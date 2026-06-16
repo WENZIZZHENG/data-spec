@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 表模板管理 API
+ */
+
 @RestController
 @RequestMapping("/api/templates")
 @RequiredArgsConstructor
@@ -21,15 +25,21 @@ public class TemplateController {
 
     // ---- 模板 ----
 
+    /** 查询模板列表 */
+
     @GetMapping
     public R<List<Template>> list(@RequestParam Long projectId) {
         return R.ok(templateService.listByProject(projectId));
     }
 
+    /** 获取模板详情 */
+
     @GetMapping("/{id}")
     public R<Template> getById(@PathVariable Long id) {
         return R.ok(templateService.getById(id));
     }
+
+    /** 创建模板 */
 
     @PostMapping
     public R<Template> create(@Valid @RequestBody TemplateReq req) {
@@ -41,6 +51,8 @@ public class TemplateController {
         return R.ok(templateService.create(t));
     }
 
+    /** 更新模板 */
+
     @PutMapping("/{id}")
     public R<Template> update(@PathVariable Long id, @Valid @RequestBody TemplateReq req) {
         Template t = new Template();
@@ -50,6 +62,8 @@ public class TemplateController {
         return R.ok(templateService.update(id, t));
     }
 
+    /** 删除模板 */
+
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         templateService.delete(id);
@@ -58,10 +72,14 @@ public class TemplateController {
 
     // ---- 模板字段 ----
 
+    /** 查询模板字段 */
+
     @GetMapping("/{templateId}/fields")
     public R<List<TemplateField>> listFields(@PathVariable Long templateId) {
         return R.ok(templateService.listFields(templateId));
     }
+
+    /** 创建模板字段 */
 
     @PostMapping("/{templateId}/fields")
     public R<TemplateField> createField(@PathVariable Long templateId,
@@ -79,6 +97,8 @@ public class TemplateController {
         return R.ok(templateService.createField(f));
     }
 
+    /** 更新模板字段 */
+
     @PutMapping("/fields/{id}")
     public R<TemplateField> updateField(@PathVariable Long id,
                                         @Valid @RequestBody TemplateFieldReq req) {
@@ -93,6 +113,8 @@ public class TemplateController {
         f.setIsRequired(req.isRequired());
         return R.ok(templateService.updateField(id, f));
     }
+
+    /** 删除模板字段 */
 
     @DeleteMapping("/fields/{id}")
     public R<Void> deleteField(@PathVariable Long id) {

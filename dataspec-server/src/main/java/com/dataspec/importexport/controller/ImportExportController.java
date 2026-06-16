@@ -11,12 +11,18 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
 
+/**
+ * 导入导出 API
+ */
+
 @RestController
 @RequestMapping("/api/import-export")
 @RequiredArgsConstructor
 public class ImportExportController {
 
     private final ImportExportService importExportService;
+
+    /** 导出项目字段为 JSON */
 
     @GetMapping("/fields/export")
     public ResponseEntity<byte[]> exportFields(@RequestParam Long projectId) {
@@ -26,6 +32,8 @@ public class ImportExportController {
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(json.getBytes(StandardCharsets.UTF_8));
     }
+
+    /** 从 JSON 文件导入字段 */
 
     @PostMapping("/fields/import")
     public R<Integer> importFields(@RequestParam Long projectId,

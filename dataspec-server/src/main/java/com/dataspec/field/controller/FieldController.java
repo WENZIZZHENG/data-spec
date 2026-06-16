@@ -13,12 +13,18 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 标准字段库 API
+ */
+
 @RestController
 @RequestMapping("/api/fields")
 @RequiredArgsConstructor
 public class FieldController {
 
     private final FieldService fieldService;
+
+    /** 分页查询字段 */
 
     @GetMapping
     public R<PageResult<Field>> page(
@@ -29,15 +35,21 @@ public class FieldController {
         return R.ok(PageResult.of(page));
     }
 
+    /** 查询全部字段（不分页） */
+
     @GetMapping("/all")
     public R<List<Field>> listAll(@RequestParam Long projectId) {
         return R.ok(fieldService.listByProject(projectId));
     }
 
+    /** 获取字段详情 */
+
     @GetMapping("/{id}")
     public R<Field> getById(@PathVariable Long id) {
         return R.ok(fieldService.getById(id));
     }
+
+    /** 创建字段 */
 
     @PostMapping
     public R<Field> create(@Valid @RequestBody FieldReq req) {
@@ -57,6 +69,8 @@ public class FieldController {
         return R.ok(fieldService.create(field));
     }
 
+    /** 更新字段 */
+
     @PutMapping("/{id}")
     public R<Field> update(@PathVariable Long id, @Valid @RequestBody FieldReq req) {
         Field field = new Field();
@@ -73,6 +87,8 @@ public class FieldController {
         field.setTags(req.tags());
         return R.ok(fieldService.update(id, field));
     }
+
+    /** 删除字段 */
 
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {

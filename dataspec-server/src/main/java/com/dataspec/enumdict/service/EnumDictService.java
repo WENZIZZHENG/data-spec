@@ -5,6 +5,9 @@ import com.dataspec.enumdict.entity.EnumValue;
 
 import java.util.List;
 
+/**
+ * 枚举字典服务接口
+ */
 public interface EnumDictService {
     List<EnumDict> listByProject(Long projectId);
     EnumDict getById(Long id);

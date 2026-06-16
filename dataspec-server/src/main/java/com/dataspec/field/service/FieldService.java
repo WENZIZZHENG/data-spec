@@ -5,6 +5,9 @@ import com.dataspec.field.entity.Field;
 
 import java.util.List;
 
+/**
+ * 标准字段服务接口
+ */
 public interface FieldService {
     IPage<Field> page(Long projectId, int current, int size);
     List<Field> listByProject(Long projectId);

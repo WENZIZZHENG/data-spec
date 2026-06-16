@@ -11,6 +11,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 规则配置管理 API
+ */
+
 @RestController
 @RequestMapping("/api/rules")
 @RequiredArgsConstructor
@@ -18,15 +22,21 @@ public class RuleConfigController {
 
     private final RuleConfigService ruleConfigService;
 
+    /** 查询规则配置列表 */
+
     @GetMapping
     public R<List<RuleConfig>> list(@RequestParam Long projectId) {
         return R.ok(ruleConfigService.listByProject(projectId));
     }
 
+    /** 获取规则配置详情 */
+
     @GetMapping("/{id}")
     public R<RuleConfig> getById(@PathVariable Long id) {
         return R.ok(ruleConfigService.getById(id));
     }
+
+    /** 创建规则配置 */
 
     @PostMapping
     public R<RuleConfig> create(@Valid @RequestBody RuleConfigReq req) {
@@ -40,6 +50,8 @@ public class RuleConfigController {
         return R.ok(ruleConfigService.create(rc));
     }
 
+    /** 更新规则配置 */
+
     @PutMapping("/{id}")
     public R<RuleConfig> update(@PathVariable Long id, @Valid @RequestBody RuleConfigReq req) {
         RuleConfig rc = new RuleConfig();
@@ -50,11 +62,15 @@ public class RuleConfigController {
         return R.ok(ruleConfigService.update(id, rc));
     }
 
+    /** 切换规则启停 */
+
     @PatchMapping("/{id}/toggle")
     public R<Void> toggle(@PathVariable Long id, @RequestParam boolean enabled) {
         ruleConfigService.toggle(id, enabled);
         return R.ok();
     }
+
+    /** 删除规则配置 */
 
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {

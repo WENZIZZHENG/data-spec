@@ -9,6 +9,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * 规则配置服务实现
+ */
+
 @Service
 @RequiredArgsConstructor
 public class RuleConfigServiceImpl implements RuleConfigService {

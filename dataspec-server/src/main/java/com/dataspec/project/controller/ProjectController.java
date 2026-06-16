@@ -10,6 +10,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 项目空间 API
+ */
+
 @RestController
 @RequestMapping("/api/projects")
 @RequiredArgsConstructor
@@ -17,15 +21,21 @@ public class ProjectController {
 
     private final ProjectService projectService;
 
+    /** 查询项目列表 */
+
     @GetMapping
     public R<List<Project>> list() {
         return R.ok(projectService.list());
     }
 
+    /** 获取项目详情 */
+
     @GetMapping("/{id}")
     public R<Project> getById(@PathVariable Long id) {
         return R.ok(projectService.getById(id));
     }
+
+    /** 创建项目 */
 
     @PostMapping
     public R<Project> create(@Valid @RequestBody CreateProjectReq req) {
@@ -36,6 +46,8 @@ public class ProjectController {
         return R.ok(projectService.create(project));
     }
 
+    /** 更新项目 */
+
     @PutMapping("/{id}")
     public R<Project> update(@PathVariable Long id, @Valid @RequestBody CreateProjectReq req) {
         Project project = new Project();
@@ -44,6 +56,8 @@ public class ProjectController {
         project.setDbType(req.dbType());
         return R.ok(projectService.update(id, project));
     }
+
+    /** 删除项目 */
 
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {

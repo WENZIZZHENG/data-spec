@@ -11,6 +11,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * SQL 校验 API
+ */
+
 @RestController
 @RequestMapping("/api/lint")
 @RequiredArgsConstructor

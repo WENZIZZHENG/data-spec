@@ -4,6 +4,9 @@ import com.dataspec.rule.entity.RuleConfig;
 
 import java.util.List;
 
+/**
+ * 规则配置服务接口
+ */
 public interface RuleConfigService {
     List<RuleConfig> listByProject(Long projectId);
     List<RuleConfig> listEnabledByProject(Long projectId);

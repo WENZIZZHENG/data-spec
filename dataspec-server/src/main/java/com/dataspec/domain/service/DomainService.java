@@ -4,6 +4,9 @@ import com.dataspec.domain.entity.Domain;
 
 import java.util.List;
 
+/**
+ * 数据域服务接口
+ */
 public interface DomainService {
     List<Domain> listByProject(Long projectId);
     Domain getById(Long id);

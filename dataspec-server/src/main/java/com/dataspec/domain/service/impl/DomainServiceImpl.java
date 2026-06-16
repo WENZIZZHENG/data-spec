@@ -9,6 +9,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * 数据域服务实现
+ */
+
 @Service
 @RequiredArgsConstructor
 public class DomainServiceImpl implements DomainService {

@@ -11,6 +11,10 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * 表模板 Repository —— 封装模板和模板字段的业务查询
+ */
+
 @Repository
 @RequiredArgsConstructor
 public class TemplateRepository {
@@ -20,10 +24,12 @@ public class TemplateRepository {
 
     // ---- Template ----
 
+    /** 根据 ID 查找模板 */
     public Optional<Template> findById(Long id) {
         return Optional.ofNullable(templateMapper.selectById(id));
     }
 
+    /** 查询项目下所有模板 */
     public List<Template> findByProjectId(Long projectId) {
         return templateMapper.selectList(
                 new LambdaQueryWrapper<Template>()
@@ -31,20 +37,24 @@ public class TemplateRepository {
                         .orderByAsc(Template::getName));
     }
 
+    /** 新增模板 */
     public int insert(Template template) {
         return templateMapper.insert(template);
     }
 
+    /** 更新模板 */
     public int update(Template template) {
         return templateMapper.updateById(template);
     }
 
+    /** 逻辑删除模板 */
     public int deleteById(Long id) {
         return templateMapper.deleteById(id);
     }
 
     // ---- TemplateField ----
 
+    /** 查询模板下所有字段（按排序升序） */
     public List<TemplateField> findFieldsByTemplateId(Long templateId) {
         return templateFieldMapper.selectList(
                 new LambdaQueryWrapper<TemplateField>()
@@ -52,18 +62,22 @@ public class TemplateRepository {
                         .orderByAsc(TemplateField::getSortOrder));
     }
 
+    /** 新增模板字段 */
     public int insertField(TemplateField field) {
         return templateFieldMapper.insert(field);
     }
 
+    /** 更新模板字段 */
     public int updateField(TemplateField field) {
         return templateFieldMapper.updateById(field);
     }
 
+    /** 逻辑删除模板字段 */
     public int deleteFieldById(Long id) {
         return templateFieldMapper.deleteById(id);
     }
 
+    /** 删除模板下所有字段 */
     public int deleteFieldsByTemplateId(Long templateId) {
         return templateFieldMapper.delete(
                 new LambdaQueryWrapper<TemplateField>()

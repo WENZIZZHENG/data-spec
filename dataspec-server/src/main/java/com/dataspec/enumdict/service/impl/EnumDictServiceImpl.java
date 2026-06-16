@@ -11,6 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/**
+ * 枚举字典服务实现
+ */
+
 @Service
 @RequiredArgsConstructor
 public class EnumDictServiceImpl implements EnumDictService {

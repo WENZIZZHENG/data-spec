@@ -4,6 +4,9 @@ import com.dataspec.project.entity.Project;
 
 import java.util.List;
 
+/**
+ * 项目空间服务接口
+ */
 public interface ProjectService {
     List<Project> list();
     Project getById(Long id);

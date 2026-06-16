@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 枚举字典管理 API
+ */
+
 @RestController
 @RequestMapping("/api/enums")
 @RequiredArgsConstructor
@@ -21,15 +25,21 @@ public class EnumDictController {
 
     // ---- 枚举字典 ----
 
+    /** 查询枚举字典列表 */
+
     @GetMapping
     public R<List<EnumDict>> list(@RequestParam Long projectId) {
         return R.ok(enumDictService.listByProject(projectId));
     }
 
+    /** 获取枚举字典详情 */
+
     @GetMapping("/{id}")
     public R<EnumDict> getById(@PathVariable Long id) {
         return R.ok(enumDictService.getById(id));
     }
+
+    /** 创建枚举字典 */
 
     @PostMapping
     public R<EnumDict> create(@Valid @RequestBody EnumDictReq req) {
@@ -42,6 +52,8 @@ public class EnumDictController {
         return R.ok(enumDictService.create(dict));
     }
 
+    /** 更新枚举字典 */
+
     @PutMapping("/{id}")
     public R<EnumDict> update(@PathVariable Long id, @Valid @RequestBody EnumDictReq req) {
         EnumDict dict = new EnumDict();
@@ -52,6 +64,8 @@ public class EnumDictController {
         return R.ok(enumDictService.update(id, dict));
     }
 
+    /** 删除枚举字典 */
+
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         enumDictService.delete(id);
@@ -60,10 +74,14 @@ public class EnumDictController {
 
     // ---- 枚举值 ----
 
+    /** 查询枚举值列表 */
+
     @GetMapping("/{enumId}/values")
     public R<List<EnumValue>> listValues(@PathVariable Long enumId) {
         return R.ok(enumDictService.listValues(enumId));
     }
+
+    /** 创建枚举值 */
 
     @PostMapping("/{enumId}/values")
     public R<EnumValue> createValue(@PathVariable Long enumId, @Valid @RequestBody EnumValueReq req) {
@@ -75,6 +93,8 @@ public class EnumDictController {
         return R.ok(enumDictService.createValue(value));
     }
 
+    /** 更新枚举值 */
+
     @PutMapping("/values/{id}")
     public R<EnumValue> updateValue(@PathVariable Long id, @Valid @RequestBody EnumValueReq req) {
         EnumValue value = new EnumValue();
@@ -83,6 +103,8 @@ public class EnumDictController {
         value.setSortOrder(req.sortOrder());
         return R.ok(enumDictService.updateValue(id, value));
     }
+
+    /** 删除枚举值 */
 
     @DeleteMapping("/values/{id}")
     public R<Void> deleteValue(@PathVariable Long id) {

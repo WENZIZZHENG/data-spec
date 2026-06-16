@@ -5,6 +5,9 @@ import com.dataspec.template.entity.TemplateField;
 
 import java.util.List;
 
+/**
+ * 表模板服务接口
+ */
 public interface TemplateService {
     List<Template> listByProject(Long projectId);
     Template getById(Long id);

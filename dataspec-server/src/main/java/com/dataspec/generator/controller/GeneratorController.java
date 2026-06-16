@@ -10,6 +10,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
 
+/**
+ * 生成器 API —— 数据字典生成与下载
+ */
+
 @RestController
 @RequestMapping("/api/generator")
 @RequiredArgsConstructor
