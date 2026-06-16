@@ -4,7 +4,7 @@
 
 ## 下一步顺序
 
-1. 先让 DataSpec 变成 AI 可消费的规范上下文和可调用工具，而不是只做给人看的后台。
+1. 先让 DataSpec 变成个人/小团队可自用、AI 可消费的规范上下文和可调用工具，而不是只做给人看的后台。
 2. 优先交付 AI Context 导出包、CLI 和 MCP Server，让 Codex/Cursor/Claude Code/CI 能直接使用字段标准。
 3. 再打通 SQL 校验端到端闭环和字段推荐、DDL 生成、自动修复建议，让 AI 能“写表前查标准，写表后自检”。
 4. 最后补齐项目、字段库、规则配置页面，以及数据库反向导入、CI PR 评论等团队化能力。
@@ -43,6 +43,39 @@
 - 验收标准：MCP client 能列出 DataSpec resources；AI 能调用 `lint_sql` 得到结构化问题；能读取字段目录并用于生成 SQL。
 - 参考项目/资料：[Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)、[`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)。
 - 不做/边界：第一阶段不做多租户权限模型和远程 SaaS 托管。
+
+### P0-4：补齐个人版标准字段模型
+- 类型：数据模型、标准字段库、AI 上下文基础。
+- 背景/问题：当前 `ds_field` 已支持字段名、显示名、类型、长度、注释、数据域和 tags，但附件中的个人版字段标准还需要别名、敏感标记、启用/停用/废弃状态、代码集关联、示例值等信息。
+- 已有基础：已有标准字段 CRUD、数据域、枚举字典和 `standards/fields/standard-fields.yaml`。
+- 缺口：缺少字段别名表或结构化别名字段；缺少 `sensitive`、`enabled/deprecated`、`example`、`code_set_id`；当前 tags 不能替代可检索别名。
+- 建议方案：在保持个人版简单性的前提下扩展字段模型：`aliases`、`category/domain`、`codeSetId`、`sensitive`、`status(enabled/disabled/deprecated)`、`example`；字段搜索、AI 导出和 lint 都读取同一模型。
+- 涉及文件/模块：`dataspec-server/src/main/resources/db/schema.sql`、`field`、`domain`、`enumdict`、`aicontext`、`standards/fields`。
+- 验收标准：能维护 `mobile_no` 的别名 `phone/mobile/tel/user_phone`；AI 导出的字段目录包含别名、敏感标记、代码集关联和状态。
+- 参考项目/资料：附件中的个人版字段 JSON 结构。
+- 不做/边界：不引入草稿、审核、发布等生命周期流程。
+
+### P0-5：结构化命名规则配置
+- 类型：规则配置、SQL lint、个人规范沉淀。
+- 背景/问题：当前已有 `RuleConfig.paramsJson` 和若干固定 lint 规则，但附件要求的 field/table case、后缀规则、禁用词、拼音缩写、泛化词等还没有形成个人可维护的结构化配置。
+- 已有基础：`ds_rule_config`、`ForbiddenFieldNameRule`、`RecommendedFieldNameRule`、`RequiredColumnsRule`、`FieldNamingSnakeCaseRule`。
+- 缺口：缺少统一 `naming-rules.yaml/json` 导出模型；缺少后缀规则、拼音/无意义词检测、表名前缀提示、字段类型/长度规则配置页面。
+- 建议方案：先用内置默认规则 + `paramsJson` 配置支撑个人使用，再逐步提供 UI：基础命名、后缀规则、禁用词、推荐替换、公共字段。
+- 涉及文件/模块：`rule`、`lint/rules`、`aicontext`、前端 `RuleConfig.vue`。
+- 验收标准：可配置 `created_at/updated_at/is_deleted`、`_id/_at/_no/_count/is_`、`tmp/test/flag1/type1` 等规则，并导出给 AI。
+- 参考项目/资料：附件中的 `naming`、`suffix_rules`、`forbidden_words` 示例。
+- 不做/边界：第一版不做复杂规则 DSL 或图形化规则编排器。
+
+### P0-6：AI 建表 Prompt 生成器
+- 类型：AI 辅助、Prompt 生成、个人工作流。
+- 背景/问题：个人版第一阶段可以不接大模型 API，但需要根据当前字段标准和命名规则生成可复制给 Codex/ChatGPT 的建表提示词。
+- 已有基础：`AiContextExportService` 能生成规则文档、字段目录和规则 YAML。
+- 缺口：缺少面向“建表任务”的 prompt 模板、按项目标准填充字段清单、SQL 检查后生成修正 prompt 的能力。
+- 建议方案：新增 `generateCreateTablePrompt(projectId, businessDescription)` 和 `generateFixSqlPrompt(projectId, sql, issues)`，输出纯文本 prompt；后续再接 CLI/MCP。
+- 涉及文件/模块：`aicontext`、`lint`、前端 `AiExport.vue` 或新增 AI 助手页。
+- 验收标准：用户输入“订单模块”或粘贴一段 SQL 后，可生成包含字段规则、禁用词、代码集、标准字段和修正要求的 prompt。
+- 参考项目/资料：附件中的 AI 建表 Prompt 和 AI 修正建议示例。
+- 不做/边界：不直接调用外部 LLM API。
 
 ## P1：核心闭环
 
@@ -130,6 +163,18 @@
 - 不照搬：不实现完整 migration planner。
 - 落地方式：复用 P2-2 的 DDL generator，但优先暴露给 CLI/MCP。
 
+### P1-8：SQL 检查记录与修正 SQL 输出
+- 为什么做：附件里的 SQL 检查不只是列问题，还要能输出建议版 SQL，并保留最近检查记录用于个人复盘和命中率统计。
+- 已有基础：后端已有 `SqlParserService`、`SqlLintService` 和 lint issue 统计；前端已有 SQL 编辑器骨架。
+- 缺口：缺少 `sql_check_record` 表；缺少 `fixedSql`；缺少基于别名、标准字段、类型长度、公共字段和注释生成修正 SQL 的服务。
+- 落地产物：SQL 检查返回 `issues`、`suggestions`、`fixedSql`；保存原 SQL、修正 SQL、问题数量、结构化检查结果和创建时间。
+- 验收标准：输入包含 `phone/create_time/update_time` 的建表 SQL 后，结果能建议 `mobile_no/created_at/updated_at`，并输出一份可复制的修正 SQL。
+- 边界：第一版只生成建议 SQL，不自动覆盖源文件或直接执行数据库变更。
+- 参考项目：[`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)
+- 借鉴点：lint 输出与可修复建议分离。
+- 不照搬：不做完整 formatter。
+- 落地方式：在 P1-6 的结构化修复建议基础上增加 SQL 生成和记录表。
+
 ## P2：产品增强
 
 ### P2-1：创建项目时导入内置 standards
@@ -175,6 +220,30 @@
 - 不照搬：不直接扫描数据库生成全量 schema 文档，先基于 DataSpec 内部模型生成。
 - 落地方式：扩展 generator service 和前端预览/下载体验。
 
+### P2-5：Excel 导入导出标准字段和代码集
+- 为什么做：个人/小团队维护字段标准时，Excel 批量编辑比逐条表单更高效。
+- 已有基础：已有字段 JSON 导入导出和标准字段 CRUD。
+- 缺口：缺少 `.xlsx` 模板、字段别名/分类/代码集的批量导入导出、导入预览和错误报告。
+- 落地产物：导出标准字段 Excel 模板；导入字段、别名、分类、代码集；导入前预览新增/更新/冲突。
+- 验收标准：可用 Excel 批量维护 `mobile_no`、`order_status` 等字段及别名，导入后字段推荐和 AI 导出立即可用。
+- 边界：第一版只支持手动上传文件，不做在线协同编辑。
+
+### P2-6：轻量变更记录
+- 为什么做：第一版不做审核发布，但字段标准和命名规则修改仍然需要可追溯，后续多人协作也能复用。
+- 已有基础：所有主表已有 `created_at/updated_at`；后端 service 层集中处理创建和更新。
+- 缺口：缺少 `standard_change_log` 或等价记录表；缺少 before/after JSON 自动记录。
+- 落地产物：记录标准字段、代码集、命名规则的新增/修改/停用/废弃操作。
+- 验收标准：修改字段类型、别名、状态后，后台能查到 target、before、after、changedAt。
+- 边界：不做审批流、不做页面复杂 diff；先后台自动记录。
+
+### P2-7：个人工作台与标准命中率报告
+- 为什么做：附件建议首页展示标准字段数量、代码集数量、禁用词数量、最近检查 SQL 数量和字段命中率，这有助于自用时快速判断规范沉淀效果。
+- 已有基础：已有字段、枚举、规则和 lint 结果统计模型。
+- 缺口：缺少检查记录、命中率计算、轻量首页。
+- 落地产物：首页展示标准字段数、代码集数、命名规则数、最近检查次数、SQL 问题趋势和字段标准命中率。
+- 验收标准：完成几次 SQL 检查后，首页能看到最近检查记录和命中率摘要。
+- 边界：不做企业治理驾驶舱和复杂资产目录。
+
 ## P3：高级能力
 
 ### P3-1：数据库反向导入与差异分析
@@ -188,6 +257,14 @@
 - 借鉴点：数据库 introspection、schema 文档和 schema diff 思路。
 - 不照搬：不实现完整跨数据库迁移和部署。
 - 落地方式：先支持 SQL 文件解析，再评估 JDBC 直连读取 metadata。
+
+### P3-1a：MySQL CREATE TABLE 支持
+- 为什么做：附件中的个人版示例以 MySQL DDL 为主，但当前 README 和 parser 主要面向 PostgreSQL。
+- 已有基础：JSqlParser 已用于解析 CREATE TABLE；现有规则大部分与方言无关。
+- 缺口：缺少 MySQL 方言下的类型、长度、COMMENT、AUTO_INCREMENT、tinyint、datetime、反引号等兼容测试。
+- 落地产物：支持 MySQL `CREATE TABLE` 基础解析，并能复用字段标准、别名、命名规则和注释检查。
+- 验收标准：附件中的 `t_user` 示例能被解析并输出规范建议。
+- 边界：不做完整多数据库迁移；仅补个人常用 MySQL DDL 检查能力。
 
 ### P3-2：CI/GitHub Action 校验入口
 - 为什么做：DataSpec 如果能在 PR 中检查 SQL，就能从本地工具升级为团队规范门禁。
