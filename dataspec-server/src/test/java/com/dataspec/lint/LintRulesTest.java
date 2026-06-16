@@ -1,0 +1,147 @@
+package com.dataspec.lint;
+
+import com.dataspec.lint.model.*;
+import com.dataspec.lint.rules.*;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * 规则引擎单元测试（不依赖 Spring 容器）
+ */
+class LintRulesTest {
+
+    // 构造测试表定义
+    private TableDef goodTable() {
+        return TableDef.builder()
+                .name("user_order")
+                .comment("用户订单表")
+                .columns(List.of(
+                        ColumnDef.builder().name("id").dataType("bigserial").nullable(false).comment("主键").build(),
+                        ColumnDef.builder().name("user_id").dataType("bigint").nullable(false).comment("用户ID").build(),
+                        ColumnDef.builder().name("order_no").dataType("varchar(64)").nullable(false).comment("订单号").build(),
+                        ColumnDef.builder().name("amount_cent").dataType("bigint").nullable(false).comment("金额（分）").build(),
+                        ColumnDef.builder().name("created_at").dataType("timestamp with time zone").nullable(false).comment("创建时间").build(),
+                        ColumnDef.builder().name("updated_at").dataType("timestamp with time zone").nullable(false).comment("更新时间").build(),
+                        ColumnDef.builder().name("is_deleted").dataType("boolean").nullable(false).comment("软删除").build()
+                ))
+                .build();
+    }
+
+    private TableDef badTable() {
+        return TableDef.builder()
+                .name("UserOrder")
+                .columns(List.of(
+                        ColumnDef.builder().name("userId").dataType("bigint").nullable(false).build(),
+                        ColumnDef.builder().name("uid").dataType("bigint").nullable(false).build(),
+                        ColumnDef.builder().name("create_time").dataType("datetime").nullable(true).build(),
+                        ColumnDef.builder().name("totalAmount").dataType("float").nullable(false).build()
+                ))
+                .build();
+    }
+
+    private RuleContext contextOf(TableDef... tables) {
+        return RuleContext.builder()
+                .tables(List.of(tables))
+                .ruleParams(Map.of())
+                .build();
+    }
+
+    @Test
+    void snakeCaseRule_goodTable_noIssues() {
+        var rule = new FieldNamingSnakeCaseRule();
+        List<LintIssue> issues = rule.check(contextOf(goodTable()));
+        assertTrue(issues.isEmpty(), "规范表不应有 snake_case 问题");
+    }
+
+    @Test
+    void snakeCaseRule_badTable_hasIssues() {
+        var rule = new FieldNamingSnakeCaseRule();
+        List<LintIssue> issues = rule.check(contextOf(badTable()));
+        assertFalse(issues.isEmpty(), "不规范表应有 snake_case 问题");
+        // UserOrder, userId, totalAmount 都不符合 snake_case（注：uid 和 create_time 符合 snake_case）
+        assertTrue(issues.size() >= 2);
+    }
+
+    @Test
+    void forbiddenFieldRule_detectsUid() {
+        var rule = new ForbiddenFieldNameRule();
+        List<LintIssue> issues = rule.check(contextOf(badTable()));
+        assertTrue(issues.stream().anyMatch(i -> i.getColumnName().equals("uid")),
+                "uid 应被检测为禁用字段名");
+        assertTrue(issues.stream().anyMatch(i -> i.getColumnName().equals("create_time")),
+                "create_time 应被检测为禁用字段名");
+    }
+
+    @Test
+    void recommendedFieldRule_suggestsCreatedAt() {
+        var rule = new RecommendedFieldNameRule();
+        List<LintIssue> issues = rule.check(contextOf(badTable()));
+        assertTrue(issues.stream().anyMatch(i ->
+                i.getColumnName().equals("create_time")
+                        && i.getMessage().contains("created_at")),
+                "create_time 应建议改为 created_at");
+    }
+
+    @Test
+    void requiredColumnsRule_goodTable_noIssues() {
+        var rule = new RequiredColumnsRule();
+        List<LintIssue> issues = rule.check(contextOf(goodTable()));
+        assertTrue(issues.isEmpty(), "规范表应包含所有必含列");
+    }
+
+    @Test
+    void requiredColumnsRule_badTable_missingColumns() {
+        var rule = new RequiredColumnsRule();
+        List<LintIssue> issues = rule.check(contextOf(badTable()));
+        // 缺少 id, created_at, updated_at, is_deleted
+        assertEquals(4, issues.size());
+    }
+
+    @Test
+    void amountFieldRule_detectsFloat() {
+        var rule = new AmountFieldRule();
+        List<LintIssue> issues = rule.check(contextOf(badTable()));
+        assertTrue(issues.stream().anyMatch(i ->
+                i.getColumnName().equals("totalAmount")
+                        && i.getMessage().contains("float")),
+                "totalAmount 使用 float 应被警告");
+    }
+
+    @Test
+    void amountFieldRule_goodTable_noIssues() {
+        var rule = new AmountFieldRule();
+        List<LintIssue> issues = rule.check(contextOf(goodTable()));
+        assertTrue(issues.isEmpty(), "bigint 金额字段不应有问题");
+    }
+
+    @Test
+    void commentMissingRule_goodTable_noIssues() {
+        var rule = new CommentMissingRule();
+        List<LintIssue> issues = rule.check(contextOf(goodTable()));
+        assertTrue(issues.isEmpty(), "所有字段都有注释不应有问题");
+    }
+
+    @Test
+    void commentMissingRule_badTable_hasIssues() {
+        var rule = new CommentMissingRule();
+        List<LintIssue> issues = rule.check(contextOf(badTable()));
+        // 表没有注释 + 所有字段没有注释
+        assertTrue(issues.size() >= 5); // 1 表 + 4 字段
+    }
+
+    @Test
+    void forbiddenFieldRule_customParams() {
+        var rule = new ForbiddenFieldNameRule();
+        RuleContext ctx = RuleContext.builder()
+                .tables(List.of(badTable()))
+                .ruleParams(Map.of("forbiddenNames", List.of("userid")))
+                .build();
+        List<LintIssue> issues = rule.check(ctx);
+        // 只检测自定义的禁用名
+        assertTrue(issues.stream().anyMatch(i -> i.getColumnName().equalsIgnoreCase("userid")));
+    }
+}

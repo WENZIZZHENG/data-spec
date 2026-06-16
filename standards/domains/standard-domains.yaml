@@ -1,0 +1,22 @@
+# DataSpec 内置数据域
+
+domains:
+  - code: system
+    name: 系统域
+    description: 系统级字段，如审计字段、状态字段
+
+  - code: user
+    name: 用户域
+    description: 用户相关字段
+
+  - code: order
+    name: 订单域
+    description: 订单相关字段
+
+  - code: payment
+    name: 支付域
+    description: 支付和金额相关字段
+
+  - code: content
+    name: 内容域
+    description: 文本、描述、备注等内容字段

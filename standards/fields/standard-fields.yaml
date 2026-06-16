@@ -1,0 +1,74 @@
+# DataSpec 内置标准字段
+# 这些字段可作为项目初始化时的种子数据
+
+fields:
+  # 主键
+  - name: id
+    displayName: 主键
+    dataType: bigserial
+    nullable: false
+    comment: 自增主键
+    tags: primary_key,system
+
+  # 审计字段
+  - name: created_at
+    displayName: 创建时间
+    dataType: timestamp with time zone
+    nullable: false
+    defaultValue: now()
+    comment: 记录创建时间
+    tags: audit,system
+
+  - name: updated_at
+    displayName: 更新时间
+    dataType: timestamp with time zone
+    nullable: false
+    defaultValue: now()
+    comment: 记录最后更新时间
+    tags: audit,system
+
+  - name: is_deleted
+    displayName: 软删除标记
+    dataType: boolean
+    nullable: false
+    defaultValue: "false"
+    comment: 软删除标记，false=未删除，true=已删除
+    tags: audit,system
+
+  # 常用业务字段
+  - name: user_id
+    displayName: 用户ID
+    dataType: bigint
+    nullable: false
+    comment: 关联用户表
+    tags: reference
+
+  - name: order_no
+    displayName: 订单号
+    dataType: varchar(64)
+    nullable: false
+    comment: 订单唯一编号
+    tags: business
+
+  - name: amount_cent
+    displayName: 金额（分）
+    dataType: bigint
+    nullable: false
+    defaultValue: "0"
+    comment: 金额，以分为单位存储，避免浮点精度问题
+    tags: business,money
+
+  - name: status
+    displayName: 状态
+    dataType: integer
+    nullable: false
+    defaultValue: "0"
+    comment: 业务状态，具体含义参考枚举字典
+    tags: business
+
+  - name: remark
+    displayName: 备注
+    dataType: text
+    nullable: true
+    comment: 备注信息
+    tags: business
