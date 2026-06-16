@@ -4,10 +4,45 @@
 
 ## 下一步顺序
 
-1. 先打通 SQL 校验端到端闭环，让用户能在前端实际验证 SQL。
-2. 再补齐项目、字段库、规则配置等基础管理页面，让后端 MVP 可操作。
-3. 随后增强 SQL 解析和规则准确性，降低误报和漏报。
-4. 最后扩展模板生成、AI 规则导出、CI 集成和数据库反向导入等高级能力。
+1. 先让 DataSpec 变成 AI 可消费的规范上下文和可调用工具，而不是只做给人看的后台。
+2. 优先交付 AI Context 导出包、CLI 和 MCP Server，让 Codex/Cursor/Claude Code/CI 能直接使用字段标准。
+3. 再打通 SQL 校验端到端闭环和字段推荐、DDL 生成、自动修复建议，让 AI 能“写表前查标准，写表后自检”。
+4. 最后补齐项目、字段库、规则配置页面，以及数据库反向导入、CI PR 评论等团队化能力。
+
+## P0：AI 可消费主线
+
+### P0-1：升级 AI Context 导出包
+- 类型：AI 上下文、文档生成、规范导出。
+- 背景/问题：当前已有 `DATABASE_RULES.md`、`field-catalog.json`、`rules.yaml` 单项导出，但 AI 编程工具更需要一次性、结构化、可放进业务仓库的上下文包。
+- 已有基础：后端已有 `AiContextExportService`，可生成规则文档、字段目录和规则 YAML。
+- 缺口：缺少 zip 打包、`.dataspec/` 目录约定、`AGENTS.md` 片段、JSON Schema、few-shot 示例和 AI prompt 模板。
+- 建议方案：新增 `dataspec-ai-context.zip` 导出，包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。
+- 涉及文件/模块：`dataspec-server/src/main/java/com/dataspec/aicontext`、`standards/`、`examples/`，后续可补前端 `AiExport.vue`。
+- 验收标准：下载包解压后可直接复制到业务项目；AI agent 能从 `AGENTS.md.fragment` 和 `.dataspec/field-catalog.json` 理解字段命名、类型、注释和规则。
+- 参考项目/资料：[`agents.md`](https://agents.md/)、[OpenAI Codex AGENTS.md 文档](https://developers.openai.com/codex/guides/agents-md)。
+- 不做/边界：本任务只生成上下文文件，不自动修改外部业务仓库。
+
+### P0-2：提供 DataSpec CLI 给 AI 和 CI 调用
+- 类型：命令行工具、自动化入口、AI 工具调用。
+- 背景/问题：AI agent 和 CI 更适合调用命令行；如果只有 Web API/后台页面，DataSpec 很难进入真实编码工作流。
+- 已有基础：后端已有 lint、AI context、generator 等 service；示例 SQL 已在 `examples/`。
+- 缺口：缺少批量文件扫描、stdin 输入、JSON 输出、退出码约定和本地命令入口。
+- 建议方案：提供 `dataspec lint <path|-> --project <id> --format json`、`dataspec export-context --project <id> --target codex`、`dataspec generate-ddl --template <id>`、`dataspec suggest-field "用户手机号"` 等命令。
+- 涉及文件/模块：后端可先新增 Spring Boot CLI profile 或独立 command 模块；后续再评估是否拆成轻量 native/Node wrapper。
+- 验收标准：AI 或 CI 可通过命令校验 SQL；发现 ERROR 时返回非 0 退出码；`--format json` 输出可被 agent 稳定解析。
+- 参考项目/资料：[`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff) 的 lint CLI、[`ariga/atlas`](https://github.com/ariga/atlas) 的 schema 工作流。
+- 不做/边界：第一阶段不发布包管理器，不做完整安装器。
+
+### P0-3：建设 DataSpec MCP Server
+- 类型：MCP 集成、AI 工具协议、新架构边界。
+- 背景/问题：如果 DataSpec 要优先服务 AI，最自然的形态是 MCP Server：暴露规范资源、标准 prompt 和可执行工具。
+- 已有基础：后端已有项目、字段、规则、lint、生成器、AI context 服务。
+- 缺口：缺少 MCP resources/prompts/tools 映射、鉴权边界、项目选择和错误输出协议。
+- 建议方案：先实现只读 resources 和核心 tools：`lint_sql`、`get_field_catalog`、`suggest_fields`、`generate_table_ddl`、`explain_lint_issue`；再补 prompts：`按 DataSpec 创建表`、`评审 SQL`、`把业务需求转字段设计`。
+- 涉及文件/模块：可新增 `dataspec-mcp` 子模块，或在后端新增 MCP adapter 层；复用现有 service，不复制业务逻辑。
+- 验收标准：MCP client 能列出 DataSpec resources；AI 能调用 `lint_sql` 得到结构化问题；能读取字段目录并用于生成 SQL。
+- 参考项目/资料：[Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)、[`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)。
+- 不做/边界：第一阶段不做多租户权限模型和远程 SaaS 托管。
 
 ## P1：核心闭环
 
@@ -59,6 +94,42 @@
 - 不照搬：不做多租户、审批流、环境隔离等重型能力。
 - 落地方式：优先实现最小可用的管理表格和表单。
 
+### P1-5：字段推荐 API
+- 为什么做：AI 写 SQL 前最常见的问题是“这个业务含义应该用什么字段名和类型”，只做 lint 会让 AI 先犯错再修。
+- 已有基础：标准字段库、数据域、枚举字典和内置 `standards/fields`。
+- 缺口：缺少按业务描述查找标准字段、推荐字段名、别名匹配和置信度输出。
+- 落地产物：提供 `suggestField` 能力，输入“用户手机号”“支付金额”等描述，输出标准字段候选、推荐字段名、类型、默认值、注释、是否已有标准字段。
+- 验收标准：常见字段描述能命中或推荐 `phone`、`amount_cent`、`created_at`、`is_deleted` 等标准字段；结果可被 CLI/MCP/API 复用。
+- 边界：第一版先做规则、别名、关键词和 fuzzy match，不直接引入 LLM。
+- 参考项目：[`bytebase/bytebase`](https://github.com/bytebase/bytebase)
+- 借鉴点：围绕数据库资产提供结构化检索和工作台能力。
+- 不照搬：不引入完整数据库实例管理。
+- 落地方式：新增字段搜索/推荐 service，并让 CLI/MCP 调用同一能力。
+
+### P1-6：SQL 自动修复建议结构化
+- 为什么做：AI agent 需要可执行的修改建议，而不是只读自然语言错误信息。
+- 已有基础：`LintIssue` 已有 severity、ruleCode、message、tableName、columnName。
+- 缺口：缺少 `suggestion`、`replacement`、`before`、`after`、`confidence` 等结构化修复字段。
+- 落地产物：扩展 lint issue 模型和规则输出，让 snake_case、禁用字段、推荐字段名、必备列等规则能提供修复建议。
+- 验收标准：AI 调用 lint 后可根据结构化字段生成修复后的 SQL 或补充字段列表。
+- 边界：第一阶段只给建议，不自动改写用户文件。
+- 参考项目：[`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)
+- 借鉴点：lint issue 和 fixable rule 的分层思路。
+- 不照搬：不做完整 SQL formatter 或自动格式化。
+- 落地方式：先扩展 Java model 和核心规则单测，再接 CLI/MCP JSON 输出。
+
+### P1-7：DDL 生成能力作为 AI tool
+- 为什么做：理想流程不是让 AI 直接手写建表 SQL，而是 AI 提供业务语义，DataSpec 匹配字段/模板并生成规范 DDL，再自检。
+- 已有基础：模板、模板字段、标准字段和 Markdown generator。
+- 缺口：缺少面向 AI 调用的 DDL 生成接口和 lint 自检闭环。
+- 落地产物：提供 `generateTableDdl` 能力，支持按模板或字段候选生成 PostgreSQL `CREATE TABLE` 和 `COMMENT ON` 语句。
+- 验收标准：生成 SQL 能通过 DataSpec lint；CLI/MCP/API 均能调用同一生成逻辑。
+- 边界：第一阶段只支持 PostgreSQL，不做自动迁移应用。
+- 参考项目：[`ariga/atlas`](https://github.com/ariga/atlas)
+- 借鉴点：从期望 schema 生成数据库变更的思路。
+- 不照搬：不实现完整 migration planner。
+- 落地方式：复用 P2-2 的 DDL generator，但优先暴露给 CLI/MCP。
+
 ## P2：产品增强
 
 ### P2-1：创建项目时导入内置 standards
@@ -81,13 +152,16 @@
 - 不照搬：不实现自动迁移应用、状态管理或 Atlas Cloud 类能力。
 - 落地方式：新增 generator service 方法和前端模板生成页。
 
-### P2-3：AI Context 一键导出包
-- 为什么做：当前已有 `DATABASE_RULES.md`、`field-catalog.json`、`rules.yaml` 单项导出，但 AI 编程工具更适合一次下载完整上下文包。
-- 已有基础：`AiContextExportService` 已能生成三类内容。
-- 缺口：缺少 zip 打包、工具目录约定和导出说明。
-- 落地产物：一键下载 `dataspec-ai-context.zip`，包含规则文档、字段目录、规则 YAML 和 README。
-- 验收标准：下载包解压后可直接复制到 AI 工具项目目录使用；文件内容与当前项目数据一致。
-- 边界：只生成上下文文件，不自动写入外部项目目录。
+### P2-3：业务项目 `.dataspec/` 落地约定
+- 为什么做：AI agent 在业务项目中需要稳定入口读取字段标准，不能每次依赖人工复制散落文件。
+- 已有基础：P0-1 会生成 AI Context 包；当前仓库已有 `standards/`、`examples/` 和导出服务。
+- 缺口：缺少业务项目目录约定、更新策略、README 和 agent 指令片段。
+- 落地产物：定义 `.dataspec/` 目录结构，包含规则、字段目录、prompt、示例和版本信息；生成项目级 `AGENTS.md.fragment`。
+- 验收标准：业务仓库引入 `.dataspec/` 后，AI agent 可按目录约定找到 DataSpec 上下文并执行 lint 命令。
+- 边界：只定义和导出目录结构，不托管业务项目文件。
+- 参考项目：[`agents.md`](https://agents.md/)
+- 借鉴点：用项目内约定文件指导 coding agent 的工作方式。
+- 不照搬：不把所有项目开发规范都塞进 DataSpec，只聚焦数据库字段标准。
 
 ### P2-4：数据字典生成增强
 - 为什么做：当前 Markdown 数据字典较基础，缺少模板、枚举、字段域关系、索引/约束等可读信息。
@@ -127,6 +201,18 @@
 - 不照搬：不做完整数据库发布流水线或审批系统。
 - 落地方式：优先实现批量 lint 命令，再补 GitHub Actions 使用示例。
 
+### P3-3：PR 评论式 SQL Review
+- 为什么做：CI 只失败不够友好，AI 和开发者需要在 PR 中看到可定位、可修复的字段规范反馈。
+- 已有基础：P0-2 CLI、P1-6 修复建议和 P3-2 GitHub Action 校验入口。
+- 缺口：缺少文件级定位、Markdown 评论格式、重复评论更新策略和 GitHub token 权限边界。
+- 落地产物：在 PR 中评论 SQL lint 结果，包含文件、表、字段、规则、建议替换和修复示例。
+- 验收标准：Pull Request 中新增或修改 SQL 文件时，Action 能发布或更新 DataSpec Review 评论。
+- 边界：第一阶段只做 GitHub Actions，不做 GitLab/Gitea 集成。
+- 参考项目：[`bytebase/example-gitops-github-flow`](https://github.com/bytebase/example-gitops-github-flow)、[`ariga/atlas-action`](https://github.com/ariga/atlas-action)
+- 借鉴点：数据库变更在 PR 流程中的自动反馈。
+- 不照搬：不做完整审批流和数据库发布。
+- 落地方式：先基于 CLI JSON 输出生成 Markdown Summary，再扩展为 PR comment。
+
 ## P4：暂缓探索
 
 ### P4-1：多方言规则体系
@@ -147,3 +233,6 @@
 - [`bytebase/bytebase`](https://github.com/bytebase/bytebase)：数据库 DevOps 工作台、SQL Review、数据库 CI/CD。
 - [`bytebase/example-gitops-github-flow`](https://github.com/bytebase/example-gitops-github-flow)：Bytebase + GitHub Flow 数据库发布示例。
 - [`k1LoW/tbls`](https://github.com/k1Low/tbls)：CI-friendly 数据库文档生成工具。
+- [Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)：AI 应用接入 resources、prompts、tools 的协议基础。
+- [`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)：MCP server 参考实现集合。
+- [`agents.md`](https://agents.md/)：面向 coding agent 的项目指令文件约定。
