@@ -2,6 +2,9 @@ package com.dataspec.aicontext.controller;
 
 import com.dataspec.aicontext.service.AiContextExportService;
 import com.dataspec.common.result.R;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -64,6 +67,20 @@ public class AiContextController {
         return R.ok(aiContextExportService.generateRulesYaml(projectId));
     }
 
+    /** 生成 AI 建表 Prompt */
+
+    @PostMapping("/prompts/create-table")
+    public R<String> generateCreateTablePrompt(@Valid @RequestBody CreateTablePromptReq req) {
+        return R.ok(aiContextExportService.generateCreateTablePrompt(req.projectId(), req.businessDescription()));
+    }
+
+    /** 生成 SQL 修正 Prompt */
+
+    @PostMapping("/prompts/fix-sql")
+    public R<String> generateFixSqlPrompt(@Valid @RequestBody FixSqlPromptReq req) {
+        return R.ok(aiContextExportService.generateFixSqlPrompt(req.projectId(), req.sql()));
+    }
+
     /** 下载 rules.yaml */
 
     @GetMapping("/rules-yaml/download")
@@ -85,4 +102,14 @@ public class AiContextController {
                 .contentType(MediaType.parseMediaType("application/zip"))
                 .body(content);
     }
+
+    public record CreateTablePromptReq(
+            @NotNull(message = "项目ID不能为空") Long projectId,
+            String businessDescription
+    ) {}
+
+    public record FixSqlPromptReq(
+            @NotNull(message = "项目ID不能为空") Long projectId,
+            @NotBlank(message = "SQL 不能为空") String sql
+    ) {}
 }

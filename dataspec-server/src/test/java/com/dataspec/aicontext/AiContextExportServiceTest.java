@@ -79,6 +79,32 @@ class AiContextExportServiceTest {
         assertTrue(fieldProperties.has("example"));
     }
 
+    @Test
+    void generateCreateTablePrompt_containsBusinessContextAndStandards() {
+        AiContextExportService service = createService();
+
+        String prompt = service.generateCreateTablePrompt(PROJECT_ID, "订单模块");
+
+        assertTrue(prompt.contains("订单模块"));
+        assertTrue(prompt.contains("field-catalog.json"));
+        assertTrue(prompt.contains("mobile_no"));
+        assertTrue(prompt.contains("naming:"));
+        assertTrue(prompt.contains("CREATE TABLE"));
+    }
+
+    @Test
+    void generateFixSqlPrompt_containsLintIssuesAndOriginalSql() {
+        AiContextExportService service = createService();
+        String sql = "CREATE TABLE UserOrder (user_id bigint);";
+
+        String prompt = service.generateFixSqlPrompt(PROJECT_ID, sql);
+
+        assertTrue(prompt.contains(sql));
+        assertTrue(prompt.contains("table_naming_snake_case"));
+        assertTrue(prompt.contains("UserOrder"));
+        assertTrue(prompt.contains("修正后的 SQL"));
+    }
+
     private AiContextExportService createService() {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         FieldService fieldService = mock(FieldService.class);

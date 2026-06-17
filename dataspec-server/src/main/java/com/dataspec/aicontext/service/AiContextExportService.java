@@ -3,6 +3,7 @@ package com.dataspec.aicontext.service;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlLintService;
+import com.dataspec.lint.model.LintResult;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.enumdict.entity.EnumDict;
@@ -194,6 +195,118 @@ public class AiContextExportService {
         }
 
         return yaml.toString();
+    }
+
+    /**
+     * 生成建表 Prompt —— 用户复制给 AI 后即可按当前项目标准产出 PostgreSQL DDL。
+     */
+    public String generateCreateTablePrompt(Long projectId, String businessDescription) {
+        String description = businessDescription == null || businessDescription.isBlank()
+                ? "请根据后续业务描述设计数据表。"
+                : businessDescription.trim();
+        return """
+                # DataSpec 建表 Prompt
+
+                你是数据库设计助手。请严格依据 DataSpec 字段目录和命名规则生成 PostgreSQL DDL。
+
+                ## 业务需求
+
+                %s
+
+                ## 字段目录 field-catalog.json
+
+                ```json
+                %s
+                ```
+
+                ## 命名规则 rules.yaml
+
+                ```yaml
+                %s
+                ```
+
+                ## 数据库规则 DATABASE_RULES.md
+
+                ```markdown
+                %s
+                ```
+
+                ## 输出要求
+
+                - 优先复用 field-catalog.json 中已有标准字段，包含别名、敏感标记、代码集和示例值。
+                - 表名、字段名必须遵守 rules.yaml 中的 naming 规则。
+                - 输出 PostgreSQL CREATE TABLE，并补全 COMMENT ON TABLE / COMMENT ON COLUMN。
+                - 必须包含必含列；新增非标准字段时说明命名理由和建议是否加入标准字段库。
+                """.formatted(
+                description,
+                generateFieldCatalogJson(projectId),
+                generateRulesYaml(projectId),
+                generateDatabaseRules(projectId)
+        );
+    }
+
+    /**
+     * 生成 SQL 修正 Prompt —— 先跑 lint，再把结构化问题和当前标准一起交给 AI。
+     */
+    public String generateFixSqlPrompt(Long projectId, String sql) {
+        LintResult lintResult = sqlLintService.lint(sql, projectId);
+        return """
+                # DataSpec SQL 修正 Prompt
+
+                你是 DataSpec SQL Review 助手。请根据 lint 问题、字段目录和命名规则修正 SQL。
+
+                ## 原始 SQL
+
+                ```sql
+                %s
+                ```
+
+                ## Lint 统计
+
+                - errors: %d
+                - warnings: %d
+                - suggestions: %d
+
+                ## Lint issues
+
+                ```json
+                %s
+                ```
+
+                ## 字段目录 field-catalog.json
+
+                ```json
+                %s
+                ```
+
+                ## 命名规则 rules.yaml
+
+                ```yaml
+                %s
+                ```
+
+                ## 输出要求
+
+                - 先列出每个问题的修正理由。
+                - 输出一份修正后的 SQL，包含 CREATE TABLE 和 COMMENT ON 语句。
+                - 优先复用标准字段；无法复用时说明新增字段建议。
+                """.formatted(
+                sql,
+                lintResult.getErrorCount(),
+                lintResult.getWarningCount(),
+                lintResult.getSuggestionCount(),
+                writePrettyJson(lintResult.getIssues()),
+                generateFieldCatalogJson(projectId),
+                generateRulesYaml(projectId)
+        );
+    }
+
+    private String writePrettyJson(Object value) {
+        try {
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(value);
+        } catch (Exception e) {
+            throw new RuntimeException("生成 prompt JSON 片段失败", e);
+        }
     }
 
     private void appendStructuredNamingRules(StringBuilder yaml, List<RuleConfig> configs) {

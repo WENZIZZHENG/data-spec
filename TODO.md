@@ -72,6 +72,7 @@
 - 不做/边界：第一版不做复杂规则 DSL 或图形化规则编排器。
 
 ### P0-6：AI 建表 Prompt 生成器
+- 状态：已完成第一版，后端已提供建表 Prompt 和 SQL 修正 Prompt 生成 API，复用字段目录、结构化命名规则和 lint 结果；前端 AI 助手页与外部 LLM 调用留后续。
 - 类型：AI 辅助、Prompt 生成、个人工作流。
 - 背景/问题：个人版第一阶段可以不接大模型 API，但需要根据当前字段标准和命名规则生成可复制给 Codex/ChatGPT 的建表提示词。
 - 已有基础：`AiContextExportService` 能生成规则文档、字段目录和规则 YAML。

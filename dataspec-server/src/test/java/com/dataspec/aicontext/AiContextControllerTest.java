@@ -28,4 +28,28 @@ class AiContextControllerTest {
                 response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION));
         assertArrayEquals(new byte[] { 1, 2, 3 }, response.getBody());
     }
+
+    @Test
+    void generateCreateTablePrompt_returnsText() {
+        AiContextExportService service = mock(AiContextExportService.class);
+        when(service.generateCreateTablePrompt(1L, "订单模块")).thenReturn("prompt text");
+        AiContextController controller = new AiContextController(service);
+
+        var response = controller.generateCreateTablePrompt(
+                new AiContextController.CreateTablePromptReq(1L, "订单模块"));
+
+        assertEquals("prompt text", response.getData());
+    }
+
+    @Test
+    void generateFixSqlPrompt_returnsText() {
+        AiContextExportService service = mock(AiContextExportService.class);
+        when(service.generateFixSqlPrompt(1L, "select 1")).thenReturn("fix prompt");
+        AiContextController controller = new AiContextController(service);
+
+        var response = controller.generateFixSqlPrompt(
+                new AiContextController.FixSqlPromptReq(1L, "select 1"));
+
+        assertEquals("fix prompt", response.getData());
+    }
 }

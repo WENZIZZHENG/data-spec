@@ -71,6 +71,13 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1" -o d
 
 `rules.yaml` 会导出结构化 `naming:` 模型，包含表/字段 snake_case、必含列、禁用字段名、推荐替换、字段后缀/前缀类型规则。SQL lint 已支持 `field_suffix_type`，默认校验 `_id/_at/_no/_count` 和 `is_` 对应的数据类型，并可通过 `RuleConfig.paramsJson` 的 `suffixTypes`、`prefixTypes` 覆盖。
 
+## AI Prompt 生成
+
+后端提供纯文本 Prompt 生成 API，不直接调用外部 LLM：
+
+- `POST /api/ai-context/prompts/create-table`：传入 `projectId` 和 `businessDescription`，生成建表 Prompt。
+- `POST /api/ai-context/prompts/fix-sql`：传入 `projectId` 和 `sql`，先运行 DataSpec lint，再生成 SQL 修正 Prompt。
+
 ## CLI
 
 第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`：
