@@ -196,6 +196,8 @@ data-spec/
 | amount_field_type | 金额字段应使用 bigint/numeric | WARNING |
 | comment_missing | 字段/表注释缺失 | SUGGESTION |
 
+`LintIssue` 除 `severity/ruleCode/message/tableName/columnName` 外，还会在可确定修复时输出 `suggestion`、`replacement`、`before`、`after`、`confidence`。这些字段会通过 API、CLI 和 MCP 原样返回，供 AI agent 生成修正 SQL 或修复说明。
+
 ## MVP 功能清单
 
 - [x] 标准字段 CRUD
@@ -206,6 +208,7 @@ data-spec/
 - [x] SQL 粘贴校验（PostgreSQL CREATE TABLE）
 - [x] 字段推荐 API/CLI/MCP
 - [x] 校验结果输出 error/warning/suggestion
+- [x] SQL lint 结构化修复建议
 - [x] 生成 Markdown 数据字典
 - [x] 导出 DATABASE_RULES.md、field-catalog.json、rules.yaml
 - [x] 导出 AI Context zip 包

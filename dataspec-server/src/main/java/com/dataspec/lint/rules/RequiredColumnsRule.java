@@ -49,12 +49,17 @@ public class RequiredColumnsRule implements LintRule {
 
             for (String req : required) {
                 if (!existingCols.contains(req.toLowerCase())) {
+                    String snippet = RuleFixSupport.requiredColumnSnippet(req);
                     issues.add(LintIssue.builder()
                             .severity(Severity.ERROR)
                             .ruleCode(getCode())
                             .ruleName(getName())
                             .tableName(table.getName())
                             .message(String.format("表 '%s' 缺少必含列 '%s'", table.getName(), req))
+                            .suggestion(String.format("补充必含列 '%s'", req))
+                            .replacement(req)
+                            .after(snippet)
+                            .confidence(85)
                             .build());
                 }
             }

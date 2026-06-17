@@ -60,6 +60,11 @@ public class RecommendedFieldNameRule implements LintRule {
                             .columnName(col.getName())
                             .message(String.format("字段 '%s.%s' 建议改为 '%s'",
                                     table.getName(), col.getName(), recommended))
+                            .suggestion(String.format("将字段 '%s' 替换为推荐字段名 '%s'", col.getName(), recommended))
+                            .replacement(recommended)
+                            .before(col.getName())
+                            .after(recommended)
+                            .confidence(95)
                             .build());
                 }
             }

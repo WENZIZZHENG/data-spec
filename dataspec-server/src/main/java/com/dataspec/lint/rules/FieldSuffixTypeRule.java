@@ -61,6 +61,9 @@ public class FieldSuffixTypeRule implements LintRule {
             String columnName
     ) {
         for (Map.Entry<String, List<String>> entry : ruleMap.entrySet()) {
+            if (entry.getValue().isEmpty()) {
+                continue;
+            }
             String pattern = entry.getKey().toLowerCase(Locale.ROOT);
             boolean matched = mode == MatchMode.SUFFIX
                     ? columnName.endsWith(pattern)
@@ -68,6 +71,7 @@ public class FieldSuffixTypeRule implements LintRule {
             if (!matched || matchesAnyType(dataType, entry.getValue())) {
                 continue;
             }
+            String recommendedType = entry.getValue().getFirst();
             issues.add(LintIssue.builder()
                     .severity(Severity.WARNING)
                     .ruleCode(getCode())
@@ -76,6 +80,11 @@ public class FieldSuffixTypeRule implements LintRule {
                     .columnName(column.getName())
                     .message(String.format("字段 '%s.%s' 命中命名模式 '%s'，类型应为 %s，当前为 %s",
                             table.getName(), column.getName(), entry.getKey(), entry.getValue(), column.getDataType()))
+                    .suggestion(String.format("将字段 '%s' 的类型改为 '%s'", column.getName(), recommendedType))
+                    .replacement(recommendedType)
+                    .before(column.getDataType())
+                    .after(recommendedType)
+                    .confidence(75)
                     .build());
         }
     }

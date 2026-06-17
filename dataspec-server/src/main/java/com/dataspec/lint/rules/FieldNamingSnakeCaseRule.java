@@ -31,6 +31,7 @@ public class FieldNamingSnakeCaseRule implements LintRule {
         for (TableDef table : context.getTables()) {
             for (ColumnDef col : table.getColumns()) {
                 if (!SNAKE_CASE.matcher(col.getName()).matches()) {
+                    String replacement = RuleFixSupport.toSnakeCase(col.getName());
                     issues.add(LintIssue.builder()
                             .severity(Severity.ERROR)
                             .ruleCode(getCode())
@@ -39,6 +40,11 @@ public class FieldNamingSnakeCaseRule implements LintRule {
                             .columnName(col.getName())
                             .message(String.format("字段 '%s.%s' 不符合 snake_case 命名规范",
                                     table.getName(), col.getName()))
+                            .suggestion(String.format("将字段 '%s' 重命名为 '%s'", col.getName(), replacement))
+                            .replacement(replacement)
+                            .before(col.getName())
+                            .after(replacement)
+                            .confidence(90)
                             .build());
                 }
             }

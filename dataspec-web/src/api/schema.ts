@@ -854,6 +854,12 @@ export interface components {
             message?: string;
             tableName?: string;
             columnName?: string;
+            suggestion?: string;
+            replacement?: string;
+            before?: string;
+            after?: string;
+            /** Format: int32 */
+            confidence?: number;
         };
         LintResult: {
             tables?: components["schemas"]["TableDef"][];

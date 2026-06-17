@@ -39,6 +39,11 @@
               <el-table-column prop="columnName" label="字段" width="130" />
               <el-table-column prop="ruleCode" label="规则" width="180" />
               <el-table-column prop="message" label="描述" min-width="260" />
+              <el-table-column label="建议" min-width="240" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <span>{{ fixSuggestion(row) }}</span>
+                </template>
+              </el-table-column>
             </el-table>
           </template>
           <el-empty v-else description="请输入 SQL 并点击执行校验" />
@@ -132,6 +137,16 @@ function severityLabel(severity: LintIssue['severity']) {
     SUGGESTION: '建议'
   }
   return severity ? map[severity] : '-'
+}
+
+function fixSuggestion(issue: LintIssue) {
+  if (issue.suggestion) {
+    return issue.suggestion
+  }
+  if (issue.replacement) {
+    return `建议替换为 ${issue.replacement}`
+  }
+  return '-'
 }
 </script>
 

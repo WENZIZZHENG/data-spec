@@ -71,6 +71,14 @@ class LintRulesTest {
         assertFalse(issues.isEmpty(), "不规范表应有 snake_case 问题");
         // UserOrder, userId, totalAmount 都不符合 snake_case（注：uid 和 create_time 符合 snake_case）
         assertTrue(issues.size() >= 2);
+        LintIssue userIdIssue = issues.stream()
+                .filter(i -> i.getColumnName().equals("userId"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("userId", userIdIssue.getBefore());
+        assertEquals("user_id", userIdIssue.getReplacement());
+        assertEquals("user_id", userIdIssue.getAfter());
+        assertTrue(userIdIssue.getConfidence() >= 80);
     }
 
     @Test
@@ -87,6 +95,9 @@ class LintRulesTest {
         assertEquals(1, issues.size());
         assertEquals("table_naming_snake_case", issues.get(0).getRuleCode());
         assertEquals("UserOrder", issues.get(0).getTableName());
+        assertEquals("UserOrder", issues.get(0).getBefore());
+        assertEquals("user_order", issues.get(0).getReplacement());
+        assertEquals("user_order", issues.get(0).getAfter());
     }
 
     @Test
@@ -97,6 +108,14 @@ class LintRulesTest {
                 "uid 应被检测为禁用字段名");
         assertTrue(issues.stream().anyMatch(i -> i.getColumnName().equals("create_time")),
                 "create_time 应被检测为禁用字段名");
+        LintIssue uidIssue = issues.stream()
+                .filter(i -> i.getColumnName().equals("uid"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("uid", uidIssue.getBefore());
+        assertEquals("user_id", uidIssue.getReplacement());
+        assertEquals("user_id", uidIssue.getAfter());
+        assertTrue(uidIssue.getSuggestion().contains("user_id"));
     }
 
     @Test
@@ -107,6 +126,14 @@ class LintRulesTest {
                 i.getColumnName().equals("create_time")
                         && i.getMessage().contains("created_at")),
                 "create_time 应建议改为 created_at");
+        LintIssue issue = issues.stream()
+                .filter(i -> i.getColumnName().equals("create_time"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("create_time", issue.getBefore());
+        assertEquals("created_at", issue.getReplacement());
+        assertEquals("created_at", issue.getAfter());
+        assertTrue(issue.getConfidence() >= 90);
     }
 
     @Test
@@ -122,6 +149,12 @@ class LintRulesTest {
         List<LintIssue> issues = rule.check(contextOf(badTable()));
         // 缺少 id, created_at, updated_at, is_deleted
         assertEquals(4, issues.size());
+        LintIssue createdAt = issues.stream()
+                .filter(i -> "created_at".equals(i.getReplacement()))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(createdAt.getSuggestion().contains("补充必含列"));
+        assertTrue(createdAt.getAfter().contains("created_at"));
     }
 
     @Test
@@ -166,6 +199,14 @@ class LintRulesTest {
 
         assertEquals(5, issues.size());
         assertTrue(issues.stream().allMatch(issue -> "field_suffix_type".equals(issue.getRuleCode())));
+        LintIssue userId = issues.stream()
+                .filter(issue -> "user_id".equals(issue.getColumnName()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("varchar(64)", userId.getBefore());
+        assertEquals("bigint", userId.getReplacement());
+        assertEquals("bigint", userId.getAfter());
+        assertTrue(userId.getConfidence() >= 70);
     }
 
     @Test
@@ -184,6 +225,23 @@ class LintRulesTest {
 
         assertEquals(1, issues.size());
         assertEquals("order_code", issues.get(0).getColumnName());
+    }
+
+    @Test
+    void fieldSuffixTypeRule_ignoresEmptyCustomTypeList() {
+        var rule = new FieldSuffixTypeRule();
+        TableDef table = TableDef.builder()
+                .name("order")
+                .columns(List.of(ColumnDef.builder().name("user_id").dataType("varchar(64)").build()))
+                .build();
+        RuleContext ctx = RuleContext.builder()
+                .tables(List.of(table))
+                .ruleParams(Map.of("suffixTypes", Map.of("_id", List.of())))
+                .build();
+
+        List<LintIssue> issues = rule.check(ctx);
+
+        assertTrue(issues.isEmpty());
     }
 
     @Test

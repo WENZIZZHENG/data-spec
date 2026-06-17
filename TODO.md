@@ -151,6 +151,7 @@
 - 落地方式：新增字段搜索/推荐 service，并让 CLI/MCP 调用同一能力。
 
 ### P1-6：SQL 自动修复建议结构化
+- 状态：已完成第一版，`LintIssue` 已增加 `suggestion/replacement/before/after/confidence`，snake_case、推荐字段名、禁用字段名、必备列、后缀/前缀类型规则已输出结构化建议；自动改写 SQL 留 P1-8。
 - 为什么做：AI agent 需要可执行的修改建议，而不是只读自然语言错误信息。
 - 已有基础：`LintIssue` 已有 severity、ruleCode、message、tableName、columnName。
 - 缺口：缺少 `suggestion`、`replacement`、`before`、`after`、`confidence` 等结构化修复字段。

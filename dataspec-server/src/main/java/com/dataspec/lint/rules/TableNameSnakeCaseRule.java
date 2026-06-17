@@ -34,12 +34,18 @@ public class TableNameSnakeCaseRule implements LintRule {
         List<LintIssue> issues = new ArrayList<>();
         for (TableDef table : context.getTables()) {
             if (!SNAKE_CASE.matcher(table.getName()).matches()) {
+                String replacement = RuleFixSupport.toSnakeCase(table.getName());
                 issues.add(LintIssue.builder()
                         .severity(Severity.ERROR)
                         .ruleCode(getCode())
                         .ruleName(getName())
                         .tableName(table.getName())
                         .message(String.format("表 '%s' 不符合 snake_case 命名规范", table.getName()))
+                        .suggestion(String.format("将表 '%s' 重命名为 '%s'", table.getName(), replacement))
+                        .replacement(replacement)
+                        .before(table.getName())
+                        .after(replacement)
+                        .confidence(90)
                         .build());
             }
         }
