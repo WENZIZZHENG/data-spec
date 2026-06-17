@@ -288,6 +288,28 @@ function listTools() {
             }
           }
         }
+      },
+      {
+        name: 'suggest_fields',
+        description: '根据业务描述推荐 DataSpec 标准字段候选。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: '业务字段描述，如“用户手机号”。'
+            },
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            limit: {
+              type: 'integer',
+              description: '可选返回数量，默认 5。'
+            }
+          },
+          required: ['query']
+        }
       }
     ]
   }
@@ -301,6 +323,9 @@ async function callTool(params, context) {
   }
   if (name === 'get_field_catalog') {
     return await callGetFieldCatalog(args, context)
+  }
+  if (name === 'suggest_fields') {
+    return await callSuggestFields(args, context)
   }
   throw new JsonRpcError(-32602, `未知 tool: ${name}`)
 }
@@ -330,6 +355,19 @@ async function callGetFieldCatalog(args, context) {
   )
   const structured = parseJsonOrFallback(text)
   return toolJsonResult(structured)
+}
+
+async function callSuggestFields(args, context) {
+  const query = args.query
+  if (typeof query !== 'string' || query.trim() === '') {
+    throw new JsonRpcError(-32602, 'suggest_fields 需要非空 query')
+  }
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  const limit = optionalLimit(args.limit, 5)
+  const url = `${context.server}/api/fields/suggest?projectId=${encodeURIComponent(projectId)}&query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`
+  const response = await context.fetchFn(url)
+  const result = await readDataSpecJson(response)
+  return toolJsonResult(result)
 }
 
 async function fetchAiContextText(server, fetchFn, path, projectId) {
@@ -390,6 +428,17 @@ function optionalProjectId(value, fallback) {
     return fallback
   }
   return parseProjectId(value)
+}
+
+function optionalLimit(value, fallback) {
+  if (value === undefined || value === null || value === '') {
+    return fallback
+  }
+  const limit = Number(value)
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new JsonRpcError(-32602, `无效 limit: ${value}`)
+  }
+  return limit
 }
 
 function parseProjectId(value) {

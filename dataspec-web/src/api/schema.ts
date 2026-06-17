@@ -388,6 +388,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fields/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["suggest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-context/rules-yaml": {
         parameters: {
             query?: never;
@@ -721,6 +737,14 @@ export interface components {
             updatedAt?: string;
             isDeleted?: boolean;
         };
+        FieldSuggestion: {
+            field?: components["schemas"]["Field"] | null;
+            /** Format: int32 */
+            score?: number;
+            matchReason?: string;
+            recommendedName?: string;
+            existing?: boolean;
+        };
         RField: {
             /** Format: int32 */
             code?: number;
@@ -929,6 +953,12 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["Field"][];
+        };
+        RListFieldSuggestion: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldSuggestion"][];
         };
         RListEnumDict: {
             /** Format: int32 */
@@ -2836,6 +2866,48 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RListField"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    suggest: {
+        parameters: {
+            query: {
+                projectId: number;
+                query: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListFieldSuggestion"];
                 };
             };
             /** @description Bad Request */

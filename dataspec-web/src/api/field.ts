@@ -1,5 +1,5 @@
 import request from '@/api/request'
-import type { Field, FieldReq, PageResult } from '@/types'
+import type { Field, FieldReq, FieldSuggestion, PageResult } from '@/types'
 
 export function pageFields(projectId: number, current = 1, size = 20) {
   return request.get<unknown, PageResult<Field>>('/fields', {
@@ -10,6 +10,12 @@ export function pageFields(projectId: number, current = 1, size = 20) {
 export function listFields(projectId: number) {
   return request.get<unknown, Field[]>('/fields/all', {
     params: { projectId }
+  })
+}
+
+export function suggestFields(projectId: number, query: string, limit = 5) {
+  return request.get<unknown, FieldSuggestion[]>('/fields/suggest', {
+    params: { projectId, query, limit }
   })
 }
 

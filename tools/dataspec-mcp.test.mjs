@@ -126,6 +126,41 @@ test('get_field_catalog tool parses json catalog when possible', async () => {
   assert.equal(JSON.parse(response.result.content[0].text).fields[0].name, 'created_at')
 })
 
+test('suggest_fields tool returns structured suggestions', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    calls.push(url)
+    return jsonResponse({
+      code: 200,
+      data: [
+        {
+          recommendedName: 'mobile_no',
+          score: 92,
+          matchReason: '显示名匹配',
+          existing: true
+        }
+      ]
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 10,
+    method: 'tools/call',
+    params: {
+      name: 'suggest_fields',
+      arguments: { query: '用户手机号', projectId: 8, limit: 3 }
+    }
+  })
+
+  assert.equal(
+    calls[0],
+    'http://dataspec.local/api/fields/suggest?projectId=8&query=%E7%94%A8%E6%88%B7%E6%89%8B%E6%9C%BA%E5%8F%B7&limit=3'
+  )
+  assert.equal(response.result.structuredContent[0].recommendedName, 'mobile_no')
+  assert.equal(JSON.parse(response.result.content[0].text)[0].existing, true)
+})
+
 test('unknown method returns json rpc method not found error', async () => {
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
 

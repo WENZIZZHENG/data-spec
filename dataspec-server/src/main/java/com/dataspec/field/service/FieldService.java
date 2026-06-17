@@ -2,6 +2,7 @@ package com.dataspec.field.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldSuggestion;
 
 import java.util.List;
 
@@ -15,4 +16,5 @@ public interface FieldService {
     Field create(Field field);
     Field update(Long id, Field field);
     void delete(Long id);
+    List<FieldSuggestion> suggest(Long projectId, String query, int limit);
 }

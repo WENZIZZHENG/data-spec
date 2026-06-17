@@ -2,10 +2,12 @@ package com.dataspec.field;
 
 import com.dataspec.common.exception.BizException;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.impl.FieldServiceImpl;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -82,5 +84,78 @@ class FieldServiceImplTest {
         assertEquals("deprecated", updated.getStatus());
         assertEquals("13800138000", updated.getExampleValue());
         verify(repository).update(updated);
+    }
+
+    @Test
+    void suggest_matchesAliasAndChineseDisplayName() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(
+                field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone,mobile,tel", "enabled"),
+                field("amount_cent", "金额（分）", "bigint", "支付金额，以分存储", "amount,pay_amount", "enabled")
+        ));
+        FieldServiceImpl service = new FieldServiceImpl(repository);
+
+        List<FieldSuggestion> suggestions = service.suggest(1L, "用户手机号", 5);
+
+        assertFalse(suggestions.isEmpty());
+        FieldSuggestion first = suggestions.getFirst();
+        assertTrue(first.existing());
+        assertEquals("mobile_no", first.recommendedName());
+        assertEquals("mobile_no", first.field().getName());
+        assertTrue(first.score() > 0);
+        assertTrue(first.matchReason().contains("显示名") || first.matchReason().contains("注释"));
+    }
+
+    @Test
+    void suggest_filtersDisabledFields() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(
+                field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone,mobile,tel", "disabled")
+        ));
+        FieldServiceImpl service = new FieldServiceImpl(repository);
+
+        List<FieldSuggestion> suggestions = service.suggest(1L, "手机号", 5);
+
+        assertFalse(suggestions.isEmpty());
+        assertFalse(suggestions.getFirst().existing());
+        assertNull(suggestions.getFirst().field());
+    }
+
+    @Test
+    void suggest_returnsFallbackSnakeCaseNameWhenNoExistingFieldMatches() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of());
+        FieldServiceImpl service = new FieldServiceImpl(repository);
+
+        List<FieldSuggestion> suggestions = service.suggest(1L, "客户生日", 5);
+
+        assertEquals(1, suggestions.size());
+        FieldSuggestion fallback = suggestions.getFirst();
+        assertFalse(fallback.existing());
+        assertEquals("customer_birthday", fallback.recommendedName());
+        assertEquals(0, fallback.score());
+        assertNull(fallback.field());
+    }
+
+    @Test
+    void suggest_rejectsDescriptionWithoutSearchableContent() {
+        FieldRepository repository = mock(FieldRepository.class);
+        FieldServiceImpl service = new FieldServiceImpl(repository);
+
+        assertThrows(BizException.class, () -> service.suggest(1L, "!!!", 5));
+        verify(repository, never()).findAllByProjectId(anyLong());
+    }
+
+    private Field field(String name, String displayName, String dataType, String comment,
+                        String aliases, String status) {
+        Field field = new Field();
+        field.setProjectId(1L);
+        field.setName(name);
+        field.setDisplayName(displayName);
+        field.setDataType(dataType);
+        field.setComment(comment);
+        field.setAliases(aliases);
+        field.setStatus(status);
+        return field;
     }
 }

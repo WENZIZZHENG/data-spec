@@ -78,6 +78,16 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1" -o d
 - `POST /api/ai-context/prompts/create-table`：传入 `projectId` 和 `businessDescription`，生成建表 Prompt。
 - `POST /api/ai-context/prompts/fix-sql`：传入 `projectId` 和 `sql`，先运行 DataSpec lint，再生成 SQL 修正 Prompt。
 
+## 字段推荐
+
+后端提供确定性字段推荐 API，不调用外部 LLM：
+
+```bash
+curl "http://localhost:8090/api/fields/suggest?projectId=1&query=用户手机号&limit=5"
+```
+
+推荐结果会返回已有标准字段、匹配分数、命中原因、推荐字段名和 `existing` 标记。第一版按字段名、显示名、注释、别名、分类和标签匹配；未命中时生成一个 snake_case fallback 字段名。
+
 ## CLI
 
 第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`：
@@ -91,6 +101,9 @@ cat examples/good-example.sql | node tools/dataspec-cli.mjs lint - --project 1 -
 
 # 导出 AI Context zip 包
 node tools/dataspec-cli.mjs export-context --project 1 --output dataspec-ai-context.zip
+
+# 推荐标准字段
+node tools/dataspec-cli.mjs suggest-field "用户手机号" --project 1 --format json
 
 # 指定后端地址
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --server http://localhost:8090
@@ -108,7 +121,7 @@ node tools/dataspec-mcp.mjs --project 1 --server http://localhost:8090
 
 - resources：`field-catalog`、`database-rules`、`rules-yaml`，URI 形如 `dataspec://project/1/field-catalog`。
 - prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`。
-- tools：`lint_sql`、`get_field_catalog`；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
+- tools：`lint_sql`、`get_field_catalog`、`suggest_fields`；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
 
 ## 验证
 
@@ -191,6 +204,7 @@ data-spec/
 - [x] 表模板 CRUD
 - [x] 规则配置 CRUD
 - [x] SQL 粘贴校验（PostgreSQL CREATE TABLE）
+- [x] 字段推荐 API/CLI/MCP
 - [x] 校验结果输出 error/warning/suggestion
 - [x] 生成 Markdown 数据字典
 - [x] 导出 DATABASE_RULES.md、field-catalog.json、rules.yaml

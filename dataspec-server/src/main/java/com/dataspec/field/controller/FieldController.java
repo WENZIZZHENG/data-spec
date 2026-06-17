@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.common.result.PageResult;
 import com.dataspec.common.result.R;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.service.FieldService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -40,6 +41,16 @@ public class FieldController {
     @GetMapping("/all")
     public R<List<Field>> listAll(@RequestParam Long projectId) {
         return R.ok(fieldService.listByProject(projectId));
+    }
+
+    /** 根据业务描述推荐标准字段 */
+
+    @GetMapping("/suggest")
+    public R<List<FieldSuggestion>> suggest(
+            @RequestParam Long projectId,
+            @RequestParam String query,
+            @RequestParam(defaultValue = "5") int limit) {
+        return R.ok(fieldService.suggest(projectId, query, limit));
     }
 
     /** 获取字段详情 */

@@ -94,6 +94,48 @@ test('export-context downloads zip bytes to output path', async () => {
   }
 })
 
+test('suggest-field calls field suggestion api and prints json', async () => {
+  const calls = []
+  const fetchFn = async (url) => {
+    calls.push(url)
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: [
+          {
+            recommendedName: 'mobile_no',
+            score: 92,
+            matchReason: '显示名匹配',
+            existing: true
+          }
+        ]
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'suggest-field',
+    '用户手机号',
+    '--project',
+    '7',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.equal(
+    calls[0],
+    'http://dataspec.local/api/fields/suggest?projectId=7&query=%E7%94%A8%E6%88%B7%E6%89%8B%E6%9C%BA%E5%8F%B7&limit=5'
+  )
+  assert.equal(JSON.parse(io.stdout)[0].recommendedName, 'mobile_no')
+  assert.equal(io.stderr, '')
+})
+
 test('invalid arguments print stderr and return 2', async () => {
   const io = createIo()
   const fetchFn = async () => {

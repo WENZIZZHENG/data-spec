@@ -22,6 +22,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'export-context') {
       return await runExportContext(rest, io, fetchFn)
     }
+    if (command === 'suggest-field') {
+      return await runSuggestField(rest, io, fetchFn)
+    }
     throw new Error(`未知命令: ${command}\n\n${helpText()}`)
   } catch (error) {
     io.writeErr(`错误: ${error.message}\n`)
@@ -80,6 +83,30 @@ async function runExportContext(args, io, fetchFn) {
   return 0
 }
 
+async function runSuggestField(args, io, fetchFn) {
+  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'limit'])
+  const query = positional[0]
+  if (!query) {
+    throw new Error('suggest-field 需要提供业务字段描述')
+  }
+  if (positional.length > 1) {
+    throw new Error(`suggest-field 只接受一个描述参数，收到: ${positional.slice(1).join(', ')}`)
+  }
+  const projectId = parseProjectId(options.project)
+  const format = options.format ?? 'json'
+  if (format !== 'json') {
+    throw new Error('当前仅支持 --format json')
+  }
+  const limit = parseLimit(options.limit)
+  const server = normalizeServer(options.server)
+  const url = `${server}/api/fields/suggest?projectId=${encodeURIComponent(projectId)}&query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`
+  const response = await fetchFn(url)
+  const payload = await readJsonResponse(response)
+  const result = unwrapResponse(payload)
+  io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  return 0
+}
+
 function parseArgs(args, allowedOptions) {
   const positional = []
   const options = {}
@@ -115,6 +142,17 @@ function parseProjectId(value) {
   return projectId
 }
 
+function parseLimit(value, fallback = 5) {
+  if (value === undefined || value === null || value === '') {
+    return fallback
+  }
+  const limit = Number(value)
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error(`无效 limit: ${value}`)
+  }
+  return limit
+}
+
 function normalizeServer(server = DEFAULT_SERVER) {
   return server.replace(/\/+$/, '')
 }
@@ -140,6 +178,7 @@ function helpText() {
 Usage:
   node tools/dataspec-cli.mjs lint <path|-> --project <id> --format json [--server <url>]
   node tools/dataspec-cli.mjs export-context --project <id> --output <zip> [--server <url>]
+  node tools/dataspec-cli.mjs suggest-field <query> --project <id> --format json [--limit <n>] [--server <url>]
 `
 }
 
