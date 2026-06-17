@@ -86,6 +86,7 @@
 ## P1：核心闭环
 
 ### P1-1：打通前端 SQL 校验页
+- 状态：已完成，`SqlLint.vue` 已调用真实 `/api/lint`，展示 error/warning/suggestion 与问题列表，空 SQL 和请求错误已有页面/拦截器反馈。
 - 为什么做：当前 `SqlLint.vue` 仍是占位逻辑，用户无法从前端使用后端 `/api/lint`。
 - 已有基础：后端已有 `SqlLintService`、`LintController` 和规则单测；前端已有 Monaco SQL 编辑器和请求封装。
 - 缺口：前端未发起真实请求，结果字段与后端返回结构不一致。
@@ -98,6 +99,7 @@
 - 落地方式：更新 `dataspec-web/src/views/SqlLint.vue` 和前端类型定义。
 
 ### P1-2：统一前后端 API 契约和类型
+- 状态：已完成第一版，前端已引入 OpenAPI 生成类型 `schema.ts`，并补齐 project/field/rule/lint API wrapper；`pnpm build` 已作为类型门禁。
 - 为什么做：前端类型中存在 `fieldName/fieldType/totalIssues/line/column` 等字段，但后端实际返回 `name/dataType/errorCount/warningCount/suggestionCount/tableName/columnName` 等结构。
 - 已有基础：后端统一使用 `R<T>` 和 `PageResult<T>`；前端已有 `request.ts` 解包。
 - 缺口：缺少统一 API 类型来源，页面实现容易继续偏离后端。
@@ -110,6 +112,7 @@
 - 落地方式：先用手写轻量 API client，后续再评估从 OpenAPI 生成 TypeScript 类型。
 
 ### P1-3：增强 SQL 解析与 lint 准确性
+- 状态：已完成第一版，已支持 `COMMENT ON TABLE/COLUMN` 回填，新增 `table_naming_snake_case`，并用 parser/lint 单测锁定 good/bad 示例。
 - 为什么做：当前 parser 不解析 `COMMENT ON TABLE/COLUMN`，示例中预期的表名 snake_case 规则也尚未实现，容易产生误报或漏报。
 - 已有基础：已有 `SqlParserService`、`TableDef`、`ColumnDef`、`LintRule` 插件式规则模型和单测。
 - 缺口：缺少表注释/列注释解析、表名规则、定位信息、更多 PostgreSQL 约束识别。
