@@ -81,6 +81,20 @@ node tools/dataspec-cli.mjs export-context --project 1 --output dataspec-ai-cont
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --server http://localhost:8090
 ```
 
+## MCP Server
+
+第一版 MCP Server 同样是 HTTP-backed stdio adapter，需要先启动 DataSpec 后端，并在启动时指定默认项目：
+
+```bash
+node tools/dataspec-mcp.mjs --project 1 --server http://localhost:8090
+```
+
+可在 MCP client 中按本地 stdio server 配置。当前暴露能力：
+
+- resources：`field-catalog`、`database-rules`、`rules-yaml`，URI 形如 `dataspec://project/1/field-catalog`。
+- prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`。
+- tools：`lint_sql`、`get_field_catalog`；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
+
 ## 验证
 
 ```bash
@@ -95,6 +109,9 @@ pnpm build
 # CLI 单元测试
 cd ..
 node --test tools/dataspec-cli.test.mjs
+
+# MCP 单元测试
+node --test tools/dataspec-mcp.test.mjs
 ```
 
 ## 项目结构

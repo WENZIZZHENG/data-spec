@@ -36,6 +36,7 @@
 - 不做/边界：第一阶段不发布包管理器，不做完整安装器。
 
 ### P0-3：建设 DataSpec MCP Server
+- 状态：已完成第一版，已提供 HTTP-backed stdio MCP adapter，支持 resources/prompts，以及 `lint_sql`、`get_field_catalog` 两个核心工具；`suggest_fields`、`generate_table_ddl`、`explain_lint_issue` 待对应后端能力成熟后接入。
 - 类型：MCP 集成、AI 工具协议、新架构边界。
 - 背景/问题：如果 DataSpec 要优先服务 AI，最自然的形态是 MCP Server：暴露规范资源、标准 prompt 和可执行工具。
 - 已有基础：后端已有项目、字段、规则、lint、生成器、AI context 服务。
