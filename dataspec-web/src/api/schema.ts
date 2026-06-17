@@ -648,6 +648,13 @@ export interface components {
             /** Format: int64 */
             domainId?: number;
             tags?: string;
+            aliases?: string;
+            category?: string;
+            /** Format: int64 */
+            codeSetId?: number;
+            sensitive?: boolean;
+            status?: string;
+            exampleValue?: string;
         };
         Field: {
             /** Format: int64 */
@@ -669,6 +676,13 @@ export interface components {
             /** Format: int64 */
             domainId?: number;
             tags?: string;
+            aliases?: string;
+            category?: string;
+            /** Format: int64 */
+            codeSetId?: number;
+            sensitive?: boolean;
+            status?: string;
+            exampleValue?: string;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */

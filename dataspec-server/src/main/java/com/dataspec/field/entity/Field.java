@@ -53,6 +53,26 @@ public class Field {
     /** 标签，逗号分隔 */
     private String tags;
 
+    /** 别名，逗号分隔，用于 AI 按自然语言或历史字段名匹配 */
+    private String aliases;
+
+    /** 字段分类，如 contact、money、audit */
+    private String category;
+
+    /** 关联代码集/枚举字典 ID */
+    @TableField("code_set_id")
+    private Long codeSetId;
+
+    /** 是否敏感字段 */
+    private Boolean sensitive;
+
+    /** 字段状态: enabled/disabled/deprecated */
+    private String status;
+
+    /** 示例值 */
+    @TableField("example_value")
+    private String exampleValue;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

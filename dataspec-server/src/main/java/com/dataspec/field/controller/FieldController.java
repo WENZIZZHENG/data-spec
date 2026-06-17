@@ -66,6 +66,12 @@ public class FieldController {
         field.setComment(req.comment());
         field.setDomainId(req.domainId());
         field.setTags(req.tags());
+        field.setAliases(req.aliases());
+        field.setCategory(req.category());
+        field.setCodeSetId(req.codeSetId());
+        field.setSensitive(req.sensitive());
+        field.setStatus(req.status());
+        field.setExampleValue(req.exampleValue());
         return R.ok(fieldService.create(field));
     }
 
@@ -85,6 +91,12 @@ public class FieldController {
         field.setComment(req.comment());
         field.setDomainId(req.domainId());
         field.setTags(req.tags());
+        field.setAliases(req.aliases());
+        field.setCategory(req.category());
+        field.setCodeSetId(req.codeSetId());
+        field.setSensitive(req.sensitive());
+        field.setStatus(req.status());
+        field.setExampleValue(req.exampleValue());
         return R.ok(fieldService.update(id, field));
     }
 
@@ -108,6 +120,12 @@ public class FieldController {
             String defaultValue,
             String comment,
             Long domainId,
-            String tags
+            String tags,
+            String aliases,
+            String category,
+            Long codeSetId,
+            Boolean sensitive,
+            String status,
+            String exampleValue
     ) {}
 }

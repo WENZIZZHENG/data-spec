@@ -48,6 +48,7 @@
 - 不做/边界：第一阶段不做多租户权限模型和远程 SaaS 托管。
 
 ### P0-4：补齐个人版标准字段模型
+- 状态：已完成第一版，`ds_field` 已扩展 `aliases/category/codeSetId/sensitive/status/exampleValue`，AI 字段目录和 schema 已同步输出；字段库前端表单重做留到 P1 体验专项。
 - 类型：数据模型、标准字段库、AI 上下文基础。
 - 背景/问题：当前 `ds_field` 已支持字段名、显示名、类型、长度、注释、数据域和 tags，但附件中的个人版字段标准还需要别名、敏感标记、启用/停用/废弃状态、代码集关联、示例值等信息。
 - 已有基础：已有标准字段 CRUD、数据域、枚举字典和 `standards/fields/standard-fields.yaml`。

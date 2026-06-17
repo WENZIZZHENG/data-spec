@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -105,9 +106,16 @@ public class AiContextExportService {
                 fn.put("name", f.getName());
                 fn.put("dataType", f.getDataType());
                 fn.put("nullable", f.getNullable());
+                fn.put("sensitive", Boolean.TRUE.equals(f.getSensitive()));
+                fn.put("status", fieldStatusForExport(f.getStatus()));
                 if (f.getComment() != null) fn.put("comment", f.getComment());
                 if (f.getDefaultValue() != null) fn.put("defaultValue", f.getDefaultValue());
                 if (f.getDisplayName() != null) fn.put("displayName", f.getDisplayName());
+                if (f.getCategory() != null) fn.put("category", f.getCategory());
+                if (f.getCodeSetId() != null) fn.put("codeSetId", f.getCodeSetId());
+                if (f.getExampleValue() != null) fn.put("example", f.getExampleValue());
+                ArrayNode aliasesNode = aliasesToArrayNode(mapper, f.getAliases());
+                if (!aliasesNode.isEmpty()) fn.set("aliases", aliasesNode);
                 fieldsNode.add(fn);
             }
             root.set("fields", fieldsNode);
@@ -218,7 +226,19 @@ public class AiContextExportService {
                           "nullable": { "type": "boolean" },
                           "comment": { "type": "string" },
                           "defaultValue": { "type": "string" },
-                          "displayName": { "type": "string" }
+                          "displayName": { "type": "string" },
+                          "aliases": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                          },
+                          "category": { "type": "string" },
+                          "codeSetId": { "type": "integer" },
+                          "sensitive": { "type": "boolean" },
+                          "status": {
+                            "type": "string",
+                            "enum": ["enabled", "disabled", "deprecated"]
+                          },
+                          "example": { "type": "string" }
                         }
                       }
                     },
@@ -250,6 +270,23 @@ public class AiContextExportService {
                   }
                 }
                 """;
+    }
+
+    private ArrayNode aliasesToArrayNode(ObjectMapper mapper, String aliases) {
+        ArrayNode node = mapper.createArrayNode();
+        if (aliases == null || aliases.isBlank()) {
+            return node;
+        }
+        Arrays.stream(aliases.split(","))
+                .map(String::trim)
+                .filter(alias -> !alias.isBlank())
+                .distinct()
+                .forEach(node::add);
+        return node;
+    }
+
+    private String fieldStatusForExport(String status) {
+        return status == null || status.isBlank() ? "enabled" : status;
     }
 
     private String generatePromptsMarkdown() {

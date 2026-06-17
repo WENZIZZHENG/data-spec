@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * 标准字段服务实现
@@ -17,6 +19,9 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class FieldServiceImpl implements FieldService {
+
+    private static final String DEFAULT_STATUS = "enabled";
+    private static final Set<String> ALLOWED_STATUSES = Set.of("enabled", "disabled", "deprecated");
 
     private final FieldRepository fieldRepository;
 
@@ -42,6 +47,7 @@ public class FieldServiceImpl implements FieldService {
             throw new BizException("项目内字段名已存在: " + field.getName());
         }
         field.setNullable(field.getNullable() != null ? field.getNullable() : true);
+        applyPersonalMetadataDefaults(field);
         fieldRepository.insert(field);
         return field;
     }
@@ -63,6 +69,12 @@ public class FieldServiceImpl implements FieldService {
         existing.setComment(field.getComment());
         existing.setDomainId(field.getDomainId());
         existing.setTags(field.getTags());
+        existing.setAliases(field.getAliases());
+        existing.setCategory(field.getCategory());
+        existing.setCodeSetId(field.getCodeSetId());
+        existing.setSensitive(field.getSensitive() != null ? field.getSensitive() : false);
+        existing.setStatus(normalizeStatus(field.getStatus()));
+        existing.setExampleValue(field.getExampleValue());
         fieldRepository.update(existing);
         return existing;
     }
@@ -71,5 +83,21 @@ public class FieldServiceImpl implements FieldService {
     public void delete(Long id) {
         getById(id);
         fieldRepository.deleteById(id);
+    }
+
+    private void applyPersonalMetadataDefaults(Field field) {
+        field.setSensitive(field.getSensitive() != null ? field.getSensitive() : false);
+        field.setStatus(normalizeStatus(field.getStatus()));
+    }
+
+    private String normalizeStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return DEFAULT_STATUS;
+        }
+        String normalized = status.trim().toLowerCase(Locale.ROOT);
+        if (!ALLOWED_STATUSES.contains(normalized)) {
+            throw new BizException("无效字段状态: " + status + "，允许值: " + ALLOWED_STATUSES);
+        }
+        return normalized;
     }
 }

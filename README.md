@@ -63,6 +63,10 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1" -o d
 
 解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前读取字段标准和规则。
 
+## 标准字段模型
+
+标准字段支持 `aliases`、`category`、`codeSetId`、`sensitive`、`status`、`exampleValue` 等个人版元数据。AI 导出的 `field-catalog.json` 会把 `aliases` 转成数组，并输出敏感标记、字段状态、代码集关联和示例值，方便 AI 按业务语义复用标准字段。
+
 ## CLI
 
 第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`：

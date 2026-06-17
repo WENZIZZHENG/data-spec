@@ -52,10 +52,26 @@ class AiContextExportServiceTest {
         assertTrue(entries.get(".dataspec/examples/good.sql").contains("CREATE TABLE users"));
         assertTrue(entries.get(".dataspec/examples/bad.sql").contains("CREATE TABLE UserOrder"));
 
+        var catalog = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.json"));
+        var field = catalog.path("fields").get(0);
+        assertEquals("phone", field.path("aliases").get(0).asText());
+        assertEquals("mobile", field.path("aliases").get(1).asText());
+        assertTrue(field.path("sensitive").asBoolean());
+        assertEquals("enabled", field.path("status").asText());
+        assertEquals("contact", field.path("category").asText());
+        assertEquals(10L, field.path("codeSetId").asLong());
+        assertEquals("13800138000", field.path("example").asText());
+
         var schema = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.schema.json"));
         assertTrue(schema.path("properties").has("projectId"));
         assertTrue(schema.path("properties").has("fields"));
         assertTrue(schema.path("properties").has("enums"));
+        var fieldProperties = schema.path("properties").path("fields").path("items").path("properties");
+        assertTrue(fieldProperties.has("aliases"));
+        assertTrue(fieldProperties.has("sensitive"));
+        assertTrue(fieldProperties.has("status"));
+        assertTrue(fieldProperties.has("codeSetId"));
+        assertTrue(fieldProperties.has("example"));
     }
 
     private AiContextExportService createService() {
@@ -92,6 +108,12 @@ class AiContextExportServiceTest {
         field.setNullable(false);
         field.setComment("用户手机号");
         field.setDefaultValue("");
+        field.setAliases("phone, mobile, tel, user_phone");
+        field.setCategory("contact");
+        field.setSensitive(true);
+        field.setStatus("enabled");
+        field.setCodeSetId(10L);
+        field.setExampleValue("13800138000");
         return field;
     }
 
