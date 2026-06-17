@@ -88,6 +88,16 @@ curl "http://localhost:8090/api/fields/suggest?projectId=1&query=用户手机号
 
 推荐结果会返回已有标准字段、匹配分数、命中原因、推荐字段名和 `existing` 标记。第一版按字段名、显示名、注释、别名、分类和标签匹配；未命中时生成一个 snake_case fallback 字段名。
 
+## DDL 生成
+
+后端提供基于表模板的 PostgreSQL DDL 生成 API，并在生成后复用 DataSpec lint 做自检：
+
+```bash
+curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&tableName=user_order"
+```
+
+返回结果包含 `ddl` 和 `lintResult`。第一版只生成 `CREATE TABLE` 与 `COMMENT ON` 文本，不执行数据库变更，也不生成迁移计划。
+
 ## CLI
 
 第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`：
@@ -105,6 +115,9 @@ node tools/dataspec-cli.mjs export-context --project 1 --output dataspec-ai-cont
 # 推荐标准字段
 node tools/dataspec-cli.mjs suggest-field "用户手机号" --project 1 --format json
 
+# 基于表模板生成 DDL，并返回 lint 自检结果
+node tools/dataspec-cli.mjs generate-ddl --project 1 --template 1 --table user_order --format json
+
 # 指定后端地址
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --server http://localhost:8090
 ```
@@ -121,7 +134,7 @@ node tools/dataspec-mcp.mjs --project 1 --server http://localhost:8090
 
 - resources：`field-catalog`、`database-rules`、`rules-yaml`，URI 形如 `dataspec://project/1/field-catalog`。
 - prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`。
-- tools：`lint_sql`、`get_field_catalog`、`suggest_fields`；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
+- tools：`lint_sql`、`get_field_catalog`、`suggest_fields`、`generate_table_ddl`；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
 
 ## 验证
 
@@ -156,7 +169,7 @@ data-spec/
 │       ├── template/         # 表模板
 │       ├── rule/             # 规则配置
 │       ├── lint/             # SQL 校验引擎 + 规则实现
-│       ├── generator/        # Markdown 数据字典生成
+│       ├── generator/        # Markdown 数据字典与 DDL 生成
 │       ├── aicontext/        # AI 规则导出
 │       └── importexport/     # 导入导出
 ├── dataspec-web/             # Vue 3 前端
@@ -178,7 +191,7 @@ data-spec/
 | template | /api/templates | 表模板 + 模板字段 |
 | rule | /api/rules | 规则配置管理 |
 | lint | /api/lint | SQL 粘贴校验 |
-| generator | /api/generator | Markdown 数据字典生成 |
+| generator | /api/generator | Markdown 数据字典与 DDL 生成 |
 | aicontext | /api/ai-context | AI 规则导出 |
 | importexport | /api/import-export | 字段导入导出 |
 
@@ -207,6 +220,7 @@ data-spec/
 - [x] 规则配置 CRUD
 - [x] SQL 粘贴校验（PostgreSQL CREATE TABLE）
 - [x] 字段推荐 API/CLI/MCP
+- [x] DDL 生成 API/CLI/MCP
 - [x] 校验结果输出 error/warning/suggestion
 - [x] SQL lint 结构化修复建议
 - [x] 生成 Markdown 数据字典

@@ -356,6 +356,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/generator/ddl/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewDdl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/generator/markdown/download": {
         parameters: {
             query?: never;
@@ -876,6 +892,16 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["LintResult"];
+        };
+        DdlGenerateResult: {
+            ddl?: string;
+            lintResult?: components["schemas"]["LintResult"];
+        };
+        RDdlGenerateResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DdlGenerateResult"];
         };
         TableDef: {
             name?: string;
@@ -2792,6 +2818,48 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RString"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    previewDdl: {
+        parameters: {
+            query: {
+                projectId: number;
+                templateId: number;
+                tableName: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDdlGenerateResult"];
                 };
             };
             /** @description Bad Request */

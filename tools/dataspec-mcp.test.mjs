@@ -161,6 +161,37 @@ test('suggest_fields tool returns structured suggestions', async () => {
   assert.equal(JSON.parse(response.result.content[0].text)[0].existing, true)
 })
 
+test('generate_table_ddl tool returns structured ddl result', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    calls.push(url)
+    return jsonResponse({
+      code: 200,
+      data: {
+        ddl: 'CREATE TABLE user_order (id bigserial);',
+        lintResult: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] }
+      }
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 11,
+    method: 'tools/call',
+    params: {
+      name: 'generate_table_ddl',
+      arguments: { templateId: 10, tableName: 'user_order', projectId: 8 }
+    }
+  })
+
+  assert.equal(
+    calls[0],
+    'http://dataspec.local/api/generator/ddl/preview?projectId=8&templateId=10&tableName=user_order'
+  )
+  assert.equal(response.result.structuredContent.ddl, 'CREATE TABLE user_order (id bigserial);')
+  assert.equal(JSON.parse(response.result.content[0].text).lintResult.errorCount, 0)
+})
+
 test('unknown method returns json rpc method not found error', async () => {
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
 

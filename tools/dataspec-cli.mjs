@@ -25,6 +25,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'suggest-field') {
       return await runSuggestField(rest, io, fetchFn)
     }
+    if (command === 'generate-ddl') {
+      return await runGenerateDdl(rest, io, fetchFn)
+    }
     throw new Error(`未知命令: ${command}\n\n${helpText()}`)
   } catch (error) {
     io.writeErr(`错误: ${error.message}\n`)
@@ -107,6 +110,30 @@ async function runSuggestField(args, io, fetchFn) {
   return 0
 }
 
+async function runGenerateDdl(args, io, fetchFn) {
+  const { positional, options } = parseArgs(args, ['project', 'template', 'table', 'format', 'server'])
+  if (positional.length > 0) {
+    throw new Error(`generate-ddl 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const projectId = parseProjectId(options.project)
+  const templateId = parsePositiveInteger(options.template, 'template id')
+  const tableName = options.table
+  if (!tableName) {
+    throw new Error('generate-ddl 需要提供 --table <name>')
+  }
+  const format = options.format ?? 'json'
+  if (format !== 'json') {
+    throw new Error('当前仅支持 --format json')
+  }
+  const server = normalizeServer(options.server)
+  const url = `${server}/api/generator/ddl/preview?projectId=${encodeURIComponent(projectId)}&templateId=${encodeURIComponent(templateId)}&tableName=${encodeURIComponent(tableName)}`
+  const response = await fetchFn(url)
+  const payload = await readJsonResponse(response)
+  const result = unwrapResponse(payload)
+  io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  return 0
+}
+
 function parseArgs(args, allowedOptions) {
   const positional = []
   const options = {}
@@ -135,11 +162,15 @@ function parseProjectId(value) {
   if (!value) {
     throw new Error('需要提供 --project <id>')
   }
-  const projectId = Number(value)
-  if (!Number.isInteger(projectId) || projectId <= 0) {
-    throw new Error(`无效 project id: ${value}`)
+  return parsePositiveInteger(value, 'project id')
+}
+
+function parsePositiveInteger(value, label) {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`无效 ${label}: ${value}`)
   }
-  return projectId
+  return parsed
 }
 
 function parseLimit(value, fallback = 5) {
@@ -179,6 +210,7 @@ Usage:
   node tools/dataspec-cli.mjs lint <path|-> --project <id> --format json [--server <url>]
   node tools/dataspec-cli.mjs export-context --project <id> --output <zip> [--server <url>]
   node tools/dataspec-cli.mjs suggest-field <query> --project <id> --format json [--limit <n>] [--server <url>]
+  node tools/dataspec-cli.mjs generate-ddl --project <id> --template <id> --table <name> --format json [--server <url>]
 `
 }
 

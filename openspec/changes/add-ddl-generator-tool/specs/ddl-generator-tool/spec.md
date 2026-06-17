@@ -1,0 +1,27 @@
+## ADDED Requirements
+
+### Requirement: Template DDL Generation
+The system SHALL generate PostgreSQL DDL from a DataSpec table template.
+
+#### Scenario: Generate DDL from template
+- **WHEN** a client provides `projectId`, `templateId`, and `tableName`
+- **THEN** the system returns PostgreSQL `CREATE TABLE` SQL
+- **AND** the SQL includes `COMMENT ON TABLE` and `COMMENT ON COLUMN` statements when comments are available
+
+### Requirement: Generated DDL Self Check
+Generated DDL SHALL be checked by the existing DataSpec lint engine.
+
+#### Scenario: Return lint result
+- **WHEN** DDL is generated
+- **THEN** the response includes the generated SQL and the lint result for the same project
+
+### Requirement: AI Tool Entrypoints
+DDL generation SHALL be available through API, CLI, and MCP.
+
+#### Scenario: CLI DDL generation
+- **WHEN** a user runs `generate-ddl --template <id> --table <name> --project <id> --format json`
+- **THEN** the CLI calls the DDL API and prints the JSON result
+
+#### Scenario: MCP DDL generation
+- **WHEN** an MCP client calls `generate_table_ddl`
+- **THEN** the MCP server calls the DDL API and returns structured JSON content

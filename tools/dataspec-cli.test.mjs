@@ -136,6 +136,47 @@ test('suggest-field calls field suggestion api and prints json', async () => {
   assert.equal(io.stderr, '')
 })
 
+test('generate-ddl calls ddl preview api and prints json', async () => {
+  const calls = []
+  const fetchFn = async (url) => {
+    calls.push(url)
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          ddl: 'CREATE TABLE user_order (id bigserial);',
+          lintResult: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] }
+        }
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'generate-ddl',
+    '--project',
+    '7',
+    '--template',
+    '10',
+    '--table',
+    'user_order',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.equal(
+    calls[0],
+    'http://dataspec.local/api/generator/ddl/preview?projectId=7&templateId=10&tableName=user_order'
+  )
+  assert.equal(JSON.parse(io.stdout).ddl, 'CREATE TABLE user_order (id bigserial);')
+  assert.equal(io.stderr, '')
+})
+
 test('invalid arguments print stderr and return 2', async () => {
   const io = createIo()
   const fetchFn = async () => {

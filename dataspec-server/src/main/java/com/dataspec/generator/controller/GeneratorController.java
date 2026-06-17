@@ -1,6 +1,8 @@
 package com.dataspec.generator.controller;
 
 import com.dataspec.common.result.R;
+import com.dataspec.generator.model.DdlGenerateResult;
+import com.dataspec.generator.service.DdlGeneratorService;
 import com.dataspec.generator.service.MarkdownGeneratorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -20,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 public class GeneratorController {
 
     private final MarkdownGeneratorService markdownGeneratorService;
+    private final DdlGeneratorService ddlGeneratorService;
 
     /**
      * 预览 Markdown 数据字典
@@ -27,6 +30,16 @@ public class GeneratorController {
     @GetMapping("/markdown/preview")
     public R<String> previewMarkdown(@RequestParam Long projectId) {
         return R.ok(markdownGeneratorService.generateDataDictionary(projectId));
+    }
+
+    /**
+     * 预览表模板生成的 PostgreSQL DDL
+     */
+    @GetMapping("/ddl/preview")
+    public R<DdlGenerateResult> previewDdl(@RequestParam Long projectId,
+                                           @RequestParam Long templateId,
+                                           @RequestParam String tableName) {
+        return R.ok(ddlGeneratorService.generateFromTemplate(projectId, templateId, tableName));
     }
 
     /**

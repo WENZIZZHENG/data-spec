@@ -12,6 +12,7 @@ export type RuleConfigReq = Schemas['RuleConfigReq']
 export type LintRequest = Schemas['LintRequest']
 export type LintResult = Schemas['LintResult']
 export type LintIssue = Schemas['LintIssue']
+export type DdlGenerateResult = Schemas['DdlGenerateResult']
 export type TableDef = Schemas['TableDef']
 export type ColumnDef = Schemas['ColumnDef']
 

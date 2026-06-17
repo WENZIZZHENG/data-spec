@@ -24,7 +24,7 @@
 - 不做/边界：本任务只生成上下文文件，不自动修改外部业务仓库。
 
 ### P0-2：提供 DataSpec CLI 给 AI 和 CI 调用
-- 状态：已完成第一版，已提供 HTTP-backed CLI，支持 `lint <path|-> --format json` 和 `export-context --output <zip>`；`generate-ddl`、`suggest-field` 待对应能力成熟后接入。
+- 状态：已完成第一版，已提供 HTTP-backed CLI，支持 `lint <path|-> --format json`、`export-context --output <zip>`、`suggest-field` 和 `generate-ddl`。
 - 类型：命令行工具、自动化入口、AI 工具调用。
 - 背景/问题：AI agent 和 CI 更适合调用命令行；如果只有 Web API/后台页面，DataSpec 很难进入真实编码工作流。
 - 已有基础：后端已有 lint、AI context、generator 等 service；示例 SQL 已在 `examples/`。
@@ -36,7 +36,7 @@
 - 不做/边界：第一阶段不发布包管理器，不做完整安装器。
 
 ### P0-3：建设 DataSpec MCP Server
-- 状态：已完成第一版，已提供 HTTP-backed stdio MCP adapter，支持 resources/prompts，以及 `lint_sql`、`get_field_catalog` 两个核心工具；`suggest_fields`、`generate_table_ddl`、`explain_lint_issue` 待对应后端能力成熟后接入。
+- 状态：已完成第一版，已提供 HTTP-backed stdio MCP adapter，支持 resources/prompts，以及 `lint_sql`、`get_field_catalog`、`suggest_fields`、`generate_table_ddl` 核心工具；`explain_lint_issue` 待后续接入。
 - 类型：MCP 集成、AI 工具协议、新架构边界。
 - 背景/问题：如果 DataSpec 要优先服务 AI，最自然的形态是 MCP Server：暴露规范资源、标准 prompt 和可执行工具。
 - 已有基础：后端已有项目、字段、规则、lint、生成器、AI context 服务。
@@ -164,6 +164,7 @@
 - 落地方式：先扩展 Java model 和核心规则单测，再接 CLI/MCP JSON 输出。
 
 ### P1-7：DDL 生成能力作为 AI tool
+- 状态：已完成第一版，已提供模板驱动的 PostgreSQL DDL 生成 API、CLI `generate-ddl` 和 MCP `generate_table_ddl`，生成结果包含 `ddl` 与 lint 自检结果；不执行数据库变更。
 - 为什么做：理想流程不是让 AI 直接手写建表 SQL，而是 AI 提供业务语义，DataSpec 匹配字段/模板并生成规范 DDL，再自检。
 - 已有基础：模板、模板字段、标准字段和 Markdown generator。
 - 缺口：缺少面向 AI 调用的 DDL 生成接口和 lint 自检闭环。

@@ -310,6 +310,28 @@ function listTools() {
           },
           required: ['query']
         }
+      },
+      {
+        name: 'generate_table_ddl',
+        description: '根据 DataSpec 表模板生成 PostgreSQL DDL，并返回 lint 自检结果。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            templateId: {
+              type: 'integer',
+              description: '表模板 ID。'
+            },
+            tableName: {
+              type: 'string',
+              description: '生成 DDL 使用的 snake_case 表名。'
+            },
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            }
+          },
+          required: ['templateId', 'tableName']
+        }
       }
     ]
   }
@@ -326,6 +348,9 @@ async function callTool(params, context) {
   }
   if (name === 'suggest_fields') {
     return await callSuggestFields(args, context)
+  }
+  if (name === 'generate_table_ddl') {
+    return await callGenerateTableDdl(args, context)
   }
   throw new JsonRpcError(-32602, `未知 tool: ${name}`)
 }
@@ -365,6 +390,19 @@ async function callSuggestFields(args, context) {
   const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
   const limit = optionalLimit(args.limit, 5)
   const url = `${context.server}/api/fields/suggest?projectId=${encodeURIComponent(projectId)}&query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`
+  const response = await context.fetchFn(url)
+  const result = await readDataSpecJson(response)
+  return toolJsonResult(result)
+}
+
+async function callGenerateTableDdl(args, context) {
+  const templateId = parsePositiveInteger(args.templateId, 'templateId')
+  const tableName = args.tableName
+  if (typeof tableName !== 'string' || tableName.trim() === '') {
+    throw new JsonRpcError(-32602, 'generate_table_ddl 需要非空 tableName')
+  }
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  const url = `${context.server}/api/generator/ddl/preview?projectId=${encodeURIComponent(projectId)}&templateId=${encodeURIComponent(templateId)}&tableName=${encodeURIComponent(tableName)}`
   const response = await context.fetchFn(url)
   const result = await readDataSpecJson(response)
   return toolJsonResult(result)
@@ -434,22 +472,22 @@ function optionalLimit(value, fallback) {
   if (value === undefined || value === null || value === '') {
     return fallback
   }
-  const limit = Number(value)
-  if (!Number.isInteger(limit) || limit <= 0) {
-    throw new JsonRpcError(-32602, `无效 limit: ${value}`)
-  }
-  return limit
+  return parsePositiveInteger(value, 'limit')
 }
 
 function parseProjectId(value) {
   if (value === undefined || value === null || value === '') {
     throw new JsonRpcError(-32602, '需要提供 --project <id>')
   }
-  const projectId = Number(value)
-  if (!Number.isInteger(projectId) || projectId <= 0) {
-    throw new JsonRpcError(-32602, `无效 project id: ${value}`)
+  return parsePositiveInteger(value, 'project id')
+}
+
+function parsePositiveInteger(value, label) {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new JsonRpcError(-32602, `无效 ${label}: ${value}`)
   }
-  return projectId
+  return parsed
 }
 
 function normalizeServer(server = DEFAULT_SERVER) {
