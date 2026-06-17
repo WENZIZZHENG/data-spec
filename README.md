@@ -63,6 +63,24 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1" -o d
 
 解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前读取字段标准和规则。
 
+## CLI
+
+第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`：
+
+```bash
+# 校验 SQL 文件，发现 ERROR 时退出码为 1，参数错误/网络错误退出码为 2
+node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json
+
+# 从 stdin 校验
+cat examples/good-example.sql | node tools/dataspec-cli.mjs lint - --project 1 --format json
+
+# 导出 AI Context zip 包
+node tools/dataspec-cli.mjs export-context --project 1 --output dataspec-ai-context.zip
+
+# 指定后端地址
+node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --server http://localhost:8090
+```
+
 ## 验证
 
 ```bash
@@ -73,6 +91,10 @@ mvn test
 # 前端类型检查与生产构建
 cd ../dataspec-web
 pnpm build
+
+# CLI 单元测试
+cd ..
+node --test tools/dataspec-cli.test.mjs
 ```
 
 ## 项目结构

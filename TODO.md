@@ -24,6 +24,7 @@
 - 不做/边界：本任务只生成上下文文件，不自动修改外部业务仓库。
 
 ### P0-2：提供 DataSpec CLI 给 AI 和 CI 调用
+- 状态：已完成第一版，已提供 HTTP-backed CLI，支持 `lint <path|-> --format json` 和 `export-context --output <zip>`；`generate-ddl`、`suggest-field` 待对应能力成熟后接入。
 - 类型：命令行工具、自动化入口、AI 工具调用。
 - 背景/问题：AI agent 和 CI 更适合调用命令行；如果只有 Web API/后台页面，DataSpec 很难进入真实编码工作流。
 - 已有基础：后端已有 lint、AI context、generator 等 service；示例 SQL 已在 `examples/`。
