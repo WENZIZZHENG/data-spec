@@ -74,4 +74,15 @@ public class AiContextController {
                 .contentType(MediaType.parseMediaType("text/yaml"))
                 .body(content.getBytes(StandardCharsets.UTF_8));
     }
+
+    /** 下载 AI Context zip 包 */
+
+    @GetMapping("/package/download")
+    public ResponseEntity<byte[]> downloadAiContextPackage(@RequestParam Long projectId) {
+        byte[] content = aiContextExportService.generateAiContextPackage(projectId);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=dataspec-ai-context.zip")
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .body(content);
+    }
 }

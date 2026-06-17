@@ -12,6 +12,7 @@
 ## P0：AI 可消费主线
 
 ### P0-1：升级 AI Context 导出包
+- 状态：已完成，已新增 `dataspec-ai-context.zip` 导出能力，包含 `.dataspec/` 上下文、JSON Schema、Prompt、示例 SQL 和 `AGENTS.md.fragment`。
 - 类型：AI 上下文、文档生成、规范导出。
 - 背景/问题：当前已有 `DATABASE_RULES.md`、`field-catalog.json`、`rules.yaml` 单项导出，但 AI 编程工具更需要一次性、结构化、可放进业务仓库的上下文包。
 - 已有基础：后端已有 `AiContextExportService`，可生成规则文档、字段目录和规则 YAML。

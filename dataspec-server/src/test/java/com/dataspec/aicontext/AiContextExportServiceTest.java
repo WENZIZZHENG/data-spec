@@ -1,0 +1,112 @@
+package com.dataspec.aicontext;
+
+import com.dataspec.aicontext.service.AiContextExportService;
+import com.dataspec.enumdict.service.EnumDictService;
+import com.dataspec.field.entity.Field;
+import com.dataspec.field.service.FieldService;
+import com.dataspec.lint.engine.SqlLintService;
+import com.dataspec.lint.engine.SqlParserService;
+import com.dataspec.lint.rules.TableNameSnakeCaseRule;
+import com.dataspec.rule.service.RuleConfigService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.zip.ZipInputStream;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+/**
+ * AI Context 导出服务测试
+ */
+class AiContextExportServiceTest {
+
+    private static final Long PROJECT_ID = 1L;
+
+    @Test
+    void generateAiContextPackage_containsAgentReadyContextFiles() throws Exception {
+        AiContextExportService service = createService();
+
+        byte[] zipBytes = service.generateAiContextPackage(PROJECT_ID);
+        Map<String, String> entries = unzipTextEntries(zipBytes);
+
+        assertTrue(entries.containsKey(".dataspec/DATABASE_RULES.md"));
+        assertTrue(entries.containsKey(".dataspec/field-catalog.json"));
+        assertTrue(entries.containsKey(".dataspec/field-catalog.schema.json"));
+        assertTrue(entries.containsKey(".dataspec/rules.yaml"));
+        assertTrue(entries.containsKey(".dataspec/prompts.md"));
+        assertTrue(entries.containsKey(".dataspec/examples/good.sql"));
+        assertTrue(entries.containsKey(".dataspec/examples/bad.sql"));
+        assertTrue(entries.containsKey("AGENTS.md.fragment"));
+
+        assertTrue(entries.get(".dataspec/DATABASE_RULES.md").contains("table_naming_snake_case"));
+        assertTrue(entries.get(".dataspec/field-catalog.json").contains("mobile_no"));
+        assertTrue(entries.get(".dataspec/prompts.md").contains("创建表"));
+        assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/field-catalog.json"));
+        assertTrue(entries.get(".dataspec/examples/good.sql").contains("CREATE TABLE users"));
+        assertTrue(entries.get(".dataspec/examples/bad.sql").contains("CREATE TABLE UserOrder"));
+
+        var schema = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.schema.json"));
+        assertTrue(schema.path("properties").has("projectId"));
+        assertTrue(schema.path("properties").has("fields"));
+        assertTrue(schema.path("properties").has("enums"));
+    }
+
+    private AiContextExportService createService() {
+        RuleConfigService ruleConfigService = mock(RuleConfigService.class);
+        FieldService fieldService = mock(FieldService.class);
+        EnumDictService enumDictService = mock(EnumDictService.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        when(ruleConfigService.listByProject(PROJECT_ID)).thenReturn(List.of());
+        when(ruleConfigService.listEnabledByProject(PROJECT_ID)).thenReturn(List.of());
+        when(fieldService.listByProject(PROJECT_ID)).thenReturn(List.of(sampleField()));
+        when(enumDictService.listByProject(PROJECT_ID)).thenReturn(List.of());
+
+        SqlLintService sqlLintService = new SqlLintService(
+                new SqlParserService(),
+                ruleConfigService,
+                List.of(new TableNameSnakeCaseRule()),
+                objectMapper
+        );
+        return new AiContextExportService(
+                ruleConfigService,
+                fieldService,
+                enumDictService,
+                sqlLintService,
+                objectMapper
+        );
+    }
+
+    private Field sampleField() {
+        Field field = new Field();
+        field.setName("mobile_no");
+        field.setDisplayName("手机号");
+        field.setDataType("varchar(20)");
+        field.setNullable(false);
+        field.setComment("用户手机号");
+        field.setDefaultValue("");
+        return field;
+    }
+
+    private Map<String, String> unzipTextEntries(byte[] zipBytes) throws Exception {
+        Map<String, String> entries = new HashMap<>();
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(zipBytes), StandardCharsets.UTF_8)) {
+            var entry = zip.getNextEntry();
+            while (entry != null) {
+                if (!entry.isDirectory()) {
+                    entries.put(entry.getName(), new String(zip.readAllBytes(), StandardCharsets.UTF_8));
+                }
+                zip.closeEntry();
+                entry = zip.getNextEntry();
+            }
+        }
+        return entries;
+    }
+}

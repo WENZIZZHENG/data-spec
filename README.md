@@ -53,6 +53,16 @@ pnpm dev
 
 前端启动在 http://localhost:5173
 
+## AI Context 导出包
+
+DataSpec 可为 AI 编程工具导出完整上下文包：
+
+```bash
+curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1" -o dataspec-ai-context.zip
+```
+
+解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前读取字段标准和规则。
+
 ## 验证
 
 ```bash
@@ -111,6 +121,7 @@ data-spec/
 
 | 规则编码 | 说明 | 级别 |
 |----------|------|------|
+| table_naming_snake_case | 表命名必须 snake_case | ERROR |
 | field_naming_snake_case | 字段命名必须 snake_case | ERROR |
 | forbidden_field_name | 禁用字段名（uid、create_time 等） | ERROR |
 | recommended_field_name | 推荐字段名（create_time → created_at） | SUGGESTION |
@@ -129,4 +140,5 @@ data-spec/
 - [x] 校验结果输出 error/warning/suggestion
 - [x] 生成 Markdown 数据字典
 - [x] 导出 DATABASE_RULES.md、field-catalog.json、rules.yaml
+- [x] 导出 AI Context zip 包
 - [x] 字段 JSON 导入导出
