@@ -18,7 +18,7 @@ public class ForbiddenFieldNameRule implements LintRule {
 
     private static final Set<String> DEFAULT_FORBIDDEN = Set.of(
             "uid", "create_time", "update_time", "del_flag",
-            "ctime", "mtime", "is_del"
+            "ctime", "mtime", "is_del", "tmp", "test", "flag1", "type1"
     );
 
     @Override

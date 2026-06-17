@@ -8,6 +8,7 @@ import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.service.EnumDictService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -21,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -34,6 +36,29 @@ import java.util.zip.ZipOutputStream;
 public class AiContextExportService {
 
     private static final String PACKAGE_FILE_NAME = "dataspec-ai-context.zip";
+    private static final List<String> DEFAULT_REQUIRED_COLUMNS = List.of("id", "created_at", "updated_at", "is_deleted");
+    private static final List<String> DEFAULT_FORBIDDEN_NAMES = List.of(
+            "uid", "create_time", "update_time", "del_flag", "ctime", "mtime", "is_del", "tmp", "test", "flag1", "type1"
+    );
+    private static final Map<String, String> DEFAULT_RECOMMENDATIONS = orderedStringMap(
+            "create_time", "created_at",
+            "update_time", "updated_at",
+            "delete_time", "deleted_at",
+            "user_name", "username",
+            "pass_word", "password",
+            "is_delete", "is_deleted",
+            "phone_number", "phone",
+            "email_address", "email"
+    );
+    private static final Map<String, List<String>> DEFAULT_SUFFIX_TYPES = orderedStringListMap(
+            Map.entry("_id", List.of("bigint", "integer", "bigserial")),
+            Map.entry("_at", List.of("timestamp", "timestamp with time zone", "datetime")),
+            Map.entry("_no", List.of("varchar", "char", "text")),
+            Map.entry("_count", List.of("integer", "bigint"))
+    );
+    private static final Map<String, List<String>> DEFAULT_PREFIX_TYPES = orderedStringListMap(
+            Map.entry("is_", List.of("boolean"))
+    );
 
     private final RuleConfigService ruleConfigService;
     private final FieldService fieldService;
@@ -153,9 +178,11 @@ public class AiContextExportService {
         StringBuilder yaml = new StringBuilder();
         yaml.append("# DataSpec 规则配置\n");
         yaml.append("# 此文件由 DataSpec 自动生成\n\n");
-        yaml.append("rules:\n");
 
         List<RuleConfig> configs = ruleConfigService.listByProject(projectId);
+        appendStructuredNamingRules(yaml, configs);
+
+        yaml.append("rules:\n");
         for (RuleConfig cfg : configs) {
             yaml.append(String.format("  - code: %s\n", cfg.getRuleCode()));
             yaml.append(String.format("    name: %s\n", cfg.getRuleName()));
@@ -167,6 +194,110 @@ public class AiContextExportService {
         }
 
         return yaml.toString();
+    }
+
+    private void appendStructuredNamingRules(StringBuilder yaml, List<RuleConfig> configs) {
+        Map<String, RuleConfig> configByCode = new LinkedHashMap<>();
+        for (RuleConfig config : configs) {
+            configByCode.put(config.getRuleCode(), config);
+        }
+
+        Map<String, Object> requiredParams = readRuleParams(configByCode.get("required_columns"));
+        Map<String, Object> forbiddenParams = readRuleParams(configByCode.get("forbidden_field_name"));
+        Map<String, Object> recommendedParams = readRuleParams(configByCode.get("recommended_field_name"));
+        Map<String, Object> suffixParams = readRuleParams(configByCode.get("field_suffix_type"));
+
+        yaml.append("naming:\n");
+        yaml.append("  table_case: snake_case\n");
+        yaml.append("  field_case: snake_case\n");
+        appendYamlList(yaml, "  required_columns", stringListParam(requiredParams, "requiredColumns", DEFAULT_REQUIRED_COLUMNS));
+        appendYamlList(yaml, "  forbidden_names", stringListParam(forbiddenParams, "forbiddenNames", DEFAULT_FORBIDDEN_NAMES));
+        appendYamlStringMap(yaml, "  recommendations", stringMapParam(recommendedParams, "recommendations", DEFAULT_RECOMMENDATIONS));
+        appendYamlStringListMap(yaml, "  suffix_types", stringListMapParam(suffixParams, "suffixTypes", DEFAULT_SUFFIX_TYPES));
+        appendYamlStringListMap(yaml, "  prefix_types", stringListMapParam(suffixParams, "prefixTypes", DEFAULT_PREFIX_TYPES));
+        yaml.append("\n");
+    }
+
+    private Map<String, Object> readRuleParams(RuleConfig config) {
+        if (config == null || config.getParamsJson() == null || config.getParamsJson().isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(config.getParamsJson(), new TypeReference<>() {});
+        } catch (Exception ignored) {
+            // AI 导出不应因单条规则参数格式错误失败；此处回退到内置默认规则。
+            return Map.of();
+        }
+    }
+
+    private List<String> stringListParam(Map<String, Object> params, String key, List<String> defaults) {
+        Object value = params.get(key);
+        if (value instanceof List<?> list) {
+            return list.stream().map(Object::toString).toList();
+        }
+        return defaults;
+    }
+
+    private Map<String, String> stringMapParam(Map<String, Object> params, String key, Map<String, String> defaults) {
+        Object value = params.get(key);
+        if (value instanceof Map<?, ?> map) {
+            Map<String, String> result = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null && entry.getValue() != null) {
+                    result.put(entry.getKey().toString(), entry.getValue().toString());
+                }
+            }
+            return result.isEmpty() ? defaults : result;
+        }
+        return defaults;
+    }
+
+    private Map<String, List<String>> stringListMapParam(
+            Map<String, Object> params,
+            String key,
+            Map<String, List<String>> defaults
+    ) {
+        Object value = params.get(key);
+        if (value instanceof Map<?, ?> map) {
+            Map<String, List<String>> result = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() == null) {
+                    continue;
+                }
+                Object entryValue = entry.getValue();
+                if (entryValue instanceof List<?> list) {
+                    result.put(entry.getKey().toString(), list.stream().map(Object::toString).toList());
+                } else if (entryValue instanceof String text) {
+                    result.put(entry.getKey().toString(), List.of(text));
+                }
+            }
+            return result.isEmpty() ? defaults : result;
+        }
+        return defaults;
+    }
+
+    private void appendYamlList(StringBuilder yaml, String key, List<String> values) {
+        yaml.append(key).append(":\n");
+        for (String value : values) {
+            yaml.append("    - ").append(value).append("\n");
+        }
+    }
+
+    private void appendYamlStringMap(StringBuilder yaml, String key, Map<String, String> values) {
+        yaml.append(key).append(":\n");
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            yaml.append("    ").append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+        }
+    }
+
+    private void appendYamlStringListMap(StringBuilder yaml, String key, Map<String, List<String>> values) {
+        yaml.append(key).append(":\n");
+        for (Map.Entry<String, List<String>> entry : values.entrySet()) {
+            yaml.append("    ").append(entry.getKey()).append(":\n");
+            for (String value : entry.getValue()) {
+                yaml.append("      - ").append(value).append("\n");
+            }
+        }
     }
 
     /**
@@ -287,6 +418,23 @@ public class AiContextExportService {
 
     private String fieldStatusForExport(String status) {
         return status == null || status.isBlank() ? "enabled" : status;
+    }
+
+    private static Map<String, String> orderedStringMap(String... pairs) {
+        Map<String, String> map = new LinkedHashMap<>();
+        for (int i = 0; i < pairs.length; i += 2) {
+            map.put(pairs[i], pairs[i + 1]);
+        }
+        return map;
+    }
+
+    @SafeVarargs
+    private static Map<String, List<String>> orderedStringListMap(Map.Entry<String, List<String>>... entries) {
+        Map<String, List<String>> map = new LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> entry : entries) {
+            map.put(entry.getKey(), entry.getValue());
+        }
+        return map;
     }
 
     private String generatePromptsMarkdown() {

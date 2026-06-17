@@ -47,6 +47,11 @@ class AiContextExportServiceTest {
 
         assertTrue(entries.get(".dataspec/DATABASE_RULES.md").contains("table_naming_snake_case"));
         assertTrue(entries.get(".dataspec/field-catalog.json").contains("mobile_no"));
+        assertTrue(entries.get(".dataspec/rules.yaml").contains("naming:"));
+        assertTrue(entries.get(".dataspec/rules.yaml").contains("required_columns:"));
+        assertTrue(entries.get(".dataspec/rules.yaml").contains("suffix_types:"));
+        assertTrue(entries.get(".dataspec/rules.yaml").contains("prefix_types:"));
+        assertTrue(entries.get(".dataspec/rules.yaml").contains("forbidden_names:"));
         assertTrue(entries.get(".dataspec/prompts.md").contains("创建表"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/field-catalog.json"));
         assertTrue(entries.get(".dataspec/examples/good.sql").contains("CREATE TABLE users"));

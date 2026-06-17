@@ -142,6 +142,51 @@ class LintRulesTest {
     }
 
     @Test
+    void fieldSuffixTypeRule_goodTable_noIssues() {
+        var rule = new FieldSuffixTypeRule();
+        List<LintIssue> issues = rule.check(contextOf(goodTable()));
+        assertTrue(issues.isEmpty(), "规范后缀/前缀字段类型不应有问题");
+    }
+
+    @Test
+    void fieldSuffixTypeRule_detectsMismatchedTypes() {
+        var rule = new FieldSuffixTypeRule();
+        TableDef table = TableDef.builder()
+                .name("user_order")
+                .columns(List.of(
+                        ColumnDef.builder().name("user_id").dataType("varchar(64)").build(),
+                        ColumnDef.builder().name("paid_at").dataType("varchar(32)").build(),
+                        ColumnDef.builder().name("order_no").dataType("bigint").build(),
+                        ColumnDef.builder().name("item_count").dataType("varchar(10)").build(),
+                        ColumnDef.builder().name("is_paid").dataType("integer").build()
+                ))
+                .build();
+
+        List<LintIssue> issues = rule.check(contextOf(table));
+
+        assertEquals(5, issues.size());
+        assertTrue(issues.stream().allMatch(issue -> "field_suffix_type".equals(issue.getRuleCode())));
+    }
+
+    @Test
+    void fieldSuffixTypeRule_customParams() {
+        var rule = new FieldSuffixTypeRule();
+        TableDef table = TableDef.builder()
+                .name("order")
+                .columns(List.of(ColumnDef.builder().name("order_code").dataType("bigint").build()))
+                .build();
+        RuleContext ctx = RuleContext.builder()
+                .tables(List.of(table))
+                .ruleParams(Map.of("suffixTypes", Map.of("_code", List.of("varchar"))))
+                .build();
+
+        List<LintIssue> issues = rule.check(ctx);
+
+        assertEquals(1, issues.size());
+        assertEquals("order_code", issues.get(0).getColumnName());
+    }
+
+    @Test
     void commentMissingRule_goodTable_noIssues() {
         var rule = new CommentMissingRule();
         List<LintIssue> issues = rule.check(contextOf(goodTable()));

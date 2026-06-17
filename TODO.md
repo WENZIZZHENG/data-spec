@@ -60,6 +60,7 @@
 - 不做/边界：不引入草稿、审核、发布等生命周期流程。
 
 ### P0-5：结构化命名规则配置
+- 状态：已完成第一版，新增 `field_suffix_type` lint 规则，`rules.yaml` 已导出结构化 `naming:`，覆盖必含列、禁用词、推荐替换、后缀/前缀类型规则；复杂 DSL、拼音检测和配置页面留后续。
 - 类型：规则配置、SQL lint、个人规范沉淀。
 - 背景/问题：当前已有 `RuleConfig.paramsJson` 和若干固定 lint 规则，但附件要求的 field/table case、后缀规则、禁用词、拼音缩写、泛化词等还没有形成个人可维护的结构化配置。
 - 已有基础：`ds_rule_config`、`ForbiddenFieldNameRule`、`RecommendedFieldNameRule`、`RequiredColumnsRule`、`FieldNamingSnakeCaseRule`。
