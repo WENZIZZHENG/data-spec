@@ -49,12 +49,13 @@ public class SqlLintService {
                 configMap.put(cfg.getRuleCode(), cfg);
             }
         }
+        boolean hasProjectRuleConfig = !configMap.isEmpty();
 
         // 3. 执行规则
         List<LintIssue> issues = new ArrayList<>();
         for (LintRule rule : allRules) {
-            // 有项目配置时，只执行配置中启用的规则
-            if (projectId != null && !configMap.containsKey(rule.getCode())) {
+            // 有项目规则配置时，只执行配置中启用的规则；新项目无配置时回退到内置规则
+            if (hasProjectRuleConfig && !configMap.containsKey(rule.getCode())) {
                 continue;
             }
 

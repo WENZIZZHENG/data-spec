@@ -4,6 +4,8 @@ import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.model.TableDef;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -14,6 +16,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class SqlParserServiceTest {
 
     private final SqlParserService parser = new SqlParserService();
+
+    private String readExample(String fileName) throws Exception {
+        return Files.readString(Path.of("..", "examples", fileName));
+    }
 
     @Test
     void parsePostgreSqlCreateTable() {
@@ -64,6 +70,37 @@ class SqlParserServiceTest {
 
         List<TableDef> tables = parser.parse(sql);
         assertEquals(2, tables.size());
+    }
+
+    @Test
+    void parseGoodExample_fillsCommentOnTableAndColumns() throws Exception {
+        List<TableDef> tables = parser.parse(readExample("good-example.sql"));
+
+        assertEquals(1, tables.size());
+        TableDef table = tables.get(0);
+        assertEquals("users", table.getName());
+        assertEquals("用户表", table.getComment());
+        assertEquals(9, table.getColumns().size());
+
+        var username = table.getColumns().stream()
+                .filter(c -> c.getName().equals("username"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("用户名", username.getComment());
+        assertEquals("varchar(50)", username.getDataType().toLowerCase());
+        assertFalse(username.isNullable());
+
+        var phone = table.getColumns().stream()
+                .filter(c -> c.getName().equals("phone"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("手机号", phone.getComment());
+        assertTrue(phone.isNullable());
+    }
+
+    @Test
+    void parseBlankSql_returnsEmptyTables() {
+        assertTrue(parser.parse("   \n\t  ").isEmpty());
     }
 
     @Test

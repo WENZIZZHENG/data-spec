@@ -1,9 +1,12 @@
 package com.dataspec.lint;
 
 import com.dataspec.lint.model.*;
+import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.rules.*;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -13,6 +16,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * 规则引擎单元测试（不依赖 Spring 容器）
  */
 class LintRulesTest {
+
+    private String readExample(String fileName) throws Exception {
+        return Files.readString(Path.of("..", "examples", fileName));
+    }
 
     // 构造测试表定义
     private TableDef goodTable() {
@@ -64,6 +71,22 @@ class LintRulesTest {
         assertFalse(issues.isEmpty(), "不规范表应有 snake_case 问题");
         // UserOrder, userId, totalAmount 都不符合 snake_case（注：uid 和 create_time 符合 snake_case）
         assertTrue(issues.size() >= 2);
+    }
+
+    @Test
+    void tableNameSnakeCaseRule_goodTable_noIssues() {
+        var rule = new TableNameSnakeCaseRule();
+        List<LintIssue> issues = rule.check(contextOf(goodTable()));
+        assertTrue(issues.isEmpty(), "规范表名不应有 snake_case 问题");
+    }
+
+    @Test
+    void tableNameSnakeCaseRule_badTable_hasIssue() {
+        var rule = new TableNameSnakeCaseRule();
+        List<LintIssue> issues = rule.check(contextOf(badTable()));
+        assertEquals(1, issues.size());
+        assertEquals("table_naming_snake_case", issues.get(0).getRuleCode());
+        assertEquals("UserOrder", issues.get(0).getTableName());
     }
 
     @Test
@@ -131,6 +154,17 @@ class LintRulesTest {
         List<LintIssue> issues = rule.check(contextOf(badTable()));
         // 表没有注释 + 所有字段没有注释
         assertTrue(issues.size() >= 5); // 1 表 + 4 字段
+    }
+
+    @Test
+    void commentMissingRule_goodExampleSql_noIssues() throws Exception {
+        var parser = new SqlParserService();
+        var rule = new CommentMissingRule();
+
+        List<TableDef> tables = parser.parse(readExample("good-example.sql"));
+        List<LintIssue> issues = rule.check(contextOf(tables.toArray(TableDef[]::new)));
+
+        assertTrue(issues.isEmpty(), "good-example.sql 已包含 COMMENT ON 注释，不应误报缺注释");
     }
 
     @Test

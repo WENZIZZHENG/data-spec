@@ -2,39 +2,43 @@
   <div class="sql-lint-page">
     <div class="page-header">
       <h2>SQL 校验</h2>
-      <el-button type="primary" @click="handleLint">
+      <el-button type="primary" :loading="linting" @click="handleLint">
         <el-icon><CaretRight /></el-icon>
         执行校验
       </el-button>
     </div>
 
     <div class="lint-content">
-      <!-- 左侧：SQL 编辑器 -->
       <div class="editor-panel">
         <div class="panel-title">SQL 编辑器</div>
         <div ref="editorContainer" class="editor-container"></div>
       </div>
 
-      <!-- 右侧：校验结果 -->
       <div class="result-panel">
         <div class="panel-title">校验结果</div>
         <div class="result-content">
           <template v-if="lintResult">
-            <el-tag :type="lintResult.totalIssues === 0 ? 'success' : 'danger'" class="result-tag">
-              共 {{ lintResult.totalIssues }} 个问题
-            </el-tag>
-            <el-table :data="lintResult.issues" stripe style="width: 100%">
-              <el-table-column prop="line" label="行" width="60" />
-              <el-table-column prop="column" label="列" width="60" />
-              <el-table-column prop="severity" label="级别" width="80">
+            <div class="summary-row">
+              <el-tag :type="issueTotal === 0 ? 'success' : 'danger'">
+                共 {{ issueTotal }} 个问题
+              </el-tag>
+              <el-tag type="danger">错误 {{ lintResult.errorCount ?? 0 }}</el-tag>
+              <el-tag type="warning">警告 {{ lintResult.warningCount ?? 0 }}</el-tag>
+              <el-tag type="info">建议 {{ lintResult.suggestionCount ?? 0 }}</el-tag>
+            </div>
+
+            <el-table :data="lintResult.issues ?? []" stripe style="width: 100%">
+              <el-table-column prop="severity" label="级别" width="110">
                 <template #default="{ row }">
                   <el-tag :type="severityType(row.severity)" size="small">
-                    {{ row.severity }}
+                    {{ severityLabel(row.severity) }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="ruleCode" label="规则" width="120" />
-              <el-table-column prop="message" label="描述" />
+              <el-table-column prop="tableName" label="表" width="130" />
+              <el-table-column prop="columnName" label="字段" width="130" />
+              <el-table-column prop="ruleCode" label="规则" width="180" />
+              <el-table-column prop="message" label="描述" min-width="260" />
             </el-table>
           </template>
           <el-empty v-else description="请输入 SQL 并点击执行校验" />
@@ -45,20 +49,40 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import * as monaco from 'monaco-editor'
-import type { LintResult } from '@/types'
+import { lintSql } from '@/api/lint'
+import { useProjectStore } from '@/stores/project'
+import type { LintIssue, LintResult } from '@/types'
 
 const editorContainer = ref<HTMLElement>()
+const lintResult = ref<LintResult | null>(null)
+const linting = ref(false)
+const projectStore = useProjectStore()
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
 
-// 校验结果
-const lintResult = ref<LintResult | null>(null)
+const issueTotal = computed(() => {
+  if (!lintResult.value) {
+    return 0
+  }
+  return (
+    (lintResult.value.errorCount ?? 0) +
+    (lintResult.value.warningCount ?? 0) +
+    (lintResult.value.suggestionCount ?? 0)
+  )
+})
 
 onMounted(() => {
   if (editorContainer.value) {
     editor = monaco.editor.create(editorContainer.value, {
-      value: '-- 在此输入 SQL 语句\nSELECT * FROM table_name;\n',
+      value: `CREATE TABLE users (
+    id bigserial PRIMARY KEY,
+    username varchar(50) NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    is_deleted boolean NOT NULL DEFAULT false
+);`,
       language: 'sql',
       theme: 'vs-dark',
       automaticLayout: true,
@@ -74,27 +98,40 @@ onBeforeUnmount(() => {
   editor?.dispose()
 })
 
-/** 执行校验（占位，后续对接 API） */
-const handleLint = () => {
+async function handleLint() {
   const sql = editor?.getValue() || ''
   if (!sql.trim()) {
+    ElMessage.warning('请输入 SQL')
     return
   }
-  // 占位：返回空结果，后续替换为真实 API 调用
-  lintResult.value = {
-    totalIssues: 0,
-    issues: []
+
+  linting.value = true
+  try {
+    lintResult.value = await lintSql({
+      sql,
+      projectId: projectStore.currentProjectId ?? undefined
+    })
+  } finally {
+    linting.value = false
   }
 }
 
-/** 严重级别对应的 Tag 类型 */
-const severityType = (severity: string) => {
+function severityType(severity: LintIssue['severity']) {
   const map: Record<string, 'danger' | 'warning' | 'info'> = {
-    error: 'danger',
-    warning: 'warning',
-    info: 'info'
+    ERROR: 'danger',
+    WARNING: 'warning',
+    SUGGESTION: 'info'
   }
-  return map[severity] || 'info'
+  return severity ? map[severity] : 'info'
+}
+
+function severityLabel(severity: LintIssue['severity']) {
+  const map: Record<string, string> = {
+    ERROR: '错误',
+    WARNING: '警告',
+    SUGGESTION: '建议'
+  }
+  return severity ? map[severity] : '-'
 }
 </script>
 
@@ -153,7 +190,10 @@ const severityType = (severity: string) => {
   overflow-y: auto;
 }
 
-.result-tag {
+.summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 12px;
 }
 </style>

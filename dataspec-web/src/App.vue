@@ -94,12 +94,19 @@
         <div class="header-right">
           <span class="project-label">当前项目：</span>
           <el-select
-            v-model="projectStore.currentProjectName"
+            v-model="projectStore.currentProjectId"
             placeholder="请选择项目"
+            :loading="projectStore.loading"
             style="width: 200px"
             @change="handleProjectChange"
           >
-            <el-option label="（未选择）" value="" />
+            <el-option label="（未选择）" :value="null" />
+            <el-option
+              v-for="project in projectStore.projects"
+              :key="project.id"
+              :label="project.name"
+              :value="project.id"
+            />
           </el-select>
         </div>
       </el-header>
@@ -111,7 +118,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
 
@@ -121,9 +128,13 @@ const projectStore = useProjectStore()
 // 当前激活的菜单项，与路由路径同步
 const activeMenu = computed(() => route.path)
 
-// 切换项目（占位，后续对接真实项目列表）
-const handleProjectChange = (val: string) => {
-  projectStore.setCurrentProject('', val)
+onMounted(() => {
+  projectStore.loadProjects()
+})
+
+// 切换项目
+const handleProjectChange = (val: number | null) => {
+  projectStore.setCurrentProjectById(val)
 }
 </script>
 

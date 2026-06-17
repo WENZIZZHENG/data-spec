@@ -7,6 +7,15 @@ spring:
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    # 迁移脚本位置
+    locations: classpath:db/migration
+    # 对已有库(可能已存在表)做基线,首次部署后自动建立 baseline
+    baseline-on-migrate: true
+    baseline-version: 0
+    # 校验迁移脚本完整性
+    validate-on-migrate: true
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai

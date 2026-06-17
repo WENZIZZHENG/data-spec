@@ -1,0 +1,7 @@
+# 测试环境配置
+# 现有测试(SqlLintService / 规则引擎)为纯单元测试,不依赖数据库;
+# 若后续引入 repository/controller 切片测试,可在此关闭 Flyway,
+# 改用 H2 或 schema.sql(test resources)初始化,避免 PG 方言(bigserial 等)在 H2 下失败。
+spring:
+  flyway:
+    enabled: false

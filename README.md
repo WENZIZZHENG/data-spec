@@ -26,10 +26,12 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 ### 1. 数据库
 
 ```bash
-# 创建数据库（已包含建表脚本）
+# 创建数据库，后端启动时会由 Flyway 自动执行迁移脚本
 psql -U postgres -c "CREATE DATABASE dataspec;"
-psql -U postgres -d dataspec -f dataspec-server/src/main/resources/db/schema.sql
 ```
+
+迁移脚本位于 `dataspec-server/src/main/resources/db/migration/`，后端启动会按版本顺序自动执行全部 `V*.sql`。
+`dataspec-server/src/main/resources/db/schema.sql` 仅保留兼容说明，不再作为直接建表入口；如需手动初始化，请按版本号顺序执行迁移目录下的脚本。
 
 ### 2. 后端
 
@@ -50,6 +52,18 @@ pnpm dev
 ```
 
 前端启动在 http://localhost:5173
+
+## 验证
+
+```bash
+# 后端单元测试
+cd dataspec-server
+mvn test
+
+# 前端类型检查与生产构建
+cd ../dataspec-web
+pnpm build
+```
 
 ## 项目结构
 

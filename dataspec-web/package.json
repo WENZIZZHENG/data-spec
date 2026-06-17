@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "gen:api": "openapi-typescript http://localhost:8090/api-docs -o src/api/schema.ts",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview"
   },
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@types/node": "^25.9.3",
     "@vitejs/plugin-vue": "^6.0.7",
+    "openapi-typescript": "^7.13.0",
     "sass": "^1.101.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",

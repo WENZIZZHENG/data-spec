@@ -55,6 +55,16 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Flyway 数据库迁移 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
         <!-- JSqlParser - 由 mybatis-plus-jsqlparser 带入兼容版本，此处额外引入用于 SQL lint 解析 -->
         <!-- 若版本冲突可移除此项，使用 MP 自带版本 -->
 
