@@ -71,6 +71,12 @@ const routes: RouteRecordRaw[] = [
     name: 'ImportExport',
     component: () => import('@/views/ImportExport.vue'),
     meta: { title: '导入导出' }
+  },
+  {
+    path: '/reverse-import',
+    name: 'ReverseImport',
+    component: () => import('@/views/ReverseImport.vue'),
+    meta: { title: '反向导入' }
   }
 ]
 

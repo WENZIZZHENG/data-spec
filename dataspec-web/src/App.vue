@@ -89,6 +89,10 @@
             <el-icon><Download /></el-icon>
             <span>导入导出</span>
           </el-menu-item>
+          <el-menu-item index="/reverse-import">
+            <el-icon><Search /></el-icon>
+            <span>反向导入</span>
+          </el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>

@@ -92,3 +92,42 @@ export interface DashboardSummary {
   recentChecks?: RecentSqlCheck[]
   trend?: IssueTrendPoint[]
 }
+
+export interface ReverseImportSummary {
+  tableCount?: number
+  columnCount?: number
+  candidateCount?: number
+  missingCommentCount?: number
+  nonStandardFieldCount?: number
+}
+
+export interface FieldCandidate {
+  tableName?: string
+  columnName?: string
+  dataType?: string
+  nullable?: boolean
+  defaultValue?: string
+  comment?: string
+}
+
+export interface MissingCommentIssue {
+  tableName?: string
+  columnName?: string
+  targetType?: string
+}
+
+export interface NonStandardField {
+  tableName?: string
+  columnName?: string
+  dataType?: string
+  recommendedName?: string
+  reason?: string
+}
+
+export interface ReverseImportPreview {
+  summary?: ReverseImportSummary
+  tables?: TableDef[]
+  fieldCandidates?: FieldCandidate[]
+  missingComments?: MissingCommentIssue[]
+  nonStandardFields?: NonStandardField[]
+}
