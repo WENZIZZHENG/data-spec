@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
+const SKIPPED_SCAN_DIRECTORIES = new Set([
+  '.git',
+  '.idea',
+  '.vscode',
+  'build',
+  'dist',
+  'node_modules',
+  'target'
+])
 
 export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch) {
   try {
@@ -18,6 +27,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'lint') {
       return await runLint(rest, io, fetchFn)
+    }
+    if (command === 'lint-files') {
+      return await runLintFiles(rest, io, fetchFn)
     }
     if (command === 'export-context') {
       return await runExportContext(rest, io, fetchFn)
@@ -61,6 +73,39 @@ async function runLint(args, io, fetchFn) {
   const result = unwrapResponse(payload)
   io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
   return Number(result.errorCount ?? 0) > 0 ? 1 : 0
+}
+
+async function runLintFiles(args, io, fetchFn) {
+  const { positional, options } = parseArgs(args, ['project', 'format', 'server'])
+  if (positional.length === 0) {
+    throw new Error('lint-files 需要提供至少一个 SQL 文件或目录路径')
+  }
+  const projectId = parseProjectId(options.project)
+  const format = options.format ?? 'json'
+  if (format !== 'json') {
+    throw new Error('当前仅支持 --format json')
+  }
+  const server = normalizeServer(options.server)
+  const files = await collectSqlFiles(positional)
+  const results = []
+
+  for (const filePath of files) {
+    const sql = await readFile(filePath, 'utf8')
+    const response = await fetchFn(`${server}/api/lint`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sql, projectId })
+    })
+    const payload = await readJsonResponse(response)
+    results.push({
+      path: formatOutputPath(filePath),
+      result: unwrapResponse(payload)
+    })
+  }
+
+  const summary = summarizeLintResults(results)
+  io.writeOut(`${JSON.stringify({ summary, files: results }, null, 2)}\n`)
+  return summary.failedFiles > 0 ? 1 : 0
 }
 
 async function runExportContext(args, io, fetchFn) {
@@ -184,6 +229,73 @@ function parseLimit(value, fallback = 5) {
   return limit
 }
 
+async function collectSqlFiles(paths) {
+  const sqlFiles = []
+  for (const inputPath of paths) {
+    await collectSqlFilesFromPath(path.resolve(inputPath), sqlFiles)
+  }
+  return [...new Set(sqlFiles)].sort((left, right) => left.localeCompare(right))
+}
+
+async function collectSqlFilesFromPath(inputPath, sqlFiles) {
+  const entries = await readdir(inputPath, { withFileTypes: true }).catch(async (error) => {
+    if (error.code !== 'ENOTDIR') {
+      throw error
+    }
+    return null
+  })
+  if (!entries) {
+    if (inputPath.toLowerCase().endsWith('.sql')) {
+      sqlFiles.push(inputPath)
+    }
+    return
+  }
+  for (const entry of entries) {
+    const childPath = path.join(inputPath, entry.name)
+    if (entry.isDirectory()) {
+      if (shouldSkipDirectory(entry.name)) {
+        continue
+      }
+      await collectSqlFilesFromPath(childPath, sqlFiles)
+      continue
+    }
+    if (entry.isFile() && entry.name.toLowerCase().endsWith('.sql')) {
+      sqlFiles.push(childPath)
+    }
+  }
+}
+
+function shouldSkipDirectory(name) {
+  return SKIPPED_SCAN_DIRECTORIES.has(name)
+}
+
+function summarizeLintResults(results) {
+  return results.reduce((summary, item) => {
+    const result = item.result ?? {}
+    const errorCount = Number(result.errorCount ?? 0)
+    summary.totalFiles += 1
+    summary.failedFiles += errorCount > 0 ? 1 : 0
+    summary.errorCount += errorCount
+    summary.warningCount += Number(result.warningCount ?? 0)
+    summary.suggestionCount += Number(result.suggestionCount ?? 0)
+    return summary
+  }, {
+    totalFiles: 0,
+    failedFiles: 0,
+    errorCount: 0,
+    warningCount: 0,
+    suggestionCount: 0
+  })
+}
+
+function formatOutputPath(filePath) {
+  const relativePath = path.relative(process.cwd(), filePath)
+  const outputPath = relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
+    ? relativePath
+    : filePath
+  return outputPath.replaceAll(path.sep, '/')
+}
+
 function normalizeServer(server = DEFAULT_SERVER) {
   return server.replace(/\/+$/, '')
 }
@@ -208,6 +320,7 @@ function helpText() {
 
 Usage:
   node tools/dataspec-cli.mjs lint <path|-> --project <id> --format json [--server <url>]
+  node tools/dataspec-cli.mjs lint-files <path...> --project <id> --format json [--server <url>]
   node tools/dataspec-cli.mjs export-context --project <id> --output <zip> [--server <url>]
   node tools/dataspec-cli.mjs suggest-field <query> --project <id> --format json [--limit <n>] [--server <url>]
   node tools/dataspec-cli.mjs generate-ddl --project <id> --template <id> --table <name> --format json [--server <url>]

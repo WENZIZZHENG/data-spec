@@ -1,0 +1,44 @@
+# 示例文件：复制到业务仓库后，重命名为 .github/workflows/dataspec-sql-lint.yml 启用。
+# 当前仓库保留 .example 后缀，避免在未配置 DataSpec 服务和项目数据时误触发。
+name: DataSpec SQL Lint
+
+on:
+  pull_request:
+    paths:
+      - '**/*.sql'
+
+jobs:
+  dataspec-sql-lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 按业务项目实际方式启动 DataSpec 后端，也可以替换为访问团队内已有 DataSpec 服务。
+      - name: Start DataSpec server
+        run: |
+          echo "TODO: start DataSpec server at http://localhost:8090"
+          echo "For example: docker compose up -d dataspec-server postgres"
+
+      - name: Wait for DataSpec
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8090/api-docs >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "DataSpec server is not ready" >&2
+          exit 1
+
+      - name: Lint SQL files
+        run: |
+          node tools/dataspec-cli.mjs lint-files . --project 1 --format json --server http://localhost:8090

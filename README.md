@@ -109,6 +109,9 @@ node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format j
 # 从 stdin 校验
 cat examples/good-example.sql | node tools/dataspec-cli.mjs lint - --project 1 --format json
 
+# 批量校验 SQL 文件或目录，发现任一 ERROR 时退出码为 1
+node tools/dataspec-cli.mjs lint-files examples --project 1 --format json
+
 # 导出 AI Context zip 包
 node tools/dataspec-cli.mjs export-context --project 1 --output dataspec-ai-context.zip
 
@@ -121,6 +124,8 @@ node tools/dataspec-cli.mjs generate-ddl --project 1 --template 1 --table user_o
 # 指定后端地址
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --server http://localhost:8090
 ```
+
+`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
 
 ## MCP Server
 

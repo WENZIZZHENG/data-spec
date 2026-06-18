@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -68,6 +68,90 @@ test('lint returns 0 when server reports no errors', async () => {
 
   assert.equal(code, 0)
   assert.equal(JSON.parse(io.stdout).warningCount, 1)
+})
+
+test('lint-files scans sql files, aggregates json, and returns 1 for error files', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    const nestedDir = path.join(dir, 'migrations')
+    await mkdir(nestedDir)
+    await writeFile(path.join(dir, 'README.md'), '# ignored', 'utf8')
+    await writeFile(path.join(dir, 'bad.sql'), 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    await writeFile(path.join(nestedDir, 'good.sql'), 'CREATE TABLE user_order (id bigint);', 'utf8')
+
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      const sql = JSON.parse(options.body).sql
+      const hasError = sql.includes('UserOrder')
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            errorCount: hasError ? 1 : 0,
+            warningCount: hasError ? 0 : 1,
+            suggestionCount: 0,
+            issues: hasError ? [{ ruleCode: 'table_naming_snake_case' }] : []
+          }
+        })
+      }
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'lint-files',
+      dir,
+      '--project',
+      '7',
+      '--format',
+      'json',
+      '--server',
+      'http://dataspec.local'
+    ], io, fetchFn)
+
+    const output = JSON.parse(io.stdout)
+    assert.equal(code, 1)
+    assert.equal(calls.length, 2)
+    assert.deepEqual(output.summary, {
+      totalFiles: 2,
+      failedFiles: 1,
+      errorCount: 1,
+      warningCount: 1,
+      suggestionCount: 0
+    })
+    assert.deepEqual(output.files.map((item) => path.basename(item.path)).sort(), ['bad.sql', 'good.sql'])
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('lint-files returns 0 when no sql file has errors', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    const sqlPath = path.join(dir, 'good.sql')
+    await writeFile(sqlPath, 'CREATE TABLE user_order (id bigint);', 'utf8')
+    const fetchFn = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: { errorCount: 0, warningCount: 0, suggestionCount: 1, issues: [] }
+      })
+    })
+    const io = createIo()
+
+    const code = await runCli(['lint-files', sqlPath, '--project', '1', '--format', 'json'], io, fetchFn)
+
+    const output = JSON.parse(io.stdout)
+    assert.equal(code, 0)
+    assert.equal(output.summary.totalFiles, 1)
+    assert.equal(output.summary.suggestionCount, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
 
 test('export-context downloads zip bytes to output path', async () => {

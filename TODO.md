@@ -290,6 +290,7 @@
 - 边界：不做完整多数据库迁移；仅补个人常用 MySQL DDL 检查能力。
 
 ### P3-2：CI/GitHub Action 校验入口
+- 状态：已完成第一版，CLI 已新增 `lint-files` 批量校验命令，支持文件/目录递归扫描、聚合 JSON 输出和 ERROR 非 0 退出码，并补充 `.github/workflows/dataspec-sql-lint.yml.example` 示例。
 - 为什么做：DataSpec 如果能在 PR 中检查 SQL，就能从本地工具升级为团队规范门禁。
 - 已有基础：后端 lint service 和示例 SQL。
 - 缺口：缺少 CLI、批量文件扫描、退出码、GitHub Actions 示例。
