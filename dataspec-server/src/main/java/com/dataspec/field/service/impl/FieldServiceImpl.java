@@ -1,6 +1,7 @@
 package com.dataspec.field.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldSuggestion;
@@ -33,6 +34,7 @@ public class FieldServiceImpl implements FieldService {
     private static final Map<String, String> FALLBACK_TERMS = fallbackTerms();
 
     private final FieldRepository fieldRepository;
+    private final StandardChangeLogService changeLogService;
 
     @Override
     public IPage<Field> page(Long projectId, int current, int size) {
@@ -58,6 +60,13 @@ public class FieldServiceImpl implements FieldService {
         field.setNullable(field.getNullable() != null ? field.getNullable() : true);
         applyPersonalMetadataDefaults(field);
         fieldRepository.insert(field);
+        changeLogService.recordChange(
+                field.getProjectId(),
+                StandardChangeLogService.TARGET_FIELD,
+                field.getId(),
+                StandardChangeLogService.ACTION_CREATE,
+                null,
+                changeLogService.snapshot(field));
         return field;
     }
 
@@ -67,6 +76,7 @@ public class FieldServiceImpl implements FieldService {
         if (fieldRepository.existsByNameInProjectExcludeId(field.getName(), existing.getProjectId(), id)) {
             throw new BizException("项目内字段名已存在: " + field.getName());
         }
+        String beforeJson = changeLogService.snapshot(existing);
         existing.setName(field.getName());
         existing.setDisplayName(field.getDisplayName());
         existing.setDataType(field.getDataType());
@@ -85,13 +95,28 @@ public class FieldServiceImpl implements FieldService {
         existing.setStatus(normalizeStatus(field.getStatus()));
         existing.setExampleValue(field.getExampleValue());
         fieldRepository.update(existing);
+        changeLogService.recordChange(
+                existing.getProjectId(),
+                StandardChangeLogService.TARGET_FIELD,
+                existing.getId(),
+                StandardChangeLogService.ACTION_UPDATE,
+                beforeJson,
+                changeLogService.snapshot(existing));
         return existing;
     }
 
     @Override
     public void delete(Long id) {
-        getById(id);
+        Field existing = getById(id);
+        String beforeJson = changeLogService.snapshot(existing);
         fieldRepository.deleteById(id);
+        changeLogService.recordChange(
+                existing.getProjectId(),
+                StandardChangeLogService.TARGET_FIELD,
+                existing.getId(),
+                StandardChangeLogService.ACTION_DELETE,
+                beforeJson,
+                null);
     }
 
     @Override

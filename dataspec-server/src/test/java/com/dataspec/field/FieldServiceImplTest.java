@@ -1,6 +1,7 @@
 package com.dataspec.field;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
@@ -22,7 +23,7 @@ class FieldServiceImplTest {
     void create_defaultsPersonalMetadata() {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.existsByNameInProject("mobile_no", 1L)).thenReturn(false);
-        FieldServiceImpl service = new FieldServiceImpl(repository);
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
 
         Field field = new Field();
         field.setProjectId(1L);
@@ -40,7 +41,7 @@ class FieldServiceImplTest {
     @Test
     void create_rejectsInvalidStatus() {
         FieldRepository repository = mock(FieldRepository.class);
-        FieldServiceImpl service = new FieldServiceImpl(repository);
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
 
         Field field = new Field();
         field.setProjectId(1L);
@@ -61,7 +62,7 @@ class FieldServiceImplTest {
         existing.setName("mobile_no");
         when(repository.findById(9L)).thenReturn(Optional.of(existing));
         when(repository.existsByNameInProjectExcludeId("mobile_no", 1L, 9L)).thenReturn(false);
-        FieldServiceImpl service = new FieldServiceImpl(repository);
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
 
         Field incoming = new Field();
         incoming.setName("mobile_no");
@@ -87,13 +88,48 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void update_recordsBeforeAndAfterChangeLog() {
+        FieldRepository repository = mock(FieldRepository.class);
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        Field existing = new Field();
+        existing.setId(9L);
+        existing.setProjectId(1L);
+        existing.setName("mobile_no");
+        existing.setDataType("varchar(20)");
+        existing.setAliases("phone");
+        when(repository.findById(9L)).thenReturn(Optional.of(existing));
+        when(repository.existsByNameInProjectExcludeId("mobile_no", 1L, 9L)).thenReturn(false);
+        when(changeLogService.snapshot(any(Field.class))).thenAnswer(invocation -> {
+            Field field = invocation.getArgument(0);
+            return field.getDataType() + "|" + field.getAliases();
+        });
+        FieldServiceImpl service = new FieldServiceImpl(repository, changeLogService);
+
+        Field incoming = new Field();
+        incoming.setName("mobile_no");
+        incoming.setDataType("varchar(30)");
+        incoming.setAliases("phone,mobile");
+        incoming.setNullable(true);
+
+        service.update(9L, incoming);
+
+        verify(changeLogService).recordChange(
+                1L,
+                "field",
+                9L,
+                "update",
+                "varchar(20)|phone",
+                "varchar(30)|phone,mobile");
+    }
+
+    @Test
     void suggest_matchesAliasAndChineseDisplayName() {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.findAllByProjectId(1L)).thenReturn(List.of(
                 field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone,mobile,tel", "enabled"),
                 field("amount_cent", "金额（分）", "bigint", "支付金额，以分存储", "amount,pay_amount", "enabled")
         ));
-        FieldServiceImpl service = new FieldServiceImpl(repository);
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
 
         List<FieldSuggestion> suggestions = service.suggest(1L, "用户手机号", 5);
 
@@ -112,7 +148,7 @@ class FieldServiceImplTest {
         when(repository.findAllByProjectId(1L)).thenReturn(List.of(
                 field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone,mobile,tel", "disabled")
         ));
-        FieldServiceImpl service = new FieldServiceImpl(repository);
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
 
         List<FieldSuggestion> suggestions = service.suggest(1L, "手机号", 5);
 
@@ -125,7 +161,7 @@ class FieldServiceImplTest {
     void suggest_returnsFallbackSnakeCaseNameWhenNoExistingFieldMatches() {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.findAllByProjectId(1L)).thenReturn(List.of());
-        FieldServiceImpl service = new FieldServiceImpl(repository);
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
 
         List<FieldSuggestion> suggestions = service.suggest(1L, "客户生日", 5);
 
@@ -140,7 +176,7 @@ class FieldServiceImplTest {
     @Test
     void suggest_rejectsDescriptionWithoutSearchableContent() {
         FieldRepository repository = mock(FieldRepository.class);
-        FieldServiceImpl service = new FieldServiceImpl(repository);
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
 
         assertThrows(BizException.class, () -> service.suggest(1L, "!!!", 5));
         verify(repository, never()).findAllByProjectId(anyLong());

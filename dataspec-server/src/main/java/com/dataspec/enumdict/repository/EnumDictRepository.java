@@ -70,6 +70,11 @@ public class EnumDictRepository {
                         .orderByAsc(EnumValue::getSortOrder));
     }
 
+    /** 根据 ID 查找枚举值 */
+    public Optional<EnumValue> findValueById(Long id) {
+        return Optional.ofNullable(enumValueMapper.selectById(id));
+    }
+
     /** 新增枚举值 */
     public int insertValue(EnumValue value) {
         return enumValueMapper.insert(value);
