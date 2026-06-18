@@ -15,6 +15,8 @@ export type LintIssue = Schemas['LintIssue']
 export type SqlCheckRecord = Schemas['SqlCheckRecord']
 export type RecordDetail = Schemas['RecordDetail']
 export type DdlGenerateResult = Schemas['DdlGenerateResult']
+export type Template = Schemas['Template']
+export type TemplateField = Schemas['TemplateField']
 export type TableDef = Schemas['TableDef']
 export type ColumnDef = Schemas['ColumnDef']
 
