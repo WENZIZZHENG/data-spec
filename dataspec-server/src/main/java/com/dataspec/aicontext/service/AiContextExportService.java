@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,6 +38,7 @@ import java.util.zip.ZipOutputStream;
 public class AiContextExportService {
 
     private static final String PACKAGE_FILE_NAME = "dataspec-ai-context.zip";
+    private static final int DATASPEC_CONTEXT_SCHEMA_VERSION = 1;
     private static final List<String> DEFAULT_REQUIRED_COLUMNS = List.of("id", "created_at", "updated_at", "is_deleted");
     private static final List<String> DEFAULT_FORBIDDEN_NAMES = List.of(
             "uid", "create_time", "update_time", "del_flag", "ctime", "mtime", "is_del", "tmp", "test", "flag1", "type1"
@@ -422,6 +424,8 @@ public class AiContextExportService {
             addTextEntry(zip, ".dataspec/DATABASE_RULES.md", generateDatabaseRules(projectId));
             addTextEntry(zip, ".dataspec/field-catalog.json", generateFieldCatalogJson(projectId));
             addTextEntry(zip, ".dataspec/field-catalog.schema.json", generateFieldCatalogSchemaJson());
+            addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId));
+            addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId));
             addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(projectId));
             addTextEntry(zip, ".dataspec/prompts.md", generatePromptsMarkdown());
             addTextEntry(zip, ".dataspec/examples/good.sql", loadExampleSql(
@@ -434,12 +438,80 @@ public class AiContextExportService {
                     "examples/bad-example.sql",
                     defaultBadExampleSql()
             ));
-            addTextEntry(zip, "AGENTS.md.fragment", generateAgentsFragment());
+            addTextEntry(zip, "AGENTS.md.fragment", generateAgentsFragment(projectId));
             zip.finish();
             return output.toByteArray();
         } catch (IOException e) {
             throw new RuntimeException("生成 " + PACKAGE_FILE_NAME + " 失败", e);
         }
+    }
+
+    private String generateManifestJson(Long projectId) {
+        try {
+            ObjectNode root = objectMapper.createObjectNode();
+            root.put("schemaVersion", DATASPEC_CONTEXT_SCHEMA_VERSION);
+            root.put("kind", "dataspec-ai-context");
+            root.put("projectId", projectId);
+            root.put("generatedAt", Instant.now().toString());
+
+            ArrayNode files = root.putArray("files");
+            files.add(".dataspec/manifest.json");
+            files.add(".dataspec/README.md");
+            files.add(".dataspec/DATABASE_RULES.md");
+            files.add(".dataspec/field-catalog.json");
+            files.add(".dataspec/field-catalog.schema.json");
+            files.add(".dataspec/rules.yaml");
+            files.add(".dataspec/prompts.md");
+            files.add(".dataspec/examples/good.sql");
+            files.add(".dataspec/examples/bad.sql");
+            files.add("AGENTS.md.fragment");
+
+            ObjectNode commands = root.putObject("commands");
+            commands.put("lint", "dataspec lint <path|-> --project " + projectId + " --format json");
+            commands.put("exportContext", "dataspec export-context --project " + projectId + " --output dataspec-ai-context.zip");
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
+        } catch (Exception e) {
+            throw new RuntimeException("生成 .dataspec/manifest.json 失败", e);
+        }
+    }
+
+    private String generateDataspecReadme(Long projectId) {
+        return """
+                # .dataspec
+
+                本目录由 DataSpec 导出，供 AI 编程工具和开发者在业务项目中读取数据库字段标准。
+
+                ## 文件约定
+
+                - `.dataspec/manifest.json`：上下文包元数据，包含 schemaVersion、projectId、生成时间、文件清单和推荐命令。
+                - `.dataspec/DATABASE_RULES.md`：数据库命名、类型、注释和公共字段规则。
+                - `.dataspec/field-catalog.json`：标准字段目录，包含字段名、类型、别名、敏感标记、状态、代码集和示例值。
+                - `.dataspec/field-catalog.schema.json`：字段目录 JSON Schema。
+                - `.dataspec/rules.yaml`：结构化命名规则和项目规则配置。
+                - `.dataspec/prompts.md`：建表和 SQL Review 的 AI prompt 模板。
+                - `.dataspec/examples/good.sql`：符合标准的 SQL 示例。
+                - `.dataspec/examples/bad.sql`：不符合标准的 SQL 反例。
+                - `AGENTS.md.fragment`：可复制到业务项目 `AGENTS.md` 的 DataSpec 指令片段。
+
+                ## 使用约定
+
+                - 创建或修改 SQL、migration、ORM entity 前，先读取 `.dataspec/manifest.json`、字段目录和规则文件。
+                - 检查 SQL 时运行：
+
+                ```bash
+                dataspec lint <path|-> --project %d --format json
+                ```
+
+                - 如果使用当前仓库内的 Node CLI，可将命令替换为：
+
+                ```bash
+                node tools/dataspec-cli.mjs lint <path|-> --project %d --format json
+                ```
+
+                ## 更新约定
+
+                当 DataSpec 中的字段、规则、枚举或 prompt 更新后，重新下载 AI Context 包，并整体替换业务项目中的 `.dataspec/` 目录和 `AGENTS.md.fragment`。
+                """.formatted(projectId, projectId);
     }
 
     private void addTextEntry(ZipOutputStream zip, String entryName, String content) throws IOException {
@@ -573,12 +645,13 @@ public class AiContextExportService {
                 """;
     }
 
-    private String generateAgentsFragment() {
+    private String generateAgentsFragment(Long projectId) {
         return """
                 # DataSpec 数据库规范
 
                 在创建或修改数据库 schema、SQL migration、ORM entity 或数据字典前，必须先阅读:
 
+                - `.dataspec/manifest.json`
                 - `.dataspec/DATABASE_RULES.md`
                 - `.dataspec/field-catalog.json`
                 - `.dataspec/rules.yaml`
@@ -587,8 +660,9 @@ public class AiContextExportService {
                 - 优先使用 `.dataspec/field-catalog.json` 中已有标准字段。
                 - 新增表必须符合 `.dataspec/DATABASE_RULES.md` 的命名、类型、注释和公共字段规则。
                 - 生成 SQL 时参考 `.dataspec/examples/good.sql`，避免 `.dataspec/examples/bad.sql` 中的反例。
+                - 提交 SQL 变更前运行 `dataspec lint <path|-> --project %d --format json`，并修复 ERROR 级问题。
                 - 不确定字段命名时，先在字段目录中查找相同业务含义，再提出新增标准字段建议。
-                """;
+                """.formatted(projectId);
     }
 
     private String loadExampleSql(String primaryPath, String fallbackPath, String defaultContent) {

@@ -214,6 +214,7 @@
 - 落地方式：新增 generator service 方法和前端模板生成页。
 
 ### P2-3：业务项目 `.dataspec/` 落地约定
+- 状态：已完成第一版，AI Context 包已定义 `.dataspec/` 目录约定，包含 `manifest.json`、`README.md`、规则、字段目录、prompt、示例和 `AGENTS.md.fragment`，并写明 lint 命令入口。
 - 为什么做：AI agent 在业务项目中需要稳定入口读取字段标准，不能每次依赖人工复制散落文件。
 - 已有基础：P0-1 会生成 AI Context 包；当前仓库已有 `standards/`、`examples/` 和导出服务。
 - 缺口：缺少业务项目目录约定、更新策略、README 和 agent 指令片段。

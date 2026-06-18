@@ -41,6 +41,8 @@ class AiContextExportServiceTest {
         assertTrue(entries.containsKey(".dataspec/DATABASE_RULES.md"));
         assertTrue(entries.containsKey(".dataspec/field-catalog.json"));
         assertTrue(entries.containsKey(".dataspec/field-catalog.schema.json"));
+        assertTrue(entries.containsKey(".dataspec/manifest.json"));
+        assertTrue(entries.containsKey(".dataspec/README.md"));
         assertTrue(entries.containsKey(".dataspec/rules.yaml"));
         assertTrue(entries.containsKey(".dataspec/prompts.md"));
         assertTrue(entries.containsKey(".dataspec/examples/good.sql"));
@@ -55,9 +57,20 @@ class AiContextExportServiceTest {
         assertTrue(entries.get(".dataspec/rules.yaml").contains("prefix_types:"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("forbidden_names:"));
         assertTrue(entries.get(".dataspec/prompts.md").contains("创建表"));
+        assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/manifest.json"));
+        assertTrue(entries.get(".dataspec/README.md").contains("dataspec lint"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/field-catalog.json"));
+        assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/manifest.json"));
+        assertTrue(entries.get("AGENTS.md.fragment").contains("dataspec lint <path|-> --project 1 --format json"));
         assertTrue(entries.get(".dataspec/examples/good.sql").contains("CREATE TABLE users"));
         assertTrue(entries.get(".dataspec/examples/bad.sql").contains("CREATE TABLE UserOrder"));
+
+        var manifest = new ObjectMapper().readTree(entries.get(".dataspec/manifest.json"));
+        assertEquals(1, manifest.path("schemaVersion").asInt());
+        assertEquals(PROJECT_ID.longValue(), manifest.path("projectId").asLong());
+        assertFalse(manifest.path("generatedAt").asText().isBlank());
+        assertTrue(manifest.path("files").isArray());
+        assertTrue(manifest.path("commands").path("lint").asText().contains("--project 1"));
 
         var catalog = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.json"));
         var field = catalog.path("fields").get(0);
