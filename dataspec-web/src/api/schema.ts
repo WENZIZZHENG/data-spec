@@ -707,6 +707,7 @@ export interface components {
             name: string;
             description?: string;
             dbType?: string;
+            importBuiltInStandards?: boolean;
         };
         Project: {
             /** Format: int64 */

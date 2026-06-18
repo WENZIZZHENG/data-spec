@@ -43,7 +43,8 @@ public class ProjectController {
         project.setName(req.name());
         project.setDescription(req.description());
         project.setDbType(req.dbType());
-        return R.ok(projectService.create(project));
+        boolean importBuiltInStandards = req.importBuiltInStandards() == null || req.importBuiltInStandards();
+        return R.ok(projectService.create(project, importBuiltInStandards));
     }
 
     /** 更新项目 */
@@ -69,6 +70,7 @@ public class ProjectController {
     public record CreateProjectReq(
             @NotBlank(message = "项目名称不能为空") String name,
             String description,
-            String dbType
+            String dbType,
+            Boolean importBuiltInStandards
     ) {}
 }

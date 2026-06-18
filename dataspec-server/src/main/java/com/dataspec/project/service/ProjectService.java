@@ -11,6 +11,7 @@ public interface ProjectService {
     List<Project> list();
     Project getById(Long id);
     Project create(Project project);
+    Project create(Project project, boolean importBuiltInStandards);
     Project update(Long id, Project project);
     void delete(Long id);
 }

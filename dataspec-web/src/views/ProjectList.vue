@@ -61,6 +61,13 @@
             placeholder="请输入项目描述"
           />
         </el-form-item>
+        <el-form-item v-if="!editingProject" label="初始化">
+          <el-switch
+            v-model="form.importBuiltInStandards"
+            active-text="导入内置标准"
+            inactive-text="空白项目"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -88,7 +95,8 @@ const formRef = ref<FormInstance>()
 const form = reactive<CreateProjectReq>({
   name: '',
   description: '',
-  dbType: 'postgresql'
+  dbType: 'postgresql',
+  importBuiltInStandards: true
 })
 
 const rules: FormRules<CreateProjectReq> = {
@@ -104,6 +112,7 @@ function resetForm(project?: Project) {
   form.name = project?.name ?? ''
   form.description = project?.description ?? ''
   form.dbType = project?.dbType ?? 'postgresql'
+  form.importBuiltInStandards = !project
   formRef.value?.clearValidate()
 }
 
@@ -128,7 +137,11 @@ async function handleSubmit() {
   submitting.value = true
   try {
     if (editingProject.value?.id) {
-      await updateProject(editingProject.value.id, { ...form })
+      await updateProject(editingProject.value.id, {
+        name: form.name,
+        description: form.description,
+        dbType: form.dbType
+      })
       ElMessage.success('项目已更新')
     } else {
       const created = await createProject({ ...form })
