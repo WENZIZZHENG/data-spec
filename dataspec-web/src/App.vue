@@ -14,6 +14,11 @@
         text-color="#a3a6b4"
         active-text-color="#409eff"
       >
+        <el-menu-item index="/dashboard">
+          <el-icon><DataAnalysis /></el-icon>
+          <span>工作台</span>
+        </el-menu-item>
+
         <!-- 基础数据 -->
         <el-sub-menu index="basic">
           <template #title>

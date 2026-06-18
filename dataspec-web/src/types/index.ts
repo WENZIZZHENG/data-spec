@@ -63,3 +63,32 @@ export interface ExcelImportResult {
   importedEnumValues?: number
   errors?: ExcelImportError[]
 }
+
+export interface RecentSqlCheck {
+  id?: number
+  createdAt?: string
+  errorCount?: number
+  warningCount?: number
+  suggestionCount?: number
+  issueCount?: number
+}
+
+export interface IssueTrendPoint {
+  recordId?: number
+  createdAt?: string
+  issueCount?: number
+  errorCount?: number
+  warningCount?: number
+  suggestionCount?: number
+}
+
+export interface DashboardSummary {
+  fieldCount?: number
+  enumDictCount?: number
+  ruleCount?: number
+  forbiddenTermCount?: number
+  recentCheckCount?: number
+  fieldHitRate?: number | null
+  recentChecks?: RecentSqlCheck[]
+  trend?: IssueTrendPoint[]
+}
