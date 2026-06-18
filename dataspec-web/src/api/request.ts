@@ -21,6 +21,9 @@ request.interceptors.request.use(
 // 响应拦截器：解包 R<T> 格式响应
 request.interceptors.response.use(
   (response) => {
+    if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
+      return response.data
+    }
     const res = response.data
     // 约定 code === 200 为成功
     if (res.code === 200) {

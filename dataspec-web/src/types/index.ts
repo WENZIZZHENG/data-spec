@@ -33,3 +33,33 @@ export interface R<T> {
   message?: string
   data?: T
 }
+
+export interface ExcelSheetSummary {
+  total?: number
+  createCount?: number
+  updateCount?: number
+  conflictCount?: number
+}
+
+export interface ExcelImportError {
+  sheet?: string
+  rowNumber?: number
+  field?: string
+  message?: string
+}
+
+export interface ExcelImportPreview {
+  valid?: boolean
+  fields?: ExcelSheetSummary
+  enumDicts?: ExcelSheetSummary
+  enumValues?: ExcelSheetSummary
+  errors?: ExcelImportError[]
+}
+
+export interface ExcelImportResult {
+  success?: boolean
+  importedFields?: number
+  importedEnumDicts?: number
+  importedEnumValues?: number
+  errors?: ExcelImportError[]
+}
