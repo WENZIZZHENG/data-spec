@@ -212,6 +212,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lint/records/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getRecord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lint/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/import-export/fields/import": {
         parameters: {
             query?: never;
@@ -886,12 +918,60 @@ export interface components {
             warningCount?: number;
             /** Format: int32 */
             suggestionCount?: number;
+            fixedSql?: string;
         };
         RLintResult: {
             /** Format: int32 */
             code?: number;
             message?: string;
             data?: components["schemas"]["LintResult"];
+        };
+        RecordDetail: {
+            record?: components["schemas"]["SqlCheckRecord"];
+            issues?: components["schemas"]["LintIssue"][];
+        };
+        SqlCheckRecord: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            originalSql?: string;
+            fixedSql?: string;
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            suggestionCount?: number;
+            issuesJson?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        RRecordDetail: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["RecordDetail"];
+        };
+        PageResultSqlCheckRecord: {
+            records?: components["schemas"]["SqlCheckRecord"][];
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            current?: number;
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            pages?: number;
+        };
+        RPageResultSqlCheckRecord: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["PageResultSqlCheckRecord"];
         };
         DdlGenerateResult: {
             ddl?: string;
@@ -2279,6 +2359,88 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RLintResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    getRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRecordDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    listRecords: {
+        parameters: {
+            query: {
+                projectId?: number;
+                current?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RPageResultSqlCheckRecord"];
                 };
             };
             /** @description Bad Request */

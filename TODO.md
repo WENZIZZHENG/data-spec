@@ -177,6 +177,7 @@
 - 落地方式：复用 P2-2 的 DDL generator，但优先暴露给 CLI/MCP。
 
 ### P1-8：SQL 检查记录与修正 SQL 输出
+- 状态：已完成第一版，`/api/lint` 已返回 `fixedSql` 并保存检查记录，前端 SQL 校验页已展示修正 SQL、复制按钮、最近检查记录、分页和详情弹窗。
 - 为什么做：附件里的 SQL 检查不只是列问题，还要能输出建议版 SQL，并保留最近检查记录用于个人复盘和命中率统计。
 - 已有基础：后端已有 `SqlParserService`、`SqlLintService` 和 lint issue 统计；前端已有 SQL 编辑器骨架。
 - 缺口：缺少 `sql_check_record` 表；缺少 `fixedSql`；缺少基于别名、标准字段、类型长度、公共字段和注释生成修正 SQL 的服务。

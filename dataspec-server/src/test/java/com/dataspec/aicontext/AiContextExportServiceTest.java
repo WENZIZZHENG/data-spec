@@ -4,9 +4,11 @@ import com.dataspec.aicontext.service.AiContextExportService;
 import com.dataspec.enumdict.service.EnumDictService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.lint.engine.FixedSqlGenerator;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.rules.TableNameSnakeCaseRule;
+import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.rule.service.RuleConfigService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -109,6 +111,7 @@ class AiContextExportServiceTest {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         FieldService fieldService = mock(FieldService.class);
         EnumDictService enumDictService = mock(EnumDictService.class);
+        SqlCheckRecordService sqlCheckRecordService = mock(SqlCheckRecordService.class);
         ObjectMapper objectMapper = new ObjectMapper();
 
         when(ruleConfigService.listByProject(PROJECT_ID)).thenReturn(List.of());
@@ -120,7 +123,9 @@ class AiContextExportServiceTest {
                 new SqlParserService(),
                 ruleConfigService,
                 List.of(new TableNameSnakeCaseRule()),
-                objectMapper
+                objectMapper,
+                new FixedSqlGenerator(),
+                sqlCheckRecordService
         );
         return new AiContextExportService(
                 ruleConfigService,

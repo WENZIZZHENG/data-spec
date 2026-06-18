@@ -1,6 +1,7 @@
 package com.dataspec.lint.engine;
 
 import com.dataspec.lint.model.*;
+import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -12,7 +13,7 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 
 /**
- * SQL 校验服务 —— 编排 SQL 解析 + 规则执行
+ * SQL 校验服务 —— 编排 SQL 解析 + 规则执行 + 修正 SQL 生成 + 记录落库
  */
 @Slf4j
 @Service
@@ -23,6 +24,8 @@ public class SqlLintService {
     private final RuleConfigService ruleConfigService;
     private final List<LintRule> allRules; // Spring 自动注入所有 LintRule 实现
     private final ObjectMapper objectMapper;
+    private final FixedSqlGenerator fixedSqlGenerator;
+    private final SqlCheckRecordService sqlCheckRecordService;
 
     /**
      * 校验 SQL（不指定项目，使用所有内置规则）
@@ -38,7 +41,14 @@ public class SqlLintService {
         // 1. 解析 SQL
         List<TableDef> tables = sqlParserService.parse(sql);
         if (tables.isEmpty()) {
-            return LintResult.of(tables, List.of());
+            LintResult emptyResult = LintResult.of(tables, List.of());
+            // 无可解析表时仍落库一条记录,用于命中率统计与审计
+            try {
+                sqlCheckRecordService.save(projectId, sql, emptyResult);
+            } catch (Exception e) {
+                log.warn("保存 SQL 检查记录失败: {}", e.getMessage());
+            }
+            return emptyResult;
         }
 
         // 2. 确定启用的规则
@@ -109,7 +119,19 @@ public class SqlLintService {
             issues.addAll(ruleIssues);
         }
 
-        return LintResult.of(tables, issues);
+        LintResult result = LintResult.of(tables, issues);
+        // 基于确定性修复建议重建修正 SQL
+        String fixedSql = fixedSqlGenerator.generate(result);
+        result.setFixedSql(fixedSql);
+
+        // 落库检查记录(失败不阻断主流程,仅记录日志)
+        try {
+            sqlCheckRecordService.save(projectId, sql, result);
+        } catch (Exception e) {
+            log.warn("保存 SQL 检查记录失败: {}", e.getMessage());
+        }
+
+        return result;
     }
 
     /**

@@ -27,6 +27,9 @@ public class LintResult {
     private int warningCount;
     private int suggestionCount;
 
+    /** 基于确定性修复建议重建的修正 SQL,无法重建时为 null */
+    private String fixedSql;
+
     public static LintResult of(List<TableDef> tables, List<LintIssue> issues) {
         long errors = issues.stream().filter(i -> i.getSeverity() == Severity.ERROR).count();
         long warnings = issues.stream().filter(i -> i.getSeverity() == Severity.WARNING).count();
