@@ -281,6 +281,7 @@
 - 落地方式：先支持 SQL 文件解析，再评估 JDBC 直连读取 metadata。
 
 ### P3-1a：MySQL CREATE TABLE 支持
+- 状态：已完成第一版，解析器已支持常见 MySQL `CREATE TABLE` 的反引号标识符、列内 `COMMENT`、表级 `COMMENT='...'`、`AUTO_INCREMENT`、`tinyint(1)`、`datetime` 基础解析。
 - 为什么做：附件中的个人版示例以 MySQL DDL 为主，但当前 README 和 parser 主要面向 PostgreSQL。
 - 已有基础：JSqlParser 已用于解析 CREATE TABLE；现有规则大部分与方言无关。
 - 缺口：缺少 MySQL 方言下的类型、长度、COMMENT、AUTO_INCREMENT、tinyint、datetime、反引号等兼容测试。

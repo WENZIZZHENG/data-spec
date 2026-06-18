@@ -99,6 +99,43 @@ class SqlParserServiceTest {
     }
 
     @Test
+    void parseMySqlCreateTable_fillsInlineCommentsAndTypes() {
+        String sql = """
+                CREATE TABLE `t_user` (
+                    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+                    `mobile_no` varchar(20) NOT NULL COMMENT '手机号',
+                    `is_deleted` tinyint(1) NOT NULL DEFAULT 0 COMMENT '删除标记',
+                    `created_at` datetime NOT NULL COMMENT '创建时间',
+                    PRIMARY KEY (`id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+                """;
+
+        List<TableDef> tables = parser.parse(sql);
+
+        assertEquals(1, tables.size());
+        TableDef table = tables.get(0);
+        assertEquals("t_user", table.getName());
+        assertEquals("用户表", table.getComment());
+        assertEquals(4, table.getColumns().size());
+
+        var mobile = table.getColumns().stream()
+                .filter(c -> c.getName().equals("mobile_no"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("varchar(20)", mobile.getDataType().toLowerCase());
+        assertEquals("手机号", mobile.getComment());
+        assertFalse(mobile.isNullable());
+
+        var deleted = table.getColumns().stream()
+                .filter(c -> c.getName().equals("is_deleted"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("tinyint(1)", deleted.getDataType().toLowerCase());
+        assertEquals("0", deleted.getDefaultValue());
+        assertEquals("删除标记", deleted.getComment());
+    }
+
+    @Test
     void parseBlankSql_returnsEmptyTables() {
         assertTrue(parser.parse("   \n\t  ").isEmpty());
     }

@@ -28,6 +28,8 @@ public class SqlParserService {
             "(?is)COMMENT\\s+ON\\s+TABLE\\s+([^\\s]+)\\s+IS\\s+'((?:''|[^'])*)'\\s*;?");
     private static final Pattern COLUMN_COMMENT_PATTERN = Pattern.compile(
             "(?is)COMMENT\\s+ON\\s+COLUMN\\s+([^\\s]+)\\s+IS\\s+'((?:''|[^'])*)'\\s*;?");
+    private static final Pattern MYSQL_TABLE_COMMENT_PATTERN = Pattern.compile(
+            "(?is)CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?([^\\s(]+)\\s*\\(.*?\\)\\s*[^;]*?COMMENT\\s*=\\s*'((?:''|[^'])*)'");
 
     /**
      * 解析 SQL 文本，提取表定义
@@ -75,6 +77,12 @@ public class SqlParserService {
             }
         }
 
+        Matcher mysqlTableMatcher = MYSQL_TABLE_COMMENT_PATTERN.matcher(sql);
+        while (mysqlTableMatcher.find()) {
+            String tableName = normalizeTableName(mysqlTableMatcher.group(1));
+            tableComments.put(tableName, unescapeSqlString(mysqlTableMatcher.group(2)));
+        }
+
         return new CommentIndex(tableComments, columnComments);
     }
 
@@ -91,7 +99,7 @@ public class SqlParserService {
     }
 
     private TableDef parseCreateTable(CreateTable createTable) {
-        String tableName = createTable.getTable().getName();
+        String tableName = stripIdentifierQuotes(createTable.getTable().getName());
 
         // 提取表注释
         String tableComment = null;
@@ -114,7 +122,7 @@ public class SqlParserService {
     }
 
     private ColumnDef parseColumn(ColumnDefinition colDef) {
-        String name = colDef.getColumnName();
+        String name = stripIdentifierQuotes(colDef.getColumnName());
         String dataType = colDef.getColDataType().getDataType().trim();
 
         // 解析列参数（如 varchar(100)、numeric(10,2)）
@@ -127,6 +135,7 @@ public class SqlParserService {
         // 检查 NOT NULL、PRIMARY KEY、DEFAULT 值
         boolean nullable = true;
         String defaultValue = null;
+        String comment = null;
         if (colDef.getColumnSpecs() != null) {
             List<String> specs = colDef.getColumnSpecs();
             for (int i = 0; i < specs.size(); i++) {
@@ -141,11 +150,11 @@ public class SqlParserService {
                 if ("DEFAULT".equals(spec) && i + 1 < specs.size()) {
                     defaultValue = specs.get(i + 1);
                 }
+                if ("COMMENT".equals(spec) && i + 1 < specs.size()) {
+                    comment = stripSqlString(specs.get(i + 1));
+                }
             }
         }
-
-        // 提取 COMMENT（PostgreSQL 使用 COMMENT ON COLUMN，不在 CREATE TABLE 内部）
-        String comment = null;
 
         return ColumnDef.builder()
                 .name(name)
@@ -166,6 +175,19 @@ public class SqlParserService {
             return "";
         }
         return normalizeIdentifier(parts.get(parts.size() - 1));
+    }
+
+    private String stripIdentifierQuotes(String name) {
+        if (name == null) {
+            return null;
+        }
+        String normalized = name.trim();
+        while ((normalized.startsWith("\"") && normalized.endsWith("\""))
+                || (normalized.startsWith("`") && normalized.endsWith("`"))
+                || (normalized.startsWith("[") && normalized.endsWith("]"))) {
+            normalized = normalized.substring(1, normalized.length() - 1).trim();
+        }
+        return normalized;
     }
 
     private List<String> splitQualifiedName(String name) {
@@ -193,6 +215,17 @@ public class SqlParserService {
 
     private String unescapeSqlString(String value) {
         return value == null ? null : value.replace("''", "'");
+    }
+
+    private String stripSqlString(String value) {
+        if (value == null) {
+            return null;
+        }
+        String stripped = value.trim();
+        if (stripped.length() >= 2 && stripped.startsWith("'") && stripped.endsWith("'")) {
+            stripped = stripped.substring(1, stripped.length() - 1);
+        }
+        return unescapeSqlString(stripped);
     }
 
     private record CommentIndex(Map<String, String> tableComments, Map<String, String> columnComments) {
