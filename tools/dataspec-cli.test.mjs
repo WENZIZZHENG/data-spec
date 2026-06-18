@@ -154,6 +154,131 @@ test('lint-files returns 0 when no sql file has errors', async () => {
   }
 })
 
+test('review-pr posts markdown comment and returns 1 when lint has errors', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    await writeFile(path.join(dir, 'bad.sql'), 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    const calls = []
+    const fetchFn = async (url, options = {}) => {
+      calls.push({ url, options })
+      if (url === 'http://dataspec.local/api/lint') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: {
+              errorCount: 1,
+              warningCount: 0,
+              suggestionCount: 0,
+              issues: [
+                {
+                  severity: 'ERROR',
+                  ruleCode: 'table_naming_snake_case',
+                  message: '表名必须使用 snake_case',
+                  tableName: 'UserOrder',
+                  suggestion: '改为 user_order',
+                  replacement: 'user_order'
+                }
+              ]
+            }
+          })
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/issues/42/comments?per_page=100') {
+        return { ok: true, status: 200, json: async () => [] }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/issues/42/comments' && options.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({ id: 99 }) }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'review-pr',
+      dir,
+      '--project',
+      '7',
+      '--repo',
+      'acme/app',
+      '--pr',
+      '42',
+      '--token',
+      'ghs_test',
+      '--server',
+      'http://dataspec.local'
+    ], io, fetchFn)
+
+    const postCall = calls.find((call) => call.url.endsWith('/issues/42/comments') && call.options.method === 'POST')
+    const commentBody = JSON.parse(postCall.options.body).body
+    assert.equal(code, 1)
+    assert.equal(postCall.options.headers.Authorization, 'Bearer ghs_test')
+    assert.match(commentBody, /<!-- dataspec-sql-review -->/)
+    assert.match(commentBody, /bad\.sql/)
+    assert.match(commentBody, /table_naming_snake_case/)
+    assert.match(commentBody, /user_order/)
+    assert.match(io.stdout, /已创建 DataSpec Review 评论/)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('review-pr updates existing markdown comment and returns 0 when lint passes', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    await writeFile(path.join(dir, 'good.sql'), 'CREATE TABLE user_order (id bigint);', 'utf8')
+    const calls = []
+    const fetchFn = async (url, options = {}) => {
+      calls.push({ url, options })
+      if (url === 'http://localhost:8090/api/lint') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] }
+          })
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/issues/9/comments?per_page=100') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{ id: 123, body: 'old\n<!-- dataspec-sql-review -->' }]
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/issues/comments/123' && options.method === 'PATCH') {
+        return { ok: true, status: 200, json: async () => ({ id: 123 }) }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'review-pr',
+      dir,
+      '--project',
+      '1',
+      '--repo',
+      'acme/app',
+      '--pr',
+      '9',
+      '--token',
+      'ghs_test'
+    ], io, fetchFn)
+
+    const patchCall = calls.find((call) => call.options.method === 'PATCH')
+    const commentBody = JSON.parse(patchCall.options.body).body
+    assert.equal(code, 0)
+    assert.match(commentBody, /未发现 ERROR/)
+    assert.match(io.stdout, /已更新 DataSpec Review 评论/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('export-context downloads zip bytes to output path', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {

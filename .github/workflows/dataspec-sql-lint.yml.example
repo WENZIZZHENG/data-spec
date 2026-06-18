@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -39,6 +41,11 @@ jobs:
           echo "DataSpec server is not ready" >&2
           exit 1
 
-      - name: Lint SQL files
+      - name: Review SQL files
         run: |
-          node tools/dataspec-cli.mjs lint-files . --project 1 --format json --server http://localhost:8090
+          node tools/dataspec-cli.mjs review-pr . \
+            --project 1 \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
+            --server http://localhost:8090

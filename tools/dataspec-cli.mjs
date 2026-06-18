@@ -5,6 +5,8 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
+const DEFAULT_GITHUB_API = 'https://api.github.com'
+const DATASPEC_REVIEW_MARKER = '<!-- dataspec-sql-review -->'
 const SKIPPED_SCAN_DIRECTORIES = new Set([
   '.git',
   '.idea',
@@ -30,6 +32,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'lint-files') {
       return await runLintFiles(rest, io, fetchFn)
+    }
+    if (command === 'review-pr') {
+      return await runReviewPr(rest, io, fetchFn)
     }
     if (command === 'export-context') {
       return await runExportContext(rest, io, fetchFn)
@@ -86,26 +91,37 @@ async function runLintFiles(args, io, fetchFn) {
     throw new Error('当前仅支持 --format json')
   }
   const server = normalizeServer(options.server)
-  const files = await collectSqlFiles(positional)
-  const results = []
+  const output = await lintSqlFiles(positional, projectId, server, fetchFn)
+  io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
+  return output.summary.failedFiles > 0 ? 1 : 0
+}
 
-  for (const filePath of files) {
-    const sql = await readFile(filePath, 'utf8')
-    const response = await fetchFn(`${server}/api/lint`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sql, projectId })
-    })
-    const payload = await readJsonResponse(response)
-    results.push({
-      path: formatOutputPath(filePath),
-      result: unwrapResponse(payload)
-    })
+async function runReviewPr(args, io, fetchFn) {
+  const { positional, options } = parseArgs(args, ['project', 'repo', 'pr', 'token', 'server', 'github-api'])
+  if (positional.length === 0) {
+    throw new Error('review-pr 需要提供至少一个 SQL 文件或目录路径')
   }
-
-  const summary = summarizeLintResults(results)
-  io.writeOut(`${JSON.stringify({ summary, files: results }, null, 2)}\n`)
-  return summary.failedFiles > 0 ? 1 : 0
+  const projectId = parseProjectId(options.project)
+  const repo = parseRepository(options.repo)
+  const prNumber = parsePositiveInteger(options.pr, 'pull request number')
+  const token = options.token ?? process.env.GITHUB_TOKEN
+  if (!token) {
+    throw new Error('review-pr 需要提供 --token <token> 或设置 GITHUB_TOKEN')
+  }
+  const server = normalizeServer(options.server)
+  const githubApi = normalizeServer(options['github-api'] ?? DEFAULT_GITHUB_API)
+  const lintOutput = await lintSqlFiles(positional, projectId, server, fetchFn)
+  const body = buildReviewMarkdown(lintOutput)
+  const action = await upsertPullRequestComment({
+    repo,
+    prNumber,
+    token,
+    githubApi,
+    body,
+    fetchFn
+  })
+  io.writeOut(`已${action === 'updated' ? '更新' : '创建'} DataSpec Review 评论\n`)
+  return lintOutput.summary.failedFiles > 0 ? 1 : 0
 }
 
 async function runExportContext(args, io, fetchFn) {
@@ -218,6 +234,13 @@ function parsePositiveInteger(value, label) {
   return parsed
 }
 
+function parseRepository(value) {
+  if (!value || !/^[^/\s]+\/[^/\s]+$/.test(value)) {
+    throw new Error(`无效 repo: ${value}`)
+  }
+  return value
+}
+
 function parseLimit(value, fallback = 5) {
   if (value === undefined || value === null || value === '') {
     return fallback
@@ -227,6 +250,30 @@ function parseLimit(value, fallback = 5) {
     throw new Error(`无效 limit: ${value}`)
   }
   return limit
+}
+
+async function lintSqlFiles(paths, projectId, server, fetchFn) {
+  const files = await collectSqlFiles(paths)
+  const results = []
+
+  for (const filePath of files) {
+    const sql = await readFile(filePath, 'utf8')
+    const response = await fetchFn(`${server}/api/lint`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sql, projectId })
+    })
+    const payload = await readJsonResponse(response)
+    results.push({
+      path: formatOutputPath(filePath),
+      result: unwrapResponse(payload)
+    })
+  }
+
+  return {
+    summary: summarizeLintResults(results),
+    files: results
+  }
 }
 
 async function collectSqlFiles(paths) {
@@ -296,6 +343,147 @@ function formatOutputPath(filePath) {
   return outputPath.replaceAll(path.sep, '/')
 }
 
+async function upsertPullRequestComment({ repo, prNumber, token, githubApi, body, fetchFn }) {
+  const repoPath = repo.split('/').map(encodeURIComponent).join('/')
+  const listUrl = `${githubApi}/repos/${repoPath}/issues/${encodeURIComponent(prNumber)}/comments?per_page=100`
+  const commentsResponse = await fetchFn(listUrl, {
+    method: 'GET',
+    headers: githubHeaders(token)
+  })
+  const comments = await readGithubJsonResponse(commentsResponse)
+  const existing = Array.isArray(comments)
+    ? comments.find((comment) => comment.body?.includes(DATASPEC_REVIEW_MARKER))
+    : null
+  if (existing?.id) {
+    const response = await fetchFn(`${githubApi}/repos/${repoPath}/issues/comments/${encodeURIComponent(existing.id)}`, {
+      method: 'PATCH',
+      headers: githubHeaders(token),
+      body: JSON.stringify({ body })
+    })
+    await readGithubJsonResponse(response)
+    return 'updated'
+  }
+
+  const response = await fetchFn(`${githubApi}/repos/${repoPath}/issues/${encodeURIComponent(prNumber)}/comments`, {
+    method: 'POST',
+    headers: githubHeaders(token),
+    body: JSON.stringify({ body })
+  })
+  await readGithubJsonResponse(response)
+  return 'created'
+}
+
+function githubHeaders(token) {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  }
+}
+
+async function readGithubJsonResponse(response) {
+  if (!response.ok) {
+    throw new Error(`GitHub 请求失败，HTTP ${response.status}`)
+  }
+  return await response.json()
+}
+
+function buildReviewMarkdown(lintOutput) {
+  const { summary, files } = lintOutput
+  const status = summary.failedFiles > 0
+    ? `发现 ${summary.failedFiles} 个 SQL 文件存在 ERROR`
+    : '未发现 ERROR'
+  const lines = [
+    DATASPEC_REVIEW_MARKER,
+    '## DataSpec SQL Review',
+    '',
+    `**状态**：${status}`,
+    '',
+    '| 指标 | 数量 |',
+    '|---|---:|',
+    `| SQL 文件 | ${summary.totalFiles} |`,
+    `| ERROR 文件 | ${summary.failedFiles} |`,
+    `| ERROR | ${summary.errorCount} |`,
+    `| WARNING | ${summary.warningCount} |`,
+    `| SUGGESTION | ${summary.suggestionCount} |`,
+    ''
+  ]
+
+  if (files.length > 0) {
+    lines.push('### 文件概览', '')
+    lines.push('| 文件 | ERROR | WARNING | SUGGESTION |')
+    lines.push('|---|---:|---:|---:|')
+    for (const item of files) {
+      const result = item.result ?? {}
+      lines.push(`| \`${escapeTableCell(item.path)}\` | ${Number(result.errorCount ?? 0)} | ${Number(result.warningCount ?? 0)} | ${Number(result.suggestionCount ?? 0)} |`)
+    }
+    lines.push('')
+  }
+
+  const issueLines = buildIssueMarkdownLines(files)
+  if (issueLines.length > 0) {
+    lines.push('### 问题明细', '')
+    lines.push(...issueLines)
+  }
+
+  lines.push('> 该评论由 DataSpec CLI 自动生成。')
+  return lines.join('\n')
+}
+
+function buildIssueMarkdownLines(files) {
+  const lines = []
+  let issueCount = 0
+  const maxIssues = 50
+  for (const item of files) {
+    const issues = item.result?.issues ?? []
+    if (issues.length === 0) {
+      continue
+    }
+    lines.push(`#### \`${item.path}\``)
+    for (const issue of issues) {
+      if (issueCount >= maxIssues) {
+        lines.push(`- 其余问题已省略，请查看 CLI JSON 输出。`)
+        return [...lines, '']
+      }
+      lines.push(formatIssueMarkdown(issue))
+      issueCount += 1
+    }
+    lines.push('')
+  }
+  return lines
+}
+
+function formatIssueMarkdown(issue) {
+  const severity = issue.severity ?? 'UNKNOWN'
+  const ruleCode = issue.ruleCode ?? 'unknown_rule'
+  const message = issue.message ?? ''
+  const location = formatIssueLocation(issue)
+  const lines = [`- **${severity}** \`${ruleCode}\`${location ? ` (${location})` : ''}: ${message}`]
+  if (issue.suggestion) {
+    lines.push(`  - 建议：${issue.suggestion}`)
+  }
+  if (issue.replacement) {
+    lines.push(`  - 替换：\`${issue.replacement}\``)
+  }
+  return lines.join('\n')
+}
+
+function formatIssueLocation(issue) {
+  const parts = []
+  if (issue.tableName) {
+    parts.push(`表 \`${issue.tableName}\``)
+  }
+  if (issue.columnName) {
+    parts.push(`字段 \`${issue.columnName}\``)
+  }
+  return parts.join(' / ')
+}
+
+function escapeTableCell(value) {
+  return String(value ?? '').replaceAll('|', '\\|').replaceAll('\n', ' ')
+}
+
 function normalizeServer(server = DEFAULT_SERVER) {
   return server.replace(/\/+$/, '')
 }
@@ -321,6 +509,7 @@ function helpText() {
 Usage:
   node tools/dataspec-cli.mjs lint <path|-> --project <id> --format json [--server <url>]
   node tools/dataspec-cli.mjs lint-files <path...> --project <id> --format json [--server <url>]
+  node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--server <url>]
   node tools/dataspec-cli.mjs export-context --project <id> --output <zip> [--server <url>]
   node tools/dataspec-cli.mjs suggest-field <query> --project <id> --format json [--limit <n>] [--server <url>]
   node tools/dataspec-cli.mjs generate-ddl --project <id> --template <id> --table <name> --format json [--server <url>]

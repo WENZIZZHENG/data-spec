@@ -303,6 +303,7 @@
 - 落地方式：优先实现批量 lint 命令，再补 GitHub Actions 使用示例。
 
 ### P3-3：PR 评论式 SQL Review
+- 状态：已完成第一版，CLI 已新增 `review-pr`，可在 GitHub Actions 中批量 lint SQL 后创建或更新带固定 marker 的 DataSpec Review 评论，并在评论后按 ERROR 情况返回 CI 退出码。
 - 为什么做：CI 只失败不够友好，AI 和开发者需要在 PR 中看到可定位、可修复的字段规范反馈。
 - 已有基础：P0-2 CLI、P1-6 修复建议和 P3-2 GitHub Action 校验入口。
 - 缺口：缺少文件级定位、Markdown 评论格式、重复评论更新策略和 GitHub token 权限边界。
