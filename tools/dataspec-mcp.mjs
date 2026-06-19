@@ -2,6 +2,7 @@
 
 import { createInterface } from 'node:readline'
 import { pathToFileURL } from 'node:url'
+import { loadDataSpecConfig } from './dataspec-config.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const SERVER_NAME = 'dataspec-mcp'
@@ -141,13 +142,15 @@ export function createMcpHandler(config, fetchFn = globalThis.fetch) {
 }
 
 /**
- * 解析 MCP Server 启动参数。`--project` 是资源 URI 可确定化的基础，因此第一版要求显式提供。
+ * 解析 MCP Server 启动参数。项目 ID 是 resource URI 可确定化的基础，
+ * 可由显式参数提供，也可由业务仓库 `.dataspec/config.json` 提供。
  */
-export function parseServerArgs(argv) {
+export function parseServerArgs(argv, startDir = process.cwd()) {
   const { options } = parseArgs(argv, ['project', 'server'])
+  const config = loadDataSpecConfig(startDir)
   return {
-    projectId: parseProjectId(options.project),
-    server: normalizeServer(options.server)
+    projectId: parseProjectId(options.project ?? config.projectId),
+    server: normalizeServer(options.server ?? config.server)
   }
 }
 
@@ -477,7 +480,7 @@ function optionalLimit(value, fallback) {
 
 function parseProjectId(value) {
   if (value === undefined || value === null || value === '') {
-    throw new JsonRpcError(-32602, '需要提供 --project <id>')
+    throw new JsonRpcError(-32602, '需要提供 --project <id> 或 .dataspec/config.json 的 projectId')
   }
   return parsePositiveInteger(value, 'project id')
 }

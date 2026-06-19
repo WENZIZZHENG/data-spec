@@ -336,7 +336,7 @@
 - 边界：不自动覆盖源文件，不执行数据库变更。
 
 ### P4-3：`.dataspec/config.json` 与 CLI 使用体验
-- 状态：待办。
+- 状态：已完成第一版，CLI/MCP 已支持从当前目录向上读取 `.dataspec/config.json` 的 `projectId/server/defaultPaths`，显式命令行参数优先；`lint-files` 未传路径时会使用 `defaultPaths`。
 - 为什么做：CLI/MCP 当前每次都要传 `--project`、`--server`，业务仓库和 AI agent 使用成本偏高。
 - 已有基础：业务项目 `.dataspec/` 约定、CLI/MCP、AI Context 导出包已经存在。
 - 缺口：缺少项目级默认配置、npm bin 入口和更短命令。

@@ -70,6 +70,86 @@ test('lint returns 0 when server reports no errors', async () => {
   assert.equal(JSON.parse(io.stdout).warningCount, 1)
 })
 
+test('lint uses local config defaults when project and server are omitted', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({ projectId: 7, server: 'http://dataspec.local/' }),
+      'utf8'
+    )
+    const sqlPath = path.join(dir, 'good.sql')
+    await writeFile(sqlPath, 'CREATE TABLE users (id bigserial);', 'utf8')
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] }
+        })
+      }
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli(['lint', sqlPath, '--format', 'json'], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(calls[0].url, 'http://dataspec.local/api/lint')
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      sql: 'CREATE TABLE users (id bigserial);',
+      projectId: 7
+    })
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('explicit lint options override local config defaults', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({ projectId: 7, server: 'http://dataspec.local' }),
+      'utf8'
+    )
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] }
+        })
+      }
+    }
+    const io = createIo('CREATE TABLE users (id bigserial);', dir)
+
+    const code = await runCli([
+      'lint',
+      '-',
+      '--project',
+      '8',
+      '--format',
+      'json',
+      '--server',
+      'http://override.local/'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(calls[0].url, 'http://override.local/api/lint')
+    assert.equal(JSON.parse(calls[0].options.body).projectId, 8)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('lint-files scans sql files, aggregates json, and returns 1 for error files', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {
@@ -149,6 +229,48 @@ test('lint-files returns 0 when no sql file has errors', async () => {
     assert.equal(code, 0)
     assert.equal(output.summary.totalFiles, 1)
     assert.equal(output.summary.suggestionCount, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('lint-files uses default paths from local config when paths are omitted', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({
+        projectId: 7,
+        server: 'http://dataspec.local',
+        defaultPaths: ['sql']
+      }),
+      'utf8'
+    )
+    await writeFile(path.join(dir, 'sql', 'good.sql'), 'CREATE TABLE users (id bigint);', 'utf8')
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: { errorCount: 0, warningCount: 1, suggestionCount: 0, issues: [] }
+        })
+      }
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli(['lint-files', '--format', 'json'], io, fetchFn)
+
+    const output = JSON.parse(io.stdout)
+    assert.equal(code, 0)
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].url, 'http://dataspec.local/api/lint')
+    assert.equal(JSON.parse(calls[0].options.body).projectId, 7)
+    assert.equal(output.summary.totalFiles, 1)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -399,9 +521,10 @@ test('invalid arguments print stderr and return 2', async () => {
   assert.equal(io.stdout, '')
 })
 
-function createIo(stdin = '') {
+function createIo(stdin = '', cwd = process.cwd()) {
   return {
     stdin,
+    cwd,
     stdout: '',
     stderr: '',
     writeOut(text) {

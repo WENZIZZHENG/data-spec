@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { test } from 'node:test'
 import { createMcpHandler, parseServerArgs } from './dataspec-mcp.mjs'
 
@@ -224,6 +227,29 @@ test('parseServerArgs requires project id and normalizes server url', () => {
     server: 'http://dataspec.local'
   })
   assert.throws(() => parseServerArgs(['--server', 'http://dataspec.local']), /需要提供 --project/)
+})
+
+test('parseServerArgs reads local config defaults and keeps explicit overrides', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-mcp-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({ projectId: 7, server: 'http://dataspec.local/' }),
+      'utf8'
+    )
+
+    assert.deepEqual(parseServerArgs([], dir), {
+      projectId: 7,
+      server: 'http://dataspec.local'
+    })
+    assert.deepEqual(parseServerArgs(['--project', '8', '--server', 'http://override.local/'], dir), {
+      projectId: 8,
+      server: 'http://override.local'
+    })
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
 
 function jsonResponse(payload) {

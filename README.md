@@ -151,17 +151,31 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 
 ## CLI
 
-第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`：
+第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`。在业务仓库中可放置 `.dataspec/config.json`，CLI 会从当前目录向上查找该文件；显式命令行参数优先于配置文件：
+
+```json
+{
+  "projectId": 1,
+  "server": "http://localhost:8090",
+  "defaultPaths": ["db/migrations", "sql"]
+}
+```
 
 ```bash
 # 校验 SQL 文件，发现 ERROR 时退出码为 1，参数错误/网络错误退出码为 2
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json
+
+# 在含 .dataspec/config.json 的业务仓库中，可省略 --project 和 --server
+node tools/dataspec-cli.mjs lint examples/bad-example.sql --format json
 
 # 从 stdin 校验
 cat examples/good-example.sql | node tools/dataspec-cli.mjs lint - --project 1 --format json
 
 # 批量校验 SQL 文件或目录，发现任一 ERROR 时退出码为 1
 node tools/dataspec-cli.mjs lint-files examples --project 1 --format json
+
+# 未传路径时，lint-files 会使用 config.json 的 defaultPaths
+node tools/dataspec-cli.mjs lint-files --format json
 
 # GitHub Actions 中发布或更新 PR Review 评论；有 ERROR 时评论后退出码为 1
 node tools/dataspec-cli.mjs review-pr . --project 1 --repo owner/repo --pr 123 --token "$GITHUB_TOKEN" --server http://localhost:8090
@@ -183,10 +197,13 @@ node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format j
 
 ## MCP Server
 
-第一版 MCP Server 同样是 HTTP-backed stdio adapter，需要先启动 DataSpec 后端，并在启动时指定默认项目：
+第一版 MCP Server 同样是 HTTP-backed stdio adapter，需要先启动 DataSpec 后端。启动时可显式指定默认项目，也可在业务仓库中依赖 `.dataspec/config.json`：
 
 ```bash
 node tools/dataspec-mcp.mjs --project 1 --server http://localhost:8090
+
+# 在含 .dataspec/config.json 的业务仓库中
+node tools/dataspec-mcp.mjs
 ```
 
 可在 MCP client 中按本地 stdio server 配置。当前暴露能力：
@@ -207,12 +224,9 @@ cd ../dataspec-web
 pnpm test
 pnpm build
 
-# CLI 单元测试
+# CLI/MCP 单元测试
 cd ..
-node --test tools/dataspec-cli.test.mjs
-
-# MCP 单元测试
-node --test tools/dataspec-mcp.test.mjs
+node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs
 ```
 
 ## 项目结构
@@ -299,8 +313,8 @@ data-spec/
 - [x] 个人工作台和字段命中率报告
 - [x] SQL 反向导入预览与差异分析
 - [x] 数据库直连反向导入与前端确认导入流程
-- [x] DataSpec CLI：`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`
-- [x] DataSpec MCP Server：resources、prompts、`lint_sql`、`get_field_catalog`、`suggest_fields`、`generate_table_ddl`
+- [x] DataSpec CLI：`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置
+- [x] DataSpec MCP Server：resources、prompts、`lint_sql`、`get_field_catalog`、`suggest_fields`、`generate_table_ddl`，支持 `.dataspec/config.json` 默认项目配置
 - [x] GitHub Actions 示例和 PR 评论式 SQL Review
 
 ## 暂缓探索

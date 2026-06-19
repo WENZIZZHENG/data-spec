@@ -3,6 +3,7 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { loadDataSpecConfig, resolveDefaultPaths } from './dataspec-config.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const DEFAULT_GITHUB_API = 'https://api.github.com'
@@ -54,6 +55,7 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
 
 async function runLint(args, io, fetchFn) {
   const { positional, options } = parseArgs(args, ['project', 'format', 'server'])
+  const config = loadDataSpecConfig(cliCwd(io))
   const sqlPath = positional[0]
   if (!sqlPath) {
     throw new Error('lint 需要提供 SQL 文件路径或 -')
@@ -61,12 +63,12 @@ async function runLint(args, io, fetchFn) {
   if (positional.length > 1) {
     throw new Error(`lint 只接受一个 SQL 输入路径，收到: ${positional.slice(1).join(', ')}`)
   }
-  const projectId = parseProjectId(options.project)
+  const projectId = parseProjectId(options.project ?? config.projectId)
   const format = options.format ?? 'json'
   if (format !== 'json') {
     throw new Error('当前仅支持 --format json')
   }
-  const server = normalizeServer(options.server)
+  const server = normalizeServer(options.server ?? config.server)
   const sql = sqlPath === '-' ? await io.readStdin() : await readFile(sqlPath, 'utf8')
 
   const response = await fetchFn(`${server}/api/lint`, {
@@ -82,33 +84,36 @@ async function runLint(args, io, fetchFn) {
 
 async function runLintFiles(args, io, fetchFn) {
   const { positional, options } = parseArgs(args, ['project', 'format', 'server'])
-  if (positional.length === 0) {
+  const config = loadDataSpecConfig(cliCwd(io))
+  const inputPaths = positional.length > 0 ? positional : resolveDefaultPaths(config)
+  if (inputPaths.length === 0) {
     throw new Error('lint-files 需要提供至少一个 SQL 文件或目录路径')
   }
-  const projectId = parseProjectId(options.project)
+  const projectId = parseProjectId(options.project ?? config.projectId)
   const format = options.format ?? 'json'
   if (format !== 'json') {
     throw new Error('当前仅支持 --format json')
   }
-  const server = normalizeServer(options.server)
-  const output = await lintSqlFiles(positional, projectId, server, fetchFn)
+  const server = normalizeServer(options.server ?? config.server)
+  const output = await lintSqlFiles(inputPaths, projectId, server, fetchFn)
   io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
   return output.summary.failedFiles > 0 ? 1 : 0
 }
 
 async function runReviewPr(args, io, fetchFn) {
   const { positional, options } = parseArgs(args, ['project', 'repo', 'pr', 'token', 'server', 'github-api'])
+  const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length === 0) {
     throw new Error('review-pr 需要提供至少一个 SQL 文件或目录路径')
   }
-  const projectId = parseProjectId(options.project)
+  const projectId = parseProjectId(options.project ?? config.projectId)
   const repo = parseRepository(options.repo)
   const prNumber = parsePositiveInteger(options.pr, 'pull request number')
   const token = options.token ?? process.env.GITHUB_TOKEN
   if (!token) {
     throw new Error('review-pr 需要提供 --token <token> 或设置 GITHUB_TOKEN')
   }
-  const server = normalizeServer(options.server)
+  const server = normalizeServer(options.server ?? config.server)
   const githubApi = normalizeServer(options['github-api'] ?? DEFAULT_GITHUB_API)
   const lintOutput = await lintSqlFiles(positional, projectId, server, fetchFn)
   const body = buildReviewMarkdown(lintOutput)
@@ -126,15 +131,16 @@ async function runReviewPr(args, io, fetchFn) {
 
 async function runExportContext(args, io, fetchFn) {
   const { positional, options } = parseArgs(args, ['project', 'output', 'server'])
+  const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length > 0) {
     throw new Error(`export-context 不接受位置参数: ${positional.join(', ')}`)
   }
-  const projectId = parseProjectId(options.project)
+  const projectId = parseProjectId(options.project ?? config.projectId)
   const output = options.output
   if (!output) {
     throw new Error('export-context 需要提供 --output <zip>')
   }
-  const server = normalizeServer(options.server)
+  const server = normalizeServer(options.server ?? config.server)
   const url = `${server}/api/ai-context/package/download?projectId=${encodeURIComponent(projectId)}`
   const response = await fetchFn(url)
   if (!response.ok) {
@@ -149,6 +155,7 @@ async function runExportContext(args, io, fetchFn) {
 
 async function runSuggestField(args, io, fetchFn) {
   const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'limit'])
+  const config = loadDataSpecConfig(cliCwd(io))
   const query = positional[0]
   if (!query) {
     throw new Error('suggest-field 需要提供业务字段描述')
@@ -156,13 +163,13 @@ async function runSuggestField(args, io, fetchFn) {
   if (positional.length > 1) {
     throw new Error(`suggest-field 只接受一个描述参数，收到: ${positional.slice(1).join(', ')}`)
   }
-  const projectId = parseProjectId(options.project)
+  const projectId = parseProjectId(options.project ?? config.projectId)
   const format = options.format ?? 'json'
   if (format !== 'json') {
     throw new Error('当前仅支持 --format json')
   }
   const limit = parseLimit(options.limit)
-  const server = normalizeServer(options.server)
+  const server = normalizeServer(options.server ?? config.server)
   const url = `${server}/api/fields/suggest?projectId=${encodeURIComponent(projectId)}&query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`
   const response = await fetchFn(url)
   const payload = await readJsonResponse(response)
@@ -173,10 +180,11 @@ async function runSuggestField(args, io, fetchFn) {
 
 async function runGenerateDdl(args, io, fetchFn) {
   const { positional, options } = parseArgs(args, ['project', 'template', 'table', 'format', 'server'])
+  const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length > 0) {
     throw new Error(`generate-ddl 不接受位置参数: ${positional.join(', ')}`)
   }
-  const projectId = parseProjectId(options.project)
+  const projectId = parseProjectId(options.project ?? config.projectId)
   const templateId = parsePositiveInteger(options.template, 'template id')
   const tableName = options.table
   if (!tableName) {
@@ -186,7 +194,7 @@ async function runGenerateDdl(args, io, fetchFn) {
   if (format !== 'json') {
     throw new Error('当前仅支持 --format json')
   }
-  const server = normalizeServer(options.server)
+  const server = normalizeServer(options.server ?? config.server)
   const url = `${server}/api/generator/ddl/preview?projectId=${encodeURIComponent(projectId)}&templateId=${encodeURIComponent(templateId)}&tableName=${encodeURIComponent(tableName)}`
   const response = await fetchFn(url)
   const payload = await readJsonResponse(response)
@@ -221,7 +229,7 @@ function parseArgs(args, allowedOptions) {
 
 function parseProjectId(value) {
   if (!value) {
-    throw new Error('需要提供 --project <id>')
+    throw new Error('需要提供 --project <id> 或 .dataspec/config.json 的 projectId')
   }
   return parsePositiveInteger(value, 'project id')
 }
@@ -488,6 +496,10 @@ function normalizeServer(server = DEFAULT_SERVER) {
   return server.replace(/\/+$/, '')
 }
 
+function cliCwd(io) {
+  return typeof io.cwd === 'function' ? io.cwd() : io.cwd ?? process.cwd()
+}
+
 async function readJsonResponse(response) {
   if (!response.ok) {
     throw new Error(`DataSpec 请求失败，HTTP ${response.status}`)
@@ -507,17 +519,23 @@ function helpText() {
   return `DataSpec CLI
 
 Usage:
-  node tools/dataspec-cli.mjs lint <path|-> --project <id> --format json [--server <url>]
-  node tools/dataspec-cli.mjs lint-files <path...> --project <id> --format json [--server <url>]
+  node tools/dataspec-cli.mjs lint <path|-> [--project <id>] --format json [--server <url>]
+  node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] --format json [--server <url>]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--server <url>]
-  node tools/dataspec-cli.mjs export-context --project <id> --output <zip> [--server <url>]
-  node tools/dataspec-cli.mjs suggest-field <query> --project <id> --format json [--limit <n>] [--server <url>]
-  node tools/dataspec-cli.mjs generate-ddl --project <id> --template <id> --table <name> --format json [--server <url>]
+  node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--server <url>]
+  node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>]
+  node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>]
+
+Options:
+  --project 可由 .dataspec/config.json 的 projectId 提供
+  --server  可由 .dataspec/config.json 的 server 提供
+  lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
 `
 }
 
 function processIo() {
   return {
+    cwd: () => process.cwd(),
     writeOut(text) {
       process.stdout.write(text)
     },
