@@ -35,6 +35,15 @@
                   复制
                 </el-button>
               </div>
+              <div v-if="fixedSqlDiffLines.length" class="sql-diff">
+                <div
+                  v-for="(line, index) in fixedSqlDiffLines"
+                  :key="`current-${index}`"
+                  :class="['diff-line', `diff-line-${line.type}`]"
+                >
+                  {{ line.text || ' ' }}
+                </div>
+              </div>
               <pre class="sql-code">{{ lintResult.fixedSql }}</pre>
             </div>
 
@@ -150,6 +159,15 @@
 
         <div v-if="activeRecord.record.fixedSql" class="detail-section">
           <div class="detail-title">修正 SQL</div>
+          <div v-if="recordDiffLines.length" class="sql-diff compact">
+            <div
+              v-for="(line, index) in recordDiffLines"
+              :key="`record-${index}`"
+              :class="['diff-line', `diff-line-${line.type}`]"
+            >
+              {{ line.text || ' ' }}
+            </div>
+          </div>
           <pre class="sql-code compact">{{ activeRecord.record.fixedSql }}</pre>
         </div>
 
@@ -212,6 +230,11 @@ const issueTotal = computed(() => {
     (lintResult.value.warningCount ?? 0) +
     (lintResult.value.suggestionCount ?? 0)
   )
+})
+const fixedSqlDiffLines = computed(() => parseDiff(lintResult.value?.fixedSqlDiff))
+const recordDiffLines = computed(() => {
+  const record = activeRecord.value?.record
+  return parseDiff(buildSqlDiff(record?.originalSql, record?.fixedSql))
 })
 
 onMounted(() => {
@@ -383,6 +406,87 @@ function formatDate(value?: string) {
   }
   return date.toLocaleString('zh-CN', { hour12: false })
 }
+
+type DiffLineType = 'header' | 'add' | 'remove' | 'context'
+
+function parseDiff(diff?: string | null) {
+  if (!diff) {
+    return []
+  }
+  return diff.split('\n').map((text) => ({
+    text,
+    type: diffLineType(text)
+  }))
+}
+
+function diffLineType(line: string): DiffLineType {
+  if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) {
+    return 'header'
+  }
+  if (line.startsWith('+')) {
+    return 'add'
+  }
+  if (line.startsWith('-')) {
+    return 'remove'
+  }
+  return 'context'
+}
+
+function buildSqlDiff(originalSql?: string, fixedSql?: string) {
+  if (!originalSql || !fixedSql || originalSql === fixedSql) {
+    return null
+  }
+  const originalLines = originalSql.split(/\r?\n/)
+  const fixedLines = fixedSql.split(/\r?\n/)
+  if (originalLines.join('\n') === fixedLines.join('\n')) {
+    return null
+  }
+  return [
+    '--- original.sql',
+    '+++ fixed.sql',
+    '@@',
+    ...buildDiffLines(originalLines, fixedLines)
+  ].join('\n')
+}
+
+function buildDiffLines(originalLines: string[], fixedLines: string[]) {
+  const lcs = Array.from({ length: originalLines.length + 1 }, () =>
+    Array.from({ length: fixedLines.length + 1 }, () => 0)
+  )
+  for (let i = originalLines.length - 1; i >= 0; i--) {
+    for (let j = fixedLines.length - 1; j >= 0; j--) {
+      lcs[i][j] = originalLines[i] === fixedLines[j]
+        ? lcs[i + 1][j + 1] + 1
+        : Math.max(lcs[i + 1][j], lcs[i][j + 1])
+    }
+  }
+
+  const lines: string[] = []
+  let i = 0
+  let j = 0
+  while (i < originalLines.length && j < fixedLines.length) {
+    if (originalLines[i] === fixedLines[j]) {
+      lines.push(` ${originalLines[i]}`)
+      i++
+      j++
+    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+      lines.push(`-${originalLines[i]}`)
+      i++
+    } else {
+      lines.push(`+${fixedLines[j]}`)
+      j++
+    }
+  }
+  while (i < originalLines.length) {
+    lines.push(`-${originalLines[i]}`)
+    i++
+  }
+  while (j < fixedLines.length) {
+    lines.push(`+${fixedLines[j]}`)
+    j++
+  }
+  return lines
+}
 </script>
 
 <style scoped>
@@ -499,6 +603,48 @@ function formatDate(value?: string) {
   max-height: 220px;
   border: 1px solid #ebeef5;
   border-radius: 4px;
+}
+
+.sql-diff {
+  max-height: 260px;
+  overflow: auto;
+  border-bottom: 1px solid #e4e7ed;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  background: #f8fafc;
+}
+
+.sql-diff.compact {
+  max-height: 220px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+}
+
+.diff-line {
+  min-height: 19px;
+  padding: 0 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diff-line-header {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.diff-line-add {
+  color: #14532d;
+  background: #dcfce7;
+}
+
+.diff-line-remove {
+  color: #7f1d1d;
+  background: #fee2e2;
+}
+
+.diff-line-context {
+  color: #334155;
 }
 
 .record-table {

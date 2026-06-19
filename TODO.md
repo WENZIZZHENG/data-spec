@@ -327,7 +327,7 @@
 - 边界：第一阶段不做 GitHub inline comment，只先产出稳定定位字段。
 
 ### P4-2：修正 SQL diff 视图
-- 状态：待办。
+- 状态：已完成第一版，`/api/lint` 已新增 `fixedSqlDiff` unified diff 输出，前端 SQL 校验页和检查记录详情已展示新增/删除/上下文差异；自动覆盖源文件、side-by-side 编辑器和 PR inline diff 留后续。
 - 为什么做：已有 `fixedSql` 但用户更关心“具体改了哪里”，AI 和代码评审也需要可读 diff。
 - 已有基础：`/api/lint` 已返回 `fixedSql`，前端 SQL 校验页已支持展示和复制。
 - 缺口：缺少 unified diff/side-by-side diff 输出和前端差异视图。

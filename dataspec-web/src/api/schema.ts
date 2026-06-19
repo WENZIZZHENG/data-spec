@@ -928,6 +928,7 @@ export interface components {
             /** Format: int32 */
             suggestionCount?: number;
             fixedSql?: string;
+            fixedSqlDiff?: string;
         };
         RLintResult: {
             /** Format: int32 */

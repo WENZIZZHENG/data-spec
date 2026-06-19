@@ -46,6 +46,9 @@ class SqlLintServiceTest {
         // 应同步生成修正 SQL 并落库
         assertNotNull(result.getFixedSql(), "应生成修正 SQL");
         assertTrue(result.getFixedSql().contains("user_order"), "修正 SQL 应含重命名后的表名");
+        assertNotNull(result.getFixedSqlDiff(), "应生成修正 SQL diff");
+        assertTrue(result.getFixedSqlDiff().contains("-CREATE TABLE UserOrder"));
+        assertTrue(result.getFixedSqlDiff().contains("+CREATE TABLE user_order"));
         assertEquals(1, recordService.saved.size(), "应保存 1 条检查记录");
     }
 

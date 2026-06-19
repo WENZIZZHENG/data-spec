@@ -30,6 +30,9 @@ public class LintResult {
     /** 基于确定性修复建议重建的修正 SQL,无法重建时为 null */
     private String fixedSql;
 
+    /** 原 SQL 与修正 SQL 的 unified diff,无差异时为 null */
+    private String fixedSqlDiff;
+
     public static LintResult of(List<TableDef> tables, List<LintIssue> issues) {
         long errors = issues.stream().filter(i -> i.getSeverity() == Severity.ERROR).count();
         long warnings = issues.stream().filter(i -> i.getSeverity() == Severity.WARNING).count();

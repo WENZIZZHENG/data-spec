@@ -27,6 +27,7 @@ public class SqlLintService {
     private final FixedSqlGenerator fixedSqlGenerator;
     private final SqlCheckRecordService sqlCheckRecordService;
     private final SqlIssueSourceSpanResolver sourceSpanResolver = new SqlIssueSourceSpanResolver();
+    private final SqlDiffGenerator sqlDiffGenerator = new SqlDiffGenerator();
 
     /**
      * 校验 SQL（不指定项目，使用所有内置规则）
@@ -125,6 +126,7 @@ public class SqlLintService {
         // 基于确定性修复建议重建修正 SQL
         String fixedSql = fixedSqlGenerator.generate(result);
         result.setFixedSql(fixedSql);
+        result.setFixedSqlDiff(sqlDiffGenerator.generate(sql, fixedSql));
 
         // 落库检查记录(失败不阻断主流程,仅记录日志)
         try {
