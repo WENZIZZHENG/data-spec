@@ -224,6 +224,12 @@ cd ../dataspec-web
 pnpm test
 pnpm build
 
+# OpenAPI 类型契约防漂移；默认读取 http://localhost:8090/api-docs
+pnpm check:api
+
+# CI 或离线场景可指定 OpenAPI JSON/YAML 文件
+pnpm check:api -- --source ./api-docs.json
+
 # CLI/MCP 单元测试
 cd ..
 node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs

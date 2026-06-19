@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "gen:api": "openapi-typescript http://localhost:8090/api-docs -o src/api/schema.ts",
-    "test": "node --test tests/reverseImportSelection.test.ts tests/ruleParams.test.ts",
+    "check:api": "node scripts/check-openapi-schema.mjs",
+    "test": "node --test tests/reverseImportSelection.test.ts tests/ruleParams.test.ts tests/checkOpenapiSchema.test.mjs",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview"
   },

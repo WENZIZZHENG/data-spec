@@ -354,7 +354,7 @@
 - 边界：不做复杂 DSL 或图形化规则编排器。
 
 ### P4-5：OpenAPI 契约防漂移
-- 状态：待办。
+- 状态：已完成第一版，`dataspec-web` 已新增 `pnpm check:api`，会用 `openapi-typescript` 重新生成临时 schema 并与 `src/api/schema.ts` 比较；支持 `--source` 或 `DATASPEC_API_DOCS_URL` 指定 OpenAPI 文档来源。
 - 为什么做：前端已使用生成类型，但后端接口变更后仍可能忘记更新 `schema.ts`。
 - 已有基础：`pnpm gen:api`、`src/api/schema.ts`、`pnpm build` 类型门禁已经存在。
 - 缺口：缺少 CI 或本地验证脚本检查 OpenAPI 生成产物是否与后端当前契约一致。
