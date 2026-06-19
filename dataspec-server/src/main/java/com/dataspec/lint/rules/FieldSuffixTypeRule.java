@@ -125,10 +125,18 @@ public class FieldSuffixTypeRule implements LintRule {
         if (type == null) {
             return "";
         }
-        return type.toLowerCase(Locale.ROOT)
+        String normalized = type.toLowerCase(Locale.ROOT)
+                .replaceAll("\\bunsigned\\b", "")
                 .replaceAll("\\s*\\([^)]*\\)", "")
                 .replaceAll("\\s+", " ")
                 .trim();
+        if ("tinyint".equals(normalized)) {
+            return "boolean";
+        }
+        if ("int".equals(normalized)) {
+            return "integer";
+        }
+        return normalized;
     }
 
     private enum MatchMode {

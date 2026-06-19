@@ -218,6 +218,24 @@ class LintRulesTest {
     }
 
     @Test
+    void fieldSuffixTypeRule_acceptsMySqlUnsignedAndTinyintBoolean() {
+        var rule = new FieldSuffixTypeRule();
+        TableDef table = TableDef.builder()
+                .name("user_order")
+                .columns(List.of(
+                        ColumnDef.builder().name("user_id").dataType("bigint unsigned").build(),
+                        ColumnDef.builder().name("item_count").dataType("int unsigned").build(),
+                        ColumnDef.builder().name("is_paid").dataType("tinyint(1)").build(),
+                        ColumnDef.builder().name("is_deleted").dataType("tinyint").build()
+                ))
+                .build();
+
+        List<LintIssue> issues = rule.check(contextOf(table));
+
+        assertTrue(issues.isEmpty(), "MySQL unsigned 数字类型和 tinyint(1) 布尔习惯不应误报");
+    }
+
+    @Test
     void fieldSuffixTypeRule_customParams() {
         var rule = new FieldSuffixTypeRule();
         TableDef table = TableDef.builder()

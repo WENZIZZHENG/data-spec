@@ -27,7 +27,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 ### SQL 规范闭环
 
 - SQL 粘贴校验，返回 error/warning/suggestion 和结构化修复建议。
-- 支持 PostgreSQL `COMMENT ON TABLE/COLUMN` 和常见 MySQL `CREATE TABLE` 注释解析。
+- 支持 PostgreSQL `COMMENT ON TABLE/COLUMN`，以及常见 MySQL `CREATE TABLE`、列内注释、表选项、索引定义、`UNSIGNED` 数值类型和 `tinyint(1)` 布尔习惯解析。
 - 表名/字段名 snake_case、禁用字段名、推荐字段名、必备列、金额类型、字段后缀/前缀类型和注释缺失等规则。
 - 修正 SQL 输出、复制、检查记录、分页历史和详情查看。
 - SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项和非标准字段差异，并支持确认导入数标候选。
@@ -309,7 +309,7 @@ data-spec/
 - [x] 结构化命名规则导出和 `field_suffix_type` lint 规则
 - [x] SQL 粘贴校验、结构化 issue、修复建议和 `fixedSql`
 - [x] SQL 检查记录、最近记录分页和详情
-- [x] PostgreSQL `COMMENT ON` 解析和常见 MySQL `CREATE TABLE` 解析
+- [x] PostgreSQL `COMMENT ON` 解析和常见 MySQL `CREATE TABLE` / `UNSIGNED` / 表选项解析
 - [x] 字段推荐 API/CLI/MCP
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
 - [x] AI Context zip 导出和业务项目 `.dataspec/` 约定
@@ -326,5 +326,5 @@ data-spec/
 
 ## 暂缓探索
 
-- 多方言完整规则体系：当前已覆盖 PostgreSQL 和常见 MySQL DDL 解析，SQL Server 等方言后续按场景补充。
+- 多方言完整规则体系：当前已覆盖 PostgreSQL 和常见 MySQL DDL 解析，SQL Server 等其他方言后续按实际场景补充。
 - 权限、审批和审计日志：当前定位个人/小团队优先，不引入重型治理流程。

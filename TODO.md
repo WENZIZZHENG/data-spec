@@ -381,11 +381,11 @@
 - 边界：不做完整在线文档站或数据库实例扫描型文档系统。
 
 ### P4-8：MySQL 与多方言规则覆盖增强
-- 状态：待办。
+- 状态：已完成第一版，解析器已保留 MySQL `UNSIGNED` 数值修饰，并用测试覆盖 `DECIMAL UNSIGNED`、`BIGINT UNSIGNED`、`ENGINE/CHARSET/COLLATE/KEY`；`field_suffix_type` 已兼容 `tinyint(1)`/`tinyint` 布尔习惯和 `int unsigned`。
 - 为什么做：当前已支持常见 MySQL `CREATE TABLE` 解析，但 charset/collation/index/unsigned/decimal 等常见约束还未系统覆盖。
 - 已有基础：MySQL 反引号、列内 `COMMENT`、表级 `COMMENT`、`AUTO_INCREMENT`、`tinyint(1)`、`datetime` 基础解析已完成。
-- 缺口：缺少 charset/collation、engine、index/key、unsigned、decimal 精度、tinyint boolean 映射等测试和规则。
-- 落地产物：扩展 MySQL 解析测试和规则；评估 SQL Server 等方言的后续入口。
+- 缺口：SQL Server 等其他方言尚未按真实样例扩展。
+- 落地产物：已扩展 MySQL 解析测试和规则；SQL Server 等方言作为后续入口按场景推进。
 - 验收标准：包含 MySQL `ENGINE/CHARSET/COLLATE/KEY/UNSIGNED/DECIMAL` 的建表 SQL 能稳定解析并输出规范建议。
 - 边界：不做完整跨数据库迁移或 schema diff 引擎。
 

@@ -144,6 +144,45 @@ class SqlParserServiceTest {
     }
 
     @Test
+    void parseMySqlCreateTable_keepsUnsignedDecimalAndIgnoresIndexes() {
+        String sql = """
+                CREATE TABLE `order_payment` (
+                    `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+                    `order_no` varchar(64) NOT NULL COMMENT '订单号',
+                    `amount_cent` bigint unsigned NOT NULL DEFAULT 0 COMMENT '金额分',
+                    `pay_amount` decimal(12,2) unsigned NOT NULL DEFAULT 0.00 COMMENT '支付金额',
+                    `is_paid` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否支付',
+                    PRIMARY KEY (`id`),
+                    KEY `idx_order_no` (`order_no`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='订单支付表';
+                """;
+
+        List<TableDef> tables = parser.parse(sql);
+
+        assertEquals(1, tables.size());
+        TableDef table = tables.get(0);
+        assertEquals("order_payment", table.getName());
+        assertEquals("订单支付表", table.getComment());
+        assertEquals(5, table.getColumns().size());
+
+        var id = table.getColumns().stream()
+                .filter(c -> c.getName().equals("id"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("bigint unsigned", id.getDataType().toLowerCase());
+        assertEquals("主键", id.getComment());
+        assertFalse(id.isNullable());
+
+        var amount = table.getColumns().stream()
+                .filter(c -> c.getName().equals("pay_amount"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("decimal(12, 2) unsigned", amount.getDataType().toLowerCase());
+        assertEquals("0.00", amount.getDefaultValue());
+        assertEquals("支付金额", amount.getComment());
+    }
+
+    @Test
     void parseBlankSql_returnsEmptyTables() {
         assertTrue(parser.parse("   \n\t  ").isEmpty());
     }

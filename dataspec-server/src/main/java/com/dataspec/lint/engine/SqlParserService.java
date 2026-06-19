@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -138,9 +139,12 @@ public class SqlParserService {
         String comment = null;
         if (colDef.getColumnSpecs() != null) {
             List<String> specs = colDef.getColumnSpecs();
+            if (containsSpec(specs, "UNSIGNED") && !dataType.toLowerCase(Locale.ROOT).contains("unsigned")) {
+                dataType = dataType + " unsigned";
+            }
             for (int i = 0; i < specs.size(); i++) {
-                String spec = specs.get(i).toUpperCase();
-                if ("NOT".equals(spec) && i + 1 < specs.size() && "NULL".equals(specs.get(i + 1).toUpperCase())) {
+                String spec = specs.get(i).toUpperCase(Locale.ROOT);
+                if ("NOT".equals(spec) && i + 1 < specs.size() && "NULL".equals(specs.get(i + 1).toUpperCase(Locale.ROOT))) {
                     nullable = false;
                 }
                 // PRIMARY KEY 隐含 NOT NULL
@@ -163,6 +167,15 @@ public class SqlParserService {
                 .defaultValue(defaultValue)
                 .comment(comment)
                 .build();
+    }
+
+    private boolean containsSpec(List<String> specs, String expected) {
+        for (String spec : specs) {
+            if (expected.equalsIgnoreCase(spec)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String columnKey(String tableName, String columnName) {
