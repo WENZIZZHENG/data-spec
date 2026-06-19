@@ -35,7 +35,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 ### 生成与报告
 
 - 基于表模板生成 PostgreSQL DDL，并自动运行 lint 自检。
-- Markdown 数据字典，包含概览统计、字段与数据域关系、枚举、模板和个人版字段元数据。
+- Markdown/HTML 数据字典，包含概览统计、字段与数据域关系、枚举、模板、个人版字段元数据和 Mermaid 关系图。
 - 个人工作台，展示字段数、代码集数、规则数、检查数、字段命中率、最近检查和问题趋势。
 
 ### AI 与自动化
@@ -141,6 +141,7 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 ## 数据字典与导入导出
 
 - Markdown 数据字典会输出项目概览、字段库、数据域、枚举字典、表模板和模板字段约束。
+- HTML 数据字典支持浏览器离线打开；Mermaid ERD/关系图可展示字段、数据域、代码集和模板之间的关系。
 - Excel 导入导出支持 `.xlsx` 模板下载、字段/代码集导出、导入预览、新增/更新/冲突统计、行级 dry-run 明细、字段级 before/after diff 和确认导入。
 
 ## 工作台与变更记录
@@ -313,7 +314,7 @@ data-spec/
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
 - [x] AI Context zip 导出和业务项目 `.dataspec/` 约定
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
-- [x] Markdown 数据字典增强
+- [x] Markdown/HTML 数据字典增强和 Mermaid ERD 输出
 - [x] Excel `.xlsx` 字段/代码集导入导出与 dry-run 明细预览
 - [x] 标准变更日志
 - [x] 个人工作台和字段命中率报告

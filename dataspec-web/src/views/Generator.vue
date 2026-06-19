@@ -81,6 +81,64 @@
 
       <el-empty v-if="templates.length === 0 && !templateLoading" description="当前项目暂无表模板" />
 
+      <section class="dictionary-section">
+        <div class="section-header">
+          <h3>数据字典</h3>
+          <div class="dictionary-actions">
+            <el-button
+              :loading="dictionaryLoading === 'html'"
+              :disabled="!hasProject || dictionaryBusy"
+              @click="handlePreviewDictionaryHtml"
+            >
+              <el-icon><View /></el-icon>
+              预览 HTML
+            </el-button>
+            <el-button
+              :loading="dictionaryLoading === 'erd'"
+              :disabled="!hasProject || dictionaryBusy"
+              @click="handlePreviewDictionaryErd"
+            >
+              <el-icon><View /></el-icon>
+              预览 ERD
+            </el-button>
+            <el-button
+              type="primary"
+              :loading="dictionaryDownloading === 'html'"
+              :disabled="!hasProject || dictionaryDownloadBusy"
+              @click="handleDownloadDictionaryHtml"
+            >
+              <el-icon><Download /></el-icon>
+              下载 HTML
+            </el-button>
+            <el-button
+              :loading="dictionaryDownloading === 'erd'"
+              :disabled="!hasProject || dictionaryDownloadBusy"
+              @click="handleDownloadDictionaryErd"
+            >
+              <el-icon><Download /></el-icon>
+              下载 ERD
+            </el-button>
+          </div>
+        </div>
+
+        <el-tabs v-if="hasDictionaryPreview" v-model="activeDictionaryTab" class="dictionary-preview">
+          <el-tab-pane label="HTML" name="html">
+            <iframe
+              v-if="dictionaryHtml"
+              class="html-preview"
+              title="HTML 数据字典预览"
+              sandbox=""
+              :srcdoc="dictionaryHtml"
+            />
+            <el-empty v-else description="暂无 HTML 预览" />
+          </el-tab-pane>
+          <el-tab-pane label="ERD" name="erd">
+            <pre v-if="dictionaryErd" class="erd-code">{{ dictionaryErd }}</pre>
+            <el-empty v-else description="暂无 ERD 预览" />
+          </el-tab-pane>
+        </el-tabs>
+      </section>
+
       <section v-if="result" class="result-section">
         <div class="result-header">
           <div>
@@ -132,8 +190,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { CopyDocument, Download, Refresh } from '@element-plus/icons-vue'
-import { previewDdl } from '@/api/generator'
+import { CopyDocument, Download, Refresh, View } from '@element-plus/icons-vue'
+import {
+  downloadDataDictionaryErd,
+  downloadDataDictionaryHtml,
+  previewDataDictionaryErd,
+  previewDataDictionaryHtml,
+  previewDdl
+} from '@/api/generator'
 import { listTemplateFields, listTemplates } from '@/api/template'
 import { useProjectStore } from '@/stores/project'
 import type { DdlGenerateResult, LintIssue, Template, TemplateField } from '@/types'
@@ -147,12 +211,20 @@ const result = ref<DdlGenerateResult | null>(null)
 const templateLoading = ref(false)
 const fieldLoading = ref(false)
 const generating = ref(false)
+const dictionaryHtml = ref('')
+const dictionaryErd = ref('')
+const activeDictionaryTab = ref<'html' | 'erd'>('html')
+const dictionaryLoading = ref<'html' | 'erd' | ''>('')
+const dictionaryDownloading = ref<'html' | 'erd' | ''>('')
 
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
 const canGenerate = computed(() =>
   Boolean(projectStore.currentProjectId && selectedTemplateId.value && tableName.value.trim())
 )
 const lintIssues = computed<LintIssue[]>(() => result.value?.lintResult?.issues ?? [])
+const hasDictionaryPreview = computed(() => Boolean(dictionaryHtml.value || dictionaryErd.value))
+const dictionaryBusy = computed(() => Boolean(dictionaryLoading.value))
+const dictionaryDownloadBusy = computed(() => Boolean(dictionaryDownloading.value))
 
 onMounted(() => {
   if (projectStore.projects.length === 0) {
@@ -178,6 +250,9 @@ async function loadTemplates() {
   result.value = null
   templateFields.value = []
   selectedTemplateId.value = null
+  dictionaryHtml.value = ''
+  dictionaryErd.value = ''
+  activeDictionaryTab.value = 'html'
   if (!projectId) {
     templates.value = []
     return
@@ -243,11 +318,74 @@ function handleDownloadDdl() {
     return
   }
   const safeTableName = tableName.value.trim().replace(/[^a-z0-9_]+/g, '_') || 'dataspec_ddl'
-  const blob = new Blob([result.value.ddl], { type: 'text/sql;charset=utf-8' })
+  saveBlob(new Blob([result.value.ddl], { type: 'text/sql;charset=utf-8' }), `${safeTableName}.sql`)
+}
+
+async function handlePreviewDictionaryHtml() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  dictionaryLoading.value = 'html'
+  try {
+    dictionaryHtml.value = await previewDataDictionaryHtml(projectId)
+    activeDictionaryTab.value = 'html'
+    ElMessage.success('HTML 数据字典已生成')
+  } finally {
+    dictionaryLoading.value = ''
+  }
+}
+
+async function handlePreviewDictionaryErd() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  dictionaryLoading.value = 'erd'
+  try {
+    dictionaryErd.value = await previewDataDictionaryErd(projectId)
+    activeDictionaryTab.value = 'erd'
+    ElMessage.success('ERD 已生成')
+  } finally {
+    dictionaryLoading.value = ''
+  }
+}
+
+async function handleDownloadDictionaryHtml() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  dictionaryDownloading.value = 'html'
+  try {
+    saveBlob(await downloadDataDictionaryHtml(projectId), 'data-dictionary.html')
+  } finally {
+    dictionaryDownloading.value = ''
+  }
+}
+
+async function handleDownloadDictionaryErd() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  dictionaryDownloading.value = 'erd'
+  try {
+    saveBlob(await downloadDataDictionaryErd(projectId), 'data-dictionary.mmd')
+  } finally {
+    dictionaryDownloading.value = ''
+  }
+}
+
+function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `${safeTableName}.sql`
+  link.download = filename
   document.body.appendChild(link)
   link.click()
   link.remove()
@@ -274,6 +412,7 @@ function severityTagType(severity?: string) {
 }
 
 .page-header,
+.section-header,
 .result-header {
   display: flex;
   align-items: flex-start;
@@ -283,6 +422,7 @@ function severityTagType(severity?: string) {
 }
 
 .page-header h2,
+.section-header h3,
 .result-header h3 {
   margin: 0;
 }
@@ -315,15 +455,23 @@ function severityTagType(severity?: string) {
   width: 100%;
 }
 
+.dictionary-section,
 .result-section {
   margin-top: 20px;
 }
 
+.dictionary-section {
+  padding-top: 20px;
+  border-top: 1px solid #ebeef5;
+}
+
 .lint-summary,
+.dictionary-actions,
 .result-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .lint-summary {
@@ -346,12 +494,41 @@ function severityTagType(severity?: string) {
   white-space: pre-wrap;
 }
 
+.dictionary-preview {
+  margin-top: 12px;
+}
+
+.html-preview {
+  width: 100%;
+  min-height: 520px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.erd-code {
+  min-height: 220px;
+  max-height: 440px;
+  overflow: auto;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background: #1f2933;
+  color: #f8fafc;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 960px) {
   .generator-toolbar {
     grid-template-columns: 1fr;
   }
 
   .page-header,
+  .section-header,
   .result-header {
     flex-direction: column;
   }

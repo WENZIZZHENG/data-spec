@@ -3,6 +3,7 @@ package com.dataspec.generator;
 import com.dataspec.generator.controller.GeneratorController;
 import com.dataspec.generator.model.DdlGenerateResult;
 import com.dataspec.generator.service.DdlGeneratorService;
+import com.dataspec.generator.service.HtmlDataDictionaryService;
 import com.dataspec.generator.service.MarkdownGeneratorService;
 import com.dataspec.lint.model.LintResult;
 import org.junit.jupiter.api.Test;
@@ -21,8 +22,12 @@ class GeneratorControllerTest {
     @Test
     void previewDdl_returnsGeneratedDdlResult() {
         MarkdownGeneratorService markdownGeneratorService = mock(MarkdownGeneratorService.class);
+        HtmlDataDictionaryService htmlDataDictionaryService = mock(HtmlDataDictionaryService.class);
         DdlGeneratorService ddlGeneratorService = mock(DdlGeneratorService.class);
-        GeneratorController controller = new GeneratorController(markdownGeneratorService, ddlGeneratorService);
+        GeneratorController controller = new GeneratorController(
+                markdownGeneratorService,
+                htmlDataDictionaryService,
+                ddlGeneratorService);
         DdlGenerateResult result = new DdlGenerateResult(
                 "CREATE TABLE user_order (id bigserial);",
                 LintResult.of(List.of(), List.of())
