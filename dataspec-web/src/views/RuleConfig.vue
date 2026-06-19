@@ -48,7 +48,19 @@
           />
         </template>
       </el-table-column>
-      <el-table-column prop="paramsJson" label="参数 JSON" min-width="260" show-overflow-tooltip />
+      <el-table-column label="参数摘要" min-width="260">
+        <template #default="{ row }">
+          <div class="params-summary">
+            <span>{{ parameterSummary(row) }}</span>
+            <el-popover placement="left" width="420" trigger="click">
+              <template #reference>
+                <el-button text size="small">JSON</el-button>
+              </template>
+              <pre class="json-preview">{{ row.paramsJson || '{}' }}</pre>
+            </el-popover>
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column prop="updatedAt" label="更新时间" width="180" />
       <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
@@ -58,7 +70,7 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editingRule ? '编辑规则' : '新建规则'" width="680px">
+    <el-dialog v-model="dialogVisible" :title="editingRule ? '编辑规则' : '新建规则'" width="860px">
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="104px">
         <el-form-item label="规则编码" prop="ruleCode">
           <el-select
@@ -99,13 +111,74 @@
           </el-col>
         </el-row>
 
-        <el-form-item label="参数 JSON" prop="paramsJson">
-          <el-input
-            v-model="form.paramsJson"
-            type="textarea"
-            :rows="10"
-            placeholder="{&quot;suffixTypes&quot;:{&quot;_id&quot;:[&quot;bigint&quot;]}}"
-          />
+        <el-form-item label="规则参数" prop="paramsJson">
+          <div class="params-editor">
+            <template v-if="isStructuredRuleCode">
+              <section v-if="form.ruleCode === 'required_columns'" class="params-section">
+                <div class="section-title">必含列</div>
+                <div v-for="(_, index) in paramsForm.requiredColumns" :key="`required-${index}`" class="inline-row">
+                  <el-input v-model="paramsForm.requiredColumns[index]" placeholder="created_at" />
+                  <el-button @click="removeListItem('requiredColumns', index)">删除</el-button>
+                </div>
+                <el-button plain @click="addListItem('requiredColumns')">新增必含列</el-button>
+              </section>
+
+              <section v-else-if="form.ruleCode === 'forbidden_field_name'" class="params-section">
+                <div class="section-title">禁用字段名</div>
+                <div v-for="(_, index) in paramsForm.forbiddenNames" :key="`forbidden-${index}`" class="inline-row">
+                  <el-input v-model="paramsForm.forbiddenNames[index]" placeholder="tmp" />
+                  <el-button @click="removeListItem('forbiddenNames', index)">删除</el-button>
+                </div>
+                <el-button plain @click="addListItem('forbiddenNames')">新增禁用字段</el-button>
+              </section>
+
+              <section v-else-if="form.ruleCode === 'recommended_field_name'" class="params-section">
+                <div class="section-title">推荐替换</div>
+                <div v-for="(item, index) in paramsForm.recommendations" :key="`recommendation-${index}`" class="mapping-row">
+                  <el-input v-model="item.from" placeholder="create_time" />
+                  <span class="mapping-arrow">→</span>
+                  <el-input v-model="item.to" placeholder="created_at" />
+                  <el-button @click="removeRecommendation(index)">删除</el-button>
+                </div>
+                <el-button plain @click="addRecommendation">新增替换</el-button>
+              </section>
+
+              <section v-else-if="form.ruleCode === 'field_suffix_type'" class="params-section">
+                <div class="type-rule-columns">
+                  <div>
+                    <div class="section-title">后缀类型</div>
+                    <div v-for="(item, index) in paramsForm.suffixTypes" :key="`suffix-${index}`" class="type-rule-row">
+                      <el-input v-model="item.pattern" placeholder="_id" />
+                      <el-input v-model="item.typesText" placeholder="bigint, integer" />
+                      <el-button @click="removeTypeRule('suffixTypes', index)">删除</el-button>
+                    </div>
+                    <el-button plain @click="addTypeRule('suffixTypes')">新增后缀</el-button>
+                  </div>
+                  <div>
+                    <div class="section-title">前缀类型</div>
+                    <div v-for="(item, index) in paramsForm.prefixTypes" :key="`prefix-${index}`" class="type-rule-row">
+                      <el-input v-model="item.pattern" placeholder="is_" />
+                      <el-input v-model="item.typesText" placeholder="boolean" />
+                      <el-button @click="removeTypeRule('prefixTypes', index)">删除</el-button>
+                    </div>
+                    <el-button plain @click="addTypeRule('prefixTypes')">新增前缀</el-button>
+                  </div>
+                </div>
+              </section>
+
+              <div class="section-title">JSON 预览</div>
+              <el-input :model-value="paramsJsonPreview" type="textarea" :rows="8" readonly />
+            </template>
+
+            <template v-else>
+              <el-input
+                v-model="form.paramsJson"
+                type="textarea"
+                :rows="10"
+                placeholder="{&quot;suffixTypes&quot;:{&quot;_id&quot;:[&quot;bigint&quot;]}}"
+              />
+            </template>
+          </div>
         </el-form-item>
       </el-form>
 
@@ -137,6 +210,14 @@ import {
   updateRuleConfig
 } from '@/api/rule'
 import { useProjectStore } from '@/stores/project'
+import {
+  buildRuleParamsJson,
+  createRuleParamsForm,
+  isStructuredRule,
+  parseRuleParamsForm,
+  summarizeRuleParams,
+  type RuleParamsForm
+} from '@/utils/ruleParams'
 import type { RuleConfig, RuleConfigReq } from '@/types'
 
 interface AvailableRule {
@@ -152,6 +233,7 @@ const submitting = ref(false)
 const dialogVisible = ref(false)
 const editingRule = ref<RuleConfig | null>(null)
 const formRef = ref<FormInstance>()
+const paramsForm = reactive<RuleParamsForm>(createRuleParamsForm())
 
 const form = reactive<RuleConfigReq>({
   projectId: 0,
@@ -183,6 +265,10 @@ const formRules: FormRules<RuleConfigReq> = {
 }
 
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
+const isStructuredRuleCode = computed(() => isStructuredRule(form.ruleCode))
+const paramsJsonPreview = computed(() =>
+  isStructuredRuleCode.value ? buildRuleParamsJson(form.ruleCode, paramsForm) : form.paramsJson || '{}'
+)
 
 onMounted(() => {
   if (projectStore.projects.length === 0) {
@@ -224,6 +310,7 @@ function resetForm(rule?: RuleConfig) {
   form.severity = rule?.severity ?? 'ERROR'
   form.enabled = rule?.enabled ?? true
   form.paramsJson = rule?.paramsJson?.trim() || '{}'
+  resetParamsForm()
   formRef.value?.clearValidate()
 }
 
@@ -244,6 +331,8 @@ function handleRuleCodeChange(value: string) {
   if (selected?.name) {
     form.ruleName = selected.name
   }
+  form.paramsJson = '{}'
+  resetParamsForm()
 }
 
 async function handleSubmit() {
@@ -257,7 +346,9 @@ async function handleSubmit() {
     const payload: RuleConfigReq = {
       ...form,
       projectId: projectStore.currentProjectId,
-      paramsJson: form.paramsJson?.trim() || undefined
+      paramsJson: isStructuredRuleCode.value
+        ? buildRuleParamsJson(form.ruleCode, paramsForm)
+        : form.paramsJson?.trim() || undefined
     }
     if (editingRule.value?.id) {
       await updateRuleConfig(editingRule.value.id, payload)
@@ -305,6 +396,11 @@ async function handleDelete(rule: RuleConfig) {
 }
 
 function formatParamsJson() {
+  if (isStructuredRuleCode.value) {
+    form.paramsJson = buildRuleParamsJson(form.ruleCode, paramsForm)
+    ElMessage.success('已同步 JSON 预览')
+    return
+  }
   const text = form.paramsJson?.trim()
   if (!text) {
     form.paramsJson = '{}'
@@ -325,6 +421,38 @@ function severityTagType(severity?: string) {
     return 'info'
   }
   return 'danger'
+}
+
+function resetParamsForm() {
+  Object.assign(paramsForm, parseRuleParamsForm(form.ruleCode, form.paramsJson))
+}
+
+function parameterSummary(rule: RuleConfig) {
+  return summarizeRuleParams(rule.ruleCode, rule.paramsJson)
+}
+
+function addListItem(key: 'requiredColumns' | 'forbiddenNames') {
+  paramsForm[key].push('')
+}
+
+function removeListItem(key: 'requiredColumns' | 'forbiddenNames', index: number) {
+  paramsForm[key].splice(index, 1)
+}
+
+function addRecommendation() {
+  paramsForm.recommendations.push({ from: '', to: '' })
+}
+
+function removeRecommendation(index: number) {
+  paramsForm.recommendations.splice(index, 1)
+}
+
+function addTypeRule(key: 'suffixTypes' | 'prefixTypes') {
+  paramsForm[key].push({ pattern: '', typesText: '' })
+}
+
+function removeTypeRule(key: 'suffixTypes' | 'prefixTypes', index: number) {
+  paramsForm[key].splice(index, 1)
 }
 </script>
 
@@ -365,5 +493,84 @@ function severityTagType(severity?: string) {
 
 .full-width {
   width: 100%;
+}
+
+.params-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.json-preview {
+  max-height: 360px;
+  margin: 0;
+  overflow: auto;
+  color: #1f2937;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.params-editor {
+  width: 100%;
+}
+
+.params-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.section-title {
+  margin: 8px 0 6px;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.inline-row,
+.mapping-row,
+.type-rule-row {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+}
+
+.inline-row {
+  grid-template-columns: minmax(220px, 1fr) auto;
+}
+
+.mapping-row {
+  grid-template-columns: minmax(160px, 1fr) auto minmax(160px, 1fr) auto;
+}
+
+.type-rule-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.type-rule-row {
+  grid-template-columns: minmax(90px, 0.8fr) minmax(160px, 1.2fr) auto;
+  margin-bottom: 10px;
+}
+
+.mapping-arrow {
+  color: #909399;
+}
+
+@media (max-width: 760px) {
+  .type-rule-columns,
+  .inline-row,
+  .mapping-row,
+  .type-rule-row {
+    grid-template-columns: 1fr;
+  }
+
+  .mapping-arrow {
+    display: none;
+  }
 }
 </style>

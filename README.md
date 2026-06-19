@@ -103,7 +103,7 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1" -o d
 
 ## 结构化命名规则
 
-`rules.yaml` 会导出结构化 `naming:` 模型，包含表/字段 snake_case、必含列、禁用字段名、推荐替换、字段后缀/前缀类型规则。SQL lint 已支持 `field_suffix_type`，默认校验 `_id/_at/_no/_count` 和 `is_` 对应的数据类型，并可通过 `RuleConfig.paramsJson` 的 `suffixTypes`、`prefixTypes` 覆盖。
+`rules.yaml` 会导出结构化 `naming:` 模型，包含表/字段 snake_case、必含列、禁用字段名、推荐替换、字段后缀/前缀类型规则。SQL lint 已支持 `field_suffix_type`，默认校验 `_id/_at/_no/_count` 和 `is_` 对应的数据类型；前端规则配置页已为必含列、禁用字段名、推荐替换、后缀/前缀类型提供结构化表单，并保留 JSON 预览和兜底编辑。
 
 ## AI Prompt 生成
 
@@ -283,7 +283,7 @@ data-spec/
 ## 已完成功能清单
 
 - [x] 项目空间、顶部当前项目联动和内置 standards 初始化
-- [x] 标准字段、数据域、枚举字典、表模板、规则配置 CRUD
+- [x] 标准字段、数据域、枚举字典、表模板、规则配置 CRUD 与常见规则结构化参数表单
 - [x] 个人版字段模型：别名、分类、代码集、敏感标记、状态、示例值
 - [x] 结构化命名规则导出和 `field_suffix_type` lint 规则
 - [x] SQL 粘贴校验、结构化 issue、修复建议和 `fixedSql`
