@@ -30,7 +30,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 支持 PostgreSQL `COMMENT ON TABLE/COLUMN` 和常见 MySQL `CREATE TABLE` 注释解析。
 - 表名/字段名 snake_case、禁用字段名、推荐字段名、必备列、金额类型、字段后缀/前缀类型和注释缺失等规则。
 - 修正 SQL 输出、复制、检查记录、分页历史和详情查看。
-- SQL 反向导入预览，输出解析表、字段候选、缺注释项和非标准字段差异。
+- SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项和非标准字段差异，并支持确认导入数标候选。
 
 ### 生成与报告
 
@@ -136,7 +136,7 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 
 `/api/lint` 会返回 lint 结果、结构化修复建议和 `fixedSql`，并保存 SQL 检查记录。前端 SQL 校验页支持查看修正 SQL、复制、最近检查记录分页和详情。
 
-反向导入页支持粘贴 SQL DDL 生成只读预览，用于从现有 schema 识别字段候选、缺注释项和非标准字段。当前不会连接数据库，也不会自动写入字段库。
+反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。直连模式不会保存数据库密码，不会修改源数据库，也不会做定时同步。
 
 ## 数据字典与导入导出
 
@@ -204,6 +204,7 @@ mvn test
 
 # 前端类型检查与生产构建
 cd ../dataspec-web
+pnpm test
 pnpm build
 
 # CLI 单元测试
@@ -260,7 +261,7 @@ data-spec/
 | aicontext | /api/ai-context | AI 规则导出 |
 | importexport | /api/import-export | 字段导入导出 |
 | changelog | /api/change-logs | 标准变更日志 |
-| reverse-import | /api/reverse-import | SQL 反向导入预览 |
+| reverse-import | /api/reverse-import | SQL 与数据库直连反向导入 |
 
 ## 规则引擎
 
@@ -297,6 +298,7 @@ data-spec/
 - [x] 标准变更日志
 - [x] 个人工作台和字段命中率报告
 - [x] SQL 反向导入预览与差异分析
+- [x] 数据库直连反向导入与前端确认导入流程
 - [x] DataSpec CLI：`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`
 - [x] DataSpec MCP Server：resources、prompts、`lint_sql`、`get_field_catalog`、`suggest_fields`、`generate_table_ddl`
 - [x] GitHub Actions 示例和 PR 评论式 SQL Review
