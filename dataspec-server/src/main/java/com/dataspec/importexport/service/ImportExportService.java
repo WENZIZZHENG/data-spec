@@ -8,7 +8,9 @@ import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.service.EnumDictService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.importexport.model.ExcelImportDiff;
 import com.dataspec.importexport.model.ExcelImportPreview;
+import com.dataspec.importexport.model.ExcelImportPreviewItem;
 import com.dataspec.importexport.model.ExcelImportResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -339,22 +341,29 @@ public class ImportExportService {
         Set<String> seenCodes = new LinkedHashSet<>();
         for (RowValues row : rows.enumDicts()) {
             preview.getEnumDicts().increaseTotal();
-            boolean rowValid = require(row, "code", preview) & require(row, "name", preview);
+            List<String> reasons = new ArrayList<>();
+            boolean rowValid = require(row, "code", preview, reasons) & require(row, "name", preview, reasons);
             String code = row.get("code");
             if (!isBlank(code) && !seenCodes.add(code)) {
-                preview.getEnumDicts().increaseConflictCount();
                 preview.addError(row.sheet(), row.rowNumber(), "code", "Excel 内代码集编码重复: " + code);
+                reasons.add("Excel 内代码集编码重复: " + code);
                 rowValid = false;
             }
-            rowValid = validateValueType(row, preview) && rowValid;
+            rowValid = validateValueType(row, preview, reasons) && rowValid;
             if (!rowValid) {
+                preview.getEnumDicts().increaseConflictCount();
+                addPreviewItem(preview, row, code, "CONFLICT", "BLOCKED", String.join("；", reasons), List.of());
                 continue;
             }
             workbookEnumDicts.put(code, row);
-            if (snapshot.enumDictsByCode().containsKey(code)) {
+            EnumDict existing = snapshot.enumDictsByCode().get(code);
+            if (existing != null) {
                 preview.getEnumDicts().increaseUpdateCount();
+                List<ExcelImportDiff> diffs = enumDictUpdateDiffs(existing, row);
+                addPreviewItem(preview, row, code, "UPDATE", "READY", readyReason("将更新代码集", diffs), diffs);
             } else {
                 preview.getEnumDicts().increaseCreateCount();
+                addPreviewItem(preview, row, code, "CREATE", "READY", "将新增代码集", submittedDiffs(row, ENUM_DICT_HEADERS));
             }
         }
         return workbookEnumDicts;
@@ -367,29 +376,37 @@ public class ImportExportService {
         Set<String> seenValues = new LinkedHashSet<>();
         for (RowValues row : rows.enumValues()) {
             preview.getEnumValues().increaseTotal();
-            boolean rowValid = require(row, "enumCode", preview)
-                    & require(row, "value", preview)
-                    & require(row, "label", preview);
+            List<String> reasons = new ArrayList<>();
+            boolean rowValid = require(row, "enumCode", preview, reasons)
+                    & require(row, "value", preview, reasons)
+                    & require(row, "label", preview, reasons);
             String enumCode = row.get("enumCode");
             String value = row.get("value");
             if (!isBlank(enumCode) && !availableEnumCodes.contains(enumCode)) {
                 preview.addError(row.sheet(), row.rowNumber(), "enumCode", "未知代码集编码: " + enumCode);
+                reasons.add("未知代码集编码: " + enumCode);
                 rowValid = false;
             }
             String valueKey = enumCode + "\u0000" + value;
             if (!isBlank(enumCode) && !isBlank(value) && !seenValues.add(valueKey)) {
-                preview.getEnumValues().increaseConflictCount();
                 preview.addError(row.sheet(), row.rowNumber(), "value", "Excel 内枚举值重复: " + enumCode + "/" + value);
+                reasons.add("Excel 内枚举值重复: " + enumCode + "/" + value);
                 rowValid = false;
             }
-            rowValid = validateInteger(row, "sortOrder", preview) && rowValid;
+            rowValid = validateInteger(row, "sortOrder", preview, reasons) && rowValid;
             if (!rowValid) {
+                preview.getEnumValues().increaseConflictCount();
+                addPreviewItem(preview, row, enumValueKey(enumCode, value), "CONFLICT", "BLOCKED", String.join("；", reasons), List.of());
                 continue;
             }
-            if (snapshot.enumValuesByEnumCode().getOrDefault(enumCode, Map.of()).containsKey(value)) {
+            EnumValue existing = snapshot.enumValuesByEnumCode().getOrDefault(enumCode, Map.of()).get(value);
+            if (existing != null) {
                 preview.getEnumValues().increaseUpdateCount();
+                List<ExcelImportDiff> diffs = enumValueUpdateDiffs(existing, row);
+                addPreviewItem(preview, row, enumValueKey(enumCode, value), "UPDATE", "READY", readyReason("将更新枚举值", diffs), diffs);
             } else {
                 preview.getEnumValues().increaseCreateCount();
+                addPreviewItem(preview, row, enumValueKey(enumCode, value), "CREATE", "READY", "将新增枚举值", submittedDiffs(row, ENUM_VALUE_HEADERS));
             }
         }
     }
@@ -399,51 +416,191 @@ public class ImportExportService {
                                Set<String> availableEnumCodes,
                                ExcelImportPreview preview) {
         Set<String> seenNames = new LinkedHashSet<>();
+        Map<String, String> aliasOwners = existingAliasOwners(snapshot);
         for (RowValues row : rows.fields()) {
             preview.getFields().increaseTotal();
-            boolean rowValid = require(row, "name", preview) & require(row, "dataType", preview);
+            List<String> reasons = new ArrayList<>();
+            boolean rowValid = require(row, "name", preview, reasons) & require(row, "dataType", preview, reasons);
             String name = row.get("name");
             if (!isBlank(name) && !seenNames.add(name)) {
-                preview.getFields().increaseConflictCount();
                 preview.addError(row.sheet(), row.rowNumber(), "name", "Excel 内字段名重复: " + name);
+                reasons.add("Excel 内字段名重复: " + name);
                 rowValid = false;
             }
             String domainCode = row.get("domainCode");
             if (!isBlank(domainCode) && !snapshot.domainsByCode().containsKey(domainCode)) {
                 preview.addError(row.sheet(), row.rowNumber(), "domainCode", "未知数据域编码: " + domainCode);
+                reasons.add("未知数据域编码: " + domainCode);
                 rowValid = false;
             }
             String codeSetCode = row.get("codeSetCode");
             if (!isBlank(codeSetCode) && !availableEnumCodes.contains(codeSetCode)) {
                 preview.addError(row.sheet(), row.rowNumber(), "codeSetCode", "未知代码集编码: " + codeSetCode);
+                reasons.add("未知代码集编码: " + codeSetCode);
                 rowValid = false;
             }
-            rowValid = validateInteger(row, "length", preview) && rowValid;
-            rowValid = validateInteger(row, "precisionVal", preview) && rowValid;
-            rowValid = validateInteger(row, "scaleVal", preview) && rowValid;
-            rowValid = validateBoolean(row, "nullable", preview) && rowValid;
-            rowValid = validateBoolean(row, "sensitive", preview) && rowValid;
-            rowValid = validateFieldStatus(row, preview) && rowValid;
+            List<String> rowAliases = aliasList(row.get("aliases"));
+            if (!isBlank(name)) {
+                for (String alias : rowAliases) {
+                    String owner = aliasOwners.get(alias.toLowerCase(Locale.ROOT));
+                    if (owner != null && !owner.equals(name)) {
+                        preview.addError(row.sheet(), row.rowNumber(), "aliases", "字段别名重复: " + alias + " 已属于 " + owner);
+                        reasons.add("字段别名重复: " + alias + " 已属于 " + owner);
+                        rowValid = false;
+                    }
+                }
+            }
+            rowValid = validateInteger(row, "length", preview, reasons) && rowValid;
+            rowValid = validateInteger(row, "precisionVal", preview, reasons) && rowValid;
+            rowValid = validateInteger(row, "scaleVal", preview, reasons) && rowValid;
+            rowValid = validateBoolean(row, "nullable", preview, reasons) && rowValid;
+            rowValid = validateBoolean(row, "sensitive", preview, reasons) && rowValid;
+            rowValid = validateFieldStatus(row, preview, reasons) && rowValid;
             if (!rowValid) {
+                preview.getFields().increaseConflictCount();
+                addPreviewItem(preview, row, name, "CONFLICT", "BLOCKED", String.join("；", reasons), List.of());
                 continue;
             }
-            if (snapshot.fieldsByName().containsKey(name)) {
+            for (String alias : rowAliases) {
+                aliasOwners.put(alias.toLowerCase(Locale.ROOT), name);
+            }
+            Field existing = snapshot.fieldsByName().get(name);
+            if (existing != null) {
                 preview.getFields().increaseUpdateCount();
+                List<ExcelImportDiff> diffs = fieldUpdateDiffs(existing, row, snapshot);
+                addPreviewItem(preview, row, name, "UPDATE", "READY", readyReason("将更新字段", diffs), diffs);
             } else {
                 preview.getFields().increaseCreateCount();
+                addPreviewItem(preview, row, name, "CREATE", "READY", "将新增字段", submittedDiffs(row, FIELD_HEADERS));
             }
         }
     }
 
-    private boolean require(RowValues row, String field, ExcelImportPreview preview) {
+    private void addPreviewItem(ExcelImportPreview preview,
+                                RowValues row,
+                                String key,
+                                String action,
+                                String status,
+                                String reason,
+                                List<ExcelImportDiff> diffs) {
+        ExcelImportPreviewItem item = new ExcelImportPreviewItem();
+        item.setSheet(row.sheet());
+        item.setRowNumber(row.rowNumber());
+        item.setKey(key);
+        item.setAction(action);
+        item.setStatus(status);
+        item.setReason(isBlank(reason) ? null : reason);
+        item.setDiffs(diffs == null ? List.of() : diffs);
+        preview.addItem(item);
+    }
+
+    private String readyReason(String prefix, List<ExcelImportDiff> diffs) {
+        return diffs == null || diffs.isEmpty() ? "已存在且无字段变化" : prefix;
+    }
+
+    private List<ExcelImportDiff> submittedDiffs(RowValues row, String[] headers) {
+        List<ExcelImportDiff> diffs = new ArrayList<>();
+        for (String header : headers) {
+            String value = row.get(header);
+            if (!isBlank(value)) {
+                diffs.add(new ExcelImportDiff(header, null, value));
+            }
+        }
+        return diffs;
+    }
+
+    private List<ExcelImportDiff> enumDictUpdateDiffs(EnumDict existing, RowValues row) {
+        List<ExcelImportDiff> diffs = new ArrayList<>();
+        addDiff(diffs, "name", existing.getName(), row.get("name"));
+        addDiff(diffs, "valueType", existing.getValueType(), isBlank(row.get("valueType")) ? "integer" : row.get("valueType"));
+        addDiff(diffs, "description", existing.getDescription(), row.get("description"));
+        return diffs;
+    }
+
+    private List<ExcelImportDiff> enumValueUpdateDiffs(EnumValue existing, RowValues row) {
+        List<ExcelImportDiff> diffs = new ArrayList<>();
+        addDiff(diffs, "label", existing.getLabel(), row.get("label"));
+        addDiff(diffs, "sortOrder", numberText(existing.getSortOrder()), numberText(toInteger(row.get("sortOrder"))));
+        return diffs;
+    }
+
+    private List<ExcelImportDiff> fieldUpdateDiffs(Field existing, RowValues row, ProjectSnapshot snapshot) {
+        List<ExcelImportDiff> diffs = new ArrayList<>();
+        addDiff(diffs, "displayName", existing.getDisplayName(), row.get("displayName"));
+        addDiff(diffs, "dataType", existing.getDataType(), row.get("dataType"));
+        addDiff(diffs, "length", numberText(existing.getLength()), numberText(toInteger(row.get("length"))));
+        addDiff(diffs, "precisionVal", numberText(existing.getPrecisionVal()), numberText(toInteger(row.get("precisionVal"))));
+        addDiff(diffs, "scaleVal", numberText(existing.getScaleVal()), numberText(toInteger(row.get("scaleVal"))));
+        addDiff(diffs, "nullable", boolText(existing.getNullable()), boolText(parseBoolean(row.get("nullable"))));
+        addDiff(diffs, "defaultValue", existing.getDefaultValue(), row.get("defaultValue"));
+        addDiff(diffs, "comment", existing.getComment(), row.get("comment"));
+        addDiff(diffs, "domainCode", domainCode(existing.getDomainId(), snapshot), row.get("domainCode"));
+        addDiff(diffs, "tags", existing.getTags(), row.get("tags"));
+        addDiff(diffs, "aliases", existing.getAliases(), row.get("aliases"));
+        addDiff(diffs, "category", existing.getCategory(), row.get("category"));
+        addDiff(diffs, "codeSetCode", enumCode(existing.getCodeSetId(), snapshot), row.get("codeSetCode"));
+        addDiff(diffs, "sensitive", boolText(existing.getSensitive()), boolText(parseBoolean(row.get("sensitive"))));
+        addDiff(diffs, "status", existing.getStatus(), row.get("status"));
+        addDiff(diffs, "exampleValue", existing.getExampleValue(), row.get("exampleValue"));
+        return diffs;
+    }
+
+    private void addDiff(List<ExcelImportDiff> diffs, String field, String beforeValue, String afterValue) {
+        String beforeText = normalizeDiffValue(beforeValue);
+        String afterText = normalizeDiffValue(afterValue);
+        if (!beforeText.equals(afterText)) {
+            diffs.add(new ExcelImportDiff(field, beforeText, afterText));
+        }
+    }
+
+    private String enumValueKey(String enumCode, String value) {
+        if (isBlank(enumCode)) {
+            return value;
+        }
+        if (isBlank(value)) {
+            return enumCode;
+        }
+        return enumCode + "/" + value;
+    }
+
+    private String normalizeDiffValue(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private Map<String, String> existingAliasOwners(ProjectSnapshot snapshot) {
+        Map<String, String> owners = new LinkedHashMap<>();
+        for (Field field : snapshot.fieldsByName().values()) {
+            if (isBlank(field.getName())) {
+                continue;
+            }
+            for (String alias : aliasList(field.getAliases())) {
+                owners.put(alias.toLowerCase(Locale.ROOT), field.getName());
+            }
+        }
+        return owners;
+    }
+
+    private List<String> aliasList(String aliases) {
+        if (isBlank(aliases)) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(aliases.split("[,，]"))
+                .map(String::trim)
+                .filter(alias -> !alias.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private boolean require(RowValues row, String field, ExcelImportPreview preview, List<String> reasons) {
         if (!isBlank(row.get(field))) {
             return true;
         }
         preview.addError(row.sheet(), row.rowNumber(), field, "必填字段为空");
+        reasons.add(field + " 必填字段为空");
         return false;
     }
 
-    private boolean validateInteger(RowValues row, String field, ExcelImportPreview preview) {
+    private boolean validateInteger(RowValues row, String field, ExcelImportPreview preview, List<String> reasons) {
         String value = row.get(field);
         if (isBlank(value)) {
             return true;
@@ -453,11 +610,12 @@ public class ImportExportService {
             return true;
         } catch (Exception e) {
             preview.addError(row.sheet(), row.rowNumber(), field, "必须是整数");
+            reasons.add(field + " 必须是整数");
             return false;
         }
     }
 
-    private boolean validateBoolean(RowValues row, String field, ExcelImportPreview preview) {
+    private boolean validateBoolean(RowValues row, String field, ExcelImportPreview preview, List<String> reasons) {
         String value = row.get(field);
         if (isBlank(value)) {
             return true;
@@ -466,24 +624,27 @@ public class ImportExportService {
             return true;
         }
         preview.addError(row.sheet(), row.rowNumber(), field, "必须是 是/否/true/false/1/0");
+        reasons.add(field + " 必须是 是/否/true/false/1/0");
         return false;
     }
 
-    private boolean validateFieldStatus(RowValues row, ExcelImportPreview preview) {
+    private boolean validateFieldStatus(RowValues row, ExcelImportPreview preview, List<String> reasons) {
         String status = row.get("status");
         if (isBlank(status) || ALLOWED_FIELD_STATUSES.contains(status.toLowerCase(Locale.ROOT))) {
             return true;
         }
         preview.addError(row.sheet(), row.rowNumber(), "status", "字段状态必须是 enabled/disabled/deprecated");
+        reasons.add("status 字段状态必须是 enabled/disabled/deprecated");
         return false;
     }
 
-    private boolean validateValueType(RowValues row, ExcelImportPreview preview) {
+    private boolean validateValueType(RowValues row, ExcelImportPreview preview, List<String> reasons) {
         String valueType = row.get("valueType");
         if (isBlank(valueType) || "integer".equalsIgnoreCase(valueType) || "string".equalsIgnoreCase(valueType)) {
             return true;
         }
         preview.addError(row.sheet(), row.rowNumber(), "valueType", "值类型建议使用 integer 或 string");
+        reasons.add("valueType 值类型建议使用 integer 或 string");
         return false;
     }
 

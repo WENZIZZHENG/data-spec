@@ -18,7 +18,15 @@ import static org.junit.jupiter.api.Assertions.*;
 class LintRulesTest {
 
     private String readExample(String fileName) throws Exception {
-        return Files.readString(Path.of("..", "examples", fileName));
+        Path current = Path.of("").toAbsolutePath();
+        while (current != null) {
+            Path candidate = current.resolve("examples").resolve(fileName);
+            if (Files.exists(candidate)) {
+                return Files.readString(candidate);
+            }
+            current = current.getParent();
+        }
+        throw new IllegalStateException("未找到 examples/" + fileName);
     }
 
     // 构造测试表定义

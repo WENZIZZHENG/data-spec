@@ -16,9 +16,14 @@ public class ExcelImportPreview {
     private ExcelSheetSummary enumDicts = new ExcelSheetSummary();
     private ExcelSheetSummary enumValues = new ExcelSheetSummary();
     private List<ExcelImportError> errors = new ArrayList<>();
+    private List<ExcelImportPreviewItem> items = new ArrayList<>();
 
     public void addError(String sheet, Integer rowNumber, String field, String message) {
         valid = false;
         errors.add(new ExcelImportError(sheet, rowNumber, field, message));
+    }
+
+    public void addItem(ExcelImportPreviewItem item) {
+        items.add(item);
     }
 }

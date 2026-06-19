@@ -141,7 +141,7 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 ## 数据字典与导入导出
 
 - Markdown 数据字典会输出项目概览、字段库、数据域、枚举字典、表模板和模板字段约束。
-- Excel 导入导出支持 `.xlsx` 模板下载、字段/代码集导出、导入预览、新增/更新/冲突统计和确认导入。
+- Excel 导入导出支持 `.xlsx` 模板下载、字段/代码集导出、导入预览、新增/更新/冲突统计、行级 dry-run 明细、字段级 before/after diff 和确认导入。
 
 ## 工作台与变更记录
 
@@ -314,7 +314,7 @@ data-spec/
 - [x] AI Context zip 导出和业务项目 `.dataspec/` 约定
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
 - [x] Markdown 数据字典增强
-- [x] Excel `.xlsx` 字段/代码集导入导出
+- [x] Excel `.xlsx` 字段/代码集导入导出与 dry-run 明细预览
 - [x] 标准变更日志
 - [x] 个人工作台和字段命中率报告
 - [x] SQL 反向导入预览与差异分析

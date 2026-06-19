@@ -48,12 +48,29 @@ export interface ExcelImportError {
   message?: string
 }
 
+export interface ExcelImportDiff {
+  field?: string
+  beforeValue?: string
+  afterValue?: string
+}
+
+export interface ExcelImportPreviewItem {
+  sheet?: string
+  rowNumber?: number
+  key?: string
+  action?: 'CREATE' | 'UPDATE' | 'CONFLICT' | string
+  status?: 'READY' | 'BLOCKED' | string
+  reason?: string
+  diffs?: ExcelImportDiff[]
+}
+
 export interface ExcelImportPreview {
   valid?: boolean
   fields?: ExcelSheetSummary
   enumDicts?: ExcelSheetSummary
   enumValues?: ExcelSheetSummary
   errors?: ExcelImportError[]
+  items?: ExcelImportPreviewItem[]
 }
 
 export interface ExcelImportResult {

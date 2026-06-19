@@ -79,6 +79,49 @@
         </div>
 
         <el-table
+          v-if="preview.items?.length"
+          :data="preview.items"
+          stripe
+          class="dry-run-table"
+          empty-text="暂无 dry-run 明细"
+        >
+          <el-table-column type="expand">
+            <template #default="{ row }">
+              <el-table
+                v-if="row.diffs?.length"
+                :data="row.diffs"
+                size="small"
+                class="diff-table"
+                empty-text="暂无字段差异"
+              >
+                <el-table-column prop="field" label="字段" width="160" />
+                <el-table-column prop="beforeValue" label="当前值" min-width="180" show-overflow-tooltip />
+                <el-table-column prop="afterValue" label="导入值" min-width="180" show-overflow-tooltip />
+              </el-table>
+              <el-empty v-else description="无字段变化" :image-size="48" />
+            </template>
+          </el-table-column>
+          <el-table-column prop="sheet" label="Sheet" width="130" />
+          <el-table-column prop="rowNumber" label="行号" width="90" />
+          <el-table-column prop="key" label="业务键" min-width="160" show-overflow-tooltip />
+          <el-table-column label="动作" width="110">
+            <template #default="{ row }">
+              <el-tag :type="actionTagType(row.action)" size="small">
+                {{ actionLabel(row.action) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag :type="statusTagType(row.status)" size="small">
+                {{ statusLabel(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="reason" label="原因" min-width="220" show-overflow-tooltip />
+        </el-table>
+
+        <el-table
           v-if="preview.errors?.length"
           :data="preview.errors"
           stripe
@@ -241,6 +284,46 @@ function summaryItem(key: string, label: string, summary?: ExcelSheetSummary) {
   }
 }
 
+function actionLabel(action?: string) {
+  if (action === 'CREATE') {
+    return '新增'
+  }
+  if (action === 'UPDATE') {
+    return '更新'
+  }
+  if (action === 'CONFLICT') {
+    return '冲突'
+  }
+  return action || '-'
+}
+
+function actionTagType(action?: string) {
+  if (action === 'CREATE') {
+    return 'success'
+  }
+  if (action === 'UPDATE') {
+    return 'warning'
+  }
+  if (action === 'CONFLICT') {
+    return 'danger'
+  }
+  return 'info'
+}
+
+function statusLabel(status?: string) {
+  if (status === 'READY') {
+    return '待写入'
+  }
+  if (status === 'BLOCKED') {
+    return '阻塞'
+  }
+  return status || '-'
+}
+
+function statusTagType(status?: string) {
+  return status === 'BLOCKED' ? 'danger' : 'success'
+}
+
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -357,8 +440,14 @@ function saveBlob(blob: Blob, filename: string) {
   font-size: 12px;
 }
 
+.dry-run-table,
 .error-table {
   margin-top: 14px;
+}
+
+.diff-table {
+  width: calc(100% - 24px);
+  margin: 4px 12px;
 }
 
 .result-number {

@@ -82,6 +82,58 @@ class ImportExportServiceTest {
         assertThat(preview.getEnumDicts().getUpdateCount()).isEqualTo(1);
         assertThat(preview.getEnumValues().getCreateCount()).isEqualTo(1);
         assertThat(preview.getEnumValues().getUpdateCount()).isEqualTo(1);
+        assertThat(preview.getItems()).hasSize(6);
+        assertThat(preview.getItems())
+                .anySatisfy(item -> {
+                    assertThat(item.getSheet()).isEqualTo("fields");
+                    assertThat(item.getKey()).isEqualTo("mobile_no");
+                    assertThat(item.getAction()).isEqualTo("UPDATE");
+                    assertThat(item.getStatus()).isEqualTo("READY");
+                    assertThat(item.getDiffs())
+                            .anySatisfy(diff -> {
+                                assertThat(diff.getField()).isEqualTo("displayName");
+                                assertThat(diff.getBeforeValue()).isEqualTo("");
+                                assertThat(diff.getAfterValue()).isEqualTo("手机号");
+                            });
+                })
+                .anySatisfy(item -> {
+                    assertThat(item.getSheet()).isEqualTo("fields");
+                    assertThat(item.getKey()).isEqualTo("user_email");
+                    assertThat(item.getAction()).isEqualTo("CREATE");
+                    assertThat(item.getDiffs())
+                            .anySatisfy(diff -> {
+                                assertThat(diff.getField()).isEqualTo("name");
+                                assertThat(diff.getAfterValue()).isEqualTo("user_email");
+                            });
+                });
+    }
+
+    @Test
+    void previewExcelImportReportsConflictDetailsForAliasesAndUnknownReferences() {
+        mockExistingProjectData();
+
+        ExcelImportPreview preview = service.previewExcelImport(1L, conflictWorkbook());
+
+        assertThat(preview.getValid()).isFalse();
+        assertThat(preview.getFields().getCreateCount()).isEqualTo(1);
+        assertThat(preview.getFields().getConflictCount()).isEqualTo(2);
+        assertThat(preview.getItems())
+                .filteredOn(item -> "fields".equals(item.getSheet()) && "BLOCKED".equals(item.getStatus()))
+                .hasSize(2)
+                .anySatisfy(item -> {
+                    assertThat(item.getKey()).isEqualTo("user_phone");
+                    assertThat(item.getReason()).contains("字段别名重复: phone 已属于 mobile_no");
+                })
+                .anySatisfy(item -> {
+                    assertThat(item.getKey()).isEqualTo("user_level");
+                    assertThat(item.getReason()).contains("未知代码集编码: missing_code");
+                });
+        assertThat(preview.getItems())
+                .anySatisfy(item -> {
+                    assertThat(item.getKey()).isEqualTo("user_level_copy");
+                    assertThat(item.getAction()).isEqualTo("CREATE");
+                    assertThat(item.getStatus()).isEqualTo("READY");
+                });
     }
 
     @Test
@@ -116,6 +168,7 @@ class ImportExportServiceTest {
         mobileNo.setProjectId(1L);
         mobileNo.setName("mobile_no");
         mobileNo.setDataType("varchar(20)");
+        mobileNo.setAliases("phone");
 
         EnumDict orderStatus = new EnumDict();
         orderStatus.setId(21L);
@@ -160,6 +213,30 @@ class ImportExportServiceTest {
                             "user", "用户", "phone,mobile", "contact", "order_status", "是", "enabled", "13800138000"},
                     new String[]{"user_email", "邮箱", "varchar(120)", "120", "", "", "是", "", "用户邮箱",
                             "user", "用户", "email", "contact", "payment_type", "否", "enabled", "a@example.com"});
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            workbook.write(output);
+            return output.toByteArray();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private byte[] conflictWorkbook() {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            addSheet(workbook, "enum_dicts",
+                    new String[]{"code", "name", "valueType", "description"});
+            addSheet(workbook, "enum_values",
+                    new String[]{"enumCode", "value", "label", "sortOrder"});
+            addSheet(workbook, "fields",
+                    new String[]{"name", "displayName", "dataType", "length", "precisionVal", "scaleVal",
+                            "nullable", "defaultValue", "comment", "domainCode", "tags", "aliases",
+                            "category", "codeSetCode", "sensitive", "status", "exampleValue"},
+                    new String[]{"user_phone", "电话", "varchar(20)", "20", "", "", "是", "", "用户电话",
+                            "user", "用户", "phone", "contact", "", "否", "enabled", ""},
+                    new String[]{"user_level", "等级", "integer", "", "", "", "是", "", "用户等级",
+                            "user", "用户", "level", "profile", "missing_code", "否", "enabled", ""},
+                    new String[]{"user_level_copy", "等级副本", "integer", "", "", "", "是", "", "用户等级副本",
+                            "user", "用户", "level", "profile", "", "否", "enabled", ""});
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             workbook.write(output);
             return output.toByteArray();
