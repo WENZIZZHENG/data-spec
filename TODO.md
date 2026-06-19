@@ -4,10 +4,10 @@
 
 ## 下一步顺序
 
-1. 先让 DataSpec 变成个人/小团队可自用、AI 可消费的规范上下文和可调用工具，而不是只做给人看的后台。
-2. 优先交付 AI Context 导出包、CLI 和 MCP Server，让 Codex/Cursor/Claude Code/CI 能直接使用字段标准。
-3. 再打通 SQL 校验端到端闭环和字段推荐、DDL 生成、自动修复建议，让 AI 能“写表前查标准，写表后自检”。
-4. 最后补齐项目、字段库、规则配置页面，以及数据库反向导入、CI PR 评论等团队化能力。
+1. 下一轮优先做 SQL 问题行列定位和修正 SQL diff，让前端、CLI、MCP、PR Review 都能给出更精确、可执行的反馈。
+2. 再优化 AI/CI 使用体验：`.dataspec/config.json` 默认配置、OpenAPI 契约防漂移、CLI npm bin 入口和更稳定的 CI 集成。
+3. 然后打磨个人/小团队日常维护体验：规则配置专项、Excel dry-run、HTML/ERD 数据字典、示例项目和首次使用引导。
+4. 最后补安全基线与更完整的多方言能力；仍避免过早引入审批流、发布流程等重型治理模型。
 
 ## P0：AI 可消费主线
 
@@ -315,17 +315,97 @@
 - 不照搬：不做完整审批流和数据库发布。
 - 落地方式：先基于 CLI JSON 输出生成 Markdown Summary，再扩展为 PR comment。
 
-## P4：暂缓探索
+## P4：下一轮优化
 
-### P4-1：多方言规则体系
-- 目标：支持 PostgreSQL 之外的 MySQL、SQL Server 等方言。
-- 触发条件：出现明确用户场景或项目需要。
-- 边界：当前 MVP 继续聚焦 PostgreSQL，避免规则体系过早复杂化。
+### P4-1：SQL 问题行列定位与 source span
+- 状态：待办。
+- 为什么做：当前前端和 PR Review 主要是文件级/表字段级反馈，开发者和 AI agent 还不能稳定定位到具体 SQL 行列。
+- 已有基础：`LintIssue` 已有 `severity/ruleCode/message/tableName/columnName`，CLI/前端/PR Review 都能消费结构化 issue。
+- 缺口：缺少 `line/column/sourceSpan`，解析器和规则未统一保留原始 SQL 位置。
+- 落地产物：为 lint issue 增加行列和 source span；前端问题列表、CLI JSON、PR Review 评论同步展示定位信息。
+- 验收标准：对 `examples/bad-example.sql` 运行 lint 时，每条可定位问题至少能返回文件内行号；前端点击问题可跳转到编辑器对应行。
+- 边界：第一阶段不做 GitHub inline comment，只先产出稳定定位字段。
 
-### P4-2：权限、审批和审计日志
-- 目标：面向团队协作时支持角色、审批、变更历史和审计。
-- 触发条件：项目从单人/小团队工具转向多人协作平台。
-- 边界：当前先不做登录态和权限模型，以免拖慢核心规范能力闭环。
+### P4-2：修正 SQL diff 视图
+- 状态：待办。
+- 为什么做：已有 `fixedSql` 但用户更关心“具体改了哪里”，AI 和代码评审也需要可读 diff。
+- 已有基础：`/api/lint` 已返回 `fixedSql`，前端 SQL 校验页已支持展示和复制。
+- 缺口：缺少 unified diff/side-by-side diff 输出和前端差异视图。
+- 落地产物：后端或前端生成原 SQL 与修正 SQL 的 diff；前端展示差异；CLI/PR Review 可输出修复片段。
+- 验收标准：输入可修复 SQL 后，页面能显示新增/删除/修改行；CLI 或 PR Review 能包含可复制的修复摘要。
+- 边界：不自动覆盖源文件，不执行数据库变更。
+
+### P4-3：`.dataspec/config.json` 与 CLI 使用体验
+- 状态：待办。
+- 为什么做：CLI/MCP 当前每次都要传 `--project`、`--server`，业务仓库和 AI agent 使用成本偏高。
+- 已有基础：业务项目 `.dataspec/` 约定、CLI/MCP、AI Context 导出包已经存在。
+- 缺口：缺少项目级默认配置、npm bin 入口和更短命令。
+- 落地产物：支持读取 `.dataspec/config.json` 中的 `server/projectId/defaultPaths`；提供 npm bin 或等价入口；命令可简化为 `dataspec lint-files .`。
+- 验收标准：在含 `.dataspec/config.json` 的业务仓库中运行 CLI，无需显式传 `--project --server` 即可完成 lint。
+- 边界：不做全局安装器发布；先支持仓库内脚本或本地 npm bin。
+
+### P4-4：规则配置体验专项
+- 状态：待办。
+- 为什么做：规则配置已可 CRUD，但后缀规则、禁用词、推荐替换仍偏 `paramsJson`，不够适合个人长期维护。
+- 已有基础：`RuleConfig`、`field_suffix_type`、禁用字段、推荐字段、必备列等规则已经可用。
+- 缺口：缺少专门 UI 表单、校验、示例和可读预览。
+- 落地产物：规则配置页按基础命名、后缀/前缀类型、禁用词、推荐替换、公共字段分组配置。
+- 验收标准：用户无需手写 JSON 即可新增/编辑 `_id/_at/_no/_count/is_`、禁用词和推荐替换，并能立即影响 lint。
+- 边界：不做复杂 DSL 或图形化规则编排器。
+
+### P4-5：OpenAPI 契约防漂移
+- 状态：待办。
+- 为什么做：前端已使用生成类型，但后端接口变更后仍可能忘记更新 `schema.ts`。
+- 已有基础：`pnpm gen:api`、`src/api/schema.ts`、`pnpm build` 类型门禁已经存在。
+- 缺口：缺少 CI 或本地验证脚本检查 OpenAPI 生成产物是否与后端当前契约一致。
+- 落地产物：增加契约验证脚本，启动后端或读取 api-docs 后重新生成 schema，并和仓库产物做 diff。
+- 验收标准：后端接口字段变化但未更新前端 `schema.ts` 时，验证命令失败并给出明确提示。
+- 边界：不引入完整 OpenAPI runtime client；继续保持手写薄封装。
+
+### P4-6：Excel 导入导出 dry-run 增强
+- 状态：待办。
+- 为什么做：当前 Excel 能预览和确认导入，但批量维护标准时还需要更细的冲突解释，降低误改风险。
+- 已有基础：`.xlsx` 模板、导出、预览、新增/更新/冲突统计和确认导入已完成。
+- 缺口：缺少字段级 diff、重复别名检测、枚举值覆盖策略和冲突详情。
+- 落地产物：导入预览展示字段级 before/after、冲突原因、重复别名、枚举覆盖/新增策略。
+- 验收标准：上传包含重复别名和枚举值变更的 Excel 时，页面能明确列出冲突行、冲突字段和推荐处理方式。
+- 边界：不做在线协同编辑；仍保持手动上传确认导入。
+
+### P4-7：数据字典 HTML 与 ERD 输出
+- 状态：待办。
+- 为什么做：Markdown 已适合 Git 管理，但团队分享和浏览关系时 HTML/ERD 更直观。
+- 已有基础：Markdown 数据字典已包含字段、数据域、枚举、模板和元数据。
+- 缺口：缺少可浏览 HTML、字段/代码集/模板关系图和下载入口。
+- 落地产物：新增 HTML 数据字典导出和轻量 ERD/关系图，前端支持预览或下载。
+- 验收标准：用户能导出一个可离线打开的 HTML 文档，并查看字段、枚举、模板之间的关系。
+- 边界：不做完整在线文档站或数据库实例扫描型文档系统。
+
+### P4-8：MySQL 与多方言规则覆盖增强
+- 状态：待办。
+- 为什么做：当前已支持常见 MySQL `CREATE TABLE` 解析，但 charset/collation/index/unsigned/decimal 等常见约束还未系统覆盖。
+- 已有基础：MySQL 反引号、列内 `COMMENT`、表级 `COMMENT`、`AUTO_INCREMENT`、`tinyint(1)`、`datetime` 基础解析已完成。
+- 缺口：缺少 charset/collation、engine、index/key、unsigned、decimal 精度、tinyint boolean 映射等测试和规则。
+- 落地产物：扩展 MySQL 解析测试和规则；评估 SQL Server 等方言的后续入口。
+- 验收标准：包含 MySQL `ENGINE/CHARSET/COLLATE/KEY/UNSIGNED/DECIMAL` 的建表 SQL 能稳定解析并输出规范建议。
+- 边界：不做完整跨数据库迁移或 schema diff 引擎。
+
+### P4-9：个人/小团队安全基线
+- 状态：待办。
+- 为什么做：项目从个人自用走向小团队时，需要最小身份、项目边界和 API token，避免标准数据被误改。
+- 已有基础：项目空间、变更日志和后端统一 API 已存在。
+- 缺口：缺少登录态、项目隔离、API token、操作人记录和基础权限边界。
+- 落地产物：最小用户身份、项目级访问边界、CLI/MCP/API token、变更日志记录操作人。
+- 验收标准：不同 token 只能访问授权项目；字段/规则变更日志能看到操作者。
+- 边界：不做审批流、发布流、复杂 RBAC 或企业治理驾驶舱。
+
+### P4-10：演示项目与首次使用引导
+- 状态：待办。
+- 为什么做：功能已经较多，新用户需要在几分钟内看到“建标准、生成 SQL、lint、修复、导出给 AI”的完整闭环。
+- 已有基础：内置 standards、项目初始化、示例 SQL、工作台、SQL 校验、DDL 生成和 AI Context 导出已完成。
+- 缺口：缺少 demo project、一键示例数据、首次进入引导和推荐下一步。
+- 落地产物：一键创建示例项目，内置字段、规则、模板、示例 SQL 和引导路径。
+- 验收标准：新环境中用户能通过一个按钮创建 demo，并在 3 分钟内完成一次 DDL 生成、SQL 校验、fixedSql 查看和 AI Context 导出。
+- 边界：不做复杂 onboarding 系统或用户行为追踪。
 
 ## 参考项目索引
 
