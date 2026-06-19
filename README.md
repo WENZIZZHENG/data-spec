@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。提供 SQL 校验、数据字典生成、AI 规则导出等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、AI Context、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -13,6 +13,40 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 | SQL 解析 | JSqlParser |
 | 接口文档 | SpringDoc OpenAPI |
 | 测试 | JUnit 5 |
+
+## 功能概览
+
+### 标准维护
+
+- 项目空间管理，创建项目时可导入内置 standards。
+- 标准字段库，支持别名、分类、代码集关联、敏感标记、状态和示例值。
+- 数据域、枚举字典、表模板和规则配置管理。
+- Excel `.xlsx` 模板下载、字段/代码集导出、导入预览和确认导入。
+- 标准变更日志，记录字段、代码集、规则的新增、修改、删除、启停 before/after。
+
+### SQL 规范闭环
+
+- SQL 粘贴校验，返回 error/warning/suggestion 和结构化修复建议。
+- 支持 PostgreSQL `COMMENT ON TABLE/COLUMN` 和常见 MySQL `CREATE TABLE` 注释解析。
+- 表名/字段名 snake_case、禁用字段名、推荐字段名、必备列、金额类型、字段后缀/前缀类型和注释缺失等规则。
+- 修正 SQL 输出、复制、检查记录、分页历史和详情查看。
+- SQL 反向导入预览，输出解析表、字段候选、缺注释项和非标准字段差异。
+
+### 生成与报告
+
+- 基于表模板生成 PostgreSQL DDL，并自动运行 lint 自检。
+- Markdown 数据字典，包含概览统计、字段与数据域关系、枚举、模板和个人版字段元数据。
+- 个人工作台，展示字段数、代码集数、规则数、检查数、字段命中率、最近检查和问题趋势。
+
+### AI 与自动化
+
+- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、prompt、示例 SQL 和 `AGENTS.md.fragment`。
+- AI 建表 Prompt 和 SQL 修正 Prompt 生成。
+- 字段推荐 API/CLI/MCP。
+- DDL 生成 API/CLI/MCP。
+- CLI 支持单文件 lint、批量 `lint-files`、PR 评论式 `review-pr`、AI Context 导出、字段推荐和 DDL 生成。
+- MCP Server 暴露 DataSpec resources、prompts 和核心 tools。
+- GitHub Actions 示例支持 SQL 批量校验和 PR Review 评论。
 
 ## 快速启动
 
@@ -98,6 +132,23 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 
 返回结果包含 `ddl` 和 `lintResult`。第一版只生成 `CREATE TABLE` 与 `COMMENT ON` 文本，不执行数据库变更，也不生成迁移计划。
 
+## SQL 校验记录与反向导入
+
+`/api/lint` 会返回 lint 结果、结构化修复建议和 `fixedSql`，并保存 SQL 检查记录。前端 SQL 校验页支持查看修正 SQL、复制、最近检查记录分页和详情。
+
+反向导入页支持粘贴 SQL DDL 生成只读预览，用于从现有 schema 识别字段候选、缺注释项和非标准字段。当前不会连接数据库，也不会自动写入字段库。
+
+## 数据字典与导入导出
+
+- Markdown 数据字典会输出项目概览、字段库、数据域、枚举字典、表模板和模板字段约束。
+- Excel 导入导出支持 `.xlsx` 模板下载、字段/代码集导出、导入预览、新增/更新/冲突统计和确认导入。
+
+## 工作台与变更记录
+
+个人工作台提供项目级摘要：标准字段数、代码集数、规则数、禁用词数、SQL 检查数、字段命中率、最近检查和问题趋势。
+
+标准变更日志会记录字段、代码集/枚举值、规则配置的创建、更新、删除、启停操作，保留 before/after JSON 便于追溯。
+
 ## CLI
 
 第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`：
@@ -176,13 +227,18 @@ data-spec/
 │       ├── enumdict/         # 枚举字典
 │       ├── template/         # 表模板
 │       ├── rule/             # 规则配置
+│       ├── standards/        # 内置标准初始化
 │       ├── lint/             # SQL 校验引擎 + 规则实现
-│       ├── generator/        # Markdown 数据字典与 DDL 生成
 │       ├── aicontext/        # AI 规则导出
-│       └── importexport/     # 导入导出
+│       ├── dashboard/        # 个人工作台
+│       ├── generator/        # Markdown 数据字典与 DDL 生成
+│       ├── importexport/     # 导入导出
+│       ├── changelog/        # 标准变更日志
+│       └── reverseimport/    # SQL 反向导入
 ├── dataspec-web/             # Vue 3 前端
 ├── standards/                # 内置标准 YAML/JSON
-├── docs/                     # 文档
+├── tools/                    # CLI 与 MCP adapter
+├── openspec/                 # OpenSpec 变更记录
 └── examples/                 # 示例 SQL
 ```
 
@@ -199,9 +255,12 @@ data-spec/
 | template | /api/templates | 表模板 + 模板字段 |
 | rule | /api/rules | 规则配置管理 |
 | lint | /api/lint | SQL 粘贴校验 |
+| dashboard | /api/dashboard | 个人工作台统计 |
 | generator | /api/generator | Markdown 数据字典与 DDL 生成 |
 | aicontext | /api/ai-context | AI 规则导出 |
 | importexport | /api/import-export | 字段导入导出 |
+| changelog | /api/change-logs | 标准变更日志 |
+| reverse-import | /api/reverse-import | SQL 反向导入预览 |
 
 ## 规则引擎
 
@@ -214,24 +273,35 @@ data-spec/
 | forbidden_field_name | 禁用字段名（uid、create_time 等） | ERROR |
 | recommended_field_name | 推荐字段名（create_time → created_at） | SUGGESTION |
 | required_columns | 业务表必含列（id、created_at、updated_at、is_deleted） | ERROR |
+| field_suffix_type | 字段后缀/前缀应匹配推荐类型 | WARNING |
 | amount_field_type | 金额字段应使用 bigint/numeric | WARNING |
 | comment_missing | 字段/表注释缺失 | SUGGESTION |
 
 `LintIssue` 除 `severity/ruleCode/message/tableName/columnName` 外，还会在可确定修复时输出 `suggestion`、`replacement`、`before`、`after`、`confidence`。这些字段会通过 API、CLI 和 MCP 原样返回，供 AI agent 生成修正 SQL 或修复说明。
 
-## MVP 功能清单
+## 已完成功能清单
 
-- [x] 标准字段 CRUD
-- [x] 数据域 CRUD
-- [x] 枚举字典 CRUD
-- [x] 表模板 CRUD
-- [x] 规则配置 CRUD
-- [x] SQL 粘贴校验（PostgreSQL CREATE TABLE）
+- [x] 项目空间、顶部当前项目联动和内置 standards 初始化
+- [x] 标准字段、数据域、枚举字典、表模板、规则配置 CRUD
+- [x] 个人版字段模型：别名、分类、代码集、敏感标记、状态、示例值
+- [x] 结构化命名规则导出和 `field_suffix_type` lint 规则
+- [x] SQL 粘贴校验、结构化 issue、修复建议和 `fixedSql`
+- [x] SQL 检查记录、最近记录分页和详情
+- [x] PostgreSQL `COMMENT ON` 解析和常见 MySQL `CREATE TABLE` 解析
 - [x] 字段推荐 API/CLI/MCP
-- [x] DDL 生成 API/CLI/MCP
-- [x] 校验结果输出 error/warning/suggestion
-- [x] SQL lint 结构化修复建议
-- [x] 生成 Markdown 数据字典
-- [x] 导出 DATABASE_RULES.md、field-catalog.json、rules.yaml
-- [x] 导出 AI Context zip 包
-- [x] 字段 JSON 导入导出
+- [x] DDL 生成 API/CLI/MCP 和前端预览下载
+- [x] AI Context zip 导出和业务项目 `.dataspec/` 约定
+- [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
+- [x] Markdown 数据字典增强
+- [x] Excel `.xlsx` 字段/代码集导入导出
+- [x] 标准变更日志
+- [x] 个人工作台和字段命中率报告
+- [x] SQL 反向导入预览与差异分析
+- [x] DataSpec CLI：`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`
+- [x] DataSpec MCP Server：resources、prompts、`lint_sql`、`get_field_catalog`、`suggest_fields`、`generate_table_ddl`
+- [x] GitHub Actions 示例和 PR 评论式 SQL Review
+
+## 暂缓探索
+
+- 多方言完整规则体系：当前已覆盖 PostgreSQL 和常见 MySQL DDL 解析，SQL Server 等方言后续按场景补充。
+- 权限、审批和审计日志：当前定位个人/小团队优先，不引入重型治理流程。
