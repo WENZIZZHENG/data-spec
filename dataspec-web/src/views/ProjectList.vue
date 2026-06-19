@@ -2,10 +2,15 @@
   <div class="project-page">
     <div class="page-header">
       <h2>项目列表</h2>
-      <el-button type="primary" @click="openCreateDialog">
-        <el-icon><Plus /></el-icon>
-        新建项目
-      </el-button>
+      <div class="header-actions">
+        <el-button :loading="demoLoading" @click="handleCreateDemoProject">
+          演示项目
+        </el-button>
+        <el-button type="primary" @click="openCreateDialog">
+          <el-icon><Plus /></el-icon>
+          新建项目
+        </el-button>
+      </div>
     </div>
 
     <el-table
@@ -89,6 +94,7 @@ import type { CreateProjectReq, Project } from '@/types'
 const projectStore = useProjectStore()
 const dialogVisible = ref(false)
 const submitting = ref(false)
+const demoLoading = ref(false)
 const editingProject = ref<Project | null>(null)
 const formRef = ref<FormInstance>()
 
@@ -155,6 +161,16 @@ async function handleSubmit() {
   }
 }
 
+async function handleCreateDemoProject() {
+  demoLoading.value = true
+  try {
+    const result = await projectStore.createDemoProjectAndSelect()
+    ElMessage.success(result.created ? '演示项目已创建' : '已切换到演示项目')
+  } finally {
+    demoLoading.value = false
+  }
+}
+
 async function handleDelete(project: Project) {
   if (!project.id) {
     return
@@ -191,6 +207,12 @@ async function handleDelete(project: Project) {
 
 .page-header h2 {
   margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 .project-table {

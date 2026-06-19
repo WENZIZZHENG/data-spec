@@ -24,6 +24,12 @@ public class ProjectRepository {
         return Optional.ofNullable(projectMapper.selectById(id));
     }
 
+    /** 根据项目名称查找项目 */
+    public Optional<Project> findByName(String name) {
+        return Optional.ofNullable(projectMapper.selectOne(
+                new LambdaQueryWrapper<Project>().eq(Project::getName, name)));
+    }
+
     /** 查询所有项目（按创建时间倒序） */
     public List<Project> findAll() {
         return projectMapper.selectList(

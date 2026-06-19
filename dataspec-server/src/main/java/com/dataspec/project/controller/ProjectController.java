@@ -2,6 +2,8 @@ package com.dataspec.project.controller;
 
 import com.dataspec.common.result.R;
 import com.dataspec.project.entity.Project;
+import com.dataspec.project.model.DemoProjectResult;
+import com.dataspec.project.service.DemoProjectService;
 import com.dataspec.project.service.ProjectService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -20,6 +22,7 @@ import java.util.List;
 public class ProjectController {
 
     private final ProjectService projectService;
+    private final DemoProjectService demoProjectService;
 
     /** 查询项目列表 */
 
@@ -45,6 +48,12 @@ public class ProjectController {
         project.setDbType(req.dbType());
         boolean importBuiltInStandards = req.importBuiltInStandards() == null || req.importBuiltInStandards();
         return R.ok(projectService.create(project, importBuiltInStandards));
+    }
+
+    /** 创建或复用演示项目 */
+    @PostMapping("/demo")
+    public R<DemoProjectResult> createDemoProject() {
+        return R.ok(demoProjectService.createOrReuseDemoProject());
     }
 
     /** 更新项目 */

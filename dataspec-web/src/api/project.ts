@@ -1,5 +1,5 @@
 import request from '@/api/request'
-import type { CreateProjectReq, Project } from '@/types'
+import type { CreateProjectReq, DemoProjectResult, Project } from '@/types'
 
 export function listProjects() {
   return request.get<unknown, Project[]>('/projects')
@@ -11,6 +11,10 @@ export function getProject(id: number) {
 
 export function createProject(data: CreateProjectReq) {
   return request.post<unknown, Project>('/projects', data)
+}
+
+export function createDemoProject() {
+  return request.post<unknown, DemoProjectResult>('/projects/demo')
 }
 
 export function updateProject(id: number, data: CreateProjectReq) {

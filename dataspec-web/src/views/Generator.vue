@@ -189,6 +189,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { CopyDocument, Download, Refresh, View } from '@element-plus/icons-vue'
 import {
@@ -203,6 +204,7 @@ import { useProjectStore } from '@/stores/project'
 import type { DdlGenerateResult, LintIssue, Template, TemplateField } from '@/types'
 
 const projectStore = useProjectStore()
+const route = useRoute()
 const templates = ref<Template[]>([])
 const templateFields = ref<TemplateField[]>([])
 const selectedTemplateId = ref<number | null>(null)
@@ -245,6 +247,17 @@ watch(selectedTemplateId, () => {
   void loadTemplateFields()
 })
 
+watch(
+  () => [route.query.templateId, route.query.tableName],
+  () => {
+    applyTableNameFromQuery()
+    const queryTemplateId = templateIdFromQuery()
+    if (queryTemplateId) {
+      selectedTemplateId.value = queryTemplateId
+    }
+  }
+)
+
 async function loadTemplates() {
   const projectId = projectStore.currentProjectId
   result.value = null
@@ -260,7 +273,10 @@ async function loadTemplates() {
   templateLoading.value = true
   try {
     templates.value = await listTemplates(projectId)
-    selectedTemplateId.value = templates.value.find((template) => template.id)?.id ?? null
+    selectedTemplateId.value = templateIdFromQuery()
+      ?? templates.value.find((template) => template.id)?.id
+      ?? null
+    applyTableNameFromQuery()
   } finally {
     templateLoading.value = false
   }
@@ -400,6 +416,24 @@ function severityTagType(severity?: string) {
     return 'warning'
   }
   return 'info'
+}
+
+function templateIdFromQuery() {
+  const rawTemplateId = route.query.templateId
+  const value = Array.isArray(rawTemplateId) ? rawTemplateId[0] : rawTemplateId
+  const templateId = value ? Number(value) : NaN
+  if (!Number.isFinite(templateId)) {
+    return null
+  }
+  return templates.value.find((template) => template.id === templateId)?.id ?? null
+}
+
+function applyTableNameFromQuery() {
+  const rawTableName = route.query.tableName
+  const value = Array.isArray(rawTableName) ? rawTableName[0] : rawTableName
+  if (value && /^[a-z][a-z0-9_]*$/.test(value)) {
+    tableName.value = value
+  }
 }
 </script>
 

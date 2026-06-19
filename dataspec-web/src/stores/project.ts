@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { listProjects } from '@/api/project'
-import type { Project } from '@/types'
+import { createDemoProject as createDemoProjectApi, listProjects } from '@/api/project'
+import type { DemoProjectResult, Project } from '@/types'
 
 /** 当前选中项目的状态 */
 export const useProjectStore = defineStore('project', () => {
@@ -40,6 +40,20 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  /** 创建或复用演示项目，并把它设为当前项目 */
+  async function createDemoProjectAndSelect(): Promise<DemoProjectResult> {
+    loading.value = true
+    try {
+      const result = await createDemoProjectApi()
+      projects.value = await listProjects()
+      const project = projects.value.find((item) => item.id === result.project?.id) ?? result.project ?? null
+      setCurrentProject(project)
+      return result
+    } finally {
+      loading.value = false
+    }
+  }
+
   /** 切换当前项目 */
   function setCurrentProject(project: Project | null) {
     currentProjectId.value = project?.id ?? null
@@ -66,6 +80,7 @@ export const useProjectStore = defineStore('project', () => {
     currentProject,
     loading,
     loadProjects,
+    createDemoProjectAndSelect,
     setCurrentProject,
     setCurrentProjectById,
     clearCurrentProject

@@ -199,6 +199,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as monaco from 'monaco-editor'
 import { getLintRecord, lintSql, listLintRecords } from '@/api/lint'
@@ -219,7 +220,25 @@ const activeRecord = ref<RecordDetail | null>(null)
 const recordDialogVisible = ref(false)
 const historyActiveNames = ref<string[]>([])
 const projectStore = useProjectStore()
+const route = useRoute()
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
+
+const DEFAULT_SQL = `CREATE TABLE users (
+    id bigserial PRIMARY KEY,
+    username varchar(50) NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    is_deleted boolean NOT NULL DEFAULT false
+);`
+const DEMO_LINT_SQL = `CREATE TABLE UserOrder (
+    id bigserial PRIMARY KEY,
+    uid bigint NOT NULL,
+    phone varchar(20),
+    amount decimal(10,2) DEFAULT 0,
+    create_time timestamp,
+    update_time timestamp,
+    del_flag boolean DEFAULT false
+);`
 
 const issueTotal = computed(() => {
   if (!lintResult.value) {
@@ -240,13 +259,7 @@ const recordDiffLines = computed(() => {
 onMounted(() => {
   if (editorContainer.value) {
     editor = monaco.editor.create(editorContainer.value, {
-      value: `CREATE TABLE users (
-    id bigserial PRIMARY KEY,
-    username varchar(50) NOT NULL,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now(),
-    is_deleted boolean NOT NULL DEFAULT false
-);`,
+      value: initialSql(),
       language: 'sql',
       theme: 'vs-dark',
       automaticLayout: true,
@@ -272,6 +285,15 @@ watch(
   () => {
     recordCurrent.value = 1
     void loadRecords()
+  }
+)
+
+watch(
+  () => route.query.demo,
+  () => {
+    if (route.query.demo === 'lint' && editor) {
+      editor.setValue(DEMO_LINT_SQL)
+    }
   }
 )
 
@@ -405,6 +427,10 @@ function formatDate(value?: string) {
     return value
   }
   return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function initialSql() {
+  return route.query.demo === 'lint' ? DEMO_LINT_SQL : DEFAULT_SQL
 }
 
 type DiffLineType = 'header' | 'add' | 'remove' | 'context'

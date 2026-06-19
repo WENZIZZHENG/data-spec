@@ -4,6 +4,7 @@ type Schemas = components['schemas']
 
 export type Project = Schemas['Project']
 export type CreateProjectReq = Schemas['CreateProjectReq']
+export type DemoProjectResult = Schemas['DemoProjectResult']
 export type Field = Schemas['Field']
 export type FieldReq = Schemas['FieldReq']
 export type FieldSuggestion = Schemas['FieldSuggestion']

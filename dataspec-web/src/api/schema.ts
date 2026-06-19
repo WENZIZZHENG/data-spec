@@ -212,6 +212,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/demo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createDemoProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lint": {
         parameters: {
             query?: never;
@@ -817,6 +833,21 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["Project"];
+        };
+        DemoProjectResult: {
+            project?: components["schemas"]["Project"];
+            /** Format: int64 */
+            templateId?: number;
+            sampleTableName?: string;
+            badExampleSql?: string;
+            goodExampleSql?: string;
+            created?: boolean;
+        };
+        RDemoProjectResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DemoProjectResult"];
         };
         FieldReq: {
             /** Format: int64 */
@@ -2456,6 +2487,44 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RProject"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    createDemoProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDemoProjectResult"];
                 };
             };
             /** @description Bad Request */

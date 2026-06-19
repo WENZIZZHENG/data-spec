@@ -12,7 +12,12 @@
     </div>
 
     <el-empty v-if="!hasProject" description="请先创建并选择项目">
-      <el-button type="primary" @click="$router.push('/projects')">去项目列表</el-button>
+      <div class="empty-actions">
+        <el-button type="primary" :loading="demoLoading" @click="handleCreateDemoProject">
+          创建演示项目
+        </el-button>
+        <el-button @click="$router.push('/projects')">去项目列表</el-button>
+      </div>
     </el-empty>
 
     <template v-else>
@@ -21,6 +26,29 @@
           <div v-for="metric in metrics" :key="metric.key" class="metric-item">
             <div class="metric-label">{{ metric.label }}</div>
             <div class="metric-value">{{ metric.value }}</div>
+          </div>
+        </section>
+
+        <section class="quick-actions">
+          <div class="section-header">
+            <h3>快速开始</h3>
+            <el-button text type="primary" :loading="demoLoading" @click="handleCreateDemoProject">
+              演示项目
+            </el-button>
+          </div>
+          <div class="action-row">
+            <el-button type="primary" :loading="demoLoading" @click="openDemoDdl">
+              生成演示 DDL
+            </el-button>
+            <el-button :loading="demoLoading" @click="openDemoSqlLint">
+              校验示例 SQL
+            </el-button>
+            <el-button @click="$router.push('/ai-export')">
+              导出 AI Context
+            </el-button>
+            <el-button @click="$router.push('/reverse-import')">
+              数据库反向导入
+            </el-button>
           </div>
         </section>
 
@@ -63,13 +91,17 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { Refresh } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { getDashboardSummary } from '@/api/dashboard'
 import { useProjectStore } from '@/stores/project'
 import type { DashboardSummary, IssueTrendPoint } from '@/types'
 
 const projectStore = useProjectStore()
+const router = useRouter()
 const loading = ref(false)
+const demoLoading = ref(false)
 const summary = ref<DashboardSummary | null>(null)
 
 const hasProject = computed(() => projectStore.currentProjectId !== null)
@@ -117,6 +149,37 @@ async function loadSummary() {
     summary.value = await getDashboardSummary(projectStore.currentProjectId)
   } finally {
     loading.value = false
+  }
+}
+
+async function handleCreateDemoProject() {
+  const result = await ensureDemoProject()
+  ElMessage.success(result.created ? '演示项目已创建' : '已切换到演示项目')
+  await loadSummary()
+}
+
+async function openDemoSqlLint() {
+  await ensureDemoProject()
+  await router.push({ path: '/sql-lint', query: { demo: 'lint' } })
+}
+
+async function openDemoDdl() {
+  const result = await ensureDemoProject()
+  await router.push({
+    path: '/generator',
+    query: {
+      templateId: result.templateId,
+      tableName: result.sampleTableName
+    }
+  })
+}
+
+async function ensureDemoProject() {
+  demoLoading.value = true
+  try {
+    return await projectStore.createDemoProjectAndSelect()
+  } finally {
+    demoLoading.value = false
   }
 }
 
@@ -199,6 +262,22 @@ function formatDate(value?: string) {
 .panel {
   padding-top: 16px;
   border-top: 1px solid #ebeef5;
+}
+
+.quick-actions {
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
+}
+
+.action-row,
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.action-row {
+  margin-top: 14px;
 }
 
 .trend-list {
