@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、AI Context、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、AI Context、API Token 安全基线、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -22,7 +22,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 标准字段库，支持别名、分类、代码集关联、敏感标记、状态和示例值。
 - 数据域、枚举字典、表模板和规则配置管理。
 - Excel `.xlsx` 模板下载、字段/代码集导出、导入预览和确认导入。
-- 标准变更日志，记录字段、代码集、规则的新增、修改、删除、启停 before/after。
+- 标准变更日志，记录字段、代码集、规则的新增、修改、删除、启停 before/after 和操作者。
 
 ### SQL 规范闭环
 
@@ -148,7 +148,31 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 
 个人工作台提供项目级摘要：标准字段数、代码集数、规则数、禁用词数、SQL 检查数、字段命中率、最近检查和问题趋势。
 
-标准变更日志会记录字段、代码集/枚举值、规则配置的创建、更新、删除、启停操作，保留 before/after JSON 便于追溯。
+标准变更日志会记录字段、代码集/枚举值、规则配置的创建、更新、删除、启停操作，保留 before/after JSON 和操作者便于追溯。
+
+## 安全基线
+
+个人本地开发默认不强制登录。小团队或 AI agent 长期接入时，可开启轻量 API Token 模式：
+
+```yaml
+dataspec:
+  security:
+    enabled: true
+```
+
+后端只保存 token 的 SHA-256 hash。示例：
+
+```powershell
+$token = "ds_your_token"
+$hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($token))).ToLower()
+```
+
+```sql
+INSERT INTO ds_api_token(name, token_hash, operator_name, project_ids)
+VALUES ('default-cli', '<hash>', 'alice', '1,2');
+```
+
+`project_ids` 使用逗号分隔项目 ID，`*` 表示全部项目。安全模式开启后，前端可在顶部 `API Token` 输入 token；CLI/MCP 可通过 `--dataspec-token`、`DATASPEC_TOKEN` 环境变量或 `.dataspec/config.json` 的 `apiToken` 传递 token。团队共享的 `.dataspec/config.json` 不建议提交明文 token，优先使用环境变量或本地忽略文件。
 
 ## CLI
 
@@ -158,6 +182,7 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 {
   "projectId": 1,
   "server": "http://localhost:8090",
+  "apiToken": "ds_optional_local_token",
   "defaultPaths": ["db/migrations", "sql"]
 }
 ```
@@ -168,6 +193,9 @@ node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format j
 
 # 在含 .dataspec/config.json 的业务仓库中，可省略 --project 和 --server
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --format json
+
+# 安全模式开启后传递 DataSpec API token
+node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --dataspec-token "$DATASPEC_TOKEN"
 
 # 从 stdin 校验
 cat examples/good-example.sql | node tools/dataspec-cli.mjs lint - --project 1 --format json
@@ -201,7 +229,7 @@ node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format j
 第一版 MCP Server 同样是 HTTP-backed stdio adapter，需要先启动 DataSpec 后端。启动时可显式指定默认项目，也可在业务仓库中依赖 `.dataspec/config.json`：
 
 ```bash
-node tools/dataspec-mcp.mjs --project 1 --server http://localhost:8090
+node tools/dataspec-mcp.mjs --project 1 --server http://localhost:8090 --dataspec-token "$DATASPEC_TOKEN"
 
 # 在含 .dataspec/config.json 的业务仓库中
 node tools/dataspec-mcp.mjs
@@ -278,6 +306,7 @@ data-spec/
 | rule | /api/rules | 规则配置管理 |
 | lint | /api/lint | SQL 粘贴校验 |
 | dashboard | /api/dashboard | 个人工作台统计 |
+| auth | /api/auth | API token 当前身份 |
 | generator | /api/generator | Markdown 数据字典与 DDL 生成 |
 | aicontext | /api/ai-context | AI 规则导出 |
 | importexport | /api/import-export | 字段导入导出 |
@@ -316,7 +345,8 @@ data-spec/
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
 - [x] Markdown/HTML 数据字典增强和 Mermaid ERD 输出
 - [x] Excel `.xlsx` 字段/代码集导入导出与 dry-run 明细预览
-- [x] 标准变更日志
+- [x] 标准变更日志和操作者记录
+- [x] 个人/小团队 API Token 安全基线、项目边界和 CLI/MCP token 透传
 - [x] 个人工作台和字段命中率报告
 - [x] SQL 反向导入预览与差异分析
 - [x] 数据库直连反向导入与前端确认导入流程
@@ -327,4 +357,4 @@ data-spec/
 ## 暂缓探索
 
 - 多方言完整规则体系：当前已覆盖 PostgreSQL 和常见 MySQL DDL 解析，SQL Server 等其他方言后续按实际场景补充。
-- 权限、审批和审计日志：当前定位个人/小团队优先，不引入重型治理流程。
+- 审批流、发布流和复杂 RBAC：当前定位个人/小团队优先，只保留轻量 API Token 与项目边界。

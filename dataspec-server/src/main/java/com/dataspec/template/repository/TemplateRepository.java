@@ -62,6 +62,11 @@ public class TemplateRepository {
                         .orderByAsc(TemplateField::getSortOrder));
     }
 
+    /** 根据 ID 查找模板字段 */
+    public Optional<TemplateField> findFieldById(Long id) {
+        return Optional.ofNullable(templateFieldMapper.selectById(id));
+    }
+
     /** 新增模板字段 */
     public int insertField(TemplateField field) {
         return templateFieldMapper.insert(field);

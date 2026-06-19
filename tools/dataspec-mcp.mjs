@@ -119,6 +119,7 @@ export function createMcpHandler(config, fetchFn = globalThis.fetch) {
   }
   const server = normalizeServer(config.server)
   const defaultProjectId = parseProjectId(config.projectId)
+  const apiToken = normalizeApiToken(config.apiToken)
 
   return async function handleMessage(message) {
     const id = message?.id
@@ -132,6 +133,7 @@ export function createMcpHandler(config, fetchFn = globalThis.fetch) {
       const result = await dispatch(message.method, message.params ?? {}, {
         server,
         defaultProjectId,
+        apiToken,
         fetchFn
       })
       return { jsonrpc: '2.0', id, result }
@@ -145,12 +147,13 @@ export function createMcpHandler(config, fetchFn = globalThis.fetch) {
  * 解析 MCP Server 启动参数。项目 ID 是 resource URI 可确定化的基础，
  * 可由显式参数提供，也可由业务仓库 `.dataspec/config.json` 提供。
  */
-export function parseServerArgs(argv, startDir = process.cwd()) {
-  const { options } = parseArgs(argv, ['project', 'server'])
+export function parseServerArgs(argv, startDir = process.cwd(), env = process.env) {
+  const { options } = parseArgs(argv, ['project', 'server', 'dataspec-token'])
   const config = loadDataSpecConfig(startDir)
   return {
     projectId: parseProjectId(options.project ?? config.projectId),
-    server: normalizeServer(options.server ?? config.server)
+    server: normalizeServer(options.server ?? config.server),
+    apiToken: normalizeApiToken(options['dataspec-token'] ?? env.DATASPEC_TOKEN ?? config.apiToken)
   }
 }
 
@@ -214,7 +217,7 @@ async function readResource(params, context) {
   if (!def) {
     throw new JsonRpcError(-32602, `未知 resource: ${uri}`)
   }
-  const text = await fetchAiContextText(context.server, context.fetchFn, def.path, projectId)
+  const text = await fetchAiContextText(context, def.path, projectId)
   return {
     contents: [
       {
@@ -366,7 +369,7 @@ async function callLintSql(args, context) {
   const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
   const response = await context.fetchFn(`${context.server}/api/lint`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: dataSpecHeaders(context.apiToken, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({ sql, projectId })
   })
   const result = await readDataSpecJson(response)
@@ -375,12 +378,7 @@ async function callLintSql(args, context) {
 
 async function callGetFieldCatalog(args, context) {
   const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
-  const text = await fetchAiContextText(
-    context.server,
-    context.fetchFn,
-    RESOURCE_DEFS['field-catalog'].path,
-    projectId
-  )
+  const text = await fetchAiContextText(context, RESOURCE_DEFS['field-catalog'].path, projectId)
   const structured = parseJsonOrFallback(text)
   return toolJsonResult(structured)
 }
@@ -393,7 +391,7 @@ async function callSuggestFields(args, context) {
   const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
   const limit = optionalLimit(args.limit, 5)
   const url = `${context.server}/api/fields/suggest?projectId=${encodeURIComponent(projectId)}&query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`
-  const response = await context.fetchFn(url)
+  const response = await context.fetchFn(url, { headers: dataSpecHeaders(context.apiToken) })
   const result = await readDataSpecJson(response)
   return toolJsonResult(result)
 }
@@ -406,14 +404,14 @@ async function callGenerateTableDdl(args, context) {
   }
   const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
   const url = `${context.server}/api/generator/ddl/preview?projectId=${encodeURIComponent(projectId)}&templateId=${encodeURIComponent(templateId)}&tableName=${encodeURIComponent(tableName)}`
-  const response = await context.fetchFn(url)
+  const response = await context.fetchFn(url, { headers: dataSpecHeaders(context.apiToken) })
   const result = await readDataSpecJson(response)
   return toolJsonResult(result)
 }
 
-async function fetchAiContextText(server, fetchFn, path, projectId) {
-  const url = `${server}${path}?projectId=${encodeURIComponent(projectId)}`
-  const response = await fetchFn(url)
+async function fetchAiContextText(context, path, projectId) {
+  const url = `${context.server}${path}?projectId=${encodeURIComponent(projectId)}`
+  const response = await context.fetchFn(url, { headers: dataSpecHeaders(context.apiToken) })
   return await readDataSpecJson(response)
 }
 
@@ -496,6 +494,23 @@ function parsePositiveInteger(value, label) {
 function normalizeServer(server = DEFAULT_SERVER) {
   const normalized = String(server || DEFAULT_SERVER).replace(/\/+$/, '')
   return normalized || DEFAULT_SERVER
+}
+
+function normalizeApiToken(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+  return String(value).trim() || undefined
+}
+
+function dataSpecHeaders(apiToken, headers = {}) {
+  if (!apiToken) {
+    return headers
+  }
+  return {
+    ...headers,
+    Authorization: `Bearer ${apiToken}`
+  }
 }
 
 function parseArgs(args, allowedOptions) {

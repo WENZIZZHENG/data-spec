@@ -5,6 +5,7 @@ import com.dataspec.common.exception.BizException;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.repository.RuleConfigRepository;
 import com.dataspec.rule.service.RuleConfigService;
+import com.dataspec.security.context.ProjectAccessGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,22 +24,27 @@ public class RuleConfigServiceImpl implements RuleConfigService {
 
     @Override
     public List<RuleConfig> listByProject(Long projectId) {
+        ProjectAccessGuard.requireProjectAccess(projectId);
         return ruleConfigRepository.findByProjectId(projectId);
     }
 
     @Override
     public List<RuleConfig> listEnabledByProject(Long projectId) {
+        ProjectAccessGuard.requireProjectAccess(projectId);
         return ruleConfigRepository.findEnabledByProjectId(projectId);
     }
 
     @Override
     public RuleConfig getById(Long id) {
-        return ruleConfigRepository.findById(id)
+        RuleConfig ruleConfig = ruleConfigRepository.findById(id)
                 .orElseThrow(() -> new BizException("规则配置不存在: " + id));
+        ProjectAccessGuard.requireProjectAccess(ruleConfig.getProjectId());
+        return ruleConfig;
     }
 
     @Override
     public RuleConfig create(RuleConfig ruleConfig) {
+        ProjectAccessGuard.requireProjectAccess(ruleConfig.getProjectId());
         ruleConfig.setEnabled(ruleConfig.getEnabled() != null ? ruleConfig.getEnabled() : true);
         ruleConfig.setSeverity(ruleConfig.getSeverity() != null ? ruleConfig.getSeverity() : "warning");
         ruleConfigRepository.insert(ruleConfig);

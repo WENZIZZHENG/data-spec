@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { AUTH_CLEARED_EVENT, clearAuthStorage, readAuthToken } from '@/api/authStorage'
 
 // 创建 Axios 实例
 const request = axios.create({
@@ -10,7 +11,10 @@ const request = axios.create({
 // 请求拦截器
 request.interceptors.request.use(
   (config) => {
-    // 后续在此处添加 token：config.headers.Authorization = `Bearer ${token}`
+    const token = readAuthToken()
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   (error) => {
@@ -35,6 +39,10 @@ request.interceptors.response.use(
   },
   (error) => {
     const msg = error.response?.data?.message || error.message || '网络错误'
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      clearAuthStorage()
+      window.dispatchEvent(new Event(AUTH_CLEARED_EVENT))
+    }
     ElMessage.error(msg)
     return Promise.reject(error)
   }

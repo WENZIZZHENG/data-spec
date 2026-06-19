@@ -4,6 +4,7 @@ import com.dataspec.common.exception.BizException;
 import com.dataspec.project.entity.Project;
 import com.dataspec.project.repository.ProjectRepository;
 import com.dataspec.project.service.ProjectService;
+import com.dataspec.security.context.ProjectAccessGuard;
 import com.dataspec.standards.BuiltInStandardsImportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,11 +25,14 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public List<Project> list() {
-        return projectRepository.findAll();
+        return projectRepository.findAll().stream()
+                .filter(project -> ProjectAccessGuard.canAccessProject(project.getId()))
+                .toList();
     }
 
     @Override
     public Project getById(Long id) {
+        ProjectAccessGuard.requireProjectAccess(id);
         return projectRepository.findById(id)
                 .orElseThrow(() -> new BizException("项目不存在: " + id));
     }
@@ -41,6 +45,7 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public Project create(Project project, boolean importBuiltInStandards) {
+        ProjectAccessGuard.requireAllProjects("创建项目需要全项目 API token");
         if (projectRepository.existsByName(project.getName())) {
             throw new BizException("项目名称已存在: " + project.getName());
         }
@@ -54,6 +59,7 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public Project update(Long id, Project project) {
+        ProjectAccessGuard.requireProjectAccess(id);
         Project existing = getById(id);
         if (projectRepository.existsByNameExcludeId(project.getName(), id)) {
             throw new BizException("项目名称已存在: " + project.getName());
@@ -67,6 +73,7 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public void delete(Long id) {
+        ProjectAccessGuard.requireProjectAccess(id);
         getById(id); // 确保存在
         projectRepository.deleteById(id);
     }

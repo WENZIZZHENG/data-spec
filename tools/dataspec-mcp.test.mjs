@@ -28,8 +28,13 @@ test('initialize advertises resources, prompts, and tools capabilities', async (
 
 test('resources list and read use configured project', async () => {
   const calls = []
-  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local/' }, async (url) => {
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local/',
+    apiToken: 'ds_mcp_token'
+  }, async (url, options = {}) => {
     calls.push(url)
+    assert.equal(options.headers.Authorization, 'Bearer ds_mcp_token')
     return jsonResponse({ code: 200, data: '{"fields":[]}' })
   })
 
@@ -224,7 +229,8 @@ test('invalid tool project id returns invalid params error', async () => {
 test('parseServerArgs requires project id and normalizes server url', () => {
   assert.deepEqual(parseServerArgs(['--project', '7', '--server', 'http://dataspec.local/']), {
     projectId: 7,
-    server: 'http://dataspec.local'
+    server: 'http://dataspec.local',
+    apiToken: undefined
   })
   assert.throws(() => parseServerArgs(['--server', 'http://dataspec.local']), /需要提供 --project/)
 })
@@ -235,17 +241,26 @@ test('parseServerArgs reads local config defaults and keeps explicit overrides',
     await mkdir(path.join(dir, '.dataspec'), { recursive: true })
     await writeFile(
       path.join(dir, '.dataspec', 'config.json'),
-      JSON.stringify({ projectId: 7, server: 'http://dataspec.local/' }),
+      JSON.stringify({ projectId: 7, server: 'http://dataspec.local/', apiToken: 'ds_config_token' }),
       'utf8'
     )
 
     assert.deepEqual(parseServerArgs([], dir), {
       projectId: 7,
-      server: 'http://dataspec.local'
+      server: 'http://dataspec.local',
+      apiToken: 'ds_config_token'
     })
-    assert.deepEqual(parseServerArgs(['--project', '8', '--server', 'http://override.local/'], dir), {
+    assert.deepEqual(parseServerArgs([
+      '--project',
+      '8',
+      '--server',
+      'http://override.local/',
+      '--dataspec-token',
+      'ds_arg_token'
+    ], dir), {
       projectId: 8,
-      server: 'http://override.local'
+      server: 'http://override.local',
+      apiToken: 'ds_arg_token'
     })
   } finally {
     await rm(dir, { recursive: true, force: true })

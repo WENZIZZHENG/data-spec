@@ -6,6 +6,7 @@ import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.repository.EnumDictRepository;
 import com.dataspec.enumdict.service.EnumDictService;
+import com.dataspec.security.context.ProjectAccessGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,17 +26,21 @@ public class EnumDictServiceImpl implements EnumDictService {
 
     @Override
     public List<EnumDict> listByProject(Long projectId) {
+        ProjectAccessGuard.requireProjectAccess(projectId);
         return enumDictRepository.findDictsByProjectId(projectId);
     }
 
     @Override
     public EnumDict getById(Long id) {
-        return enumDictRepository.findDictById(id)
+        EnumDict enumDict = enumDictRepository.findDictById(id)
                 .orElseThrow(() -> new BizException("枚举字典不存在: " + id));
+        ProjectAccessGuard.requireProjectAccess(enumDict.getProjectId());
+        return enumDict;
     }
 
     @Override
     public EnumDict create(EnumDict enumDict) {
+        ProjectAccessGuard.requireProjectAccess(enumDict.getProjectId());
         if (enumDictRepository.existsDictByCodeInProject(enumDict.getCode(), enumDict.getProjectId())) {
             throw new BizException("枚举编码已存在: " + enumDict.getCode());
         }
@@ -88,6 +93,7 @@ public class EnumDictServiceImpl implements EnumDictService {
 
     @Override
     public List<EnumValue> listValues(Long enumId) {
+        getById(enumId);
         return enumDictRepository.findValuesByEnumId(enumId);
     }
 
@@ -139,7 +145,10 @@ public class EnumDictServiceImpl implements EnumDictService {
     }
 
     private EnumValue getValueById(Long id) {
-        return enumDictRepository.findValueById(id)
+        EnumValue value = enumDictRepository.findValueById(id)
                 .orElseThrow(() -> new BizException("枚举值不存在: " + id));
+        EnumDict enumDict = getById(value.getEnumId());
+        ProjectAccessGuard.requireProjectAccess(enumDict.getProjectId());
+        return value;
     }
 }

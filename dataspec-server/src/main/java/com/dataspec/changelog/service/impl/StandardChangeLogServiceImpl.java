@@ -5,6 +5,7 @@ import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.repository.StandardChangeLogRepository;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.common.exception.BizException;
+import com.dataspec.security.context.DataSpecSecurityContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -47,6 +48,7 @@ public class StandardChangeLogServiceImpl implements StandardChangeLogService {
         log.setAction(action);
         log.setBeforeJson(beforeJson);
         log.setAfterJson(afterJson);
+        log.setOperatorName(DataSpecSecurityContext.currentOperator());
         log.setChangedAt(LocalDateTime.now());
         standardChangeLogRepository.insert(log);
     }

@@ -6,10 +6,14 @@ import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.impl.FieldServiceImpl;
+import com.dataspec.security.context.DataSpecSecurityContext;
+import com.dataspec.security.model.ApiTokenPrincipal;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -18,6 +22,11 @@ import static org.mockito.Mockito.*;
  * 标准字段服务测试
  */
 class FieldServiceImplTest {
+
+    @AfterEach
+    void tearDown() {
+        DataSpecSecurityContext.clear();
+    }
 
     @Test
     void create_defaultsPersonalMetadata() {
@@ -180,6 +189,22 @@ class FieldServiceImplTest {
 
         assertThrows(BizException.class, () -> service.suggest(1L, "!!!", 5));
         verify(repository, never()).findAllByProjectId(anyLong());
+    }
+
+    @Test
+    void getById_rejectsUnauthorizedProject() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field field = new Field();
+        field.setId(9L);
+        field.setProjectId(1L);
+        field.setName("mobile_no");
+        when(repository.findById(9L)).thenReturn(Optional.of(field));
+        DataSpecSecurityContext.set(new ApiTokenPrincipal("limited", "bob", false, Set.of(2L)));
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        BizException ex = assertThrows(BizException.class, () -> service.getById(9L));
+
+        assertEquals(403, ex.getCode());
     }
 
     private Field field(String name, String displayName, String dataType, String comment,

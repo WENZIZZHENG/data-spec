@@ -54,7 +54,7 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
 }
 
 async function runLint(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'format', 'server'])
+  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'dataspec-token'])
   const config = loadDataSpecConfig(cliCwd(io))
   const sqlPath = positional[0]
   if (!sqlPath) {
@@ -69,11 +69,12 @@ async function runLint(args, io, fetchFn) {
     throw new Error('当前仅支持 --format json')
   }
   const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
   const sql = sqlPath === '-' ? await io.readStdin() : await readFile(sqlPath, 'utf8')
 
   const response = await fetchFn(`${server}/api/lint`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({ sql, projectId })
   })
   const payload = await readJsonResponse(response)
@@ -83,7 +84,7 @@ async function runLint(args, io, fetchFn) {
 }
 
 async function runLintFiles(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'format', 'server'])
+  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'dataspec-token'])
   const config = loadDataSpecConfig(cliCwd(io))
   const inputPaths = positional.length > 0 ? positional : resolveDefaultPaths(config)
   if (inputPaths.length === 0) {
@@ -95,13 +96,14 @@ async function runLintFiles(args, io, fetchFn) {
     throw new Error('当前仅支持 --format json')
   }
   const server = normalizeServer(options.server ?? config.server)
-  const output = await lintSqlFiles(inputPaths, projectId, server, fetchFn)
+  const apiToken = resolveDataSpecToken(options, config)
+  const output = await lintSqlFiles(inputPaths, projectId, server, fetchFn, apiToken)
   io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
   return output.summary.failedFiles > 0 ? 1 : 0
 }
 
 async function runReviewPr(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'repo', 'pr', 'token', 'server', 'github-api'])
+  const { positional, options } = parseArgs(args, ['project', 'repo', 'pr', 'token', 'server', 'github-api', 'dataspec-token'])
   const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length === 0) {
     throw new Error('review-pr 需要提供至少一个 SQL 文件或目录路径')
@@ -114,8 +116,9 @@ async function runReviewPr(args, io, fetchFn) {
     throw new Error('review-pr 需要提供 --token <token> 或设置 GITHUB_TOKEN')
   }
   const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
   const githubApi = normalizeServer(options['github-api'] ?? DEFAULT_GITHUB_API)
-  const lintOutput = await lintSqlFiles(positional, projectId, server, fetchFn)
+  const lintOutput = await lintSqlFiles(positional, projectId, server, fetchFn, apiToken)
   const body = buildReviewMarkdown(lintOutput)
   const action = await upsertPullRequestComment({
     repo,
@@ -130,7 +133,7 @@ async function runReviewPr(args, io, fetchFn) {
 }
 
 async function runExportContext(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'output', 'server'])
+  const { positional, options } = parseArgs(args, ['project', 'output', 'server', 'dataspec-token'])
   const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length > 0) {
     throw new Error(`export-context 不接受位置参数: ${positional.join(', ')}`)
@@ -141,8 +144,9 @@ async function runExportContext(args, io, fetchFn) {
     throw new Error('export-context 需要提供 --output <zip>')
   }
   const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
   const url = `${server}/api/ai-context/package/download?projectId=${encodeURIComponent(projectId)}`
-  const response = await fetchFn(url)
+  const response = await fetchFn(url, { headers: dataSpecHeaders(apiToken) })
   if (!response.ok) {
     throw new Error(`导出 AI Context 失败，HTTP ${response.status}`)
   }
@@ -154,7 +158,7 @@ async function runExportContext(args, io, fetchFn) {
 }
 
 async function runSuggestField(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'limit'])
+  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'limit', 'dataspec-token'])
   const config = loadDataSpecConfig(cliCwd(io))
   const query = positional[0]
   if (!query) {
@@ -170,8 +174,9 @@ async function runSuggestField(args, io, fetchFn) {
   }
   const limit = parseLimit(options.limit)
   const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
   const url = `${server}/api/fields/suggest?projectId=${encodeURIComponent(projectId)}&query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`
-  const response = await fetchFn(url)
+  const response = await fetchFn(url, { headers: dataSpecHeaders(apiToken) })
   const payload = await readJsonResponse(response)
   const result = unwrapResponse(payload)
   io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
@@ -179,7 +184,7 @@ async function runSuggestField(args, io, fetchFn) {
 }
 
 async function runGenerateDdl(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'template', 'table', 'format', 'server'])
+  const { positional, options } = parseArgs(args, ['project', 'template', 'table', 'format', 'server', 'dataspec-token'])
   const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length > 0) {
     throw new Error(`generate-ddl 不接受位置参数: ${positional.join(', ')}`)
@@ -195,8 +200,9 @@ async function runGenerateDdl(args, io, fetchFn) {
     throw new Error('当前仅支持 --format json')
   }
   const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
   const url = `${server}/api/generator/ddl/preview?projectId=${encodeURIComponent(projectId)}&templateId=${encodeURIComponent(templateId)}&tableName=${encodeURIComponent(tableName)}`
-  const response = await fetchFn(url)
+  const response = await fetchFn(url, { headers: dataSpecHeaders(apiToken) })
   const payload = await readJsonResponse(response)
   const result = unwrapResponse(payload)
   io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
@@ -260,7 +266,7 @@ function parseLimit(value, fallback = 5) {
   return limit
 }
 
-async function lintSqlFiles(paths, projectId, server, fetchFn) {
+async function lintSqlFiles(paths, projectId, server, fetchFn, apiToken) {
   const files = await collectSqlFiles(paths)
   const results = []
 
@@ -268,7 +274,7 @@ async function lintSqlFiles(paths, projectId, server, fetchFn) {
     const sql = await readFile(filePath, 'utf8')
     const response = await fetchFn(`${server}/api/lint`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ sql, projectId })
     })
     const payload = await readJsonResponse(response)
@@ -496,6 +502,20 @@ function normalizeServer(server = DEFAULT_SERVER) {
   return server.replace(/\/+$/, '')
 }
 
+function resolveDataSpecToken(options, config) {
+  return options['dataspec-token'] ?? process.env.DATASPEC_TOKEN ?? config.apiToken
+}
+
+function dataSpecHeaders(apiToken, headers = {}) {
+  if (!apiToken) {
+    return headers
+  }
+  return {
+    ...headers,
+    Authorization: `Bearer ${apiToken}`
+  }
+}
+
 function cliCwd(io) {
   return typeof io.cwd === 'function' ? io.cwd() : io.cwd ?? process.cwd()
 }
@@ -519,16 +539,17 @@ function helpText() {
   return `DataSpec CLI
 
 Usage:
-  node tools/dataspec-cli.mjs lint <path|-> [--project <id>] --format json [--server <url>]
-  node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] --format json [--server <url>]
-  node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--server <url>]
-  node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--server <url>]
-  node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>]
-  node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>]
+  node tools/dataspec-cli.mjs lint <path|-> [--project <id>] --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
 
 Options:
   --project 可由 .dataspec/config.json 的 projectId 提供
   --server  可由 .dataspec/config.json 的 server 提供
+  --dataspec-token 可由 .dataspec/config.json 的 apiToken 或 DATASPEC_TOKEN 环境变量提供
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
 `
 }

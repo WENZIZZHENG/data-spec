@@ -76,7 +76,7 @@ test('lint uses local config defaults when project and server are omitted', asyn
     await mkdir(path.join(dir, '.dataspec'), { recursive: true })
     await writeFile(
       path.join(dir, '.dataspec', 'config.json'),
-      JSON.stringify({ projectId: 7, server: 'http://dataspec.local/' }),
+      JSON.stringify({ projectId: 7, server: 'http://dataspec.local/', apiToken: 'ds_config_token' }),
       'utf8'
     )
     const sqlPath = path.join(dir, 'good.sql')
@@ -99,6 +99,7 @@ test('lint uses local config defaults when project and server are omitted', asyn
 
     assert.equal(code, 0)
     assert.equal(calls[0].url, 'http://dataspec.local/api/lint')
+    assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_config_token')
     assert.deepEqual(JSON.parse(calls[0].options.body), {
       sql: 'CREATE TABLE users (id bigserial);',
       projectId: 7
@@ -114,7 +115,7 @@ test('explicit lint options override local config defaults', async () => {
     await mkdir(path.join(dir, '.dataspec'), { recursive: true })
     await writeFile(
       path.join(dir, '.dataspec', 'config.json'),
-      JSON.stringify({ projectId: 7, server: 'http://dataspec.local' }),
+      JSON.stringify({ projectId: 7, server: 'http://dataspec.local', apiToken: 'ds_config_token' }),
       'utf8'
     )
     const calls = []
@@ -139,11 +140,14 @@ test('explicit lint options override local config defaults', async () => {
       '--format',
       'json',
       '--server',
-      'http://override.local/'
+      'http://override.local/',
+      '--dataspec-token',
+      'ds_arg_token'
     ], io, fetchFn)
 
     assert.equal(code, 0)
     assert.equal(calls[0].url, 'http://override.local/api/lint')
+    assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_arg_token')
     assert.equal(JSON.parse(calls[0].options.body).projectId, 8)
   } finally {
     await rm(dir, { recursive: true, force: true })

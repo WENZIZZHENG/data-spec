@@ -35,6 +35,9 @@ public class StandardChangeLog {
     /** 变更后 JSON 快照 */
     private String afterJson;
 
+    /** 操作者名称 */
+    private String operatorName;
+
     /** 变更时间 */
     private LocalDateTime changedAt;
 }

@@ -7,6 +7,7 @@ import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.security.context.ProjectAccessGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -38,22 +39,27 @@ public class FieldServiceImpl implements FieldService {
 
     @Override
     public IPage<Field> page(Long projectId, int current, int size) {
+        ProjectAccessGuard.requireProjectAccess(projectId);
         return fieldRepository.findByProjectId(projectId, current, size);
     }
 
     @Override
     public List<Field> listByProject(Long projectId) {
+        ProjectAccessGuard.requireProjectAccess(projectId);
         return fieldRepository.findAllByProjectId(projectId);
     }
 
     @Override
     public Field getById(Long id) {
-        return fieldRepository.findById(id)
+        Field field = fieldRepository.findById(id)
                 .orElseThrow(() -> new BizException("字段不存在: " + id));
+        ProjectAccessGuard.requireProjectAccess(field.getProjectId());
+        return field;
     }
 
     @Override
     public Field create(Field field) {
+        ProjectAccessGuard.requireProjectAccess(field.getProjectId());
         if (fieldRepository.existsByNameInProject(field.getName(), field.getProjectId())) {
             throw new BizException("项目内字段名已存在: " + field.getName());
         }
@@ -124,6 +130,7 @@ public class FieldServiceImpl implements FieldService {
         if (projectId == null) {
             throw new BizException("项目ID不能为空");
         }
+        ProjectAccessGuard.requireProjectAccess(projectId);
         if (query == null || query.isBlank()) {
             throw new BizException("字段描述不能为空");
         }

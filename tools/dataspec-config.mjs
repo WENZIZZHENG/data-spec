@@ -52,6 +52,7 @@ function emptyConfig(startDir) {
     rootDir: path.resolve(startDir),
     projectId: undefined,
     server: undefined,
+    apiToken: undefined,
     defaultPaths: []
   }
 }
@@ -66,6 +67,7 @@ function normalizeDataSpecConfig(rawConfig, configPath) {
     rootDir,
     projectId: normalizeProjectId(rawConfig.projectId),
     server: normalizeServer(rawConfig.server),
+    apiToken: normalizeApiToken(rawConfig.apiToken),
     defaultPaths: normalizeDefaultPaths(rawConfig.defaultPaths, configPath)
   }
 }
@@ -90,6 +92,17 @@ function normalizeServer(value) {
   }
   const server = value.replace(/\/+$/, '')
   return server || undefined
+}
+
+function normalizeApiToken(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+  if (typeof value !== 'string') {
+    throw new Error(`无效 DataSpec apiToken: ${value}`)
+  }
+  const token = value.trim()
+  return token || undefined
 }
 
 function normalizeDefaultPaths(value, configPath) {

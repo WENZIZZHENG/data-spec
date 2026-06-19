@@ -20,6 +20,7 @@ test('loads nearest .dataspec config from parent directory', async () => {
       JSON.stringify({
         projectId: 7,
         server: 'http://dataspec.local/',
+        apiToken: 'ds_test_token',
         defaultPaths: ['sql', 'db/migrations']
       }),
       'utf8'
@@ -33,6 +34,7 @@ test('loads nearest .dataspec config from parent directory', async () => {
     assert.equal(config.rootDir, dir)
     assert.equal(config.projectId, 7)
     assert.equal(config.server, 'http://dataspec.local')
+    assert.equal(config.apiToken, 'ds_test_token')
     assert.deepEqual(config.defaultPaths, ['sql', 'db/migrations'])
     assert.deepEqual(resolveDefaultPaths(config), [
       path.join(dir, 'sql'),
@@ -52,6 +54,7 @@ test('returns empty config when .dataspec config is absent', async () => {
     assert.equal(config.rootDir, path.resolve(dir))
     assert.equal(config.projectId, undefined)
     assert.equal(config.server, undefined)
+    assert.equal(config.apiToken, undefined)
     assert.deepEqual(config.defaultPaths, [])
   } finally {
     await rm(dir, { recursive: true, force: true })

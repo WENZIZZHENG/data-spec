@@ -101,6 +101,16 @@
     <el-container>
       <el-header class="app-header">
         <div class="header-right">
+          <el-tag v-if="authStore.operatorName" effect="plain" type="success">
+            {{ authStore.operatorName }}
+          </el-tag>
+          <el-button size="small" @click="authStore.openLoginDialog">
+            <el-icon><Lock /></el-icon>
+            <span>API Token</span>
+          </el-button>
+          <el-button v-if="authStore.hasToken" size="small" text @click="handleLogout">
+            <el-icon><SwitchButton /></el-icon>
+          </el-button>
           <span class="project-label">当前项目：</span>
           <el-select
             v-model="projectStore.currentProjectId"
@@ -123,27 +133,72 @@
         <router-view />
       </el-main>
     </el-container>
+
+    <el-dialog v-model="authStore.loginDialogVisible" title="API Token" width="420px">
+      <el-form @submit.prevent="handleLogin">
+        <el-form-item label="Token">
+          <el-input
+            v-model="tokenInput"
+            type="password"
+            show-password
+            autocomplete="off"
+            @keyup.enter="handleLogin"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="authStore.loginDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="authStore.loading" @click="handleLogin">登录</el-button>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
+import { useAuthStore } from '@/stores/auth'
+import { AUTH_CLEARED_EVENT } from '@/api/authStorage'
 
 const route = useRoute()
 const projectStore = useProjectStore()
+const authStore = useAuthStore()
+const tokenInput = ref('')
 
 // 当前激活的菜单项，与路由路径同步
 const activeMenu = computed(() => route.path)
 
 onMounted(() => {
+  authStore.restore()
   projectStore.loadProjects()
+  window.addEventListener(AUTH_CLEARED_EVENT, authStore.handleAuthCleared)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(AUTH_CLEARED_EVENT, authStore.handleAuthCleared)
 })
 
 // 切换项目
 const handleProjectChange = (val: number | null) => {
   projectStore.setCurrentProjectById(val)
+}
+
+const handleLogin = async () => {
+  try {
+    await authStore.login(tokenInput.value)
+    tokenInput.value = ''
+    ElMessage.success('已验证 API token')
+    await projectStore.loadProjects()
+  } catch {
+    // request 拦截器已经展示错误消息，这里只阻止登录失败冒泡成未捕获异常。
+  }
+}
+
+const handleLogout = () => {
+  authStore.logout()
+  projectStore.clearCurrentProject()
 }
 </script>
 

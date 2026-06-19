@@ -42,3 +42,8 @@ springdoc:
 logging:
   level:
     com.dataspec: debug
+
+dataspec:
+  security:
+    # 个人本地开发默认关闭；小团队部署时改为 true 并在 ds_api_token 中配置 token hash。
+    enabled: false
