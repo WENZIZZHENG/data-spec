@@ -131,3 +131,34 @@ export interface ReverseImportPreview {
   missingComments?: MissingCommentIssue[]
   nonStandardFields?: NonStandardField[]
 }
+
+export interface DatabaseConnectionReq {
+  projectId?: number
+  databaseType?: 'postgresql' | 'mysql'
+  host?: string
+  port?: number
+  databaseName?: string
+  schemaName?: string
+  username?: string
+  password?: string
+  tableNames?: string[]
+}
+
+export interface DatabaseConnectionResult {
+  success?: boolean
+  message?: string
+}
+
+export interface DatabaseTableInfo {
+  schemaName?: string
+  tableName?: string
+  tableType?: string
+  comment?: string
+}
+
+export interface DatabaseImportResult {
+  importedCount?: number
+  skippedCount?: number
+  importedFields?: string[]
+  skippedFields?: string[]
+}

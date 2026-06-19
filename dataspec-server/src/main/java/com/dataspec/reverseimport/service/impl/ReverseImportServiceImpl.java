@@ -6,6 +6,8 @@ import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.model.ColumnDef;
 import com.dataspec.lint.model.TableDef;
+import com.dataspec.reverseimport.model.DatabaseImportReq;
+import com.dataspec.reverseimport.model.DatabaseImportResult;
 import com.dataspec.reverseimport.model.FieldCandidate;
 import com.dataspec.reverseimport.model.MissingCommentIssue;
 import com.dataspec.reverseimport.model.NonStandardField;
@@ -40,6 +42,17 @@ public class ReverseImportServiceImpl implements ReverseImportService {
         }
 
         List<TableDef> tables = sqlParserService.parse(sql);
+        return previewTables(projectId, tables);
+    }
+
+    @Override
+    public ReverseImportPreview previewTables(Long projectId, List<TableDef> tables) {
+        if (projectId == null) {
+            throw new BizException("项目ID不能为空");
+        }
+        if (tables == null || tables.isEmpty()) {
+            throw new BizException("未读取到可导入的表结构");
+        }
         Map<String, Field> standardFieldIndex = standardFieldIndex(projectId);
 
         ReverseImportPreview preview = new ReverseImportPreview();
@@ -81,6 +94,44 @@ public class ReverseImportServiceImpl implements ReverseImportService {
         summary.setNonStandardFieldCount(preview.getNonStandardFields().size());
         preview.setSummary(summary);
         return preview;
+    }
+
+    @Override
+    public DatabaseImportResult importCandidates(DatabaseImportReq req) {
+        if (req == null || req.getProjectId() == null) {
+            throw new BizException("项目ID不能为空");
+        }
+        if (req.getCandidates() == null || req.getCandidates().isEmpty()) {
+            throw new BizException("导入候选不能为空");
+        }
+
+        Map<String, Field> standardFieldIndex = standardFieldIndex(req.getProjectId());
+        DatabaseImportResult result = new DatabaseImportResult();
+        for (FieldCandidate candidate : req.getCandidates()) {
+            if (candidate == null || isBlank(candidate.getColumnName())) {
+                continue;
+            }
+            String normalizedName = normalize(candidate.getColumnName());
+            if (standardFieldIndex.containsKey(normalizedName)) {
+                result.setSkippedCount(result.getSkippedCount() + 1);
+                result.getSkippedFields().add(candidate.getColumnName());
+                continue;
+            }
+            Field field = new Field();
+            field.setProjectId(req.getProjectId());
+            field.setName(candidate.getColumnName());
+            field.setDisplayName(isBlank(candidate.getComment()) ? candidate.getColumnName() : candidate.getComment());
+            field.setDataType(candidate.getDataType());
+            field.setNullable(candidate.getNullable());
+            field.setDefaultValue(candidate.getDefaultValue());
+            field.setComment(candidate.getComment());
+            field.setCategory(candidate.getTableName());
+            fieldService.create(field);
+            standardFieldIndex.put(normalizedName, field);
+            result.setImportedCount(result.getImportedCount() + 1);
+            result.getImportedFields().add(candidate.getColumnName());
+        }
+        return result;
     }
 
     private Map<String, Field> standardFieldIndex(Long projectId) {
