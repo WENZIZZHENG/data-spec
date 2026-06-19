@@ -46,4 +46,16 @@ public class LintIssue {
 
     /** 建议置信度，范围 0-100 */
     private Integer confidence;
+
+    /** 1-based 源 SQL 行号；无法定位时为空 */
+    private Integer line;
+
+    /** 1-based 源 SQL 列号；无法定位时为空 */
+    private Integer column;
+
+    /** 0-based 源 SQL 起始偏移；无法定位时为空 */
+    private Integer sourceStart;
+
+    /** 0-based 源 SQL 结束偏移（不含）；无法定位时为空 */
+    private Integer sourceEnd;
 }

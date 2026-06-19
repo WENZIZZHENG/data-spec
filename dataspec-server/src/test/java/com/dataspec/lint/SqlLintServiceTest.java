@@ -21,6 +21,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -86,6 +87,88 @@ class SqlLintServiceTest {
         assertTrue(record.getIssuesJson().startsWith("["));
     }
 
+    @Test
+    void lintFillsSourceLocationForTableAndColumnIssues() {
+        RecordingCheckRecordService recordService = new RecordingCheckRecordService();
+        SqlLintService service = new SqlLintService(
+                new SqlParserService(),
+                new EmptyRuleConfigService(),
+                List.of(
+                        new TableNameSnakeCaseRule(),
+                        new com.dataspec.lint.rules.FieldNamingSnakeCaseRule()
+                ),
+                new ObjectMapper(),
+                new FixedSqlGenerator(),
+                recordService
+        );
+
+        LintResult result = service.lint("""
+                CREATE TABLE UserOrder (
+                    userId bigint NOT NULL
+                );
+                """, null);
+
+        LintIssue tableIssue = result.getIssues().stream()
+                .filter(issue -> "table_naming_snake_case".equals(issue.getRuleCode()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1, tableIssue.getLine());
+        assertEquals(14, tableIssue.getColumn());
+        assertNotNull(tableIssue.getSourceStart());
+        assertTrue(tableIssue.getSourceEnd() > tableIssue.getSourceStart());
+
+        LintIssue columnIssue = result.getIssues().stream()
+                .filter(issue -> "field_naming_snake_case".equals(issue.getRuleCode()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(2, columnIssue.getLine());
+        assertEquals(5, columnIssue.getColumn());
+        assertNotNull(columnIssue.getSourceStart());
+        assertTrue(columnIssue.getSourceEnd() > columnIssue.getSourceStart());
+        assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"line\":1"));
+    }
+
+    @Test
+    void lintKeepsUnresolvedIssueWithoutLocation() {
+        RecordingCheckRecordService recordService = new RecordingCheckRecordService();
+        SqlLintService service = new SqlLintService(
+                new SqlParserService(),
+                new EmptyRuleConfigService(),
+                List.of(new com.dataspec.lint.model.LintRule() {
+                    @Override
+                    public String getCode() {
+                        return "synthetic_unresolved";
+                    }
+
+                    @Override
+                    public String getName() {
+                        return "合成不可定位问题";
+                    }
+
+                    @Override
+                    public List<LintIssue> check(com.dataspec.lint.model.RuleContext context) {
+                        return List.of(LintIssue.builder()
+                                .severity(com.dataspec.lint.model.Severity.WARNING)
+                                .ruleCode(getCode())
+                                .ruleName(getName())
+                                .message("不可定位的问题")
+                                .build());
+                    }
+                }),
+                new ObjectMapper(),
+                new FixedSqlGenerator(),
+                recordService
+        );
+
+        LintResult result = service.lint("CREATE TABLE users (id bigint);", null);
+
+        LintIssue issue = result.getIssues().get(0);
+        assertNull(issue.getLine());
+        assertNull(issue.getColumn());
+        assertNull(issue.getSourceStart());
+        assertNull(issue.getSourceEnd());
+    }
+
     private SqlLintService newService(SqlCheckRecordService recordService) {
         return new SqlLintService(
                 new SqlParserService(),
@@ -146,7 +229,11 @@ class SqlLintServiceTest {
             record.setWarningCount(result.getWarningCount());
             record.setSuggestionCount(result.getSuggestionCount());
             // 与产品实现一致,序列化 issues 以便断言
-            record.setIssuesJson(result.getIssues() == null ? "[]" : "[\"stub\"]");
+            try {
+                record.setIssuesJson(result.getIssues() == null ? "[]" : new ObjectMapper().writeValueAsString(result.getIssues()));
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
             saved.add(record);
             return record;
         }

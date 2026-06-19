@@ -48,6 +48,20 @@
               </el-table-column>
               <el-table-column prop="tableName" label="表" width="130" />
               <el-table-column prop="columnName" label="字段" width="130" />
+              <el-table-column label="位置" width="100">
+                <template #default="{ row }">
+                  <el-button
+                    v-if="row.line"
+                    size="small"
+                    text
+                    type="primary"
+                    @click="handleGoToIssue(row)"
+                  >
+                    {{ locationLabel(row) }}
+                  </el-button>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="ruleCode" label="规则" width="180" />
               <el-table-column prop="message" label="描述" min-width="260" />
               <el-table-column label="建议" min-width="240" show-overflow-tooltip>
@@ -151,6 +165,11 @@
             </el-table-column>
             <el-table-column prop="tableName" label="表" width="120" />
             <el-table-column prop="columnName" label="字段" width="120" />
+            <el-table-column label="位置" width="90">
+              <template #default="{ row }">
+                {{ locationLabel(row) }}
+              </template>
+            </el-table-column>
             <el-table-column prop="ruleCode" label="规则" width="170" />
             <el-table-column prop="message" label="描述" min-width="240" />
           </el-table>
@@ -306,6 +325,19 @@ function handleRecordPageChange(page: number) {
   void loadRecords()
 }
 
+function handleGoToIssue(issue: LintIssue) {
+  if (!editor || !issue.line) {
+    return
+  }
+  const position = {
+    lineNumber: issue.line,
+    column: issue.column ?? 1
+  }
+  editor.setPosition(position)
+  editor.revealPositionInCenter(position)
+  editor.focus()
+}
+
 function severityType(severity: LintIssue['severity']) {
   const map: Record<string, 'danger' | 'warning' | 'info'> = {
     ERROR: 'danger',
@@ -332,6 +364,13 @@ function fixSuggestion(issue: LintIssue) {
     return `建议替换为 ${issue.replacement}`
   }
   return '-'
+}
+
+function locationLabel(issue: LintIssue) {
+  if (!issue.line) {
+    return '-'
+  }
+  return `${issue.line}:${issue.column ?? 1}`
 }
 
 function formatDate(value?: string) {

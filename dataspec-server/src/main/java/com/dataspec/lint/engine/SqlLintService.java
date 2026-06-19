@@ -26,6 +26,7 @@ public class SqlLintService {
     private final ObjectMapper objectMapper;
     private final FixedSqlGenerator fixedSqlGenerator;
     private final SqlCheckRecordService sqlCheckRecordService;
+    private final SqlIssueSourceSpanResolver sourceSpanResolver = new SqlIssueSourceSpanResolver();
 
     /**
      * 校验 SQL（不指定项目，使用所有内置规则）
@@ -118,6 +119,7 @@ public class SqlLintService {
 
             issues.addAll(ruleIssues);
         }
+        sourceSpanResolver.resolve(sql, issues);
 
         LintResult result = LintResult.of(tables, issues);
         // 基于确定性修复建议重建修正 SQL

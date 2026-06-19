@@ -318,7 +318,7 @@
 ## P4：下一轮优化
 
 ### P4-1：SQL 问题行列定位与 source span
-- 状态：待办。
+- 状态：已完成第一版，`LintIssue` 已新增 `line/column/sourceStart/sourceEnd`，后端按表名/字段名回填定位，前端 SQL 校验页已展示位置并支持点击跳转 Monaco；第一版为启发式定位，完整 AST source map 和 GitHub inline comment 留后续。
 - 为什么做：当前前端和 PR Review 主要是文件级/表字段级反馈，开发者和 AI agent 还不能稳定定位到具体 SQL 行列。
 - 已有基础：`LintIssue` 已有 `severity/ruleCode/message/tableName/columnName`，CLI/前端/PR Review 都能消费结构化 issue。
 - 缺口：缺少 `line/column/sourceSpan`，解析器和规则未统一保留原始 SQL 位置。
