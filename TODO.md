@@ -6,7 +6,8 @@
 
 1. 先增强数据库直连反向导入，支持二次比对、来源批次追踪和字段标准差异复盘。
 2. 继续提升 AI 可消费质量：SQL 精准定位、字段推荐质量、规则测试语料库和 fixedSql golden fixtures。
-3. 最后打磨个人/小团队日常体验：前端高频流程细节、轻量 API Token 管理页面；仍避免过早引入审批流、发布流程等重型治理模型。
+3. 打磨个人/小团队日常体验：前端高频流程细节、轻量 API Token 管理页面；仍避免过早引入审批流、发布流程等重型治理模型。
+4. P5 稳定后推进 P6：标准版本快照、字段覆盖率、AI 回放、业务仓库初始化向导、标准质量评分和轻量影响分析。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -17,7 +18,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P5：dataspec doctor、数据库二次比对、导入来源追踪、定位精度、字段推荐质量、fixtures、前端细节和轻量 token 管理。
+- 后续真实待办集中在 P5/P6：P5 先补齐 dataspec doctor、数据库二次比对、导入来源追踪、定位精度、字段推荐质量、fixtures、前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分和影响分析。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -102,6 +103,62 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：安全模式开启后，用户无需手写 SQL 即可创建 CLI/MCP token；token 明文只在创建时显示；禁用后 CLI/MCP 请求被拒绝。
 - 边界：不做复杂 RBAC、审批流、组织成员管理或 token 自动轮换；个人本地开发默认仍可关闭安全模式。
 
+## P6：标准治理与 AI 协作增强
+
+### P6-1：标准版本快照与 AI Context 可复现
+- 状态：待办。
+- 为什么做：AI 使用字段标准生成 SQL、DDL 或修复建议时，需要明确“使用的是哪一版标准”，否则后续复盘很难判断结果来自规则问题、标准变更还是提示词变化。
+- 已有基础：已有标准变更日志、AI Context zip、数据字典、CLI/MCP 和 OpenAPI 契约检查。
+- 缺口：缺少命名快照、版本号、导出 hash、AI Context 版本标识和检查记录/生成记录对标准版本的引用。
+- 落地产物：新增项目级标准快照模型和轻量创建入口；AI Context、数据字典、CLI/MCP 输出携带 `specVersion` 与内容 hash；SQL 校验、DDL 生成和字段推荐结果可记录使用的标准版本。
+- 验收标准：用户能创建当前标准快照；导出的 AI Context 能稳定标明版本和 hash；同一份输入可按指定快照复现字段目录和规则上下文。
+- 边界：不做复杂发布审批、多人审核、语义化版本治理或跨项目标准合并。
+
+### P6-2：字段使用覆盖率与未纳管字段盘点
+- 状态：待办。
+- 为什么做：个人/小团队维护数标时，最有价值的反馈是“真实数据库里哪些字段已经被标准覆盖，哪些还在野生生长”，这能直接指导下一轮补标准。
+- 已有基础：已有数据库直连 metadata、SQL 反向导入、字段推荐、差异预览和字段来源追踪待办。
+- 缺口：缺少按项目/表/字段统计的标准覆盖率、未知字段清单、重复语义字段和高频未纳管字段排行。
+- 落地产物：基于数据库直连或 SQL/DDL 输入生成覆盖率报告；展示标准命中、别名命中、未命中、疑似重复和缺注释字段；前端提供按表和状态筛选。
+- 验收标准：连接数据库后能输出字段覆盖率百分比和未纳管字段 Top 列表；用户可从报告跳转到反向导入或字段库补标准。
+- 边界：不扫描业务数据行，不做敏感数据采样，不做定时后台同步。
+
+### P6-3：AI 生成与修复决策回放
+- 状态：待办。
+- 为什么做：DataSpec 优先让 AI 使用时，除了给 AI 上下文，还需要能回看一次生成或修复使用了哪些字段、规则、prompt 模板和输入，方便定位“AI 为什么这么写”。
+- 已有基础：已有 AI Prompt 生成、SQL 校验记录、fixedSql、DDL 生成、CLI/MCP 和标准变更日志。
+- 缺口：缺少 AI 任务级记录，无法把 prompt 模板版本、标准快照、输入 SQL/业务描述、输出 SQL、lint 结果和修复建议串起来。
+- 落地产物：新增轻量 AI 作业记录或在现有检查/生成记录中扩展上下文字段；支持查看输入、输出、引用标准、规则结果和可复制的回放命令。
+- 验收标准：一次 CLI/MCP 或前端生成后，能在记录详情看到本次使用的项目、标准版本、prompt 输入、输出 SQL 和 lint 结果；能复制命令或 JSON 复现本次请求。
+- 边界：不内置外部 LLM 调用，不保存第三方 API key，不做长文本会话管理。
+
+### P6-4：业务仓库 `dataspec init` 初始化向导
+- 状态：待办。
+- 为什么做：让 AI 在真实业务仓库使用 DataSpec 时，第一步应该是把 `.dataspec/config.json`、默认扫描路径和 AGENTS 片段配置好；现在这些需要人工拼接。
+- 已有基础：已有 `.dataspec/config.json` 读取、`dataspec doctor`、AI Context 导出、AGENTS fragment 和 CLI/MCP。
+- 缺口：缺少一条可交互或可参数化的初始化命令，把项目 ID、服务地址、默认路径、token 使用方式和推荐脚本一次性落到业务仓库。
+- 落地产物：新增 `dataspec init` CLI 命令；生成或更新 `.dataspec/config.json`、`.dataspec/README.md`、可选 `AGENTS.md` 片段和常用命令示例；完成后自动运行 `dataspec doctor`。
+- 验收标准：在任意业务仓库执行初始化后，AI agent 能直接通过 CLI/MCP 读取项目标准；重复执行不会覆盖用户手写配置，除非显式确认或使用 `--force`。
+- 边界：不修改业务代码，不自动提交业务仓库，不把明文 token 写入可提交文件。
+
+### P6-5：标准字段质量评分与修复建议
+- 状态：待办。
+- 为什么做：字段标准越多，越需要识别哪些字段缺少别名、示例、枚举、敏感标识或注释，否则 AI 会得到看似完整但语义不足的字段目录。
+- 已有基础：字段模型已有别名、标签、状态、敏感标识、示例值、代码集关联、变更日志和字段推荐原因。
+- 缺口：缺少字段健康度评分、低质量字段筛选、推荐补全动作和批量修复入口。
+- 落地产物：新增标准质量检查服务和前端质量视图；按字段输出缺注释、缺别名、缺示例、疑似敏感未标记、枚举未关联、废弃字段仍推荐等问题；提供修复建议和跳转编辑。
+- 验收标准：字段库能按质量分排序；低质量字段可一键定位编辑；质量检查结果能被 CLI/MCP 或 AI Context 消费。
+- 边界：不自动改字段标准，不引入外部 LLM 自动补全，不做组织级质量 KPI。
+
+### P6-6：轻量字段影响分析
+- 状态：待办。
+- 为什么做：修改字段名、类型、枚举或状态前，用户需要知道它会影响哪些模板、DDL 生成、SQL 检查记录、AI Context 和反向导入来源。
+- 已有基础：已有表模板、DDL 生成、数据字典、SQL 检查记录、变更日志、反向导入来源追踪待办和 AI Context。
+- 缺口：字段详情页还不能展示“这个标准字段在哪里被使用”，编辑前也没有影响提示。
+- 落地产物：新增字段影响查询 API 和前端详情区域；汇总关联模板、生成记录、检查记录、导入来源、枚举引用和 AI Context 最近导出时间；编辑关键字段时展示轻量影响提示。
+- 验收标准：打开字段详情可看到当前字段的使用位置；修改字段类型/状态前能看到受影响模板或记录数量；不阻断个人快速编辑。
+- 边界：不做复杂血缘图谱，不扫描生产查询日志，不实现审批或发布阻断。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -110,6 +167,10 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`bytebase/bytebase`](https://github.com/bytebase/bytebase)：数据库 DevOps 工作台、SQL Review、数据库 CI/CD。
 - [`bytebase/example-gitops-github-flow`](https://github.com/bytebase/example-gitops-github-flow)：Bytebase + GitHub Flow 数据库发布示例。
 - [`k1LoW/tbls`](https://github.com/k1Low/tbls)：CI-friendly 数据库文档生成工具。
+- [`dbt-labs/dbt-core`](https://github.com/dbt-labs/dbt-core)：项目化数据模型、文档和可复现构建的参考。
+- [`great-expectations/great_expectations`](https://github.com/great-expectations/great_expectations)：数据质量规则、验证结果和文档化体验参考。
+- [`datahub-project/datahub`](https://github.com/datahub-project/datahub)：数据目录、字段影响分析和元数据关系参考。
+- [`open-metadata/OpenMetadata`](https://github.com/open-metadata/OpenMetadata)：元数据采集、数据质量和资产视图参考。
 - [Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)：AI 应用接入 resources、prompts、tools 的协议基础。
 - [`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)：MCP server 参考实现集合。
 - [`agents.md`](https://agents.md/)：面向 coding agent 的项目指令文件约定。
