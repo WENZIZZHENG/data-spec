@@ -6,6 +6,7 @@ import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
 import com.dataspec.reverseimport.model.DatabaseImportResult;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
+import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.service.DatabaseReverseImportService;
 import com.dataspec.reverseimport.service.ReverseImportService;
@@ -49,6 +50,11 @@ public class ReverseImportController {
     @PostMapping("/database/preview")
     public R<ReverseImportPreview> previewDatabase(@Valid @RequestBody DatabaseConnectionReq req) {
         return R.ok(databaseReverseImportService.preview(req));
+    }
+
+    @PostMapping("/database/compare")
+    public R<ReverseImportCompareResult> compareDatabase(@Valid @RequestBody DatabaseConnectionReq req) {
+        return R.ok(databaseReverseImportService.compare(req));
     }
 
     @PostMapping("/database/import")

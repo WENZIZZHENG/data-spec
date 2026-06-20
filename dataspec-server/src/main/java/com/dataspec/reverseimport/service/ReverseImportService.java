@@ -1,6 +1,7 @@
 package com.dataspec.reverseimport.service;
 
 import com.dataspec.reverseimport.model.ReverseImportPreview;
+import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
 import com.dataspec.reverseimport.model.DatabaseImportResult;
 import com.dataspec.lint.model.TableDef;
@@ -15,6 +16,8 @@ public interface ReverseImportService {
     ReverseImportPreview preview(Long projectId, String sql);
 
     ReverseImportPreview previewTables(Long projectId, List<TableDef> tables);
+
+    ReverseImportCompareResult compareTables(Long projectId, List<TableDef> tables);
 
     DatabaseImportResult importCandidates(DatabaseImportReq req);
 }

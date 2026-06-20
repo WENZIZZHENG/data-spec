@@ -6,6 +6,7 @@ import com.dataspec.lint.model.TableDef;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
+import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.service.DatabaseReverseImportService;
 import com.dataspec.reverseimport.service.ReverseImportService;
@@ -75,6 +76,20 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         try (Connection connection = connectionProvider.open(req)) {
             List<TableDef> tables = readSelectedTables(connection, req);
             return reverseImportService.previewTables(req.getProjectId(), tables);
+        } catch (SQLException e) {
+            throw new BizException("读取数据库表结构失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public ReverseImportCompareResult compare(DatabaseConnectionReq req) {
+        validateConnectionReq(req);
+        if (req.getTableNames() == null || req.getTableNames().isEmpty()) {
+            throw new BizException("请至少选择一张表");
+        }
+        try (Connection connection = connectionProvider.open(req)) {
+            List<TableDef> tables = readSelectedTables(connection, req);
+            return reverseImportService.compareTables(req.getProjectId(), tables);
         } catch (SQLException e) {
             throw new BizException("读取数据库表结构失败: " + e.getMessage());
         }

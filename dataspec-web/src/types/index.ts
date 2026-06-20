@@ -151,6 +151,55 @@ export interface ReverseImportPreview {
   nonStandardFields?: NonStandardField[]
 }
 
+export type ReverseImportFieldStatus =
+  | 'MATCHED'
+  | 'CHANGED'
+  | 'NEW'
+  | 'MISSING_COMMENT'
+  | 'NON_STANDARD'
+
+export interface ReverseImportCompareSummary {
+  tableCount?: number
+  columnCount?: number
+  matchedCount?: number
+  changedCount?: number
+  newCount?: number
+  missingCommentCount?: number
+  nonStandardCount?: number
+}
+
+export interface ReverseImportFieldChange {
+  property?: string
+  currentValue?: string
+  standardValue?: string
+}
+
+export interface ReverseImportFieldDiff {
+  tableName?: string
+  columnName?: string
+  dataType?: string
+  nullable?: boolean
+  defaultValue?: string
+  comment?: string
+  standardFieldName?: string
+  standardDisplayName?: string
+  status?: ReverseImportFieldStatus
+  reason?: string
+  nonStandard?: boolean
+  changes?: ReverseImportFieldChange[]
+}
+
+export interface ReverseImportTableDiff {
+  tableName?: string
+  comment?: string
+  fieldDiffs?: ReverseImportFieldDiff[]
+}
+
+export interface ReverseImportCompareResult {
+  summary?: ReverseImportCompareSummary
+  tableDiffs?: ReverseImportTableDiff[]
+}
+
 export interface DatabaseConnectionReq {
   projectId?: number
   databaseType?: 'postgresql' | 'mysql'

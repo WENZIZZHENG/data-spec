@@ -5,6 +5,7 @@ import type {
   DatabaseImportResult,
   DatabaseTableInfo,
   FieldCandidate,
+  ReverseImportCompareResult,
   ReverseImportPreview
 } from '@/types'
 
@@ -25,6 +26,10 @@ export function listDatabaseTables(data: DatabaseConnectionReq) {
 
 export function previewDatabaseReverseImport(data: DatabaseConnectionReq) {
   return request.post<unknown, ReverseImportPreview>('/reverse-import/database/preview', data)
+}
+
+export function compareDatabaseReverseImport(data: DatabaseConnectionReq) {
+  return request.post<unknown, ReverseImportCompareResult>('/reverse-import/database/compare', data)
 }
 
 export function importDatabaseCandidates(projectId: number, candidates: FieldCandidate[]) {

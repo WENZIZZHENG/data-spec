@@ -12,6 +12,15 @@
         </el-button>
         <el-button
           v-if="activeMode === 'database'"
+          :disabled="!canGenerateCompare"
+          :loading="compareLoading"
+          @click="handleGenerateCompare"
+        >
+          <el-icon><View /></el-icon>
+          生成差异
+        </el-button>
+        <el-button
+          v-if="activeMode === 'database'"
           type="success"
           :disabled="!canImportCandidates"
           :loading="importLoading"
@@ -196,6 +205,75 @@
         </div>
       </section>
 
+      <section v-if="compareResult" class="result-section compare-result">
+        <div class="section-header">
+          <h3>数据库差异</h3>
+          <el-radio-group v-model="compareStatusFilter" size="small">
+            <el-radio-button
+              v-for="option in compareStatusOptions"
+              :key="option.value"
+              :label="option.value"
+            >
+              {{ option.label }}
+            </el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <div class="summary-grid">
+          <div v-for="item in compareSummaryItems" :key="item.key" class="summary-item">
+            <div class="summary-label">{{ item.label }}</div>
+            <div class="summary-value">{{ item.value }}</div>
+          </div>
+        </div>
+
+        <el-empty v-if="compareGroups.length === 0" description="当前筛选下暂无差异" />
+        <el-collapse v-else class="compare-groups">
+          <el-collapse-item
+            v-for="group in compareGroups"
+            :key="group.tableName"
+            :name="group.tableName"
+          >
+            <template #title>
+              <span class="group-title">{{ group.tableName }}</span>
+              <el-tag size="small" effect="plain">{{ group.fieldDiffs.length }} 个字段</el-tag>
+            </template>
+            <el-table :data="group.fieldDiffs" stripe>
+              <el-table-column label="状态" width="110">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="compareStatusTagType(row.status)" effect="plain">
+                    {{ compareStatusLabel(row.status) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="columnName" label="数据库字段" min-width="150" />
+              <el-table-column prop="dataType" label="数据库类型" min-width="130" />
+              <el-table-column label="标准字段" min-width="160">
+                <template #default="{ row }">
+                  <div>{{ row.standardFieldName || '-' }}</div>
+                  <div v-if="row.standardDisplayName" class="muted-text">{{ row.standardDisplayName }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="变化" min-width="260">
+                <template #default="{ row }">
+                  <div v-if="row.changes?.length" class="change-list">
+                    <el-tag
+                      v-for="change in row.changes"
+                      :key="`${row.tableName}.${row.columnName}.${change.property}`"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ changeText(change) }}
+                    </el-tag>
+                  </div>
+                  <span v-else class="empty-inline">无</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="reason" label="原因" min-width="240" show-overflow-tooltip />
+            </el-table>
+          </el-collapse-item>
+        </el-collapse>
+      </section>
+
       <section v-if="preview" class="result-section">
         <div class="summary-grid">
           <div v-for="item in summaryItems" :key="item.key" class="summary-item">
@@ -295,6 +373,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import { Check, Connection, Refresh, Search, Upload, View } from '@element-plus/icons-vue'
 import {
+  compareDatabaseReverseImport,
   importDatabaseCandidates,
   listDatabaseTables,
   previewDatabaseReverseImport,
@@ -314,19 +393,30 @@ import type {
   DatabaseImportResult,
   DatabaseTableInfo,
   FieldCandidate,
+  ReverseImportCompareResult,
+  ReverseImportFieldChange,
+  ReverseImportFieldDiff,
+  ReverseImportFieldStatus,
+  ReverseImportTableDiff,
   ReverseImportPreview
 } from '@/types'
 
 type ReverseImportMode = 'sql' | 'database'
 type ConnectionStatus = 'idle' | 'success' | 'error'
+type CompareStatusFilter = 'ALL' | ReverseImportFieldStatus
+type CompareTableGroup = Omit<ReverseImportTableDiff, 'fieldDiffs'> & {
+  fieldDiffs: ReverseImportFieldDiff[]
+}
 
 const projectStore = useProjectStore()
 const router = useRouter()
 const activeMode = ref<ReverseImportMode>('sql')
 const sqlText = ref('')
 const preview = ref<ReverseImportPreview | null>(null)
+const compareResult = ref<ReverseImportCompareResult | null>(null)
 const importResult = ref<DatabaseImportResult | null>(null)
 const previewLoading = ref(false)
+const compareLoading = ref(false)
 const testLoading = ref(false)
 const tableLoading = ref(false)
 const importLoading = ref(false)
@@ -361,6 +451,9 @@ const canPreviewDatabase = computed(() =>
 const canGeneratePreview = computed(() =>
   activeMode.value === 'sql' ? canPreviewSql.value : canPreviewDatabase.value
 )
+const canGenerateCompare = computed(() =>
+  activeMode.value === 'database' && canPreviewDatabase.value
+)
 const canImportCandidates = computed(() =>
   activeMode.value === 'database' && selectedCandidateCount.value > 0
 )
@@ -380,7 +473,7 @@ const databaseStep = computed(() => {
   if (importResult.value) {
     return 3
   }
-  if (preview.value) {
+  if (preview.value || compareResult.value) {
     return 2
   }
   if (selectedTableCount.value > 0) {
@@ -413,6 +506,15 @@ const summaryItems = computed(() => [
   { key: 'comments', label: '缺注释', value: preview.value?.summary?.missingCommentCount ?? 0 },
   { key: 'nonStandard', label: '非标准字段', value: preview.value?.summary?.nonStandardFieldCount ?? 0 }
 ])
+const compareSummaryItems = computed(() => [
+  { key: 'tables', label: '表', value: compareResult.value?.summary?.tableCount ?? 0 },
+  { key: 'columns', label: '字段', value: compareResult.value?.summary?.columnCount ?? 0 },
+  { key: 'matched', label: '命中标准', value: compareResult.value?.summary?.matchedCount ?? 0 },
+  { key: 'changed', label: '属性变化', value: compareResult.value?.summary?.changedCount ?? 0 },
+  { key: 'new', label: '新增字段', value: compareResult.value?.summary?.newCount ?? 0 },
+  { key: 'comments', label: '缺注释', value: compareResult.value?.summary?.missingCommentCount ?? 0 },
+  { key: 'nonStandard', label: '非标准', value: compareResult.value?.summary?.nonStandardCount ?? 0 }
+])
 const tableRows = computed(() =>
   (preview.value?.tables ?? []).flatMap((table) =>
     (table.columns ?? []).map((column) => ({
@@ -422,6 +524,27 @@ const tableRows = computed(() =>
       comment: column.comment
     }))
   )
+)
+const compareStatusFilter = ref<CompareStatusFilter>('ALL')
+const compareStatusOptions: Array<{ value: CompareStatusFilter; label: string }> = [
+  { value: 'ALL', label: '全部' },
+  { value: 'CHANGED', label: '属性变化' },
+  { value: 'NEW', label: '新增' },
+  { value: 'NON_STANDARD', label: '非标准' },
+  { value: 'MISSING_COMMENT', label: '缺注释' },
+  { value: 'MATCHED', label: '已匹配' }
+]
+const compareGroups = computed<CompareTableGroup[]>(() =>
+  (compareResult.value?.tableDiffs ?? [])
+    .map((group) => ({
+      ...group,
+      fieldDiffs: (group.fieldDiffs ?? []).filter((diff) =>
+        compareStatusFilter.value === 'ALL'
+        || diff.status === compareStatusFilter.value
+        || (compareStatusFilter.value === 'NON_STANDARD' && Boolean(diff.nonStandard))
+      )
+    }))
+    .filter((group) => group.fieldDiffs.length > 0)
 )
 
 onMounted(async () => {
@@ -473,8 +596,10 @@ watch(
 
 function resetResults() {
   preview.value = null
+  compareResult.value = null
   importResult.value = null
   selectedCandidateKeys.value = new Set()
+  compareStatusFilter.value = 'ALL'
 }
 
 function resetConnectionStatus() {
@@ -527,6 +652,20 @@ async function handleDatabasePreview() {
     importResult.value = null
   } finally {
     previewLoading.value = false
+  }
+}
+
+async function handleGenerateCompare() {
+  if (!canGenerateCompare.value) {
+    return
+  }
+  compareLoading.value = true
+  try {
+    compareResult.value = await compareDatabaseReverseImport(databaseRequest())
+    importResult.value = null
+    compareStatusFilter.value = 'ALL'
+  } finally {
+    compareLoading.value = false
   }
 }
 
@@ -661,6 +800,45 @@ function isCandidateSelected(candidate: FieldCandidate) {
 
 function handleCandidateCheck(candidate: FieldCandidate, checked: boolean | string | number) {
   toggleCandidate(candidate, Boolean(checked))
+}
+
+function compareStatusLabel(status?: ReverseImportFieldStatus) {
+  const option = compareStatusOptions.find((item) => item.value === status)
+  return option?.label ?? status ?? '未知'
+}
+
+function compareStatusTagType(status?: ReverseImportFieldStatus) {
+  if (status === 'MATCHED') {
+    return 'success'
+  }
+  if (status === 'CHANGED') {
+    return 'warning'
+  }
+  if (status === 'NEW') {
+    return 'danger'
+  }
+  if (status === 'MISSING_COMMENT') {
+    return 'info'
+  }
+  return 'info'
+}
+
+function changePropertyLabel(property?: string) {
+  const labels: Record<string, string> = {
+    dataType: '类型',
+    nullable: '空值',
+    defaultValue: '默认值',
+    comment: '注释'
+  }
+  return property ? labels[property] ?? property : '属性'
+}
+
+function formatChangeValue(value?: string) {
+  return value === undefined || value === null || value === '' ? '空' : value
+}
+
+function changeText(change: ReverseImportFieldChange) {
+  return `${changePropertyLabel(change.property)}: ${formatChangeValue(change.currentValue)} -> ${formatChangeValue(change.standardValue)}`
 }
 
 function goToFieldLibrary() {
@@ -816,7 +994,7 @@ function goToFieldLibrary() {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -914,6 +1092,27 @@ function goToFieldLibrary() {
   border-top: 1px solid #ebeef5;
 }
 
+.compare-result :deep(.el-radio-group) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.compare-groups {
+  border-top: 1px solid #ebeef5;
+}
+
+.change-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.muted-text {
+  margin-top: 2px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
 .group-title {
   margin-right: 8px;
   color: #1f2937;
@@ -953,9 +1152,14 @@ function goToFieldLibrary() {
   }
 
   .candidate-toolbar,
-  .result-actions {
+  .result-actions,
+  .compare-result .section-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .compare-result :deep(.el-radio-group) {
+    justify-content: flex-start;
   }
 }
 </style>

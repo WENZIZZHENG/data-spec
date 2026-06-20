@@ -6,6 +6,8 @@ import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
 import com.dataspec.reverseimport.model.FieldCandidate;
+import com.dataspec.reverseimport.model.ReverseImportCompareResult;
+import com.dataspec.reverseimport.model.ReverseImportFieldStatus;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.service.impl.DatabaseReverseImportServiceImpl;
 import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
@@ -64,6 +66,44 @@ class DatabaseReverseImportServiceTest {
                 .contains("ID", "USER_NAME");
         assertThat(preview.getNonStandardFields()).extracting("columnName")
                 .containsExactly("USER_NAME");
+    }
+
+    @Test
+    void compare_readsMetadataAndReusesReverseImportComparison() throws Exception {
+        prepareMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        Field id = standardField("id", null);
+        id.setDataType("BIGINT");
+        id.setNullable(false);
+        Field mobileNo = standardField("mobile_no", "phone,mobile");
+        mobileNo.setDataType("VARCHAR");
+        mobileNo.setLength(30);
+        mobileNo.setNullable(true);
+        mobileNo.setComment("手机号");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(id, mobileNo));
+        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseConnectionReq req = connectionReq();
+        req.setTableNames(List.of("USER_ORDER"));
+
+        ReverseImportCompareResult result = service.compare(req);
+
+        assertThat(result.getSummary().getTableCount()).isEqualTo(1);
+        assertThat(result.getSummary().getColumnCount()).isEqualTo(3);
+        assertThat(result.getSummary().getMatchedCount()).isEqualTo(2);
+        assertThat(result.getSummary().getChangedCount()).isEqualTo(1);
+        assertThat(result.getSummary().getNewCount()).isEqualTo(1);
+        assertThat(result.getSummary().getNonStandardCount()).isEqualTo(1);
+        assertThat(result.getTableDiffs().get(0).getFieldDiffs())
+                .extracting("columnName", "status")
+                .contains(
+                        org.assertj.core.groups.Tuple.tuple("PHONE", ReverseImportFieldStatus.CHANGED),
+                        org.assertj.core.groups.Tuple.tuple("USER_NAME", ReverseImportFieldStatus.NEW)
+                );
+        assertThat(result.getTableDiffs().get(0).getFieldDiffs())
+                .filteredOn(diff -> "PHONE".equals(diff.getColumnName()))
+                .singleElement()
+                .extracting("standardFieldName")
+                .isEqualTo("mobile_no");
     }
 
     @Test
