@@ -512,6 +512,155 @@ test('generate-ddl calls ddl preview api and prints json', async () => {
   assert.equal(io.stderr, '')
 })
 
+test('doctor prints json checks from local config and returns 0 when ready', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    await writeFile(path.join(dir, 'sql', 'good.sql'), 'CREATE TABLE users (id bigint);', 'utf8')
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({
+        projectId: 7,
+        server: 'http://dataspec.local/',
+        apiToken: 'ds_config_token',
+        defaultPaths: ['sql']
+      }),
+      'utf8'
+    )
+    const calls = []
+    const fetchFn = async (url, options = {}) => {
+      calls.push({ url, options })
+      if (url === 'http://dataspec.local/api-docs') {
+        return { ok: true, status: 200, json: async () => ({ openapi: '3.0.1' }) }
+      }
+      if (url === 'http://dataspec.local/api/auth/me') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: { operatorName: 'alice', allProjects: false, projectIds: [7] }
+          })
+        }
+      }
+      if (url === 'http://dataspec.local/api/projects/7') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: { id: 7, name: '演示项目' }
+          })
+        }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli(['doctor', '--format', 'json'], io, fetchFn)
+
+    const output = JSON.parse(io.stdout)
+    assert.equal(code, 0)
+    assert.equal(output.ok, true)
+    assert.equal(output.server, 'http://dataspec.local')
+    assert.equal(output.projectId, 7)
+    assert.deepEqual(output.checks.map((check) => check.name), [
+      'config',
+      'server',
+      'auth',
+      'project',
+      'defaultPaths',
+      'openapi'
+    ])
+    assert.equal(output.checks.every((check) => check.status === 'pass'), true)
+    assert.equal(calls[0].url, 'http://dataspec.local/api-docs')
+    assert.equal(calls[1].options.headers.Authorization, 'Bearer ds_config_token')
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('doctor returns 1 and reports failed checks when server is unreachable', async () => {
+  const io = createIo()
+  const fetchFn = async () => {
+    throw new Error('connect ECONNREFUSED')
+  }
+
+  const code = await runCli([
+    'doctor',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 1)
+  assert.equal(output.ok, false)
+  assert.equal(output.checks.some((check) => check.name === 'server' && check.status === 'fail'), true)
+  assert.match(output.checks.find((check) => check.name === 'server').message, /connect ECONNREFUSED/)
+  assert.equal(io.stderr, '')
+})
+
+test('doctor check-openapi reports schema drift failure', async () => {
+  const fetchFn = async (url) => {
+    if (url === 'http://dataspec.local/api-docs') {
+      return { ok: true, status: 200, json: async () => ({ openapi: '3.0.1' }) }
+    }
+    if (url === 'http://dataspec.local/api/projects/7') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: { id: 7, name: '演示项目' }
+        })
+      }
+    }
+    throw new Error(`unexpected fetch: ${url}`)
+  }
+  const io = createIo()
+  io.checkOpenapiDrift = async (server) => {
+    assert.equal(server, 'http://dataspec.local')
+    return { ok: false, message: 'OpenAPI schema.ts 已过期: src/api/schema.ts' }
+  }
+
+  const code = await runCli([
+    'doctor',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json',
+    '--check-openapi'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  const openapiCheck = output.checks.find((check) => check.name === 'openapi')
+  assert.equal(code, 1)
+  assert.equal(openapiCheck.status, 'fail')
+  assert.match(openapiCheck.message, /schema\.ts 已过期/)
+  assert.equal(io.stderr, '')
+})
+
+test('doctor invalid format prints stderr and returns 2', async () => {
+  const io = createIo()
+  const fetchFn = async () => {
+    throw new Error('fetch should not be called')
+  }
+
+  const code = await runCli(['doctor', '--format', 'xml'], io, fetchFn)
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /doctor 当前仅支持 --format text 或 json/)
+  assert.equal(io.stdout, '')
+})
+
 test('invalid arguments print stderr and return 2', async () => {
   const io = createIo()
   const fetchFn = async () => {

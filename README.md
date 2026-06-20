@@ -44,7 +44,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - 字段推荐 API/CLI/MCP。
 - DDL 生成 API/CLI/MCP。
-- CLI 支持单文件 lint、批量 `lint-files`、PR 评论式 `review-pr`、AI Context 导出、字段推荐和 DDL 生成。
+- CLI 支持环境自检 `doctor`、单文件 lint、批量 `lint-files`、PR 评论式 `review-pr`、AI Context 导出、字段推荐和 DDL 生成。
 - MCP Server 暴露 DataSpec resources、prompts 和核心 tools。
 - GitHub Actions 示例支持 SQL 批量校验和 PR Review 评论。
 
@@ -226,11 +226,20 @@ node tools/dataspec-cli.mjs suggest-field "用户手机号" --project 1 --format
 # 基于表模板生成 DDL，并返回 lint 自检结果
 node tools/dataspec-cli.mjs generate-ddl --project 1 --template 1 --table user_order --format json
 
+# 自检本地 DataSpec CLI 环境；存在失败检查时退出码为 1，参数错误退出码为 2
+node tools/dataspec-cli.mjs doctor --project 1
+
+# 输出 AI/CI 可解析的 JSON 自检结果
+node tools/dataspec-cli.mjs doctor --format json
+
+# 执行完整 OpenAPI schema 漂移检查
+node tools/dataspec-cli.mjs doctor --check-openapi --format json
+
 # 指定后端地址
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --server http://localhost:8090
 ```
 
-`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取。`review-pr` 会在批量 lint 后创建或更新包含 `<!-- dataspec-sql-review -->` marker 的 PR 评论，避免重复刷屏；评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
+`doctor` 会检查配置文件、DataSpec 服务、API token 身份、项目可访问性、`defaultPaths` 和 OpenAPI 状态；默认只做轻量 OpenAPI 检查，传 `--check-openapi` 时会复用前端契约校验逻辑做完整 schema 漂移检查。`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取。`review-pr` 会在批量 lint 后创建或更新包含 `<!-- dataspec-sql-review -->` marker 的 PR 评论，避免重复刷屏；评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
 
 ## MCP Server
 
@@ -359,7 +368,7 @@ data-spec/
 - [x] 个人工作台和字段命中率报告
 - [x] SQL 反向导入预览与差异分析
 - [x] 数据库直连反向导入与前端确认导入流程
-- [x] DataSpec CLI：`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置
+- [x] DataSpec CLI：`doctor`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置
 - [x] DataSpec MCP Server：resources、prompts、`lint_sql`、`get_field_catalog`、`suggest_fields`、`generate_table_ddl`，支持 `.dataspec/config.json` 默认项目配置
 - [x] GitHub Actions 示例和 PR 评论式 SQL Review
 

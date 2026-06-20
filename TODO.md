@@ -4,10 +4,9 @@
 
 ## 下一步顺序
 
-1. 先补 `dataspec doctor` 自检命令，让 AI/CLI 能快速判断配置、服务、项目、token 和契约是否可用。
-2. 然后增强数据库直连反向导入，支持二次比对、来源批次追踪和字段标准差异复盘。
-3. 继续提升 AI 可消费质量：SQL 精准定位、字段推荐质量、规则测试语料库和 fixedSql golden fixtures。
-4. 最后打磨个人/小团队日常体验：前端高频流程细节、轻量 API Token 管理页面；仍避免过早引入审批流、发布流程等重型治理模型。
+1. 先增强数据库直连反向导入，支持二次比对、来源批次追踪和字段标准差异复盘。
+2. 继续提升 AI 可消费质量：SQL 精准定位、字段推荐质量、规则测试语料库和 fixedSql golden fixtures。
+3. 最后打磨个人/小团队日常体验：前端高频流程细节、轻量 API Token 管理页面；仍避免过早引入审批流、发布流程等重型治理模型。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -32,10 +31,10 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不改 README 已实现能力描述，不重排历史编号，不删除有价值的参考项目链接。
 
 ### P5-2：`dataspec doctor` 自检命令
-- 状态：待办。
+- 状态：已完成第一版，CLI 已新增 `doctor`，支持文本/JSON 输出、配置/服务/token/项目/defaultPaths/OpenAPI 状态检查，以及可选 `--check-openapi` 完整契约漂移检查。
 - 为什么做：AI agent、CLI 和 MCP 使用 DataSpec 时，最常见的问题是服务未启动、项目 ID 错误、token 无权限、OpenAPI 契约漂移或 `.dataspec/config.json` 配置不完整；需要一个可机器读取的诊断入口。
 - 已有基础：CLI/MCP 已支持 `.dataspec/config.json`、`DATASPEC_TOKEN`、项目默认配置、OpenAPI 契约检查脚本和统一 API wrapper。
-- 缺口：缺少一条命令集中检查 server、projectId、token、默认路径、API docs 和 schema.ts 是否匹配。
+- 已完成能力：已集中检查 server、projectId、token、默认路径、API docs 和本地 schema.ts 状态；完整 schema 漂移检查通过 `--check-openapi` 显式启用。
 - 落地产物：新增 `dataspec doctor` CLI 命令，输出人类可读报告和 `--format json` 结构化结果；检查后端连通、当前项目存在性、token 当前身份、默认扫描路径、OpenAPI 契约状态和建议修复动作。
 - 验收标准：在服务正常、服务未启动、projectId 不存在、token 无权限、OpenAPI 漂移等场景下返回明确诊断；JSON 输出可被 AI agent 稳定解析；相关 CLI 测试接入 `node --test`。
 - 边界：不自动修复配置，不写入外部业务仓库，不绕过安全模式。

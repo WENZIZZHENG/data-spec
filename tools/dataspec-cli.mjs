@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadDataSpecConfig, resolveDefaultPaths } from './dataspec-config.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const DEFAULT_GITHUB_API = 'https://api.github.com'
 const DATASPEC_REVIEW_MARKER = '<!-- dataspec-sql-review -->'
+const TOOLS_DIR = path.dirname(fileURLToPath(import.meta.url))
+const REPO_ROOT = path.dirname(TOOLS_DIR)
+const DATASPEC_WEB_DIR = path.join(REPO_ROOT, 'dataspec-web')
+const OPENAPI_SCHEMA_PATH = path.join(DATASPEC_WEB_DIR, 'src', 'api', 'schema.ts')
 const SKIPPED_SCAN_DIRECTORIES = new Set([
   '.git',
   '.idea',
@@ -45,6 +49,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'generate-ddl') {
       return await runGenerateDdl(rest, io, fetchFn)
+    }
+    if (command === 'doctor') {
+      return await runDoctor(rest, io, fetchFn)
     }
     throw new Error(`未知命令: ${command}\n\n${helpText()}`)
   } catch (error) {
@@ -209,10 +216,58 @@ async function runGenerateDdl(args, io, fetchFn) {
   return 0
 }
 
-function parseArgs(args, allowedOptions) {
+async function runDoctor(args, io, fetchFn) {
+  const { positional, options } = parseArgs(
+    args,
+    ['project', 'format', 'server', 'dataspec-token'],
+    ['check-openapi']
+  )
+  if (positional.length > 0) {
+    throw new Error(`doctor 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const config = loadDataSpecConfig(cliCwd(io))
+  const format = options.format ?? 'text'
+  if (format !== 'text' && format !== 'json') {
+    throw new Error('doctor 当前仅支持 --format text 或 json')
+  }
+  const server = normalizeServer(options.server ?? config.server)
+  const projectId = options.project || config.projectId ? parseProjectId(options.project ?? config.projectId) : undefined
+  const apiToken = resolveDataSpecToken(options, config)
+  const checks = []
+
+  checks.push(buildConfigCheck(config))
+  const apiDocsResult = await checkApiDocs(server, fetchFn, apiToken)
+  checks.push(apiDocsResult.check)
+  checks.push(await checkAuth(server, fetchFn, apiToken))
+  checks.push(await checkProject(server, fetchFn, projectId, apiToken))
+  checks.push(await checkDefaultPaths(config))
+  checks.push(await checkOpenapiStatus({
+    server,
+    apiDocsReachable: apiDocsResult.check.status === 'pass',
+    checkDrift: Boolean(options['check-openapi']),
+    runDriftCheck: io.checkOpenapiDrift
+  }))
+
+  const result = {
+    ok: checks.every((check) => check.status !== 'fail'),
+    server,
+    projectId: projectId ?? null,
+    configPath: config.configPath,
+    checks
+  }
+  if (format === 'json') {
+    io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  } else {
+    io.writeOut(formatDoctorText(result))
+  }
+  return result.ok ? 0 : 1
+}
+
+function parseArgs(args, allowedOptions, flagOptions = []) {
   const positional = []
   const options = {}
   const allowedOptionSet = new Set(allowedOptions)
+  const flagOptionSet = new Set(flagOptions)
   for (let i = 0; i < args.length; i += 1) {
     const token = args[i]
     if (!token.startsWith('--')) {
@@ -220,8 +275,12 @@ function parseArgs(args, allowedOptions) {
       continue
     }
     const name = token.slice(2)
-    if (!allowedOptionSet.has(name)) {
+    if (!allowedOptionSet.has(name) && !flagOptionSet.has(name)) {
       throw new Error(`未知参数: ${token}`)
+    }
+    if (flagOptionSet.has(name)) {
+      options[name] = true
+      continue
     }
     const value = args[i + 1]
     if (!value || value.startsWith('--')) {
@@ -231,6 +290,149 @@ function parseArgs(args, allowedOptions) {
     i += 1
   }
   return { positional, options }
+}
+
+function buildConfigCheck(config) {
+  if (config.configPath) {
+    return passCheck('config', `已读取配置: ${config.configPath}`, {
+      configPath: config.configPath,
+      rootDir: config.rootDir
+    })
+  }
+  return warnCheck('config', '未找到 .dataspec/config.json，将使用命令行参数和默认服务地址', {
+    rootDir: config.rootDir
+  })
+}
+
+async function checkApiDocs(server, fetchFn, apiToken) {
+  try {
+    const response = await fetchFn(`${server}/api-docs`, { headers: dataSpecHeaders(apiToken) })
+    if (!response.ok) {
+      return { check: failCheck('server', `DataSpec 服务不可用，/api-docs 返回 HTTP ${response.status}`) }
+    }
+    return { check: passCheck('server', `DataSpec 服务可访问: ${server}`) }
+  } catch (error) {
+    return { check: failCheck('server', `DataSpec 服务不可访问: ${error.message}`) }
+  }
+}
+
+async function checkAuth(server, fetchFn, apiToken) {
+  if (!apiToken) {
+    return warnCheck('auth', '未提供 API token；安全模式关闭时可以忽略')
+  }
+  try {
+    const response = await fetchFn(`${server}/api/auth/me`, {
+      headers: dataSpecHeaders(apiToken)
+    })
+    const principal = unwrapResponse(await readJsonResponse(response))
+    return passCheck('auth', `API token 有效，当前操作者: ${principal.operatorName ?? '未知'}`, principal)
+  } catch (error) {
+    return failCheck('auth', `API token 校验失败: ${error.message}`)
+  }
+}
+
+async function checkProject(server, fetchFn, projectId, apiToken) {
+  if (!projectId) {
+    return failCheck('project', '缺少 projectId，请提供 --project <id> 或 .dataspec/config.json 的 projectId')
+  }
+  try {
+    const response = await fetchFn(`${server}/api/projects/${encodeURIComponent(projectId)}`, {
+      headers: dataSpecHeaders(apiToken)
+    })
+    const project = unwrapResponse(await readJsonResponse(response))
+    return passCheck('project', `项目可访问: ${project.name ?? projectId}`, {
+      id: project.id ?? projectId,
+      name: project.name
+    })
+  } catch (error) {
+    return failCheck('project', `项目不可访问: ${error.message}`)
+  }
+}
+
+async function checkDefaultPaths(config) {
+  if (config.defaultPaths.length === 0) {
+    return warnCheck('defaultPaths', '未配置 defaultPaths；lint-files 未传路径时仍需手动提供')
+  }
+  const paths = resolveDefaultPaths(config)
+  const missing = []
+  for (const inputPath of paths) {
+    try {
+      await stat(inputPath)
+    } catch (error) {
+      missing.push(inputPath)
+    }
+  }
+  if (missing.length > 0) {
+    return failCheck('defaultPaths', `defaultPaths 存在不可访问路径: ${missing.join(', ')}`, {
+      paths,
+      missing
+    })
+  }
+  return passCheck('defaultPaths', `defaultPaths 可访问: ${paths.join(', ')}`, { paths })
+}
+
+async function checkOpenapiStatus({ server, apiDocsReachable, checkDrift, runDriftCheck = runOpenapiDriftCheck }) {
+  if (!apiDocsReachable) {
+    return failCheck('openapi', '无法检查 OpenAPI：/api-docs 不可访问')
+  }
+  try {
+    await stat(OPENAPI_SCHEMA_PATH)
+  } catch (error) {
+    return failCheck('openapi', `缺少本地 OpenAPI 类型文件: ${OPENAPI_SCHEMA_PATH}`)
+  }
+  if (!checkDrift) {
+    return passCheck('openapi', 'OpenAPI 文档可访问，本地 schema.ts 存在；完整漂移检查可运行 --check-openapi')
+  }
+  try {
+    const result = await runDriftCheck(server)
+    return result.ok
+      ? passCheck('openapi', result.message)
+      : failCheck('openapi', result.message)
+  } catch (error) {
+    return failCheck('openapi', `OpenAPI 漂移检查失败: ${error.message}`)
+  }
+}
+
+async function runOpenapiDriftCheck(server) {
+  const { checkOpenapiSchema } = await import(pathToFileURL(path.join(DATASPEC_WEB_DIR, 'scripts', 'check-openapi-schema.mjs')).href)
+  return await checkOpenapiSchema({
+    argv: ['--source', `${server}/api-docs`],
+    cwd: DATASPEC_WEB_DIR
+  })
+}
+
+function passCheck(name, message, details = undefined) {
+  return buildCheck(name, 'pass', message, details)
+}
+
+function warnCheck(name, message, details = undefined) {
+  return buildCheck(name, 'warn', message, details)
+}
+
+function failCheck(name, message, details = undefined) {
+  return buildCheck(name, 'fail', message, details)
+}
+
+function buildCheck(name, status, message, details) {
+  const check = { name, status, message }
+  if (details !== undefined) {
+    check.details = details
+  }
+  return check
+}
+
+function formatDoctorText(result) {
+  const lines = [
+    'DataSpec Doctor',
+    `server: ${result.server}`,
+    `projectId: ${result.projectId ?? '未配置'}`,
+    ''
+  ]
+  for (const check of result.checks) {
+    lines.push(`[${check.status.toUpperCase()}] ${check.name}: ${check.message}`)
+  }
+  lines.push('', result.ok ? '结果: 可用' : '结果: 存在需要处理的问题', '')
+  return lines.join('\n')
 }
 
 function parseProjectId(value) {
@@ -545,12 +747,14 @@ Usage:
   node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs doctor [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
 
 Options:
   --project 可由 .dataspec/config.json 的 projectId 提供
   --server  可由 .dataspec/config.json 的 server 提供
   --dataspec-token 可由 .dataspec/config.json 的 apiToken 或 DATASPEC_TOKEN 环境变量提供
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
+  doctor 默认做轻量 OpenAPI 状态检查；传 --check-openapi 时执行完整 schema 漂移检查
 `
 }
 
