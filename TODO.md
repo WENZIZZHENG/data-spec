@@ -7,7 +7,7 @@
 1. 先提升字段推荐质量，让 AI 建表时更稳定命中个人标准字段。
 2. 继续提升 AI 可消费质量：字段推荐质量、规则测试语料库和 fixedSql golden fixtures。
 3. 打磨个人/小团队日常体验：前端高频流程细节、轻量 API Token 管理页面；仍避免过早引入审批流、发布流程等重型治理模型。
-4. P5 稳定后推进 P6：标准版本快照、字段覆盖率、AI 回放、业务仓库初始化向导、标准质量评分、轻量影响分析、按需 AI Context 和规则例外治理。
+4. P5 稳定后推进 P6：标准版本快照、字段覆盖率、AI 回放、业务仓库初始化向导、标准质量评分、轻量影响分析、按需 AI Context、规则例外治理、AI 契约稳定性、GitHub inline 实接和性能基线。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -18,7 +18,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪和 SQL 定位范围增强，接下来补齐字段推荐质量、fixtures、前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分和影响分析。
+- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪和 SQL 定位范围增强，接下来补齐字段推荐质量、fixtures、前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接和性能基线。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -200,6 +200,51 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 落地产物：新增 CLI/MCP workflow recipes 文档和可选命令封装；为每个 recipe 定义输入、输出、失败处理、推荐下一步和机器可读 JSON 结果；AI Context 中附带 `AGENTS.md` 可直接引用的工作流片段。
 - 验收标准：AI agent 按 recipe 能稳定完成至少三类任务：建表前取标准、PR SQL review、数据库反向导入后补标准；失败时能输出下一步诊断建议。
 - 边界：不内置外部 LLM，不自动修改业务仓库，第一版以命令/文档/JSON 契约为主。
+
+### P6-12：AI 输出契约稳定性与兼容测试
+- 状态：待办。
+- 为什么做：DataSpec 优先给 AI 使用，最怕的是字段目录、规则、lint 结果、推荐结果或 MCP 输出字段悄悄漂移，导致 agent 读错上下文或自动化脚本失效。
+- 已有基础：已有 OpenAPI 契约检查、AI Context JSON Schema、CLI/MCP JSON 输出、字段推荐和 SQL lint 结构化结果。
+- 缺口：缺少面向 AI 消费场景的契约 golden 测试，无法系统覆盖 `field-catalog.json`、`rules.yaml`、`LintIssue`、推荐结果、DDL 生成结果和 MCP tool/resource 返回结构。
+- 落地产物：建立 AI contract fixtures；为 AI Context、CLI JSON、MCP resources/tools、字段推荐和 lint/fixedSql 输出增加 golden 断言；README 或 `.dataspec/README.md` 标明稳定字段与兼容策略。
+- 验收标准：改动 AI 可消费字段时，测试能明确显示契约变化；兼容字段新增不会破坏旧 fixtures；`mvn test`、`node --test` 或前端契约检查能覆盖主要 JSON 输出。
+- 边界：不冻结所有内部 DTO，不阻止向后兼容新增字段，不引入外部契约服务。
+
+### P6-13：GitHub inline review 实战接入
+- 状态：待办。
+- 为什么做：P5-5 已提供 SQL issue 文件内行列范围，但当前 `review-pr` 仍发布单条汇总评论；真正落到 PR diff inline 后，开发者和 AI 才能在具体 SQL 行旁边处理问题。
+- 已有基础：已有 CLI `review-pr`、GitHub token 参数、PR 汇总评论 marker、文件级 source range 和“不直接发 inline”的边界说明。
+- 缺口：缺少 GitHub diff hunk position 映射、inline comment 去重、过期评论处理、fallback 汇总评论和失败诊断。
+- 落地产物：新增 PR diff 映射模块；当 issue 行号落在本次 diff hunk 内时发布或更新 inline comment；无法映射时保留汇总评论；输出 JSON 说明 inline/fallback 数量和原因。
+- 验收标准：PR 中新增或修改 SQL 文件能收到对应行 inline comment；重复运行不会刷屏；不在 diff 内的问题进入汇总区；失败时 CLI 给出 token、权限或 diff 映射诊断。
+- 边界：不做代码所有者审批，不改 GitHub Actions 示例以外的业务仓库文件，不要求所有历史 SQL 问题都能 inline。
+
+### P6-14：项目内字段分组与数据域体验增强
+- 状态：待办。
+- 为什么做：字段标准变多后，仅靠字段列表搜索不够，个人/小团队需要按项目内业务域、模块、标签和来源批次组织数标，AI 也需要清楚“当前任务属于哪个字段范围”。
+- 已有基础：字段已有 category、tags、数据域关系、来源批次、字段库筛选和 AI Context 导出。
+- 缺口：数据域/分组更像字段属性，缺少面向日常维护的分组视图、批量归组、未分组字段提示和按分组导出 AI Context 的入口。
+- 落地产物：强化字段库分组视图；支持按数据域/category/tag/sourceBatch 分组浏览、批量设置分组、查看未分组字段；AI Context 和字段推荐可按分组裁剪或提示命中范围。
+- 验收标准：用户能在一个项目内按业务分组管理标准字段；未分组字段可快速定位并批量补齐；AI 导出可只包含指定分组并说明裁剪条件。
+- 边界：不做跨项目组织级目录，不引入审批/发布流，不把分组升级成复杂权限模型。
+
+### P6-15：字段库批量维护与可撤销变更
+- 状态：待办。
+- 为什么做：反向导入、Excel 导入和质量检查会一次性暴露大量待修字段；如果只能逐条编辑，个人使用也会变慢，而且误操作后缺少快速恢复手段。
+- 已有基础：已有字段 CRUD、Excel dry-run、变更日志 before/after、来源追踪和字段质量/冲突检测待办。
+- 缺口：缺少字段状态、分类、标签、敏感标记、别名等常见属性的批量编辑；变更日志已有记录但还不能从 UI 一键回退单次变更。
+- 落地产物：新增字段库批量操作入口和轻量撤销能力；支持批量设置状态/category/tags/sensitive/codeSetId，提交前展示影响预览；字段详情或变更日志可对最近单条变更执行可控回退。
+- 验收标准：用户可选择多条字段批量维护常用属性；批量操作写入变更日志；误改单个字段后可从日志恢复上一版关键属性。
+- 边界：不做复杂事务审批，不自动合并冲突字段，不跨项目批量修改。
+
+### P6-16：大字段库性能与可观测性基线
+- 状态：待办。
+- 为什么做：当标准字段、检查记录、导入批次和 AI Context 变多后，前端列表、字段推荐、Context 导出和 CLI/MCP 响应延迟会直接影响 AI 和人的日常使用。
+- 已有基础：已有分页接口、字段推荐、AI Context 导出、工作台统计、CLI/MCP 和 Spring Boot Actuator 基础依赖可扩展空间。
+- 缺口：缺少大数据量 fixture、接口耗时基线、慢查询/慢导出诊断、前端大列表体验验证和 CLI/MCP 超时边界。
+- 落地产物：新增性能基线测试或本地脚本，模拟千级/万级字段、百级规则和检查记录；记录字段列表、推荐、AI Context、lint records、反向导入 compare 的耗时；补充必要索引、分页和导出限流提示。
+- 验收标准：大字段库场景下核心接口耗时有可重复测量结果；明显慢点有日志或诊断提示；前端列表不因大数据量明显卡顿；CLI/MCP 超时信息可读。
+- 边界：不做分布式部署，不引入缓存集群，不为个人版过早上复杂监控平台。
 
 ## 参考项目索引
 
