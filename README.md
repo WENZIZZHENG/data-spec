@@ -239,7 +239,7 @@ node tools/dataspec-cli.mjs doctor --check-openapi --format json
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --server http://localhost:8090
 ```
 
-`doctor` 会检查配置文件、DataSpec 服务、API token 身份、项目可访问性、`defaultPaths` 和 OpenAPI 状态；默认只做轻量 OpenAPI 检查，传 `--check-openapi` 时会复用前端契约校验逻辑做完整 schema 漂移检查。`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取。`review-pr` 会在批量 lint 后创建或更新包含 `<!-- dataspec-sql-review -->` marker 的 PR 评论，避免重复刷屏；评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
+`doctor` 会检查配置文件、DataSpec 服务、API token 身份、项目可访问性、`defaultPaths` 和 OpenAPI 状态；默认只做轻量 OpenAPI 检查，传 `--check-openapi` 时会复用前端契约校验逻辑做完整 schema 漂移检查。`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取。`review-pr` 会在批量 lint 后创建或更新包含 `<!-- dataspec-sql-review -->` marker 的 PR 评论，避免重复刷屏；问题明细会展示文件内行列范围，作为后续 GitHub inline comment 的基础数据，但当前仍只发布单条汇总评论；评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
 
 ## MCP Server
 
@@ -345,7 +345,7 @@ data-spec/
 | amount_field_type | 金额字段应使用 bigint/numeric | WARNING |
 | comment_missing | 字段/表注释缺失 | SUGGESTION |
 
-`LintIssue` 除 `severity/ruleCode/message/tableName/columnName` 外，还会在可确定修复时输出 `suggestion`、`replacement`、`before`、`after`、`confidence`。这些字段会通过 API、CLI 和 MCP 原样返回，供 AI agent 生成修正 SQL 或修复说明。
+`LintIssue` 除 `severity/ruleCode/message/tableName/columnName` 外，还会输出可定位时的 `line/column/lineEnd/columnEnd/sourceStart/sourceEnd/locationKind`，并在可确定修复时输出 `suggestion`、`replacement`、`before`、`after`、`confidence`。这些字段会通过 API、CLI 和 MCP 原样返回，供 AI agent 生成修正 SQL、修复说明或文件级 review 定位。
 
 ## 已完成功能清单
 
@@ -356,6 +356,7 @@ data-spec/
 - [x] 结构化命名规则导出和 `field_suffix_type` lint 规则
 - [x] SQL 粘贴校验、结构化 issue、修复建议和 `fixedSql`
 - [x] SQL 检查记录、最近记录分页和详情
+- [x] SQL issue source range，支持表/字段/COMMENT 定位、前端跳转和 PR 汇总评论行列范围展示
 - [x] PostgreSQL `COMMENT ON` 解析和常见 MySQL `CREATE TABLE` / `UNSIGNED` / 表选项解析
 - [x] 字段推荐 API/CLI/MCP
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载

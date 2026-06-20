@@ -415,7 +415,11 @@ function locationLabel(issue: LintIssue) {
   if (!issue.line) {
     return '-'
   }
-  return `${issue.line}:${issue.column ?? 1}`
+  const start = `${issue.line}:${issue.column ?? 1}`
+  if (!issue.lineEnd || !issue.columnEnd) {
+    return start
+  }
+  return `${start}-${issue.lineEnd}:${issue.columnEnd}`
 }
 
 function formatDate(value?: string) {

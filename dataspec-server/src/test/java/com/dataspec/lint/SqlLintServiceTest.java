@@ -117,6 +117,9 @@ class SqlLintServiceTest {
                 .orElseThrow();
         assertEquals(1, tableIssue.getLine());
         assertEquals(14, tableIssue.getColumn());
+        assertEquals(1, tableIssue.getLineEnd());
+        assertEquals(23, tableIssue.getColumnEnd());
+        assertEquals("table", tableIssue.getLocationKind());
         assertNotNull(tableIssue.getSourceStart());
         assertTrue(tableIssue.getSourceEnd() > tableIssue.getSourceStart());
 
@@ -126,9 +129,13 @@ class SqlLintServiceTest {
                 .orElseThrow();
         assertEquals(2, columnIssue.getLine());
         assertEquals(5, columnIssue.getColumn());
+        assertEquals(2, columnIssue.getLineEnd());
+        assertEquals(11, columnIssue.getColumnEnd());
+        assertEquals("column", columnIssue.getLocationKind());
         assertNotNull(columnIssue.getSourceStart());
         assertTrue(columnIssue.getSourceEnd() > columnIssue.getSourceStart());
         assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"line\":1"));
+        assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"locationKind\":\"table\""));
     }
 
     @Test

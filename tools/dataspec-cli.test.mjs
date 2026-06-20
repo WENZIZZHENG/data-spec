@@ -177,7 +177,18 @@ test('lint-files scans sql files, aggregates json, and returns 1 for error files
             errorCount: hasError ? 1 : 0,
             warningCount: hasError ? 0 : 1,
             suggestionCount: 0,
-            issues: hasError ? [{ ruleCode: 'table_naming_snake_case' }] : []
+            issues: hasError
+              ? [{
+                  ruleCode: 'table_naming_snake_case',
+                  line: 1,
+                  column: 14,
+                  lineEnd: 1,
+                  columnEnd: 23,
+                  sourceStart: 13,
+                  sourceEnd: 22,
+                  locationKind: 'table'
+                }]
+              : []
           }
         })
       }
@@ -206,6 +217,10 @@ test('lint-files scans sql files, aggregates json, and returns 1 for error files
       suggestionCount: 0
     })
     assert.deepEqual(output.files.map((item) => path.basename(item.path)).sort(), ['bad.sql', 'good.sql'])
+    const badFile = output.files.find((item) => path.basename(item.path) === 'bad.sql')
+    assert.equal(badFile.result.issues[0].line, 1)
+    assert.equal(badFile.result.issues[0].columnEnd, 23)
+    assert.equal(badFile.result.issues[0].locationKind, 'table')
     assert.equal(io.stderr, '')
   } finally {
     await rm(dir, { recursive: true, force: true })
@@ -303,8 +318,23 @@ test('review-pr posts markdown comment and returns 1 when lint has errors', asyn
                   ruleCode: 'table_naming_snake_case',
                   message: '表名必须使用 snake_case',
                   tableName: 'UserOrder',
+                  line: 1,
+                  column: 14,
+                  lineEnd: 1,
+                  columnEnd: 23,
+                  sourceStart: 13,
+                  sourceEnd: 22,
+                  locationKind: 'table',
                   suggestion: '改为 user_order',
                   replacement: 'user_order'
+                },
+                {
+                  severity: 'WARNING',
+                  ruleCode: 'comment_missing',
+                  message: '表缺少注释',
+                  tableName: 'UserOrder',
+                  line: null,
+                  column: null
                 }
               ]
             }
@@ -343,6 +373,8 @@ test('review-pr posts markdown comment and returns 1 when lint has errors', asyn
     assert.match(commentBody, /<!-- dataspec-sql-review -->/)
     assert.match(commentBody, /bad\.sql/)
     assert.match(commentBody, /table_naming_snake_case/)
+    assert.match(commentBody, /行 1:14-1:23/)
+    assert.doesNotMatch(commentBody, /行 0:0-0:0/)
     assert.match(commentBody, /user_order/)
     assert.match(io.stdout, /已创建 DataSpec Review 评论/)
     assert.equal(io.stderr, '')

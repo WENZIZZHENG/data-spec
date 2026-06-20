@@ -4,8 +4,8 @@
 
 ## 下一步顺序
 
-1. 先提升 SQL 定位精度，为 GitHub inline comment 和更稳定的 AI 修复打基础。
-2. 继续提升 AI 可消费质量：SQL 精准定位、字段推荐质量、规则测试语料库和 fixedSql golden fixtures。
+1. 先提升字段推荐质量，让 AI 建表时更稳定命中个人标准字段。
+2. 继续提升 AI 可消费质量：字段推荐质量、规则测试语料库和 fixedSql golden fixtures。
 3. 打磨个人/小团队日常体验：前端高频流程细节、轻量 API Token 管理页面；仍避免过早引入审批流、发布流程等重型治理模型。
 4. P5 稳定后推进 P6：标准版本快照、字段覆盖率、AI 回放、业务仓库初始化向导、标准质量评分、轻量影响分析、按需 AI Context 和规则例外治理。
 
@@ -18,7 +18,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对和导入来源追踪，接下来补齐定位精度、字段推荐质量、fixtures、前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分和影响分析。
+- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪和 SQL 定位范围增强，接下来补齐字段推荐质量、fixtures、前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分和影响分析。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -57,12 +57,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不保存数据库密码，不长期保存连接串明文，不做跨项目来源合并。
 
 ### P5-5：SQL 定位精度升级与 GitHub inline comment 基础
-- 状态：待办。
+- 状态：已完成第一版，已新增更稳定的 source range、定位类型和 CLI PR 评论行列范围展示。
 - 为什么做：当前 line/column/source span 是启发式定位，足够前端跳转和汇总评论，但要支持 GitHub inline review 与更稳定的 AI 修复，需要更可靠的位置映射。
 - 已有基础：`LintIssue` 已有 `line/column/sourceStart/sourceEnd`，前端 SQL 校验页可点击跳转，CLI/GitHub Review 已能输出汇总评论。
-- 缺口：解析器和规则还没有统一的 source map；fixedSql diff 与 issue 之间没有稳定关联；PR 评论还不能精准落到变更行。
-- 落地产物：为表、列和规则 issue 建立统一 source span 解析/回填工具；增强 CLI review-pr 的文件级定位数据；为后续 GitHub inline comment 预留结构化输出。
-- 验收标准：good/bad SQL fixture 中表名、字段名、COMMENT、类型问题的位置断言稳定通过；CLI JSON 能输出足够信息供 PR inline comment 使用。
+- 已完成能力：`LintIssue` 新增 `lineEnd/columnEnd/locationKind`；resolver 优先在匹配表定义和 COMMENT ON COLUMN 范围内定位；CLI `review-pr` Markdown 展示 `行 x:y-x2:y2`；前端位置列可展示范围并继续跳转起始位置。
+- 验收标准：多表同名字段、schema/quoted/backtick/bracket 标识符、COMMENT ON COLUMN、不可定位 issue 和 CLI review 输出均有测试覆盖；CLI JSON 能输出足够信息供后续 PR inline comment 映射使用。
 - 边界：第一版不强制接入真实 GitHub inline API，不实现完整 SQL AST source map。
 
 ### P5-6：字段推荐质量增强

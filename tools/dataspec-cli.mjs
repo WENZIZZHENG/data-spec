@@ -687,6 +687,10 @@ function formatIssueMarkdown(issue) {
 
 function formatIssueLocation(issue) {
   const parts = []
+  const range = formatIssueRange(issue)
+  if (range) {
+    parts.push(range)
+  }
   if (issue.tableName) {
     parts.push(`表 \`${issue.tableName}\``)
   }
@@ -694,6 +698,25 @@ function formatIssueLocation(issue) {
     parts.push(`字段 \`${issue.columnName}\``)
   }
   return parts.join(' / ')
+}
+
+function formatIssueRange(issue) {
+  const startLine = parseOptionalNumber(issue.line)
+  if (startLine === null) {
+    return ''
+  }
+  const startColumn = parseOptionalNumber(issue.column) ?? 1
+  const endLine = parseOptionalNumber(issue.lineEnd) ?? startLine
+  const endColumn = parseOptionalNumber(issue.columnEnd) ?? startColumn
+  return `行 ${startLine}:${startColumn}-${endLine}:${endColumn}`
+}
+
+function parseOptionalNumber(value) {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
 }
 
 function escapeTableCell(value) {

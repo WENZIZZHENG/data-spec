@@ -1036,9 +1036,14 @@ export interface components {
             /** Format: int32 */
             column?: number;
             /** Format: int32 */
+            lineEnd?: number;
+            /** Format: int32 */
+            columnEnd?: number;
+            /** Format: int32 */
             sourceStart?: number;
             /** Format: int32 */
             sourceEnd?: number;
+            locationKind?: string;
         };
         LintResult: {
             tables?: components["schemas"]["TableDef"][];
