@@ -730,7 +730,13 @@ async function handleImportCandidates() {
   try {
     importResult.value = await importDatabaseCandidates(
       projectStore.currentProjectId,
-      selectedFieldCandidates.value
+      selectedFieldCandidates.value,
+      {
+        databaseType: dbForm.databaseType,
+        databaseName: dbForm.databaseName,
+        schemaName: dbForm.schemaName,
+        tableNames: [...(dbForm.tableNames ?? [])]
+      }
     )
     ElMessage.success(`导入 ${importResult.value.importedCount ?? 0} 个字段，跳过 ${importResult.value.skippedCount ?? 0} 个字段`)
   } finally {

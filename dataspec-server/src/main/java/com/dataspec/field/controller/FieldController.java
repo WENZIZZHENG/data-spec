@@ -6,6 +6,8 @@ import com.dataspec.common.result.R;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.reverseimport.model.FieldSourceDetail;
+import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,6 +26,7 @@ import java.util.List;
 public class FieldController {
 
     private final FieldService fieldService;
+    private final ReverseImportSourceService reverseImportSourceService;
 
     /** 分页查询字段 */
 
@@ -58,6 +61,14 @@ public class FieldController {
     @GetMapping("/{id}")
     public R<Field> getById(@PathVariable Long id) {
         return R.ok(fieldService.getById(id));
+    }
+
+    /** 查询字段来源 */
+
+    @GetMapping("/{id}/sources")
+    public R<List<FieldSourceDetail>> listSources(@PathVariable Long id) {
+        fieldService.getById(id);
+        return R.ok(reverseImportSourceService.listByFieldId(id));
     }
 
     /** 创建字段 */

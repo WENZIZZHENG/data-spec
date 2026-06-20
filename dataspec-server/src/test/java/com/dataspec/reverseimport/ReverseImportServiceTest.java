@@ -5,16 +5,26 @@ import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.model.ColumnDef;
 import com.dataspec.lint.model.TableDef;
+import com.dataspec.reverseimport.entity.ReverseImportBatch;
+import com.dataspec.reverseimport.model.DatabaseImportReq;
+import com.dataspec.reverseimport.model.FieldCandidate;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.model.ReverseImportFieldStatus;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
+import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -29,7 +39,10 @@ class ReverseImportServiceTest {
                 standardField("id", null),
                 standardField("mobile_no", "phone,mobile")
         ));
-        ReverseImportServiceImpl service = new ReverseImportServiceImpl(new SqlParserService(), fieldService);
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                mock(ReverseImportSourceService.class));
 
         String sql = """
                 CREATE TABLE user_order (
@@ -73,7 +86,10 @@ class ReverseImportServiceTest {
         createdAt.setNullable(true);
         createdAt.setComment("创建时间");
         when(fieldService.listByProject(1L)).thenReturn(List.of(id, mobileNo, amount, createdAt));
-        ReverseImportServiceImpl service = new ReverseImportServiceImpl(new SqlParserService(), fieldService);
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                mock(ReverseImportSourceService.class));
 
         TableDef table = TableDef.builder()
                 .name("user_order")
@@ -116,6 +132,104 @@ class ReverseImportServiceTest {
                 .singleElement()
                 .extracting("nonStandard")
                 .isEqualTo(true);
+    }
+
+    @Test
+    void importCandidates_recordsDatabaseBatchAndSourcesForNewFields() {
+        FieldService fieldService = mock(FieldService.class);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of(standardField("id", null)));
+        when(fieldService.create(any(Field.class))).thenAnswer(invocation -> {
+            Field field = invocation.getArgument(0);
+            field.setId(99L);
+            return field;
+        });
+        ReverseImportBatch batch = new ReverseImportBatch();
+        batch.setId(7L);
+        when(sourceService.createDatabaseBatch(any(DatabaseImportReq.class), eq(1), eq(1)))
+                .thenReturn(batch);
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                sourceService);
+        DatabaseImportReq req = databaseImportReq(List.of(
+                new FieldCandidate("USER_ORDER", "id", "BIGINT", false, null, "主键"),
+                new FieldCandidate("USER_ORDER", "user_name", "VARCHAR(50)", true, null, "用户名")
+        ));
+
+        var result = service.importCandidates(req);
+
+        assertThat(result.getImportedCount()).isEqualTo(1);
+        assertThat(result.getSkippedCount()).isEqualTo(1);
+        verify(sourceService).createDatabaseBatch(req, 1, 1);
+        ArgumentCaptor<Field> fieldCaptor = ArgumentCaptor.forClass(Field.class);
+        ArgumentCaptor<FieldCandidate> candidateCaptor = ArgumentCaptor.forClass(FieldCandidate.class);
+        verify(sourceService).recordFieldSource(eq(batch), fieldCaptor.capture(), candidateCaptor.capture());
+        assertThat(fieldCaptor.getValue().getId()).isEqualTo(99L);
+        assertThat(candidateCaptor.getValue().getColumnName()).isEqualTo("user_name");
+    }
+
+    @Test
+    void importCandidates_doesNotCreateBatchWhenAllFieldsAreSkipped() {
+        FieldService fieldService = mock(FieldService.class);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of(standardField("id", null)));
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                sourceService);
+        DatabaseImportReq req = databaseImportReq(List.of(
+                new FieldCandidate("USER_ORDER", "id", "BIGINT", false, null, "主键")
+        ));
+
+        var result = service.importCandidates(req);
+
+        assertThat(result.getImportedCount()).isZero();
+        assertThat(result.getSkippedCount()).isEqualTo(1);
+        verify(sourceService, never()).createDatabaseBatch(any(), anyInt(), anyInt());
+        verify(sourceService, never()).recordFieldSource(any(), any(), any());
+    }
+
+    @Test
+    void importCandidates_recordsBatchForLegacyDatabaseImportRequestsWithoutSourceContext() {
+        FieldService fieldService = mock(FieldService.class);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        when(fieldService.create(any(Field.class))).thenAnswer(invocation -> {
+            Field field = invocation.getArgument(0);
+            field.setId(100L);
+            return field;
+        });
+        ReverseImportBatch batch = new ReverseImportBatch();
+        batch.setId(8L);
+        when(sourceService.createDatabaseBatch(any(DatabaseImportReq.class), eq(1), eq(0)))
+                .thenReturn(batch);
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                sourceService);
+        DatabaseImportReq req = new DatabaseImportReq();
+        req.setProjectId(1L);
+        req.setCandidates(List.of(
+                new FieldCandidate("USER_ORDER", "user_name", "VARCHAR(50)", true, null, "用户名")
+        ));
+
+        var result = service.importCandidates(req);
+
+        assertThat(result.getImportedCount()).isEqualTo(1);
+        verify(sourceService).createDatabaseBatch(req, 1, 0);
+        verify(sourceService).recordFieldSource(eq(batch), any(Field.class), any(FieldCandidate.class));
+    }
+
+    private DatabaseImportReq databaseImportReq(List<FieldCandidate> candidates) {
+        DatabaseImportReq req = new DatabaseImportReq();
+        req.setProjectId(1L);
+        req.setDatabaseType("postgresql");
+        req.setDatabaseName("demo");
+        req.setSchemaName("public");
+        req.setTableNames(List.of("USER_ORDER"));
+        req.setCandidates(candidates);
+        return req;
     }
 
     private ColumnDef column(String name, String dataType, boolean nullable, String defaultValue, String comment) {

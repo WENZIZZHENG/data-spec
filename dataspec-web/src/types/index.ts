@@ -230,3 +230,46 @@ export interface DatabaseImportResult {
   importedFields?: string[]
   skippedFields?: string[]
 }
+
+export interface DatabaseImportSourceContext {
+  databaseType?: string
+  databaseName?: string
+  schemaName?: string
+  tableNames?: string[]
+}
+
+export interface ReverseImportBatch {
+  id?: number
+  projectId?: number
+  sourceType?: string
+  databaseType?: string
+  databaseName?: string
+  schemaName?: string
+  tableNamesJson?: string
+  importedCount?: number
+  skippedCount?: number
+  operatorName?: string
+  createdAt?: string
+}
+
+export interface FieldSource {
+  id?: number
+  projectId?: number
+  fieldId?: number
+  batchId?: number
+  sourceType?: string
+  schemaName?: string
+  tableName?: string
+  columnName?: string
+  dataType?: string
+  nullable?: boolean
+  defaultValue?: string
+  comment?: string
+  metadataJson?: string
+  createdAt?: string
+}
+
+export interface FieldSourceDetail {
+  source?: FieldSource
+  batch?: ReverseImportBatch | null
+}

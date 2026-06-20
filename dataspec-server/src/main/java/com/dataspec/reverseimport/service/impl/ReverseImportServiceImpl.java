@@ -20,10 +20,13 @@ import com.dataspec.reverseimport.model.ReverseImportTableDiff;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.model.ReverseImportSummary;
 import com.dataspec.reverseimport.service.ReverseImportService;
+import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -37,6 +40,7 @@ public class ReverseImportServiceImpl implements ReverseImportService {
 
     private final SqlParserService sqlParserService;
     private final FieldService fieldService;
+    private final ReverseImportSourceService reverseImportSourceService;
 
     @Override
     public ReverseImportPreview preview(Long projectId, String sql) {
@@ -161,6 +165,7 @@ public class ReverseImportServiceImpl implements ReverseImportService {
     }
 
     @Override
+    @Transactional
     public DatabaseImportResult importCandidates(DatabaseImportReq req) {
         if (req == null || req.getProjectId() == null) {
             throw new BizException("项目ID不能为空");
@@ -171,6 +176,7 @@ public class ReverseImportServiceImpl implements ReverseImportService {
 
         Map<String, Field> standardFieldIndex = standardFieldIndex(req.getProjectId());
         DatabaseImportResult result = new DatabaseImportResult();
+        List<ImportedFieldSource> importedSources = new ArrayList<>();
         for (FieldCandidate candidate : req.getCandidates()) {
             if (candidate == null || isBlank(candidate.getColumnName())) {
                 continue;
@@ -191,9 +197,19 @@ public class ReverseImportServiceImpl implements ReverseImportService {
             field.setComment(candidate.getComment());
             field.setCategory(candidate.getTableName());
             fieldService.create(field);
+            importedSources.add(new ImportedFieldSource(field, candidate));
             standardFieldIndex.put(normalizedName, field);
             result.setImportedCount(result.getImportedCount() + 1);
             result.getImportedFields().add(candidate.getColumnName());
+        }
+        if (!importedSources.isEmpty()) {
+            var batch = reverseImportSourceService.createDatabaseBatch(
+                    req,
+                    result.getImportedCount(),
+                    result.getSkippedCount());
+            for (ImportedFieldSource imported : importedSources) {
+                reverseImportSourceService.recordFieldSource(batch, imported.field(), imported.candidate());
+            }
         }
         return result;
     }
@@ -344,5 +360,8 @@ public class ReverseImportServiceImpl implements ReverseImportService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private record ImportedFieldSource(Field field, FieldCandidate candidate) {
     }
 }

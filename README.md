@@ -30,7 +30,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 支持 PostgreSQL `COMMENT ON TABLE/COLUMN`，以及常见 MySQL `CREATE TABLE`、列内注释、表选项、索引定义、`UNSIGNED` 数值类型和 `tinyint(1)` 布尔习惯解析。
 - 表名/字段名 snake_case、禁用字段名、推荐字段名、必备列、金额类型、字段后缀/前缀类型和注释缺失等规则。
 - 修正 SQL 输出、复制、检查记录、分页历史和详情查看。
-- SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项和非标准字段差异，并支持确认导入数标候选；直连模式支持按表生成数据库现状与 DataSpec 标准字段的二次比对。
+- SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项和非标准字段差异，并支持确认导入数标候选；直连模式支持按表生成数据库现状与 DataSpec 标准字段的二次比对，并追踪确认导入后的字段来源批次。
 
 ### 生成与报告
 
@@ -144,7 +144,7 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 
 `/api/lint` 会返回 lint 结果、结构化修复建议和 `fixedSql`，并保存 SQL 检查记录。前端 SQL 校验页支持查看修正 SQL、复制、最近检查记录分页和详情。
 
-反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。直连模式还可以生成只读二次比对，按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。直连模式不会保存数据库密码，不会修改源数据库，也不会做定时同步。
+反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。直连模式还可以生成只读二次比对，按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。确认导入创建的新字段会记录导入批次、来源 schema/table/column 和原始 metadata 快照，字段库可查看来源摘要。直连模式不会保存数据库密码或完整连接串，不会修改源数据库，也不会做定时同步。
 
 ## 数据字典与导入导出
 
@@ -369,6 +369,7 @@ data-spec/
 - [x] SQL 反向导入预览与差异分析
 - [x] 数据库直连反向导入与前端确认导入流程
 - [x] 数据库直连二次比对，按表展示标准命中、属性变化、新增、缺注释和非标准字段
+- [x] 数据库直连导入来源与批次追踪，字段库可查看来源摘要
 - [x] DataSpec CLI：`doctor`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置
 - [x] DataSpec MCP Server：resources、prompts、`lint_sql`、`get_field_catalog`、`suggest_fields`、`generate_table_ddl`，支持 `.dataspec/config.json` 默认项目配置
 - [x] GitHub Actions 示例和 PR 评论式 SQL Review

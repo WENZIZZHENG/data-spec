@@ -9,6 +9,7 @@ import com.dataspec.reverseimport.model.FieldCandidate;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.model.ReverseImportFieldStatus;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
+import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.reverseimport.service.impl.DatabaseReverseImportServiceImpl;
 import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
 import org.junit.jupiter.api.Test;
@@ -121,7 +122,8 @@ class DatabaseReverseImportServiceTest {
         });
         ReverseImportServiceImpl reverseImportService = new ReverseImportServiceImpl(
                 new com.dataspec.lint.engine.SqlParserService(),
-                fieldService);
+                fieldService,
+                mock(ReverseImportSourceService.class));
 
         DatabaseImportReq req = new DatabaseImportReq();
         req.setProjectId(1L);
@@ -144,7 +146,8 @@ class DatabaseReverseImportServiceTest {
     private DatabaseReverseImportServiceImpl service(FieldService fieldService) {
         ReverseImportServiceImpl reverseImportService = new ReverseImportServiceImpl(
                 new com.dataspec.lint.engine.SqlParserService(),
-                fieldService);
+                fieldService,
+                mock(ReverseImportSourceService.class));
         return new DatabaseReverseImportServiceImpl(reverseImportService, req -> openMetadataConnection());
     }
 

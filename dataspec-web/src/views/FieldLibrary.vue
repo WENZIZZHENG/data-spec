@@ -61,8 +61,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="comment" label="注释" min-width="220" show-overflow-tooltip />
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
+            <el-button text type="primary" @click="openSourceDialog(row)">来源</el-button>
             <el-button text type="primary" @click="openEditDialog(row)">编辑</el-button>
             <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
@@ -201,6 +202,37 @@
         <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="sourceDialogVisible" :title="sourceDialogTitle" width="820px">
+      <el-table
+        v-loading="sourceLoading"
+        :data="fieldSources"
+        stripe
+        empty-text="暂无来源记录"
+      >
+        <el-table-column label="导入时间" min-width="160">
+          <template #default="{ row }">{{ formatDate(row.batch?.createdAt ?? row.source?.createdAt) }}</template>
+        </el-table-column>
+        <el-table-column label="来源库" min-width="180">
+          <template #default="{ row }">
+            <div>{{ row.batch?.databaseType || '-' }}</div>
+            <div class="muted-text">{{ sourceDatabaseLabel(row) }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="来源字段" min-width="180">
+          <template #default="{ row }">
+            <div>{{ sourceColumnLabel(row) }}</div>
+            <div class="muted-text">{{ row.source?.dataType || '-' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="批次统计" min-width="120">
+          <template #default="{ row }">
+            <span>新增 {{ row.batch?.importedCount ?? 0 }} / 跳过 {{ row.batch?.skippedCount ?? 0 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="source.comment" label="原注释" min-width="180" show-overflow-tooltip />
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
@@ -208,16 +240,20 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
-import { createField, deleteField, pageFields, updateField } from '@/api/field'
+import { createField, deleteField, listFieldSources, pageFields, updateField } from '@/api/field'
 import { useProjectStore } from '@/stores/project'
-import type { Field, FieldReq, PageResult } from '@/types'
+import type { Field, FieldReq, FieldSourceDetail, PageResult } from '@/types'
 
 const projectStore = useProjectStore()
 const fields = ref<Field[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
+const sourceDialogVisible = ref(false)
 const editingField = ref<Field | null>(null)
+const sourceField = ref<Field | null>(null)
+const fieldSources = ref<FieldSourceDetail[]>([])
+const sourceLoading = ref(false)
 const formRef = ref<FormInstance>()
 
 const pagination = reactive({
@@ -266,6 +302,9 @@ const rules: FormRules<FieldReq> = {
 }
 
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
+const sourceDialogTitle = computed(() =>
+  sourceField.value?.name ? `字段来源：${sourceField.value.name}` : '字段来源'
+)
 
 onMounted(() => {
   if (projectStore.projects.length === 0) {
@@ -337,6 +376,20 @@ function openEditDialog(field: Field) {
   editingField.value = field
   resetForm(field)
   dialogVisible.value = true
+}
+
+async function openSourceDialog(field: Field) {
+  if (!field.id) {
+    return
+  }
+  sourceField.value = field
+  sourceDialogVisible.value = true
+  sourceLoading.value = true
+  try {
+    fieldSources.value = await listFieldSources(field.id)
+  } finally {
+    sourceLoading.value = false
+  }
 }
 
 async function handleSubmit() {
@@ -413,6 +466,27 @@ function statusTagType(status?: string) {
   }
   return 'success'
 }
+
+function sourceDatabaseLabel(row: FieldSourceDetail) {
+  const parts = [row.batch?.databaseName, row.batch?.schemaName].filter(Boolean)
+  return parts.length > 0 ? parts.join(' / ') : '-'
+}
+
+function sourceColumnLabel(row: FieldSourceDetail) {
+  const parts = [row.source?.tableName, row.source?.columnName].filter(Boolean)
+  return parts.length > 0 ? parts.join('.') : '-'
+}
+
+function formatDate(value?: string) {
+  if (!value) {
+    return '-'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return date.toLocaleString()
+}
 </script>
 
 <style scoped>
@@ -458,5 +532,11 @@ function statusTagType(status?: string) {
 
 .full-width {
   width: 100%;
+}
+
+.muted-text {
+  margin-top: 2px;
+  color: #6b7280;
+  font-size: 12px;
 }
 </style>
