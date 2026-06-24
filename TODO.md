@@ -4,10 +4,9 @@
 
 ## 下一步顺序
 
-1. 先做 P5-8 前端高频流程细节打磨，减少重复输入和上下文丢失。
-2. 再做 P5-9 轻量 API Token 管理页面，补齐 CLI/MCP 长期接入的日常入口。
-3. P5 完成后推进 P6：标准版本快照、字段覆盖率、AI 回放、业务仓库初始化向导、标准质量评分和轻量影响分析。
-4. P6 后续继续补 AI contract fixtures、按需 AI Context、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索和 OpenSpec 收口。
+1. 先做 P5-9 轻量 API Token 管理页面，补齐 CLI/MCP 长期接入的日常入口。
+2. P5 完成后推进 P6：标准版本快照、字段覆盖率、AI 回放、业务仓库初始化向导、标准质量评分和轻量影响分析。
+3. P6 后续继续补 AI contract fixtures、按需 AI Context、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索和 OpenSpec 收口。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -18,7 +17,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强和核心 fixture/golden 基线，接下来补齐前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索和 OpenSpec 收口。
+- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线和前端高频流程细节打磨，接下来补齐轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索和 OpenSpec 收口。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -81,12 +80,12 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不追求完整 SQL 方言覆盖，只收录项目真实会遇到的高价值样例。
 
 ### P5-8：前端高频流程细节打磨
-- 状态：待办。
+- 状态：已完成第一版，反向导入页已按项目记住非敏感直连状态、表选择、搜索词和差异筛选，字段库支持关键词 query 跳转筛选。
 - 为什么做：当前前端主流程已经可用，下一步应减少重复输入和上下文丢失，让个人日常使用更顺手。
 - 已有基础：工作台、项目选择、SQL 校验、DDL 生成、反向导入、字段库、规则配置、AI Context 页面均已接后端。
-- 缺口：缺少最近连接复用、表选择记忆、预览筛选、字段库跳转携带筛选条件、修正 SQL side-by-side diff、常用操作快捷入口等细节。
-- 落地产物：围绕 SQL 校验、反向导入、字段库和 AI Context 增加小步体验优化：最近配置、筛选状态保留、只看冲突/新增、跳转字段库自动筛选、diff 视图切换。
-- 验收标准：用户完成一次反向导入或 SQL 修复后，能顺畅跳转到字段库或相关结果，不需要重复选择项目和筛选条件；`pnpm build` 通过。
+- 已完成能力：新增前端 `reverseImportMemory` utility 和单测，使用浏览器本地存储保存 databaseType、host、port、databaseName、schemaName、username、tableNames、tableSearch、compareStatusFilter 和 activeMode；明确不保存 password、token、JDBC URL 或完整连接串；导入结果跳转字段库时会携带首个导入字段作为 `keyword`，字段库按 query 初始化筛选。
+- 后续增强：多连接预设、无密复用和重新比对上次来源已放在 P6-10；更完整的前端 E2E 门禁已放在 P6-17。
+- 验收标准：`pnpm test` 覆盖敏感字段剔除、项目隔离、损坏缓存兜底和字段库 query；`pnpm build` 通过。
 - 边界：不做视觉大改版，不引入复杂新状态管理，不改变后端核心模型。
 
 ### P5-9：轻量 API Token 管理页面

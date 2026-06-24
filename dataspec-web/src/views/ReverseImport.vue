@@ -368,7 +368,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import { Check, Connection, Refresh, Search, Upload, View } from '@element-plus/icons-vue'
@@ -388,6 +388,12 @@ import {
   mergeSelectedTableNames,
   pickSelectedCandidates
 } from '@/utils/reverseImportSelection'
+import {
+  fieldLibraryQueryForImportResult,
+  loadReverseImportMemory,
+  saveReverseImportMemory,
+  type ReverseImportMemoryState
+} from '@/utils/reverseImportMemory'
 import type {
   DatabaseConnectionReq,
   DatabaseImportResult,
@@ -420,6 +426,7 @@ const compareLoading = ref(false)
 const testLoading = ref(false)
 const tableLoading = ref(false)
 const importLoading = ref(false)
+const restoringMemory = ref(false)
 const databaseTables = ref<DatabaseTableInfo[]>([])
 const tableSearch = ref('')
 const connectionStatus = ref<ConnectionStatus>('idle')
@@ -551,6 +558,7 @@ onMounted(async () => {
   if (!projectStore.currentProjectId && projectStore.projects.length === 0) {
     await projectStore.loadProjects()
   }
+  applySavedReverseImportMemory()
 })
 
 watch(
@@ -561,16 +569,23 @@ watch(
     dbForm.tableNames = []
     tableSearch.value = ''
     resetConnectionStatus()
+    applySavedReverseImportMemory()
   }
 )
 
 watch(activeMode, () => {
+  if (restoringMemory.value) {
+    return
+  }
   resetResults()
 })
 
 watch(
   () => [...(dbForm.tableNames ?? [])],
   () => {
+    if (restoringMemory.value) {
+      return
+    }
     resetResults()
   }
 )
@@ -582,10 +597,12 @@ watch(
     dbForm.port,
     dbForm.databaseName,
     dbForm.schemaName,
-    dbForm.username,
-    dbForm.password
+    dbForm.username
   ],
   () => {
+    if (restoringMemory.value) {
+      return
+    }
     resetConnectionStatus()
     databaseTables.value = []
     dbForm.tableNames = []
@@ -594,12 +611,30 @@ watch(
   }
 )
 
+watch(
+  () => [
+    projectStore.currentProjectId,
+    activeMode.value,
+    tableSearch.value,
+    compareStatusFilter.value,
+    dbForm.databaseType,
+    dbForm.host,
+    dbForm.port,
+    dbForm.databaseName,
+    dbForm.schemaName,
+    dbForm.username,
+    [...(dbForm.tableNames ?? [])].join('\u0000')
+  ],
+  () => {
+    persistReverseImportMemory()
+  }
+)
+
 function resetResults() {
   preview.value = null
   compareResult.value = null
   importResult.value = null
   selectedCandidateKeys.value = new Set()
-  compareStatusFilter.value = 'ALL'
 }
 
 function resetConnectionStatus() {
@@ -848,7 +883,108 @@ function changeText(change: ReverseImportFieldChange) {
 }
 
 function goToFieldLibrary() {
-  router.push('/fields')
+  router.push({
+    path: '/fields',
+    query: fieldLibraryQueryForImportResult(importResult.value?.importedFields ?? [])
+  })
+}
+
+function applySavedReverseImportMemory() {
+  const projectId = projectStore.currentProjectId
+  const storage = browserStorage()
+  if (!projectId || !storage) {
+    return
+  }
+  const memory = loadReverseImportMemory(storage, projectId)
+  if (!memory) {
+    return
+  }
+
+  restoringMemory.value = true
+  if (memory.activeMode) {
+    activeMode.value = memory.activeMode
+  }
+  applyDatabaseMemory(memory.database)
+  if (memory.tableSearch !== undefined) {
+    tableSearch.value = memory.tableSearch
+  }
+  if (isCompareStatusFilter(memory.compareStatusFilter)) {
+    compareStatusFilter.value = memory.compareStatusFilter
+  }
+  resetConnectionStatus()
+  void nextTick(() => {
+    restoringMemory.value = false
+  })
+}
+
+function applyDatabaseMemory(database: ReverseImportMemoryState['database']) {
+  if (!database) {
+    return
+  }
+  if (isDatabaseType(database.databaseType)) {
+    dbForm.databaseType = database.databaseType
+  }
+  if (database.host !== undefined) {
+    dbForm.host = database.host
+  }
+  if (database.port !== undefined) {
+    dbForm.port = database.port
+  }
+  if (database.databaseName !== undefined) {
+    dbForm.databaseName = database.databaseName
+  }
+  if (database.schemaName !== undefined) {
+    dbForm.schemaName = database.schemaName
+  }
+  if (database.username !== undefined) {
+    dbForm.username = database.username
+  }
+  if (database.tableNames !== undefined) {
+    dbForm.tableNames = [...database.tableNames]
+  }
+  dbForm.password = ''
+}
+
+function persistReverseImportMemory() {
+  const projectId = projectStore.currentProjectId
+  const storage = browserStorage()
+  if (!projectId || !storage || restoringMemory.value) {
+    return
+  }
+  try {
+    saveReverseImportMemory(storage, projectId, {
+      activeMode: activeMode.value,
+      tableSearch: tableSearch.value,
+      compareStatusFilter: compareStatusFilter.value,
+      database: {
+        databaseType: dbForm.databaseType,
+        host: dbForm.host,
+        port: dbForm.port,
+        databaseName: dbForm.databaseName,
+        schemaName: dbForm.schemaName,
+        username: dbForm.username,
+        tableNames: [...(dbForm.tableNames ?? [])]
+      }
+    })
+  } catch {
+    // 本地记忆是体验增强，写入失败不能影响反向导入主流程。
+  }
+}
+
+function isCompareStatusFilter(value: unknown): value is CompareStatusFilter {
+  return compareStatusOptions.some((option) => option.value === value)
+}
+
+function isDatabaseType(value: unknown): value is NonNullable<DatabaseConnectionReq['databaseType']> {
+  return value === 'postgresql' || value === 'mysql'
+}
+
+function browserStorage() {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage
+  } catch {
+    return null
+  }
 }
 </script>
 

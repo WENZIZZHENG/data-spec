@@ -24,9 +24,19 @@
     </el-empty>
 
     <template v-else>
+      <div class="field-toolbar">
+        <el-input
+          v-model="fieldKeyword"
+          :prefix-icon="Search"
+          clearable
+          placeholder="搜索字段名、显示名、别名、分类或注释"
+        />
+        <span class="toolbar-count">当前页匹配 {{ filteredFields.length }} / {{ fields.length }}</span>
+      </div>
+
       <el-table
         v-loading="loading"
-        :data="fields"
+        :data="filteredFields"
         stripe
         class="field-table"
         empty-text="暂无标准字段"
@@ -238,14 +248,17 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Plus, Refresh } from '@element-plus/icons-vue'
+import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { createField, deleteField, listFieldSources, pageFields, updateField } from '@/api/field'
 import { useProjectStore } from '@/stores/project'
 import type { Field, FieldReq, FieldSourceDetail, PageResult } from '@/types'
 
 const projectStore = useProjectStore()
+const route = useRoute()
 const fields = ref<Field[]>([])
+const fieldKeyword = ref('')
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
@@ -305,6 +318,25 @@ const hasProject = computed(() => Boolean(projectStore.currentProjectId))
 const sourceDialogTitle = computed(() =>
   sourceField.value?.name ? `字段来源：${sourceField.value.name}` : '字段来源'
 )
+const filteredFields = computed(() => {
+  const keyword = fieldKeyword.value.trim().toLowerCase()
+  if (!keyword) {
+    return fields.value
+  }
+  return fields.value.filter((field) =>
+    [
+      field.name,
+      field.displayName,
+      field.aliases,
+      field.category,
+      field.tags,
+      field.comment,
+      field.dataType
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(keyword))
+  )
+})
 
 onMounted(() => {
   if (projectStore.projects.length === 0) {
@@ -317,6 +349,14 @@ watch(
   () => {
     pagination.current = 1
     void loadFields()
+  },
+  { immediate: true }
+)
+
+watch(
+  () => route.query.keyword,
+  (keyword) => {
+    fieldKeyword.value = routeKeyword(keyword)
   },
   { immediate: true }
 )
@@ -487,6 +527,13 @@ function formatDate(value?: string) {
   }
   return date.toLocaleString()
 }
+
+function routeKeyword(value: unknown) {
+  if (Array.isArray(value)) {
+    return value[0] ?? ''
+  }
+  return typeof value === 'string' ? value : ''
+}
 </script>
 
 <style scoped>
@@ -524,6 +571,19 @@ function formatDate(value?: string) {
   width: 100%;
 }
 
+.field-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 420px) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.toolbar-count {
+  color: #6b7280;
+  font-size: 13px;
+}
+
 .pagination-row {
   display: flex;
   justify-content: flex-end;
@@ -538,5 +598,11 @@ function formatDate(value?: string) {
   margin-top: 2px;
   color: #6b7280;
   font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .field-toolbar {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
