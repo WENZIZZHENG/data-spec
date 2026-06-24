@@ -7,18 +7,18 @@
 1. 先做 P5-8 前端高频流程细节打磨，减少重复输入和上下文丢失。
 2. 再做 P5-9 轻量 API Token 管理页面，补齐 CLI/MCP 长期接入的日常入口。
 3. P5 完成后推进 P6：标准版本快照、字段覆盖率、AI 回放、业务仓库初始化向导、标准质量评分和轻量影响分析。
-4. P6 后续继续补 AI contract fixtures、按需 AI Context、规则例外治理、GitHub inline 实接和性能基线。
+4. P6 后续继续补 AI contract fixtures、按需 AI Context、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索和 OpenSpec 收口。
 
 ## 已完成能力摘要（P0-P4）
 
-P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed-p0-p4.md](docs/archive/todo-completed-p0-p4.md)。主待办只保留当前仍需行动的 P5 任务。
+P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed-p0-p4.md](docs/archive/todo-completed-p0-p4.md)。主待办只保留当前仍需行动的 P5/P6 任务。
 
 - P0 AI 可消费主线已完成第一版：AI Context zip、CLI、MCP、个人版字段模型、结构化命名规则和 AI Prompt 生成。
 - P1 核心闭环已完成第一版：SQL 校验、OpenAPI 类型契约、COMMENT 解析、前端管理页、字段推荐、结构化修复建议、DDL 生成、检查记录和 fixedSql。
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强和核心 fixture/golden 基线，接下来补齐前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接和性能基线。
+- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强和核心 fixture/golden 基线，接下来补齐前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索和 OpenSpec 收口。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -243,6 +243,42 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 落地产物：新增性能基线测试或本地脚本，模拟千级/万级字段、百级规则和检查记录；记录字段列表、推荐、AI Context、lint records、反向导入 compare 的耗时；补充必要索引、分页和导出限流提示。
 - 验收标准：大字段库场景下核心接口耗时有可重复测量结果；明显慢点有日志或诊断提示；前端列表不因大数据量明显卡顿；CLI/MCP 超时信息可读。
 - 边界：不做分布式部署，不引入缓存集群，不为个人版过早上复杂监控平台。
+
+### P6-17：前端关键流程 E2E 冒烟与回归门禁
+- 状态：待办。
+- 为什么做：前端页面已覆盖字段库、规则、SQL 校验、DDL、反向导入、AI Context 和工作台，但目前主要依赖构建和局部单测，核心流程仍容易在导航、项目切换或接口类型变化时悄悄回归。
+- 已有基础：前端已有 Vue 3、Element Plus、Pinia、Axios、Monaco、`pnpm build` 和部分测试入口；后端已有 demo project 与核心接口。
+- 缺口：缺少一组稳定的端到端冒烟用例，覆盖“选择项目 -> 校验 SQL -> 查看 fixedSql/记录 -> 反向导入预览 -> 字段库筛选 -> 导出 AI Context”等高频链路。
+- 落地产物：新增前端 E2E 或组件集成测试入口，准备最小 demo 数据，覆盖关键导航、项目状态联动、核心按钮、空状态和错误提示；将命令接入统一验证说明。
+- 验收标准：本地一条命令能跑完关键流程冒烟；破坏项目选择、接口字段、核心按钮或路由跳转时测试能失败；CI/本地验证文档清楚说明依赖。
+- 边界：不追求全页面像素级截图，不覆盖所有表单排列组合，不引入重量级测试平台。
+
+### P6-18：AI 可读错误码与下一步建议标准化
+- 状态：待办。
+- 为什么做：DataSpec 优先让 AI 使用，接口、CLI 和 MCP 失败时不能只给人类文本；AI 需要稳定的错误码、原因、可重试性和下一步动作，才能自动恢复或给出准确建议。
+- 已有基础：已有 `dataspec doctor`、统一 API wrapper、CLI/MCP JSON 输出、OpenAPI 契约和安全基线。
+- 缺口：不同入口的错误结构还不统一，部分失败只返回 message；缺少 `code`、`category`、`retryable`、`suggestedAction`、`docsRef` 等机器可读字段。
+- 落地产物：定义轻量错误响应契约；统一核心 API、CLI 和 MCP 的错误输出；为服务未启动、projectId 无效、token 无权限、OpenAPI 漂移、SQL 解析失败、数据库连接失败等场景补稳定错误码和建议动作。
+- 验收标准：AI agent 可根据错误码判断是否需要运行 doctor、切换项目、重新生成 schema、补 token 或提示用户；错误契约有 golden/单测覆盖；README 或 `.dataspec/README.md` 记录稳定字段。
+- 边界：不做复杂国际化，不改变 HTTP 状态语义，不把内部异常堆栈暴露给前端或 AI。
+
+### P6-19：字段标准检索 API 与语义查询增强
+- 状态：待办。
+- 为什么做：字段推荐解决“给一个字段名推荐标准字段”，但 AI 和人还会问“支付金额相关字段有哪些”“订单域可用字段有哪些”“这个表建表前要参考哪些字段”；需要更像目录检索的入口。
+- 已有基础：已有字段列表、字段推荐、category/tags/alias、AI Context、MCP resources 和按需裁剪待办。
+- 缺口：缺少面向 AI 的标准字段搜索 API，无法稳定返回 query 命中原因、作用域、字段数量、相近字段和缺失提示；前端字段库搜索也偏列表过滤。
+- 落地产物：新增字段标准检索 API/CLI/MCP 工具；支持按关键字、中文描述、category、tag、表/模块、敏感标识、状态和来源批次查询；返回命中原因、推荐使用范围和下一步建议。
+- 验收标准：AI agent 能在建表或修 SQL 前检索最相关字段集合；搜索结果可被字段库页面复用；同义词、别名和拼音缩写有核心测试覆盖。
+- 边界：不引入向量数据库，不调用外部 LLM，不替代现有字段推荐接口。
+
+### P6-20：OpenSpec 归档与主规格同步收口
+- 状态：待办。
+- 为什么做：项目已经持续使用 OpenSpec，但完成的 change 较多，如果不定期归档并同步主规格，后续 AI 会在 active changes、README、TODO 和实际能力之间读到过期上下文。
+- 已有基础：已有多个 OpenSpec change、README 当前功能概览、TODO 完成项归档和 OpenSpec validate 流程。
+- 缺口：完成 change 仍散落在 `openspec/changes` 中，主规格和归档证据缺少周期性收口规则；部分任务完成证据只存在 commit 和 TODO 摘要里。
+- 落地产物：建立 OpenSpec 收口任务：确认已完成 change、同步 delta spec 到主 specs、归档 change、补 Verification Evidence、更新 README/TODO 入口和过期链接。
+- 验收标准：已完成 change 不再干扰“下一步待办”判断；`openspec validate` 通过；归档记录能追溯关键验证命令、commit 和遗留边界。
+- 边界：不在本任务中实现新产品能力，不重写历史方案，只处理已完成且证据清晰的变更。
 
 ## 参考项目索引
 
