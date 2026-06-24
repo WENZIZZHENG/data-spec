@@ -281,6 +281,8 @@ cd ..
 node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs
 ```
 
+后端 `mvn test` 已包含核心 fixture/golden 回归测试，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出和反向导入 metadata 预览摘要。
+
 ## 项目结构
 
 ```

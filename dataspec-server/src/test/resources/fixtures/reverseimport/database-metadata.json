@@ -1,0 +1,30 @@
+[
+  {
+    "tableName": "user_order",
+    "columnName": "id",
+    "dataType": "BIGINT",
+    "nullable": false,
+    "comment": "主键"
+  },
+  {
+    "tableName": "user_order",
+    "columnName": "phone",
+    "dataType": "VARCHAR(20)",
+    "nullable": true,
+    "comment": "手机号"
+  },
+  {
+    "tableName": "user_order",
+    "columnName": "user_name",
+    "dataType": "VARCHAR(50)",
+    "nullable": true,
+    "comment": "用户名"
+  },
+  {
+    "tableName": "user_order",
+    "columnName": "legacy_code",
+    "dataType": "VARCHAR(32)",
+    "nullable": true,
+    "comment": ""
+  }
+]

@@ -4,10 +4,10 @@
 
 ## 下一步顺序
 
-1. 先补规则测试语料库和 fixedSql golden fixtures，锁住 parser、lint、fixedSql 与反向导入核心行为。
-2. 继续打磨 AI 可消费质量：AI contract fixtures、按需 AI Context 和 MCP/CLI workflow recipes。
-3. 打磨个人/小团队日常体验：前端高频流程细节、轻量 API Token 管理页面；仍避免过早引入审批流、发布流程等重型治理模型。
-4. P5 稳定后推进 P6：标准版本快照、字段覆盖率、AI 回放、业务仓库初始化向导、标准质量评分、轻量影响分析、按需 AI Context、规则例外治理、AI 契约稳定性、GitHub inline 实接和性能基线。
+1. 先做 P5-8 前端高频流程细节打磨，减少重复输入和上下文丢失。
+2. 再做 P5-9 轻量 API Token 管理页面，补齐 CLI/MCP 长期接入的日常入口。
+3. P5 完成后推进 P6：标准版本快照、字段覆盖率、AI 回放、业务仓库初始化向导、标准质量评分和轻量影响分析。
+4. P6 后续继续补 AI contract fixtures、按需 AI Context、规则例外治理、GitHub inline 实接和性能基线。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -18,7 +18,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强和字段推荐质量增强，接下来补齐 fixtures、前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接和性能基线。
+- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强和核心 fixture/golden 基线，接下来补齐前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接和性能基线。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -73,11 +73,10 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：仍不直接调用外部 LLM；不引入复杂向量数据库。
 
 ### P5-7：规则测试语料库与 golden fixtures
-- 状态：待办。
+- 状态：已完成第一版，已新增核心 SQL fixture、fixedSql golden 和反向导入 metadata fixture，并接入 `mvn test`。
 - 为什么做：SQL parser、lint rule、fixedSql 和 reverse import 都已经成为核心链路，需要稳定样例库防止“修一个规则，坏另一个规则”。
 - 已有基础：已有后端 parser/lint 单测、examples good/bad SQL、MySQL 兼容测试和 CLI/MCP 测试。
-- 缺口：缺少按方言、规则、修复 SQL、反向导入 metadata 组织的 fixtures；缺少 fixedSql golden 输出和差异断言。
-- 落地产物：建立 `fixtures` 或等价测试资源目录，覆盖 PostgreSQL/MySQL good/bad SQL、COMMENT、UNSIGNED、索引、缺注释、字段推荐、fixedSql、反向导入样例；新增 golden 测试入口。
+- 已完成能力：建立 `dataspec-server/src/test/resources/fixtures` 测试资源目录，覆盖 PostgreSQL good SQL、MySQL bad SQL、fixedSql 输入/期望输出和反向导入 metadata JSON；新增聚合 golden 测试入口。
 - 验收标准：后端测试能一键跑完 fixture/golden 用例；修改 parser/rule/fixedSql 时能明确看到行为差异；`mvn test` 仍作为统一验证入口。
 - 边界：不追求完整 SQL 方言覆盖，只收录项目真实会遇到的高价值样例。
 

@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 @Component
 public class RequiredColumnsRule implements LintRule {
 
-    private static final Set<String> DEFAULT_REQUIRED = Set.of(
+    private static final List<String> DEFAULT_REQUIRED = List.of(
             "id", "created_at", "updated_at", "is_deleted"
     );
 
@@ -33,11 +33,15 @@ public class RequiredColumnsRule implements LintRule {
     @Override
     @SuppressWarnings("unchecked")
     public List<LintIssue> check(RuleContext context) {
-        Set<String> required = DEFAULT_REQUIRED;
+        List<String> required = DEFAULT_REQUIRED;
         if (context.getRuleParams() != null && context.getRuleParams().containsKey("requiredColumns")) {
             Object cols = context.getRuleParams().get("requiredColumns");
             if (cols instanceof List<?> list) {
-                required = Set.copyOf((List<String>) list);
+                required = list.stream()
+                        .map(Object::toString)
+                        .filter(value -> !value.isBlank())
+                        .distinct()
+                        .toList();
             }
         }
 
