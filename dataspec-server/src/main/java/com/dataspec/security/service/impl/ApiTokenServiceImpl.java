@@ -36,6 +36,11 @@ public class ApiTokenServiceImpl implements ApiTokenService {
             throw new BizException(401, "API token 已停用");
         }
         Scope scope = parseProjectScope(token.getProjectIds());
+        try {
+            apiTokenRepository.touchLastUsedAt(tokenHash);
+        } catch (RuntimeException ignored) {
+            // lastUsedAt 是审计辅助字段，写入失败不应阻断已经通过的认证请求。
+        }
         return new ApiTokenPrincipal(
                 token.getName(),
                 token.getOperatorName(),

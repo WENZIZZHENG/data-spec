@@ -10,7 +10,9 @@ import org.junit.jupiter.api.Test;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ApiTokenServiceImplTest {
@@ -30,6 +32,22 @@ class ApiTokenServiceImplTest {
         assertTrue(principal.canAccessProject(1L));
         assertTrue(principal.canAccessProject(2L));
         assertFalse(principal.canAccessProject(3L));
+        verify(repository).touchLastUsedAt(hash);
+    }
+
+    @Test
+    void authenticate_acceptsEnabledTokenWhenLastUsedTrackingFails() {
+        ApiTokenRepository repository = mock(ApiTokenRepository.class);
+        ApiTokenServiceImpl service = new ApiTokenServiceImpl(repository);
+        String hash = service.hashToken("ds_secret");
+        ApiToken token = token(hash, true, "alice", "*");
+        when(repository.findByTokenHash(hash)).thenReturn(Optional.of(token));
+        doThrow(new RuntimeException("db unavailable")).when(repository).touchLastUsedAt(hash);
+
+        ApiTokenPrincipal principal = service.authenticate("ds_secret");
+
+        assertTrue(principal.allProjects());
+        verify(repository).touchLastUsedAt(hash);
     }
 
     @Test

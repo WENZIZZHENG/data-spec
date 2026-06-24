@@ -77,6 +77,12 @@ const routes: RouteRecordRaw[] = [
     name: 'ReverseImport',
     component: () => import('@/views/ReverseImport.vue'),
     meta: { title: '反向导入' }
+  },
+  {
+    path: '/tokens',
+    name: 'TokenManage',
+    component: () => import('@/views/TokenManage.vue'),
+    meta: { title: 'API Token 管理' }
   }
 ]
 

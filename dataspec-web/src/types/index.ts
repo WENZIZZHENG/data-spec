@@ -22,6 +22,31 @@ export type TemplateField = Schemas['TemplateField']
 export type TableDef = Schemas['TableDef']
 export type ColumnDef = Schemas['ColumnDef']
 
+export interface ApiTokenInfo {
+  id?: number
+  name?: string
+  operatorName?: string
+  allProjects?: boolean
+  projectIds?: number[]
+  enabled?: boolean
+  createdAt?: string
+  updatedAt?: string
+  disabledAt?: string
+  lastUsedAt?: string
+}
+
+export interface ApiTokenCreateReq {
+  name?: string
+  operatorName?: string
+  allProjects?: boolean
+  projectIds?: number[]
+}
+
+export interface ApiTokenCreateResp {
+  plainToken?: string
+  token?: ApiTokenInfo
+}
+
 export interface PageResult<T> {
   records?: T[]
   total?: number

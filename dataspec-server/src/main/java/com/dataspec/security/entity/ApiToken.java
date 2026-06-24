@@ -37,6 +37,12 @@ public class ApiToken {
     /** 是否启用 */
     private Boolean enabled;
 
+    /** 最近一次认证成功时间，用于识别长期未使用 token */
+    private LocalDateTime lastUsedAt;
+
+    /** 停用时间；保留 enabled 是为了兼容现有鉴权判断 */
+    private LocalDateTime disabledAt;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

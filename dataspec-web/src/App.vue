@@ -94,6 +94,18 @@
             <span>反向导入</span>
           </el-menu-item>
         </el-sub-menu>
+
+        <!-- 系统设置 -->
+        <el-sub-menu index="system">
+          <template #title>
+            <el-icon><Setting /></el-icon>
+            <span>系统设置</span>
+          </template>
+          <el-menu-item index="/tokens">
+            <el-icon><Key /></el-icon>
+            <span>API Token</span>
+          </el-menu-item>
+        </el-sub-menu>
       </el-menu>
     </el-aside>
 

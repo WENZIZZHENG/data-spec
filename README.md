@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、AI Context、API Token 安全基线、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、AI Context、API Token 安全基线与管理页、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -44,6 +44,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - 字段推荐 API/CLI/MCP。
 - DDL 生成 API/CLI/MCP。
+- 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
 - CLI 支持环境自检 `doctor`、单文件 lint、批量 `lint-files`、PR 评论式 `review-pr`、AI Context 导出、字段推荐和 DDL 生成。
 - MCP Server 暴露 DataSpec resources、prompts 和核心 tools。
 - GitHub Actions 示例支持 SQL 批量校验和 PR Review 评论。
@@ -168,7 +169,7 @@ dataspec:
     enabled: true
 ```
 
-后端只保存 token 的 SHA-256 hash。示例：
+后端只保存 token 的 SHA-256 hash。安全模式关闭时可先在前端“系统设置 / API Token”创建首个 token，再开启安全模式；如果已经开启但没有全项目 token，可继续用 SQL bootstrap 写入一条全项目 token。示例：
 
 ```powershell
 $token = "ds_your_token"
@@ -181,6 +182,8 @@ VALUES ('default-cli', '<hash>', 'alice', '1,2');
 ```
 
 `project_ids` 使用逗号分隔项目 ID，`*` 表示全部项目。安全模式开启后，前端可在顶部 `API Token` 输入 token；CLI/MCP 可通过 `--dataspec-token`、`DATASPEC_TOKEN` 环境变量或 `.dataspec/config.json` 的 `apiToken` 传递 token。团队共享的 `.dataspec/config.json` 不建议提交明文 token，优先使用环境变量或本地忽略文件。
+
+前端“系统设置 / API Token”提供日常管理入口：列表只展示 token 名称、操作者、项目范围、启停状态、创建时间、停用时间和最近使用时间，不返回 token hash；新建 token 时明文只显示一次，请立即复制保存。停用 token 后，后续 CLI/MCP/API 请求会被拒绝。
 
 ## CLI
 
@@ -303,7 +306,8 @@ data-spec/
 │       ├── generator/        # Markdown 数据字典与 DDL 生成
 │       ├── importexport/     # 导入导出
 │       ├── changelog/        # 标准变更日志
-│       └── reverseimport/    # SQL 反向导入
+│       ├── reverseimport/    # SQL 反向导入
+│       └── security/         # API Token 认证与管理
 ├── dataspec-web/             # Vue 3 前端
 ├── standards/                # 内置标准 YAML/JSON
 ├── tools/                    # CLI 与 MCP adapter
@@ -326,6 +330,7 @@ data-spec/
 | lint | /api/lint | SQL 粘贴校验 |
 | dashboard | /api/dashboard | 个人工作台统计 |
 | auth | /api/auth | API token 当前身份 |
+| tokens | /api/tokens | API token 创建、列表与停用 |
 | generator | /api/generator | Markdown 数据字典与 DDL 生成 |
 | aicontext | /api/ai-context | AI 规则导出 |
 | importexport | /api/import-export | 字段导入导出 |
@@ -367,7 +372,7 @@ data-spec/
 - [x] Markdown/HTML 数据字典增强和 Mermaid ERD 输出
 - [x] Excel `.xlsx` 字段/代码集导入导出与 dry-run 明细预览
 - [x] 标准变更日志和操作者记录
-- [x] 个人/小团队 API Token 安全基线、项目边界和 CLI/MCP token 透传
+- [x] 个人/小团队 API Token 安全基线、管理页面、项目边界和 CLI/MCP token 透传
 - [x] 个人工作台和字段命中率报告
 - [x] SQL 反向导入预览与差异分析
 - [x] 数据库直连反向导入与前端确认导入流程
