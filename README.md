@@ -128,7 +128,7 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1" -o d
 curl "http://localhost:8090/api/fields/suggest?projectId=1&query=用户手机号&limit=5"
 ```
 
-推荐结果会返回已有标准字段、匹配分数、命中原因、推荐字段名和 `existing` 标记。第一版按字段名、显示名、注释、别名、分类和标签匹配；未命中时生成一个 snake_case fallback 字段名。
+推荐结果会返回已有标准字段、匹配分数、命中原因、推荐字段名和 `existing` 标记。当前推荐逻辑按字段名、显示名、注释、别名、分类、标签和内置语义词库匹配，覆盖 `uid/user_id`、`phone/mobile/tel/mobile_no`、`amount/price/fee/amount_cent`、`sfzh/id_card_no` 等常见叫法；泛化词会降权，敏感字段会在命中原因里提示。未命中已有字段但命中已知语义组时，会优先生成 canonical snake_case fallback 字段名。
 
 ## DDL 生成
 

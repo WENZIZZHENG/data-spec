@@ -148,7 +148,78 @@ class FieldServiceImplTest {
         assertEquals("mobile_no", first.recommendedName());
         assertEquals("mobile_no", first.field().getName());
         assertTrue(first.score() > 0);
-        assertTrue(first.matchReason().contains("显示名") || first.matchReason().contains("注释"));
+        assertTrue(first.matchReason().contains("显示名")
+                || first.matchReason().contains("注释")
+                || first.matchReason().contains("语义词"));
+    }
+
+    @Test
+    void suggest_matchesSemanticSynonymAndPinyinAbbreviation() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(
+                field("mobile_no", "联系电话", "varchar(20)", "用户联系号码", "", "enabled"),
+                field("user_name", "用户姓名", "varchar(64)", "用户姓名", "", "enabled")
+        ));
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        List<FieldSuggestion> suggestions = service.suggest(1L, "用户sjh", 5);
+
+        assertEquals("mobile_no", suggestions.getFirst().recommendedName());
+        assertTrue(suggestions.getFirst().matchReason().contains("语义词"));
+    }
+
+    @Test
+    void suggest_penalizesGenericOnlyMatches() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(
+                field("user_profile", "用户资料", "jsonb", "用户扩展信息", "", "enabled"),
+                field("mobile_no", "联系电话", "varchar(20)", "联系号码", "", "enabled")
+        ));
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        List<FieldSuggestion> suggestions = service.suggest(1L, "用户手机号", 5);
+
+        assertEquals("mobile_no", suggestions.getFirst().recommendedName());
+        assertTrue(suggestions.getFirst().score() > suggestions.get(1).score());
+    }
+
+    @Test
+    void suggest_marksSensitiveFieldInReason() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field idCard = field("id_card_no", "身份证号", "varchar(32)", "证件号码", "", "enabled");
+        idCard.setSensitive(true);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(idCard));
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        List<FieldSuggestion> suggestions = service.suggest(1L, "sfzh", 5);
+
+        assertEquals("id_card_no", suggestions.getFirst().recommendedName());
+        assertTrue(suggestions.getFirst().matchReason().contains("敏感"));
+    }
+
+    @Test
+    void suggest_generatesCanonicalFallbackNamesForKnownSemanticGroups() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of());
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        assertEquals("user_id", service.suggest(1L, "用户编号 uid", 5).getFirst().recommendedName());
+        assertEquals("mobile_no", service.suggest(1L, "客户手机", 5).getFirst().recommendedName());
+        assertEquals("amount_cent", service.suggest(1L, "付款金额", 5).getFirst().recommendedName());
+    }
+
+    @Test
+    void suggest_doesNotMatchShortEnglishKeywordInsideUnrelatedToken() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(
+                field("updated_at", "更新时间", "timestamp", "更新时间", "", "enabled")
+        ));
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        FieldSuggestion suggestion = service.suggest(1L, "status", 5).getFirst();
+
+        assertFalse(suggestion.existing());
+        assertEquals("status", suggestion.recommendedName());
     }
 
     @Test

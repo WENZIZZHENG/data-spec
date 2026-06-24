@@ -4,8 +4,8 @@
 
 ## 下一步顺序
 
-1. 先提升字段推荐质量，让 AI 建表时更稳定命中个人标准字段。
-2. 继续提升 AI 可消费质量：字段推荐质量、规则测试语料库和 fixedSql golden fixtures。
+1. 先补规则测试语料库和 fixedSql golden fixtures，锁住 parser、lint、fixedSql 与反向导入核心行为。
+2. 继续打磨 AI 可消费质量：AI contract fixtures、按需 AI Context 和 MCP/CLI workflow recipes。
 3. 打磨个人/小团队日常体验：前端高频流程细节、轻量 API Token 管理页面；仍避免过早引入审批流、发布流程等重型治理模型。
 4. P5 稳定后推进 P6：标准版本快照、字段覆盖率、AI 回放、业务仓库初始化向导、标准质量评分、轻量影响分析、按需 AI Context、规则例外治理、AI 契约稳定性、GitHub inline 实接和性能基线。
 
@@ -18,7 +18,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪和 SQL 定位范围增强，接下来补齐字段推荐质量、fixtures、前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接和性能基线。
+- 后续真实待办集中在 P5/P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强和字段推荐质量增强，接下来补齐 fixtures、前端细节和轻量 token 管理；P6 再提升标准版本、覆盖率、AI 回放、初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接和性能基线。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -65,12 +65,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：第一版不强制接入真实 GitHub inline API，不实现完整 SQL AST source map。
 
 ### P5-6：字段推荐质量增强
-- 状态：待办。
+- 状态：已完成第一版，字段推荐已支持轻量语义词库、泛化词降权、敏感字段提示和 canonical fallback。
 - 为什么做：DataSpec 优先服务 AI，字段推荐质量直接决定 AI 建表时是否能少犯错；当前确定性匹配可用，但还不够懂个人命名习惯。
 - 已有基础：字段推荐 API/CLI/MCP 已支持字段名、显示名、注释、别名、分类和标签匹配，并返回分数、原因和 fallback。
-- 缺口：缺少中文同义词、拼音缩写、常见业务词库、泛化词惩罚、敏感字段提示和相近字段区分能力。
-- 落地产物：增强字段推荐评分模型和内置词库；支持 `uid/user_id/account_id/member_id`、`phone/mobile/tel/mobile_no`、`amount/price/fee/amount_cent` 等常见语义区分；在推荐结果中输出更可解释的命中原因。
-- 验收标准：常见中文业务描述能稳定命中标准字段；错误泛化词得到降权或提示；推荐结果通过单元测试覆盖典型样例。
+- 已完成能力：增强字段推荐评分模型和内置词库；支持 `uid/user_id/account_id/member_id`、`phone/mobile/tel/mobile_no`、`amount/price/fee/amount_cent`、`sfzh/id_card_no` 等常见语义区分；泛化词-only 命中会降权，敏感字段会在命中原因里提示，fallback 会优先输出 canonical snake_case 候选。
+- 验收标准：常见中文业务描述、英文别名和拼音缩写能稳定命中标准字段；泛化词不会压过具体语义字段；推荐结果通过单元测试覆盖典型样例。
 - 边界：仍不直接调用外部 LLM；不引入复杂向量数据库。
 
 ### P5-7：规则测试语料库与 golden fixtures
