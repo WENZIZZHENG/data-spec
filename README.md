@@ -416,7 +416,7 @@ cd ..
 node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures 和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent` 和可解析文本内容。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures 和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库筛选与批量维护、DDL 生成、AI Context、覆盖率报告和 AI 回放的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent` 和可解析文本内容。
 
 ## 性能基线
 
@@ -515,6 +515,7 @@ data-spec/
 - [x] 个人版字段模型：别名、数据域、分类、标签、代码集、敏感标记、状态、示例值
 - [x] 字段库分组视图与批量归组，支持按数据域、分类、标签和未分组字段筛选维护
 - [x] 字段库批量维护和单条变更回退，支持状态、分类、标签、敏感标记、代码集、别名的预览式批量更新
+- [x] 前端关键流程源码级冒烟门禁，覆盖路由、项目选择、SQL 校验记录、反向导入、字段库、DDL、AI Context、覆盖率、AI 回放入口和关键按钮/空状态
 - [x] 结构化命名规则导出和 `field_suffix_type` lint 规则
 - [x] SQL 粘贴校验、结构化 issue、修复建议和 `fixedSql`
 - [x] SQL 检查记录、最近记录分页和详情
