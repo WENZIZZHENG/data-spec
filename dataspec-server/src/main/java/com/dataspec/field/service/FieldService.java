@@ -9,6 +9,8 @@ import com.dataspec.field.model.FieldChangeUndoResult;
 import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
+import com.dataspec.field.model.FieldSearchReq;
+import com.dataspec.field.model.FieldSearchResult;
 import com.dataspec.field.model.FieldSuggestion;
 
 import java.util.List;
@@ -23,6 +25,7 @@ public interface FieldService {
     Field create(Field field);
     Field update(Long id, Field field);
     void delete(Long id);
+    FieldSearchResult search(FieldSearchReq req);
     List<FieldSuggestion> suggest(Long projectId, String query, int limit);
     FieldGroupSummary groupSummary(Long projectId);
     FieldGroupingBatchUpdateResult batchUpdateGrouping(FieldGroupingBatchUpdateReq req);

@@ -123,6 +123,12 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
   assertContains(view, [
     'const fieldKeyword = ref',
     'route.query.keyword',
+    'searchFields(searchRequest)',
+    'fieldSearchSummary',
+    'fieldSearchItems',
+    'fieldSearchNextActions',
+    '命中原因',
+    '下一步建议',
     'listFields(projectId)',
     'getFieldGroupSummary(projectId)',
     'previewFieldBulkUpdate(payload)',
@@ -136,6 +142,7 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
 
   assertContains(api, [
     "request.get<unknown, Field[]>('/fields/all'",
+    "request.get<unknown, FieldSearchResult>('/fields/search'",
     "request.get<unknown, FieldGroupSummary>('/fields/groups'",
     "request.post<unknown, FieldBulkUpdatePreview>('/fields/bulk-update/preview'",
     "request.post<unknown, FieldBulkUpdateResult>('/fields/bulk-update'",

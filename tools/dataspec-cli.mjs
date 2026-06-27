@@ -65,6 +65,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'suggest-field') {
       return await runSuggestField(rest, io, fetchFn)
     }
+    if (command === 'search-fields') {
+      return await runSearchFields(rest, io, fetchFn)
+    }
     if (command === 'generate-ddl') {
       return await runGenerateDdl(rest, io, fetchFn)
     }
@@ -275,6 +278,55 @@ async function runSuggestField(args, io, fetchFn) {
   const apiToken = resolveDataSpecToken(options, config)
   const url = `${server}/api/fields/suggest?projectId=${encodeURIComponent(projectId)}&query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`
   const response = await fetchFn(url, { headers: dataSpecHeaders(apiToken) })
+  const payload = await readJsonResponse(response)
+  const result = unwrapResponse(payload)
+  io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  return 0
+}
+
+async function runSearchFields(args, io, fetchFn) {
+  const { positional, options } = parseArgs(args, [
+    'project',
+    'query',
+    'category',
+    'tag',
+    'status',
+    'sensitive',
+    'source-batch',
+    'sourceBatchId',
+    'format',
+    'server',
+    'limit',
+    'dataspec-token'
+  ])
+  const config = loadDataSpecConfig(cliCwd(io))
+  if (positional.length > 1) {
+    throw new Error(`search-fields 最多接受一个 query 参数，收到: ${positional.slice(1).join(', ')}`)
+  }
+  if (positional[0] && options.query) {
+    throw new Error('search-fields 的 query 请使用位置参数或 --query 之一，不要同时传入')
+  }
+  const projectId = parseProjectId(options.project ?? config.projectId)
+  const format = options.format ?? 'json'
+  if (format !== 'json') {
+    throw new Error('当前仅支持 --format json')
+  }
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'query', positional[0] ?? options.query)
+  appendOptionalParam(params, 'category', options.category)
+  appendOptionalParam(params, 'tag', options.tag)
+  appendOptionalParam(params, 'status', options.status)
+  appendOptionalParam(params, 'sourceBatchId', options.sourceBatchId ?? options['source-batch'])
+  if (options.sensitive !== undefined) {
+    params.set('sensitive', String(parseOptionalBoolean(options.sensitive, 'sensitive')))
+  }
+  params.set('limit', String(parseLimit(options.limit, 20)))
+  const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
+  const response = await fetchFn(`${server}/api/fields/search?${params.toString()}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
   const payload = await readJsonResponse(response)
   const result = unwrapResponse(payload)
   io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
@@ -820,6 +872,23 @@ function parseLimit(value, fallback = 5) {
     throw new Error(`无效 limit: ${value}`)
   }
   return limit
+}
+
+function parseOptionalBoolean(value, label) {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+  if (typeof value === 'boolean') {
+    return value
+  }
+  const normalized = String(value).trim().toLowerCase()
+  if (['true', '1', 'yes'].includes(normalized)) {
+    return true
+  }
+  if (['false', '0', 'no'].includes(normalized)) {
+    return false
+  }
+  throw new Error(`无效 ${label}: ${value}`)
 }
 
 async function lintSqlFiles(paths, projectId, server, fetchFn, apiToken) {
@@ -1413,6 +1482,7 @@ Usage:
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
   node tools/dataspec-cli.mjs doctor [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
@@ -1425,6 +1495,7 @@ Options:
   --dataspec-token 可由 .dataspec/config.json 的 apiToken 或 DATASPEC_TOKEN 环境变量提供
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
   export-context 默认导出完整包；传 --scope/--query/--status/--limit 时导出按需包
+  search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   doctor 默认做轻量 OpenAPI 状态检查；传 --check-openapi 时执行完整 schema 漂移检查
   workflow 只输出任务计划和命令建议，不会自动执行步骤或调用外部 LLM

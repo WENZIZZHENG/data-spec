@@ -42,6 +42,22 @@
         </div>
       </div>
 
+      <div v-if="hasFieldSearchConditions" class="search-insight">
+        <div class="search-insight-main">
+          <span class="search-insight-label">字段标准检索</span>
+          <span>
+            命中 {{ fieldSearchSummary?.matchedCount ?? filteredFields.length }}，
+            返回 {{ fieldSearchSummary?.returnedCount ?? fields.length }}
+          </span>
+        </div>
+        <div v-if="fieldSearchHints.length" class="search-insight-line">
+          {{ fieldSearchHints.join('；') }}
+        </div>
+        <div v-if="fieldSearchNextActions.length" class="search-insight-line">
+          下一步建议：{{ fieldSearchNextActions.join('；') }}
+        </div>
+      </div>
+
       <div class="field-content">
         <aside class="group-panel">
           <button
@@ -67,7 +83,17 @@
           @selection-change="handleSelectionChange"
         >
           <el-table-column type="selection" width="44" />
-          <el-table-column prop="name" label="字段名" min-width="150" fixed="left" />
+          <el-table-column label="字段名" min-width="190" fixed="left">
+            <template #default="{ row }">
+              <div class="field-name-cell">{{ row.name }}</div>
+              <div v-if="fieldSearchReasons(row).length" class="search-reason">
+                命中原因：{{ fieldSearchReasons(row).join('；') }}
+              </div>
+              <div v-if="fieldSearchRecommendedUse(row)" class="search-reason">
+                {{ fieldSearchRecommendedUse(row) }}
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column prop="displayName" label="显示名" min-width="120" />
           <el-table-column label="类型" min-width="150">
             <template #default="{ row }">
@@ -546,6 +572,7 @@ import {
   listFields,
   listFieldSources,
   previewFieldBulkUpdate,
+  searchFields,
   undoFieldChange,
   updateField
 } from '@/api/field'
@@ -567,6 +594,9 @@ import type {
   FieldGroupSummary,
   FieldImpactReport,
   FieldReq,
+  FieldSearchItem,
+  FieldSearchReq,
+  FieldSearchSummary,
   FieldSourceDetail,
   StandardChangeLog
 } from '@/types'
@@ -576,7 +606,10 @@ const route = useRoute()
 const fields = ref<Field[]>([])
 const groupSummary = ref<FieldGroupSummary | null>(null)
 const domains = ref<Domain[]>([])
-const fieldKeyword = ref('')
+const fieldKeyword = ref(routeKeyword(route.query.keyword))
+const fieldSearchItems = ref<FieldSearchItem[]>([])
+const fieldSearchSummary = ref<FieldSearchSummary | null>(null)
+const fieldSearchNextActions = ref<string[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 const batchSubmitting = ref(false)
@@ -604,6 +637,7 @@ const formRef = ref<FormInstance>()
 const openedRouteFieldId = ref<number | null>(null)
 const selectedFields = ref<Field[]>([])
 const activeGroupKey = ref('all')
+let loadSequence = 0
 
 const pagination = reactive({
   current: 1,
@@ -699,8 +733,25 @@ const groupOptions = computed(() => [
     fieldCount: group.fieldCount ?? 0
   }))
 ])
+const hasFieldSearchConditions = computed(() =>
+  Boolean(fieldKeyword.value.trim()) || isSearchableGroupKey(activeGroupKey.value)
+)
+const fieldSearchHints = computed(() => fieldSearchSummary.value?.hints?.filter(Boolean) ?? [])
+const fieldSearchItemByFieldId = computed(() => {
+  const items = new Map<number, FieldSearchItem>()
+  for (const item of fieldSearchItems.value) {
+    const id = item.field?.id
+    if (typeof id === 'number') {
+      items.set(id, item)
+    }
+  }
+  return items
+})
 const filteredFields = computed(() => {
   const keyword = fieldKeyword.value.trim().toLowerCase()
+  if (hasFieldSearchConditions.value) {
+    return fields.value.filter((field) => matchesActiveGroup(field))
+  }
   return fields.value.filter((field) =>
     matchesActiveGroup(field) && (!keyword || [
         field.name,
@@ -743,14 +794,17 @@ watch(
 watch(
   () => route.query.keyword,
   (keyword) => {
-    fieldKeyword.value = routeKeyword(keyword)
-  },
-  { immediate: true }
+    const nextKeyword = routeKeyword(keyword)
+    if (fieldKeyword.value !== nextKeyword) {
+      fieldKeyword.value = nextKeyword
+    }
+  }
 )
 
 watch([fieldKeyword, activeGroupKey], () => {
   pagination.current = 1
   selectedFields.value = []
+  void loadFields()
 })
 
 watch(bulkForm, () => {
@@ -766,29 +820,73 @@ watch(
 )
 
 async function loadFields() {
+  const sequence = ++loadSequence
   const projectId = projectStore.currentProjectId
   if (!projectId) {
     fields.value = []
     domains.value = []
     groupSummary.value = null
+    fieldSearchItems.value = []
+    fieldSearchSummary.value = null
+    fieldSearchNextActions.value = []
+    loading.value = false
     return
   }
   loading.value = true
   try {
-    const [fieldList, summary, domainList] = await Promise.all([
-      listFields(projectId),
+    const searchRequest = buildFieldSearchRequest(projectId)
+    const fieldRequest = searchRequest ? searchFields(searchRequest) : listFields(projectId)
+    const [fieldResult, summary, domainList] = await Promise.all([
+      fieldRequest,
       getFieldGroupSummary(projectId),
       listDomains(projectId)
     ])
-    fields.value = fieldList ?? []
+    if (sequence !== loadSequence) {
+      return
+    }
+    if (searchRequest) {
+      const searchResult = fieldResult as Awaited<ReturnType<typeof searchFields>>
+      fieldSearchItems.value = searchResult.items ?? []
+      fieldSearchSummary.value = searchResult.summary ?? null
+      fieldSearchNextActions.value = searchResult.nextActions ?? []
+      fields.value = fieldSearchItems.value
+        .map((item) => item.field)
+        .filter((field): field is Field => Boolean(field))
+    } else {
+      fieldSearchItems.value = []
+      fieldSearchSummary.value = null
+      fieldSearchNextActions.value = []
+      fields.value = fieldResult as Awaited<ReturnType<typeof listFields>> ?? []
+    }
     groupSummary.value = summary
     domains.value = domainList ?? []
     selectedFields.value = []
     ensureActiveGroupExists()
     await openFieldFromRoute()
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) {
+      loading.value = false
+    }
   }
+}
+
+function buildFieldSearchRequest(projectId: number): FieldSearchReq | null {
+  const query = fieldKeyword.value.trim()
+  const request: FieldSearchReq = {
+    projectId,
+    limit: 50
+  }
+  if (query) {
+    request.query = query
+  }
+  const [groupType, groupKey] = activeGroupKey.value.split(':')
+  if (groupType === 'category' && groupKey) {
+    request.category = groupKey
+  }
+  if (groupType === 'tag' && groupKey) {
+    request.tag = groupKey
+  }
+  return request.query || request.category || request.tag ? request : null
 }
 
 function handleSizeChange(size: number) {
@@ -1236,6 +1334,11 @@ function groupOptionKey(group: FieldGroupItem) {
   return `${group.groupType ?? 'unknown'}:${group.groupKey ?? ''}`
 }
 
+function isSearchableGroupKey(optionKey: string) {
+  const [groupType, groupKey] = optionKey.split(':')
+  return Boolean(groupKey && (groupType === 'category' || groupType === 'tag'))
+}
+
 function groupDisplayName(group: FieldGroupItem) {
   if (group.groupType === 'ungrouped') {
     return '未分组'
@@ -1270,6 +1373,22 @@ function matchesActiveGroup(field: Field) {
     return isUngrouped(field)
   }
   return true
+}
+
+function fieldSearchReasons(field: Field) {
+  const id = field.id
+  if (typeof id !== 'number') {
+    return []
+  }
+  return fieldSearchItemByFieldId.value.get(id)?.matchReasons?.filter(Boolean) ?? []
+}
+
+function fieldSearchRecommendedUse(field: Field) {
+  const id = field.id
+  if (typeof id !== 'number') {
+    return ''
+  }
+  return fieldSearchItemByFieldId.value.get(id)?.recommendedUse ?? ''
 }
 
 function fieldGroupLabel(field: Field) {
@@ -1522,6 +1641,20 @@ function routeFieldId(value: unknown) {
   width: 100%;
 }
 
+.field-name-cell {
+  font-weight: 600;
+  color: #303133;
+  word-break: break-all;
+}
+
+.search-reason {
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
 .field-toolbar {
   display: grid;
   grid-template-columns: minmax(240px, 420px) 1fr;
@@ -1540,6 +1673,33 @@ function routeFieldId(value: unknown) {
 .toolbar-count {
   color: #6b7280;
   font-size: 13px;
+}
+
+.search-insight {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d9e8ff;
+  border-radius: 4px;
+  background: #f7fbff;
+  color: #303133;
+  font-size: 13px;
+}
+
+.search-insight-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.search-insight-label {
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
+.search-insight-line {
+  margin-top: 4px;
+  color: #606266;
 }
 
 .field-content {

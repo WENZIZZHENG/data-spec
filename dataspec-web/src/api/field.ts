@@ -12,6 +12,8 @@ import type {
   FieldImpactReport,
   FieldQualityReport,
   FieldReq,
+  FieldSearchReq,
+  FieldSearchResult,
   FieldSourceDetail,
   FieldSuggestion,
   PageResult
@@ -26,6 +28,12 @@ export function pageFields(projectId: number, current = 1, size = 20) {
 export function listFields(projectId: number) {
   return request.get<unknown, Field[]>('/fields/all', {
     params: { projectId }
+  })
+}
+
+export function searchFields(params: FieldSearchReq) {
+  return request.get<unknown, FieldSearchResult>('/fields/search', {
+    params
   })
 }
 

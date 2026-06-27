@@ -1,6 +1,6 @@
 # AI 输出契约
 
-本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、AI Context、SQL lint、字段推荐和 DDL 预览的自动化使用场景。
+本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、AI Context、SQL lint、字段推荐、字段检索和 DDL 预览的自动化使用场景。
 
 ## 兼容策略
 
@@ -38,6 +38,16 @@
 
 `field` 命中已有标准字段时应保留标准字段基础元数据，例如 `name`、`displayName`、`dataType`、`aliases`、`category`、`sensitive`、`status`、`codeSetId` 和 `exampleValue`。
 
+## 字段检索
+
+稳定字段：
+
+- `FieldSearchResult`: `projectId`、`query`、`summary`、`items[]`、`nextActions[]`。
+- `FieldSearchSummary`: `totalCandidates`、`matchedCount`、`returnedCount`、`truncated`、`appliedFilters`、`hints[]`。
+- `FieldSearchItem`: `field`、`score`、`matchReasons[]`、`recommendedUse`、`nextActions[]`。
+
+字段检索是只读能力。AI 可依赖 `matchReasons[]` 判断命中来源，依赖 `nextActions[]` 决定收窄检索、采用标准字段或进入候选补全流程；不得把 `score` 当作跨版本绝对分值，只能用于同一次结果内排序参考。
+
 ## DDL 预览
 
 稳定字段：
@@ -52,7 +62,8 @@
 
 稳定字段：
 
-- CLI `lint`、`lint-files`、`suggest-field`、`generate-ddl` 透传后端稳定字段。
+- CLI `lint`、`lint-files`、`suggest-field`、`search-fields`、`generate-ddl` 透传后端稳定字段。
 - CLI `workflow list/show` 输出 `kind`、`schemaVersion`、`recipes[]`、`recipe`；recipe 保留 `id`、`title`、`goal`、`requiredInputs`、`prechecks`、`steps`、`expectedArtifacts`、`failureHandling`、`nextActions`。
 - MCP resources/tools 返回 `structuredContent` 和 `content[].text`；`content[].text` 应保持可解析 JSON 或明确文本 fallback。
 - MCP `workflow-recipes` resource 输出 `kind`、`schemaVersion`、`projectId`、`recipes[]`。
+- MCP `search_fields` tool 返回字段检索稳定字段，`content[].text` 保持可解析 JSON。

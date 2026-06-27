@@ -16,9 +16,14 @@ import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
 import com.dataspec.field.model.FieldGroupingSummaries;
+import com.dataspec.field.model.FieldSearchItem;
+import com.dataspec.field.model.FieldSearchReq;
+import com.dataspec.field.model.FieldSearchResult;
+import com.dataspec.field.model.FieldSearchSummary;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.security.context.ProjectAccessGuard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -47,8 +52,11 @@ public class FieldServiceImpl implements FieldService {
     private static final Set<String> ALLOWED_STATUSES = Set.of("enabled", "disabled", "deprecated");
     private static final int DEFAULT_SUGGEST_LIMIT = 5;
     private static final int MAX_SUGGEST_LIMIT = 20;
+    private static final int DEFAULT_SEARCH_LIMIT = 20;
+    private static final int MAX_SEARCH_LIMIT = 50;
     private static final long FIELD_READ_WARN_MS = 500;
     private static final long FIELD_SUGGEST_WARN_MS = 500;
+    private static final long FIELD_SEARCH_WARN_MS = 500;
     private static final Set<String> GROUPING_UPDATE_KEYS = Set.of("domainId", "category", "tags");
     private static final Set<String> BULK_UPDATE_KEYS = Set.of("status", "category", "tags", "sensitive", "codeSetId", "aliases");
     private static final Map<String, String> FALLBACK_TERMS = fallbackTerms();
@@ -57,6 +65,7 @@ public class FieldServiceImpl implements FieldService {
     private static final int GENERIC_SEMANTIC_SCORE = 24;
 
     private final FieldRepository fieldRepository;
+    private final FieldSourceRepository fieldSourceRepository;
     private final StandardChangeLogService changeLogService;
     private final ObjectMapper objectMapper;
 
@@ -78,6 +87,57 @@ public class FieldServiceImpl implements FieldService {
                     ProjectAccessGuard.requireProjectAccess(projectId);
                     return fieldRepository.findAllByProjectId(projectId);
                 });
+    }
+
+    @Override
+    public FieldSearchResult search(FieldSearchReq req) {
+        return PerformanceProbe.measure("field.search", FIELD_SEARCH_WARN_MS,
+                "字段检索变慢时优先收窄 query/category/tag/status 或后续接入元数据缓存",
+                () -> searchMeasured(req));
+    }
+
+    private FieldSearchResult searchMeasured(FieldSearchReq req) {
+        if (req == null || req.projectId() == null) {
+            throw new BizException("项目ID不能为空");
+        }
+        ProjectAccessGuard.requireProjectAccess(req.projectId());
+        SearchCriteria criteria = searchCriteria(req);
+        if (!criteria.hasQuery() && !criteria.hasAnyFilter()) {
+            throw new BizException("字段检索需要 query 或至少一个过滤条件");
+        }
+
+        Set<Long> sourceFieldIds = loadSourceFieldIds(req.projectId(), criteria.sourceBatchId());
+        List<Field> candidates = fieldRepository.findAllByProjectId(req.projectId()).stream()
+                .filter(field -> matchesSearchFilters(field, criteria, sourceFieldIds))
+                .toList();
+
+        List<FieldSearchItem> matched = new ArrayList<>();
+        for (Field field : candidates) {
+            FieldSearchItem item = searchItemFor(field, criteria);
+            if (item != null) {
+                matched.add(item);
+            }
+        }
+        matched.sort(Comparator
+                .comparingInt(FieldSearchItem::score).reversed()
+                .thenComparing(item -> nullToEmpty(item.field().getName())));
+
+        boolean truncated = matched.size() > criteria.limit();
+        List<FieldSearchItem> returned = matched.stream().limit(criteria.limit()).toList();
+        FieldSearchSummary summary = new FieldSearchSummary(
+                candidates.size(),
+                matched.size(),
+                returned.size(),
+                truncated,
+                criteria.appliedFilters(),
+                searchHints(criteria, candidates.size(), matched.size(), truncated));
+
+        return new FieldSearchResult(
+                req.projectId(),
+                criteria.query(),
+                summary,
+                returned,
+                resultNextActions(returned, truncated));
     }
 
     @Override
@@ -328,6 +388,165 @@ public class FieldServiceImpl implements FieldService {
                 "未命中已有标准字段，按描述生成候选名",
                 generateFallbackName(query),
                 false));
+    }
+
+    private SearchCriteria searchCriteria(FieldSearchReq req) {
+        String query = FieldGroupingSummaries.normalizeText(req.query());
+        String category = FieldGroupingSummaries.normalizeText(req.category());
+        String tag = FieldGroupingSummaries.normalizeText(req.tag());
+        String status = normalizeOptionalStatus(req.status());
+        return new SearchCriteria(
+                query,
+                compact(query),
+                tokens(query),
+                semanticGroupsForText(query),
+                category,
+                tag,
+                status,
+                req.sensitive(),
+                req.sourceBatchId(),
+                normalizeSearchLimit(req.limit()));
+    }
+
+    private Set<Long> loadSourceFieldIds(Long projectId, Long sourceBatchId) {
+        if (sourceBatchId == null) {
+            return Set.of();
+        }
+        if (sourceBatchId <= 0) {
+            throw new BizException("无效sourceBatchId: " + sourceBatchId);
+        }
+        return new LinkedHashSet<>(fieldSourceRepository.findFieldIdsByProjectAndBatch(projectId, sourceBatchId));
+    }
+
+    private boolean matchesSearchFilters(Field field, SearchCriteria criteria, Set<Long> sourceFieldIds) {
+        if (criteria.status() == null && "disabled".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
+            return false;
+        }
+        if (criteria.category() != null && !criteria.category().equals(FieldGroupingSummaries.normalizeText(field.getCategory()))) {
+            return false;
+        }
+        if (criteria.tag() != null && !splitCsv(nullToEmpty(field.getTags())).contains(criteria.tag())) {
+            return false;
+        }
+        if (criteria.status() != null && !criteria.status().equals(normalizeStatus(field.getStatus()))) {
+            return false;
+        }
+        if (criteria.sensitive() != null && !criteria.sensitive().equals(Boolean.TRUE.equals(field.getSensitive()))) {
+            return false;
+        }
+        return criteria.sourceBatchId() == null || sourceFieldIds.contains(field.getId());
+    }
+
+    private FieldSearchItem searchItemFor(Field field, SearchCriteria criteria) {
+        int score = 1;
+        List<String> reasons = new ArrayList<>();
+        if (criteria.hasQuery()) {
+            ScoredMatch match = scoreField(field, criteria.queryCompact(), criteria.queryTokens(), criteria.querySemanticGroups());
+            if (match.score() <= 0) {
+                return null;
+            }
+            score = match.score();
+            reasons.add(match.reason());
+        } else {
+            reasons.addAll(filterReasons(criteria));
+        }
+        if ("deprecated".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
+            score = Math.max(1, score - 15);
+            reasons.add("字段状态为 deprecated");
+        }
+        if (Boolean.TRUE.equals(field.getSensitive())) {
+            reasons.add("敏感字段");
+        }
+        return new FieldSearchItem(
+                field,
+                score,
+                List.copyOf(reasons),
+                recommendedUse(field),
+                itemNextActions(field));
+    }
+
+    private List<String> filterReasons(SearchCriteria criteria) {
+        List<String> reasons = new ArrayList<>();
+        if (criteria.category() != null) {
+            reasons.add("分类过滤命中: " + criteria.category());
+        }
+        if (criteria.tag() != null) {
+            reasons.add("标签过滤命中: " + criteria.tag());
+        }
+        if (criteria.status() != null) {
+            reasons.add("状态过滤命中: " + criteria.status());
+        }
+        if (criteria.sensitive() != null) {
+            reasons.add("敏感标记过滤命中: " + criteria.sensitive());
+        }
+        if (criteria.sourceBatchId() != null) {
+            reasons.add("导入批次过滤命中: " + criteria.sourceBatchId());
+        }
+        return reasons.isEmpty() ? List.of("过滤条件命中") : reasons;
+    }
+
+    private String recommendedUse(Field field) {
+        if ("deprecated".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
+            return "谨慎使用：字段已废弃，优先查找替代字段或确认历史兼容原因。";
+        }
+        if (Boolean.TRUE.equals(field.getSensitive())) {
+            return "敏感字段：建表、导出或 AI Context 使用前确认脱敏和权限要求。";
+        }
+        String category = FieldGroupingSummaries.normalizeText(field.getCategory());
+        if (category != null) {
+            return "适用于 " + category + " 分类的建表、SQL 修复或字段标准补全。";
+        }
+        return "可作为建表、SQL 修复或字段标准补全的候选标准字段。";
+    }
+
+    private List<String> itemNextActions(Field field) {
+        List<String> actions = new ArrayList<>();
+        actions.add("优先采用标准字段名 `" + field.getName() + "`，并沿用其数据类型与注释。");
+        if ("deprecated".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
+            actions.add("确认是否存在替代字段；新建表不建议直接采用 deprecated 字段。");
+        }
+        if (Boolean.TRUE.equals(field.getSensitive())) {
+            actions.add("如用于导出或日志，先确认脱敏规则和访问边界。");
+        }
+        return List.copyOf(actions);
+    }
+
+    private List<String> searchHints(SearchCriteria criteria, int totalCandidates, int matchedCount, boolean truncated) {
+        List<String> hints = new ArrayList<>();
+        if (criteria.sourceBatchId() != null && totalCandidates == 0) {
+            hints.add("sourceBatchId 未命中当前项目字段来源。");
+        }
+        if (matchedCount == 0) {
+            hints.add("未命中字段标准；可补充字段别名、调整 query，或进入标准候选 Inbox。");
+        }
+        if (truncated) {
+            hints.add("结果已截断；可增加更具体 query/category/tag/status 过滤。");
+        }
+        return List.copyOf(hints);
+    }
+
+    private List<String> resultNextActions(List<FieldSearchItem> items, boolean truncated) {
+        if (items.isEmpty()) {
+            return List.of("进入标准候选 Inbox 或字段推荐流程，补充缺失标准字段。");
+        }
+        List<String> actions = new ArrayList<>();
+        actions.add("优先查看首个高分字段，并在 DDL/SQL 修复中沿用其标准字段名。");
+        if (truncated) {
+            actions.add("结果较多时先收窄查询条件，再导出给 AI 使用。");
+        }
+        return List.copyOf(actions);
+    }
+
+    private String normalizeOptionalStatus(String status) {
+        String normalized = FieldGroupingSummaries.normalizeText(status);
+        return normalized == null ? null : normalizeStatus(normalized);
+    }
+
+    private int normalizeSearchLimit(Integer limit) {
+        if (limit == null || limit <= 0) {
+            return DEFAULT_SEARCH_LIMIT;
+        }
+        return Math.min(limit, MAX_SEARCH_LIMIT);
     }
 
     private void applyPersonalMetadataDefaults(Field field) {
@@ -874,5 +1093,51 @@ public class FieldServiceImpl implements FieldService {
     }
 
     private record SemanticGroup(String canonical, Set<String> keywords, boolean generic) {
+    }
+
+    private record SearchCriteria(
+            String query,
+            String queryCompact,
+            Set<String> queryTokens,
+            Set<String> querySemanticGroups,
+            String category,
+            String tag,
+            String status,
+            Boolean sensitive,
+            Long sourceBatchId,
+            int limit
+    ) {
+        boolean hasQuery() {
+            return !queryCompact.isBlank() || !queryTokens.isEmpty();
+        }
+
+        boolean hasAnyFilter() {
+            return category != null
+                    || tag != null
+                    || status != null
+                    || sensitive != null
+                    || sourceBatchId != null;
+        }
+
+        Map<String, Object> appliedFilters() {
+            Map<String, Object> filters = new LinkedHashMap<>();
+            if (category != null) {
+                filters.put("category", category);
+            }
+            if (tag != null) {
+                filters.put("tag", tag);
+            }
+            if (status != null) {
+                filters.put("status", status);
+            }
+            if (sensitive != null) {
+                filters.put("sensitive", sensitive);
+            }
+            if (sourceBatchId != null) {
+                filters.put("sourceBatchId", sourceBatchId);
+            }
+            filters.put("limit", limit);
+            return filters;
+        }
     }
 }

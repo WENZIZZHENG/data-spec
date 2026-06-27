@@ -213,6 +213,53 @@ test('search_field_catalog tool reads scoped field catalog', async () => {
   assert.equal(JSON.parse(response.result.content[0].text).contextScope.query, '手机')
 })
 
+test('search_fields tool calls backend field search api', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    calls.push(url)
+    return jsonResponse({
+      code: 200,
+      data: {
+        projectId: 8,
+        query: '手机',
+        summary: { matchedCount: 1, returnedCount: 1, appliedFilters: { category: 'contact' } },
+        items: [{ field: { name: 'mobile_no' }, score: 98, matchReasons: ['别名匹配'] }],
+        nextActions: ['优先查看首个高分字段']
+      }
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 14,
+    method: 'tools/call',
+    params: {
+      name: 'search_fields',
+      arguments: {
+        projectId: 8,
+        query: '手机',
+        category: 'contact',
+        tag: 'pii',
+        sensitive: true,
+        sourceBatchId: 3,
+        limit: 5
+      }
+    }
+  })
+
+  const url = new URL(calls[0])
+  assert.equal(url.pathname, '/api/fields/search')
+  assert.equal(url.searchParams.get('projectId'), '8')
+  assert.equal(url.searchParams.get('query'), '手机')
+  assert.equal(url.searchParams.get('category'), 'contact')
+  assert.equal(url.searchParams.get('tag'), 'pii')
+  assert.equal(url.searchParams.get('sensitive'), 'true')
+  assert.equal(url.searchParams.get('sourceBatchId'), '3')
+  assert.equal(url.searchParams.get('limit'), '5')
+  assert.equal(response.result.structuredContent.items[0].field.name, 'mobile_no')
+  assert.equal(JSON.parse(response.result.content[0].text).summary.matchedCount, 1)
+})
+
 test('suggest_fields tool returns structured suggestions', async () => {
   const calls = []
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {

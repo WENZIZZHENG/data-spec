@@ -10,6 +10,9 @@ import com.dataspec.field.model.FieldGroupItem;
 import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
+import com.dataspec.field.model.FieldSearchReq;
+import com.dataspec.field.model.FieldSearchResult;
+import com.dataspec.field.model.FieldSearchSummary;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.reverseimport.entity.FieldSource;
@@ -43,6 +46,25 @@ class FieldControllerTest {
 
         assertEquals(1, response.getData().size());
         assertEquals("mobile_no", response.getData().getFirst().recommendedName());
+    }
+
+    @Test
+    void search_forwardsFiltersToService() {
+        FieldService service = mock(FieldService.class);
+        FieldSearchReq req = new FieldSearchReq(1L, "手机号", "contact", "pii", "enabled", true, 8L, 10);
+        FieldSearchResult result = new FieldSearchResult(
+                1L,
+                "手机号",
+                new FieldSearchSummary(1, 1, 0, false, Map.of("category", "contact"), List.of()),
+                List.of(),
+                List.of("继续收窄查询"));
+        when(service.search(req)).thenReturn(result);
+        FieldController controller = new FieldController(service, mock(ReverseImportSourceService.class));
+
+        var response = controller.search(1L, "手机号", "contact", "pii", "enabled", true, 8L, 10);
+
+        assertEquals("手机号", response.getData().query());
+        verify(service).search(req);
     }
 
     @Test

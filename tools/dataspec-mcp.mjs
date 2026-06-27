@@ -353,6 +353,47 @@ function listTools() {
         }
       },
       {
+        name: 'search_fields',
+        description: '通过 DataSpec 后端检索项目字段标准，返回命中原因、推荐使用范围和下一步建议。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: '自然语言、字段名或业务需求关键词；也可仅传结构化过滤条件。'
+            },
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            category: {
+              type: 'string',
+              description: '可选字段分类过滤。'
+            },
+            tag: {
+              type: 'string',
+              description: '可选字段标签过滤。'
+            },
+            status: {
+              type: 'string',
+              description: '可选字段状态，如 enabled、disabled、deprecated。'
+            },
+            sensitive: {
+              type: 'boolean',
+              description: '可选敏感字段过滤。'
+            },
+            sourceBatchId: {
+              type: 'integer',
+              description: '可选反向导入批次 ID 过滤。'
+            },
+            limit: {
+              type: 'integer',
+              description: '可选返回数量，默认 20。'
+            }
+          }
+        }
+      },
+      {
         name: 'suggest_fields',
         description: '根据业务描述推荐 DataSpec 标准字段候选。',
         inputSchema: {
@@ -412,6 +453,9 @@ async function callTool(params, context) {
   if (name === 'search_field_catalog') {
     return await callSearchFieldCatalog(args, context)
   }
+  if (name === 'search_fields') {
+    return await callSearchFields(args, context)
+  }
   if (name === 'suggest_fields') {
     return await callSuggestFields(args, context)
   }
@@ -456,6 +500,26 @@ async function callSearchFieldCatalog(args, context) {
   }
   const text = await fetchAiContextText(context, RESOURCE_DEFS['field-catalog'].path, projectId, scopedCatalogParams(scopedArgs))
   return toolJsonResult(parseJsonOrFallback(text))
+}
+
+async function callSearchFields(args, context) {
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'query', args.query)
+  appendOptionalParam(params, 'category', args.category)
+  appendOptionalParam(params, 'tag', args.tag)
+  appendOptionalParam(params, 'status', args.status)
+  appendOptionalParam(params, 'sourceBatchId', args.sourceBatchId)
+  if (args.sensitive !== undefined && args.sensitive !== null && args.sensitive !== '') {
+    params.set('sensitive', String(parseOptionalBoolean(args.sensitive, 'sensitive')))
+  }
+  params.set('limit', String(optionalLimit(args.limit, 20)))
+  const response = await context.fetchFn(`${context.server}/api/fields/search?${params.toString()}`, {
+    headers: dataSpecHeaders(context.apiToken)
+  })
+  const result = await readDataSpecJson(response)
+  return toolJsonResult(result)
 }
 
 async function callSuggestFields(args, context) {
@@ -640,6 +704,20 @@ function optionalLimit(value, fallback) {
     return fallback
   }
   return parsePositiveInteger(value, 'limit')
+}
+
+function parseOptionalBoolean(value, label) {
+  if (typeof value === 'boolean') {
+    return value
+  }
+  const normalized = String(value).trim().toLowerCase()
+  if (['true', '1', 'yes'].includes(normalized)) {
+    return true
+  }
+  if (['false', '0', 'no'].includes(normalized)) {
+    return false
+  }
+  throw new JsonRpcError(-32602, `无效 ${label}: ${value}`)
 }
 
 function parseProjectId(value) {

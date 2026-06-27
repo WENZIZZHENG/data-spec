@@ -101,6 +101,88 @@ test('lint prints machine-readable DataSpecError when api returns diagnostic', a
   assert.equal(io.stdout, '')
 })
 
+test('search-fields passes filters and prints stable json', async () => {
+  const calls = []
+  const fetchFn = async (url, options) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          projectId: 7,
+          query: '手机号',
+          summary: { matchedCount: 1, returnedCount: 1, appliedFilters: { category: 'contact' } },
+          items: [{ field: { name: 'mobile_no' }, score: 98, matchReasons: ['别名匹配'] }],
+          nextActions: ['优先查看首个高分字段']
+        }
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'search-fields',
+    '手机号',
+    '--project',
+    '7',
+    '--category',
+    'contact',
+    '--tag',
+    'pii',
+    '--sensitive',
+    'true',
+    '--source-batch',
+    '3',
+    '--limit',
+    '10',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  const url = new URL(calls[0].url)
+  assert.equal(code, 0)
+  assert.equal(url.pathname, '/api/fields/search')
+  assert.equal(url.searchParams.get('projectId'), '7')
+  assert.equal(url.searchParams.get('query'), '手机号')
+  assert.equal(url.searchParams.get('category'), 'contact')
+  assert.equal(url.searchParams.get('tag'), 'pii')
+  assert.equal(url.searchParams.get('sensitive'), 'true')
+  assert.equal(url.searchParams.get('sourceBatchId'), '3')
+  assert.equal(url.searchParams.get('limit'), '10')
+  assert.equal(JSON.parse(io.stdout).items[0].field.name, 'mobile_no')
+  assert.equal(io.stderr, '')
+})
+
+test('search-fields prints DataSpecError when api returns diagnostic', async () => {
+  const io = createIo()
+  const fetchFn = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({
+      code: 400,
+      message: '字段检索需要 query 或至少一个过滤条件',
+      error: {
+        code: 'VALIDATION_FAILED',
+        category: 'VALIDATION',
+        retryable: true,
+        suggestedAction: '补充 query 或过滤条件。',
+        docsRef: 'README.md#字段标准检索'
+      }
+    })
+  })
+
+  const code = await runCli(['search-fields', '--project', '7', '--format', 'json'], io, fetchFn)
+  const diagnosticLine = io.stderr.split(/\r?\n/).find((line) => line.startsWith('DataSpecError: '))
+  const diagnostic = JSON.parse(diagnosticLine.replace('DataSpecError: ', ''))
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /字段检索需要/)
+  assert.equal(diagnostic.code, 'VALIDATION_FAILED')
+  assert.equal(io.stdout, '')
+})
+
 test('lint uses local config defaults when project and server are omitted', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {

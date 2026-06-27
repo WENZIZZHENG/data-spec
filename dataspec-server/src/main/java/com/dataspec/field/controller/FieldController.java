@@ -11,6 +11,8 @@ import com.dataspec.field.model.FieldChangeUndoResult;
 import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
+import com.dataspec.field.model.FieldSearchReq;
+import com.dataspec.field.model.FieldSearchResult;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.reverseimport.model.FieldSourceDetail;
@@ -84,6 +86,21 @@ public class FieldController {
             @PathVariable Long id,
             @RequestParam Long logId) {
         return R.ok(fieldService.undoFieldChange(id, logId));
+    }
+
+    /** 检索字段标准，返回命中原因和 AI 下一步建议 */
+    @GetMapping("/search")
+    public R<FieldSearchResult> search(
+            @RequestParam Long projectId,
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String tag,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Boolean sensitive,
+            @RequestParam(required = false) Long sourceBatchId,
+            @RequestParam(required = false) Integer limit) {
+        return R.ok(fieldService.search(new FieldSearchReq(
+                projectId, query, category, tag, status, sensitive, sourceBatchId, limit)));
     }
 
     /** 根据业务描述推荐标准字段 */

@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 标准字段来源 Repository。
@@ -27,5 +28,17 @@ public class FieldSourceRepository {
                         .eq(FieldSource::getFieldId, fieldId)
                         .orderByDesc(FieldSource::getCreatedAt)
                         .orderByDesc(FieldSource::getId));
+    }
+
+    public List<Long> findFieldIdsByProjectAndBatch(Long projectId, Long batchId) {
+        return fieldSourceMapper.selectList(
+                        new LambdaQueryWrapper<FieldSource>()
+                                .eq(FieldSource::getProjectId, projectId)
+                                .eq(FieldSource::getBatchId, batchId))
+                .stream()
+                .map(FieldSource::getFieldId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
     }
 }

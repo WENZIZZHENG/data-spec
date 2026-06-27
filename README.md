@@ -19,7 +19,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 ### 标准维护
 
 - 项目空间管理，创建项目时可导入内置 standards，并支持一键创建演示项目。
-- 标准字段库，支持别名、分类、代码集关联、敏感标记、状态、示例值、分组筛选、批量归组和批量维护。
+- 标准字段库，支持别名、分类、代码集关联、敏感标记、状态、示例值、分组筛选、批量归组、批量维护和字段标准检索命中原因展示。
 - 字段质量评分，按注释、别名、示例、分类、敏感标识、代码集和废弃说明识别低质量字段。
 - 字段冲突检测，识别别名冲突、显示名重复、语义疑似重复和关键属性不一致。
 - 字段影响分析，展示字段被模板、导入来源、历史 SQL 检查、标准快照和代码集引用的范围。
@@ -50,10 +50,10 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI Context manifest、字段目录和规则文件携带标准快照版本与 hash；未创建快照时标记为 `unversioned`。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - AI 回放记录，支持查看 Prompt、SQL 检查修正和 DDL 预览的输入输出、promptVersion 与标准快照。
-- 字段推荐 API/CLI/MCP。
+- 字段推荐与字段标准检索 API/CLI/MCP。
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
-- CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、workflow recipes、单文件 lint、批量 `lint-files`、PR inline/汇总评论式 `review-pr`、AI Context 导出、字段推荐和 DDL 生成。
+- CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、workflow recipes、单文件 lint、批量 `lint-files`、PR inline/汇总评论式 `review-pr`、AI Context 导出、字段推荐、字段标准检索和 DDL 生成。
 - MCP Server 暴露 DataSpec resources、workflow recipes、prompts 和核心 tools。
 - GitHub Actions 示例支持 SQL 批量校验、PR diff inline 评论和 fallback 汇总评论。
 
@@ -163,7 +163,7 @@ curl "http://localhost:8090/api/ai-jobs/1"
 
 第一版只记录 DataSpec 本地生成和检查链路，不内置外部 LLM 调用，不保存第三方 API key，不做长文本会话管理。
 
-## 字段推荐
+## 字段推荐与字段标准检索
 
 后端提供确定性字段推荐 API，不调用外部 LLM：
 
@@ -172,6 +172,15 @@ curl "http://localhost:8090/api/fields/suggest?projectId=1&query=用户手机号
 ```
 
 推荐结果会返回已有标准字段、匹配分数、命中原因、推荐字段名和 `existing` 标记。当前推荐逻辑按字段名、显示名、注释、别名、分类、标签和内置语义词库匹配，覆盖 `uid/user_id`、`phone/mobile/tel/mobile_no`、`amount/price/fee/amount_cent`、`sfzh/id_card_no` 等常见叫法；泛化词会降权，敏感字段会在命中原因里提示。未命中已有字段但命中已知语义组时，会优先生成 canonical snake_case fallback 字段名。
+
+当 AI 或用户需要先查看一组相关标准字段时，可使用只读字段标准检索：
+
+```bash
+curl "http://localhost:8090/api/fields/search?projectId=1&query=用户手机号&limit=20"
+curl "http://localhost:8090/api/fields/search?projectId=1&category=user&status=enabled&limit=20"
+```
+
+检索结果会返回 `summary`、`items[]` 和 `nextActions`。每个 item 包含标准字段、确定性分数、`matchReasons`、推荐使用范围和字段级下一步建议；支持关键词、中文描述、别名、拼音缩写、category、tag、status、sensitive 和 sourceBatchId 过滤。省略 query 且不提供任何结构化过滤时会返回校验错误，避免 AI 一次性拉取整个字段库。前端字段库的搜索框和 category/tag 分组会复用该检索结果并展示命中原因；清空搜索条件后仍使用原有字段列表。
 
 ## DDL 生成
 
@@ -348,6 +357,10 @@ node tools/dataspec-cli.mjs export-context --project 1 --scope field --query "�
 # 推荐标准字段
 node tools/dataspec-cli.mjs suggest-field "用户手机号" --project 1 --format json
 
+# 检索一组相关标准字段，支持 category/tag/status/sensitive/source-batch 过滤
+node tools/dataspec-cli.mjs search-fields "用户手机号" --project 1 --limit 20 --format json
+node tools/dataspec-cli.mjs search-fields --project 1 --category user --status enabled --format json
+
 # 基于表模板生成 DDL，并返回 lint 自检结果
 node tools/dataspec-cli.mjs generate-ddl --project 1 --template 1 --table user_order --format json
 
@@ -387,11 +400,11 @@ node tools/dataspec-mcp.mjs
 
 - resources：`field-catalog`、`database-rules`、`rules-yaml`、`workflow-recipes`，URI 形如 `dataspec://project/1/field-catalog`。
 - prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`。
-- tools：`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`generate_table_ddl`；`get_field_catalog` 可传 `scope/query/status/limit`，`search_field_catalog` 默认按当前关键词读取较小字段目录；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
+- tools：`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`search_fields`、`generate_table_ddl`；`get_field_catalog` 可传 `scope/query/status/limit`，`search_field_catalog` 默认按当前关键词读取较小字段目录，`search_fields` 调用 `/api/fields/search` 并返回字段、分数、命中原因和下一步建议；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
 
 ## AI 输出契约
 
-[docs/ai-contracts.md](docs/ai-contracts.md) 记录第一版 AI 可依赖的稳定字段，覆盖 AI Context、SQL lint/fixedSql、字段推荐、DDL 预览、CLI JSON 和 MCP resources/tools。兼容策略是：新增可选字段默认兼容；删除、改名、类型变化或语义变化需要同步更新契约测试和文档。
+[docs/ai-contracts.md](docs/ai-contracts.md) 记录第一版 AI 可依赖的稳定字段，覆盖 AI Context、SQL lint/fixedSql、字段推荐、字段检索、DDL 预览、CLI JSON 和 MCP resources/tools。兼容策略是：新增可选字段默认兼容；删除、改名、类型变化或语义变化需要同步更新契约测试和文档。
 
 ## AI 可读错误诊断
 
@@ -436,7 +449,7 @@ cd ..
 node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库筛选与批量维护、DDL 生成、AI Context、覆盖率报告和 AI 回放的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、筛选与批量维护、DDL 生成、AI Context、覆盖率报告和 AI 回放的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。
 
 ## 性能基线
 
@@ -546,10 +559,10 @@ data-spec/
 - [x] 字段冲突检测，支持别名冲突、语义疑似重复、属性不一致和跳转字段库编辑
 - [x] 字段影响分析，支持模板、导入来源、SQL 检查记录、标准快照和代码集影响提示
 - [x] 大字段库性能基线和慢操作 warning，覆盖字段分组/推荐、AI Context 字段目录和反向导入 compare
-- [x] 字段推荐 API/CLI/MCP
+- [x] 字段推荐与字段标准检索 API/CLI/MCP，字段库可展示检索命中原因和下一步建议
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
 - [x] AI Context zip 导出、按需裁剪、分组摘要、workflow recipes 和业务项目 `.dataspec/` 约定
-- [x] AI 输出契约文档与 contract fixtures，覆盖 AI Context、lint/fixedSql、字段推荐、DDL 预览、CLI/MCP JSON 稳定字段
+- [x] AI 输出契约文档与 contract fixtures，覆盖 AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览、CLI/MCP JSON 稳定字段
 - [x] AI 可读错误诊断，API 失败响应、CLI stderr 和 MCP JSON-RPC error 可输出 code/category/retryable/suggestedAction/docsRef
 - [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成

@@ -452,6 +452,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fields/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fields/{id}/undo": {
         parameters: {
             query?: never;
@@ -2429,12 +2445,61 @@ export interface components {
             recommendedName?: string;
             existing?: boolean;
         };
+        FieldSearchReq: {
+            /** Format: int64 */
+            projectId?: number;
+            query?: string;
+            category?: string;
+            tag?: string;
+            status?: string;
+            sensitive?: boolean;
+            /** Format: int64 */
+            sourceBatchId?: number;
+            /** Format: int32 */
+            limit?: number;
+        };
+        FieldSearchItem: {
+            field?: components["schemas"]["Field"];
+            /** Format: int32 */
+            score?: number;
+            matchReasons?: string[];
+            recommendedUse?: string;
+            nextActions?: string[];
+        };
+        FieldSearchSummary: {
+            /** Format: int32 */
+            totalCandidates?: number;
+            /** Format: int32 */
+            matchedCount?: number;
+            /** Format: int32 */
+            returnedCount?: number;
+            truncated?: boolean;
+            appliedFilters?: {
+                [key: string]: unknown;
+            };
+            hints?: string[];
+        };
+        FieldSearchResult: {
+            /** Format: int64 */
+            projectId?: number;
+            query?: string;
+            summary?: components["schemas"]["FieldSearchSummary"];
+            items?: components["schemas"]["FieldSearchItem"][];
+            nextActions?: string[];
+        };
         RListFieldSuggestion: {
             /** Format: int32 */
             code?: number;
             message?: string;
             error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldSuggestion"][];
+        };
+        RFieldSearchResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["FieldSearchResult"];
         };
         FieldQualityIssue: {
             code?: string;
@@ -4889,6 +4954,35 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RListFieldSuggestion"];
+                };
+            };
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                projectId: number;
+                query?: string;
+                category?: string;
+                tag?: string;
+                status?: string;
+                sensitive?: boolean;
+                sourceBatchId?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldSearchResult"];
                 };
             };
         };

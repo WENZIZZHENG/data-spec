@@ -18,6 +18,7 @@ import com.dataspec.lint.model.TableDef;
 import com.dataspec.lint.rules.TableNameSnakeCaseRule;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
+import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
 import com.dataspec.rule.service.RuleConfigService;
@@ -108,7 +109,7 @@ class PerformanceBaselineTest {
     private FieldServiceImpl fieldService(List<Field> fields) {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.findAllByProjectId(PROJECT_ID)).thenReturn(fields);
-        return new FieldServiceImpl(repository, mock(StandardChangeLogService.class), new ObjectMapper());
+        return new FieldServiceImpl(repository, mock(FieldSourceRepository.class), mock(StandardChangeLogService.class), new ObjectMapper());
     }
 
     private AiContextExportService aiContextExportService(FieldService fieldService) {

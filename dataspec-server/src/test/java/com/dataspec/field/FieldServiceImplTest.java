@@ -11,9 +11,12 @@ import com.dataspec.field.model.FieldChangeUndoResult;
 import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
+import com.dataspec.field.model.FieldSearchReq;
+import com.dataspec.field.model.FieldSearchResult;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.impl.FieldServiceImpl;
+import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.security.context.DataSpecSecurityContext;
 import com.dataspec.security.model.ApiTokenPrincipal;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -581,6 +584,91 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void search_matchesKeywordAliasesAndReturnsAiReadableFields() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field mobile = field("mobile_no", "联系电话", "varchar(20)", "用户联系号码", "phone,mobile,tel", "enabled");
+        mobile.setId(1L);
+        mobile.setCategory("contact");
+        mobile.setTags("pii,customer");
+        mobile.setSensitive(true);
+        Field amount = field("amount_cent", "金额（分）", "bigint", "支付金额，以分存储", "amount,pay_amount", "enabled");
+        amount.setId(2L);
+        amount.setCategory("money");
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(amount, mobile));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "用户sjh", null, null, null, null, null, 10));
+
+        assertEquals(1L, result.projectId());
+        assertEquals("用户sjh", result.query());
+        assertEquals(1, result.items().size());
+        assertEquals("mobile_no", result.items().getFirst().field().getName());
+        assertTrue(result.items().getFirst().score() > 0);
+        assertFalse(result.items().getFirst().matchReasons().isEmpty());
+        assertTrue(result.items().getFirst().recommendedUse().contains("敏感字段"));
+        assertFalse(result.items().getFirst().nextActions().isEmpty());
+        assertEquals(1, result.summary().matchedCount());
+    }
+
+    @Test
+    void search_filtersByCategoryTagStatusSensitiveAndSourceBatch() {
+        FieldRepository repository = mock(FieldRepository.class);
+        FieldSourceRepository sourceRepository = mock(FieldSourceRepository.class);
+        Field mobile = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        mobile.setId(1L);
+        mobile.setCategory("contact");
+        mobile.setTags("pii");
+        mobile.setSensitive(true);
+        Field amount = field("amount_cent", "金额（分）", "bigint", "支付金额", "amount", "deprecated");
+        amount.setId(3L);
+        amount.setCategory("money");
+        amount.setTags("finance");
+        amount.setSensitive(false);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(mobile, amount));
+        when(sourceRepository.findFieldIdsByProjectAndBatch(1L, 77L)).thenReturn(List.of(3L));
+        FieldServiceImpl service = service(repository, sourceRepository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, null, "money", "finance", "deprecated", false, 77L, 10));
+
+        assertEquals(1, result.items().size());
+        assertEquals("amount_cent", result.items().getFirst().field().getName());
+        assertTrue(result.items().getFirst().matchReasons().contains("导入批次过滤命中: 77"));
+        assertEquals(77L, result.summary().appliedFilters().get("sourceBatchId"));
+        assertEquals(1, result.summary().matchedCount());
+    }
+
+    @Test
+    void search_requiresQueryOrFilter() {
+        FieldRepository repository = mock(FieldRepository.class);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        BizException ex = assertThrows(BizException.class, () -> service.search(new FieldSearchReq(
+                1L, "!!!", null, null, null, null, null, 10)));
+
+        assertTrue(ex.getMessage().contains("字段检索需要"));
+        verify(repository, never()).findAllByProjectId(anyLong());
+    }
+
+    @Test
+    void search_returnsNextActionWhenNoFieldMatches() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(
+                field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled")
+        ));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "发票抬头", null, null, null, null, null, 10));
+
+        assertTrue(result.items().isEmpty());
+        assertEquals(0, result.summary().matchedCount());
+        assertFalse(result.summary().hints().isEmpty());
+        assertTrue(result.nextActions().getFirst().contains("标准候选"));
+    }
+
+    @Test
     void suggestAiContract_exposesStableRecommendationFields() {
         FieldRepository repository = mock(FieldRepository.class);
         Field mobile = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone,mobile,tel", "enabled");
@@ -760,6 +848,11 @@ class FieldServiceImplTest {
     }
 
     private FieldServiceImpl service(FieldRepository repository, StandardChangeLogService changeLogService) {
-        return new FieldServiceImpl(repository, changeLogService, objectMapper);
+        return service(repository, mock(FieldSourceRepository.class), changeLogService);
+    }
+
+    private FieldServiceImpl service(FieldRepository repository, FieldSourceRepository sourceRepository,
+                                     StandardChangeLogService changeLogService) {
+        return new FieldServiceImpl(repository, sourceRepository, changeLogService, objectMapper);
     }
 }
