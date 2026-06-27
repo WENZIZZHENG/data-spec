@@ -46,15 +46,15 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 
 ### AI 与自动化
 
-- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、项目规则例外、prompt、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包。
+- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、项目规则例外、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包。
 - AI Context manifest、字段目录和规则文件携带标准快照版本与 hash；未创建快照时标记为 `unversioned`。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - AI 回放记录，支持查看 Prompt、SQL 检查修正和 DDL 预览的输入输出、promptVersion 与标准快照。
 - 字段推荐 API/CLI/MCP。
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
-- CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、单文件 lint、批量 `lint-files`、PR 评论式 `review-pr`、AI Context 导出、字段推荐和 DDL 生成。
-- MCP Server 暴露 DataSpec resources、prompts 和核心 tools。
+- CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、workflow recipes、单文件 lint、批量 `lint-files`、PR 评论式 `review-pr`、AI Context 导出、字段推荐和 DDL 生成。
+- MCP Server 暴露 DataSpec resources、workflow recipes、prompts 和核心 tools。
 - GitHub Actions 示例支持 SQL 批量校验和 PR Review 评论。
 
 ## 快速启动
@@ -113,7 +113,7 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1" -o d
 curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1&scope=field&query=用户手机号&status=enabled&limit=20" -o dataspec-ai-context-field.zip
 ```
 
-解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前读取字段标准和规则。
+解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/workflows.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前读取字段标准和规则。
 
 导出包的 `.dataspec/manifest.json`、`.dataspec/field-catalog.json` 和 `.dataspec/rules.yaml` 会包含 `specVersion` / `specHash` 元数据。若项目尚未创建标准快照，版本显示为 `unversioned`，不阻断导出；创建快照后，后续 SQL 检查记录和 DDL 生成结果会记录当前快照 ID、版本和 hash。
 
@@ -357,11 +357,17 @@ node tools/dataspec-cli.mjs doctor --format json
 # 执行完整 OpenAPI schema 漂移检查
 node tools/dataspec-cli.mjs doctor --check-openapi --format json
 
+# 列出 AI/CLI/MCP 可读取的任务化 workflow recipes
+node tools/dataspec-cli.mjs workflow list --format json
+
+# 查看某个 recipe 的输入、前置检查、步骤、产物和失败恢复建议
+node tools/dataspec-cli.mjs workflow show create-table --format json
+
 # 指定后端地址
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --server http://localhost:8090
 ```
 
-`doctor` 会检查配置文件、DataSpec 服务、API token 身份、项目可访问性、`defaultPaths` 和 OpenAPI 状态；默认只做轻量 OpenAPI 检查，传 `--check-openapi` 时会复用前端契约校验逻辑做完整 schema 漂移检查。`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取。`review-pr` 会在批量 lint 后创建或更新包含 `<!-- dataspec-sql-review -->` marker 的 PR 评论，避免重复刷屏；问题明细会展示文件内行列范围，作为后续 GitHub inline comment 的基础数据，但当前仍只发布单条汇总评论；评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
+`doctor` 会检查配置文件、DataSpec 服务、API token 身份、项目可访问性、`defaultPaths` 和 OpenAPI 状态；默认只做轻量 OpenAPI 检查，传 `--check-openapi` 时会复用前端契约校验逻辑做完整 schema 漂移检查。`workflow` 只输出任务计划和命令建议，第一版包含 `create-table`、`review-pr-sql`、`reverse-import-standards` 和 `export-min-context`，不会自动执行步骤或调用外部 LLM。`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取。`review-pr` 会在批量 lint 后创建或更新包含 `<!-- dataspec-sql-review -->` marker 的 PR 评论，避免重复刷屏；问题明细会展示文件内行列范围，作为后续 GitHub inline comment 的基础数据，但当前仍只发布单条汇总评论；评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
 
 ## MCP Server
 
@@ -376,7 +382,7 @@ node tools/dataspec-mcp.mjs
 
 可在 MCP client 中按本地 stdio server 配置。当前暴露能力：
 
-- resources：`field-catalog`、`database-rules`、`rules-yaml`，URI 形如 `dataspec://project/1/field-catalog`。
+- resources：`field-catalog`、`database-rules`、`rules-yaml`、`workflow-recipes`，URI 形如 `dataspec://project/1/field-catalog`。
 - prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`。
 - tools：`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`generate_table_ddl`；`get_field_catalog` 可传 `scope/query/status/limit`，`search_field_catalog` 默认按当前关键词读取较小字段目录；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
 
@@ -500,7 +506,7 @@ data-spec/
 - [x] 字段影响分析，支持模板、导入来源、SQL 检查记录、标准快照和代码集影响提示
 - [x] 字段推荐 API/CLI/MCP
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
-- [x] AI Context zip 导出、按需裁剪和业务项目 `.dataspec/` 约定
+- [x] AI Context zip 导出、按需裁剪、workflow recipes 和业务项目 `.dataspec/` 约定
 - [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
 - [x] AI 回放记录，支持查看 Prompt、lint/fixedSql、DDL 预览的输入输出和标准快照
@@ -515,8 +521,8 @@ data-spec/
 - [x] 数据库直连导入来源与批次追踪，字段库可查看来源摘要
 - [x] 前端反向导入高频流程记忆，按项目恢复非敏感连接信息、表选择、筛选状态和字段库关键词跳转
 - [x] 数据库直连非敏感连接预设，支持项目级保存、选择复用和表选择恢复，不持久化用户名、密码、token 或 JDBC URL
-- [x] DataSpec CLI：`doctor`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置和按需 Context 导出
-- [x] DataSpec MCP Server：resources、prompts、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`generate_table_ddl`，支持 `.dataspec/config.json` 默认项目配置
+- [x] DataSpec CLI：`doctor`、`workflow list/show`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置和按需 Context 导出
+- [x] DataSpec MCP Server：resources、`workflow-recipes`、prompts、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`generate_table_ddl`，支持 `.dataspec/config.json` 默认项目配置
 - [x] GitHub Actions 示例和 PR 评论式 SQL Review
 
 ## 暂缓探索

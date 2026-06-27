@@ -56,6 +56,7 @@ class AiContextExportServiceTest {
         assertTrue(entries.containsKey(".dataspec/README.md"));
         assertTrue(entries.containsKey(".dataspec/rules.yaml"));
         assertTrue(entries.containsKey(".dataspec/prompts.md"));
+        assertTrue(entries.containsKey(".dataspec/workflows.md"));
         assertTrue(entries.containsKey(".dataspec/examples/good.sql"));
         assertTrue(entries.containsKey(".dataspec/examples/bad.sql"));
         assertTrue(entries.containsKey("AGENTS.md.fragment"));
@@ -70,7 +71,12 @@ class AiContextExportServiceTest {
         assertTrue(entries.get(".dataspec/rules.yaml").contains("prefix_types:"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("forbidden_names:"));
         assertTrue(entries.get(".dataspec/prompts.md").contains("创建表"));
+        assertTrue(entries.get(".dataspec/workflows.md").contains("create-table"));
+        assertTrue(entries.get(".dataspec/workflows.md").contains("review-pr-sql"));
+        assertTrue(entries.get(".dataspec/workflows.md").contains("reverse-import-standards"));
+        assertTrue(entries.get(".dataspec/workflows.md").contains("export-min-context"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/manifest.json"));
+        assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/workflows.md"));
         assertTrue(entries.get(".dataspec/README.md").contains("dataspec lint"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/field-catalog.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/manifest.json"));
@@ -85,7 +91,9 @@ class AiContextExportServiceTest {
         assertEquals("hash123", manifest.path("standard").path("specHash").asText());
         assertFalse(manifest.path("generatedAt").asText().isBlank());
         assertTrue(manifest.path("files").isArray());
+        assertTrue(manifest.path("files").toString().contains(".dataspec/workflows.md"));
         assertTrue(manifest.path("commands").path("lint").asText().contains("--project 1"));
+        assertTrue(manifest.path("commands").path("workflowList").asText().contains("workflow list"));
 
         var catalog = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.json"));
         assertEquals("v2026.06.24", catalog.path("standard").path("specVersion").asText());

@@ -644,6 +644,7 @@ public class AiContextExportService {
             addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId, scopedFields.summary()));
             addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(projectId, snapshot));
             addTextEntry(zip, ".dataspec/prompts.md", generatePromptsMarkdown());
+            addTextEntry(zip, ".dataspec/workflows.md", generateWorkflowsMarkdown(projectId));
             addTextEntry(zip, ".dataspec/examples/good.sql", loadExampleSql(
                     "../examples/good-example.sql",
                     "examples/good-example.sql",
@@ -686,6 +687,7 @@ public class AiContextExportService {
             files.add(".dataspec/field-catalog.schema.json");
             files.add(".dataspec/rules.yaml");
             files.add(".dataspec/prompts.md");
+            files.add(".dataspec/workflows.md");
             files.add(".dataspec/examples/good.sql");
             files.add(".dataspec/examples/bad.sql");
             files.add("AGENTS.md.fragment");
@@ -693,6 +695,7 @@ public class AiContextExportService {
             ObjectNode commands = root.putObject("commands");
             commands.put("lint", "dataspec lint <path|-> --project " + projectId + " --format json");
             commands.put("exportContext", exportContextCommand(projectId, scopeSummary));
+            commands.put("workflowList", "dataspec workflow list --format json");
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
         } catch (Exception e) {
             throw new RuntimeException("生成 .dataspec/manifest.json 失败", e);
@@ -748,6 +751,7 @@ public class AiContextExportService {
                 - `.dataspec/field-catalog.schema.json`：字段目录 JSON Schema。
                 - `.dataspec/rules.yaml`：结构化命名规则和项目规则配置。
                 - `.dataspec/prompts.md`：建表和 SQL Review 的 AI prompt 模板。
+                - `.dataspec/workflows.md`：常见 AI/DataSpec 任务 recipe，说明输入、步骤、命令、产物和失败恢复。
                 - `.dataspec/examples/good.sql`：符合标准的 SQL 示例。
                 - `.dataspec/examples/bad.sql`：不符合标准的 SQL 反例。
                 - `AGENTS.md.fragment`：可复制到业务项目 `AGENTS.md` 的 DataSpec 指令片段。
@@ -755,6 +759,7 @@ public class AiContextExportService {
                 ## 使用约定
 
                 - 创建或修改 SQL、migration、ORM entity 前，先读取 `.dataspec/manifest.json`、字段目录和规则文件。
+                - 不确定任务步骤时，先读取 `.dataspec/workflows.md`，选择合适 recipe 后再显式执行其中的命令。
                 - 检查 SQL 时运行：
 
                 ```bash
@@ -771,6 +776,70 @@ public class AiContextExportService {
 
                 当 DataSpec 中的字段、规则、枚举或 prompt 更新后，重新下载 AI Context 包，并整体替换业务项目中的 `.dataspec/` 目录和 `AGENTS.md.fragment`。
                 """.formatted(scopeText, projectId, projectId);
+    }
+
+    private String generateWorkflowsMarkdown(Long projectId) {
+        return """
+                # DataSpec Workflow Recipes
+
+                这些 recipe 是给 AI agent 和开发者读取的任务计划，只说明推荐步骤和命令，不会自动执行工作流，也不会调用外部 LLM。
+
+                ## create-table：新增建表 SQL
+
+                - 目标：为新业务表先读取 DataSpec 标准，再生成或整理符合规则的 `CREATE TABLE` SQL。
+                - 输入：projectId=%d、业务描述、可选 tableName、可选 templateId。
+                - 前置检查：`dataspec doctor --project %d --format json`。
+                - 步骤：
+                  1. `dataspec export-context --project %d --scope field --query "<业务描述>" --output dataspec-ai-context.zip`
+                  2. `dataspec suggest-field "<业务描述>" --project %d --format json`
+                  3. `dataspec generate-ddl --project %d --template <templateId> --table <tableName> --format json`
+                  4. `dataspec lint <sql-file|-> --project %d --format json`
+                - 产物：最终 SQL、lint JSON、使用的标准版本和字段推荐摘要。
+                - 失败恢复：doctor 失败先修服务/token/projectId；字段无命中时先标记候选；lint 有 ERROR 时先修复再交付。
+
+                ## review-pr-sql：PR SQL Review
+
+                - 目标：在 Pull Request 中扫描 SQL/DDL 变更，输出 DataSpec 校验结果。
+                - 输入：projectId=%d、paths、repo、pr、GITHUB_TOKEN。
+                - 前置检查：`dataspec doctor --project %d --format json`。
+                - 步骤：
+                  1. `dataspec lint-files <paths...> --project %d --format json`
+                  2. `dataspec review-pr <paths...> --project %d --repo <owner/name> --pr <number> --token "$GITHUB_TOKEN"`
+                  3. 修复后重新运行 `dataspec lint-files <paths...> --project %d --format json`
+                - 产物：PR Review 评论、最终 lint-files JSON、未修复建议说明。
+                - 失败恢复：GitHub 401/403 检查 token 和 repo/pr；未扫描到 SQL 时检查 paths 或 defaultPaths。
+
+                ## reverse-import-standards：数据库反向导入补标准
+
+                - 目标：从已有数据库只读抽取 metadata，生成字段标准候选并由用户确认导入。
+                - 输入：projectId=%d、databaseType、host、port、databaseName、schemaName、只读账号和表范围。
+                - 前置检查：`dataspec doctor --project %d --format json`；确认数据库账号只读。
+                - 步骤：
+                  1. `POST /api/reverse-import/database/test`
+                  2. `POST /api/reverse-import/database/tables`
+                  3. `POST /api/reverse-import/database/preview`
+                  4. `POST /api/reverse-import/database/import`
+                - 产物：反向导入预览、确认导入字段、导入批次和字段来源。
+                - 失败恢复：连接失败先修 schema/权限；候选过多时按表分批；字段冲突时先人工确认别名。
+                - 安全边界：不保存 password、token 或完整连接串，不修改源数据库。
+
+                ## export-min-context：导出最小 AI Context
+
+                - 目标：为当前建表、修 SQL 或字段设计任务导出尽量小但可复现的上下文包。
+                - 输入：projectId=%d、scope、query、limit。
+                - 前置检查：`dataspec doctor --project %d --format json`。
+                - 步骤：
+                  1. `dataspec export-context --project %d --scope <scope> --query "<query>" --limit <limit> --output dataspec-ai-context.zip`
+                  2. 读取 `.dataspec/manifest.json` 和 `.dataspec/README.md`
+                  3. 读取 `.dataspec/workflows.md` 和 `.dataspec/field-catalog.json`
+                - 产物：dataspec-ai-context.zip、contextScope 摘要、standard.specVersion/specHash。
+                - 失败恢复：字段过少时扩大 scope/query；包过大时收窄 scope/query/status；unversioned 需要在交付中说明。
+                """.formatted(
+                projectId, projectId, projectId, projectId, projectId, projectId,
+                projectId, projectId, projectId, projectId, projectId,
+                projectId, projectId,
+                projectId, projectId, projectId
+        );
     }
 
     private void addTextEntry(ZipOutputStream zip, String entryName, String content) throws IOException {

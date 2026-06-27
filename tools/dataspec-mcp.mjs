@@ -3,6 +3,7 @@
 import { createInterface } from 'node:readline'
 import { pathToFileURL } from 'node:url'
 import { loadDataSpecConfig } from './dataspec-config.mjs'
+import { workflowRecipesResourcePayload } from './dataspec-workflows.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const SERVER_NAME = 'dataspec-mcp'
@@ -26,6 +27,14 @@ const RESOURCE_DEFS = {
     description: '当前项目的规则配置 YAML。',
     path: '/api/ai-context/rules-yaml',
     mimeType: 'text/yaml'
+  },
+  'workflow-recipes': {
+    name: 'DataSpec Workflow Recipes',
+    description: 'AI/CLI/MCP 常用 DataSpec 任务计划，包含输入、步骤、失败恢复和下一步建议。',
+    mimeType: 'application/json',
+    localContent(projectId) {
+      return JSON.stringify(workflowRecipesResourcePayload(projectId), null, 2)
+    }
   }
 }
 
@@ -217,7 +226,9 @@ async function readResource(params, context) {
   if (!def) {
     throw new JsonRpcError(-32602, `未知 resource: ${uri}`)
   }
-  const text = await fetchAiContextText(context, def.path, projectId)
+  const text = typeof def.localContent === 'function'
+    ? def.localContent(projectId)
+    : await fetchAiContextText(context, def.path, projectId)
   return {
     contents: [
       {

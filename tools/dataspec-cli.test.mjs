@@ -987,6 +987,79 @@ test('init rejects repeated single-value options with readable error', async () 
   }
 })
 
+test('workflow list prints machine-readable recipe summaries without calling server', async () => {
+  const io = createIo()
+  const fetchFn = async () => {
+    throw new Error('fetch should not be called')
+  }
+
+  const code = await runCli(['workflow', 'list', '--format', 'json'], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(output.kind, 'dataspec-workflow-recipes')
+  assert.deepEqual(output.recipes.map((recipe) => recipe.id), [
+    'create-table',
+    'review-pr-sql',
+    'reverse-import-standards',
+    'export-min-context'
+  ])
+  assert.equal(output.recipes[0].requiredInputs[0].name, 'projectId')
+  assert.equal(io.stderr, '')
+})
+
+test('workflow show prints complete recipe with commands and recovery guidance', async () => {
+  const io = createIo()
+  const fetchFn = async () => {
+    throw new Error('fetch should not be called')
+  }
+
+  const code = await runCli(['workflow', 'show', 'create-table', '--format', 'json'], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(output.recipe.id, 'create-table')
+  assert.ok(output.recipe.prechecks.length > 0)
+  assert.ok(output.recipe.steps.some((step) => step.command.includes('export-context')))
+  assert.ok(output.recipe.expectedArtifacts.length > 0)
+  assert.ok(output.recipe.failureHandling.length > 0)
+  assert.ok(output.recipe.nextActions.length > 0)
+  assert.equal(output.recipe.sideEffectPolicy, 'plan-only')
+})
+
+test('workflow recipes do not suggest printing secret tokens', async () => {
+  const io = createIo()
+  const fetchFn = async () => {
+    throw new Error('fetch should not be called')
+  }
+
+  const code = await runCli(['workflow', 'show', 'review-pr-sql', '--format', 'json'], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  const commands = [
+    ...output.recipe.prechecks.map((precheck) => precheck.command),
+    ...output.recipe.steps.map((step) => step.command)
+  ].join('\n')
+  assert.equal(code, 0)
+  assert.doesNotMatch(commands, /echo "\$GITHUB_TOKEN"/)
+  assert.match(commands, /process\.env\.GITHUB_TOKEN/)
+})
+
+test('workflow show rejects unknown recipe with supported ids', async () => {
+  const io = createIo()
+  const fetchFn = async () => {
+    throw new Error('fetch should not be called')
+  }
+
+  const code = await runCli(['workflow', 'show', 'unknown-recipe', '--format', 'json'], io, fetchFn)
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /未知 workflow recipe: unknown-recipe/)
+  assert.match(io.stderr, /create-table/)
+  assert.match(io.stderr, /export-min-context/)
+  assert.equal(io.stdout, '')
+})
+
 test('init requires project id when config is absent', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-init-'))
   try {

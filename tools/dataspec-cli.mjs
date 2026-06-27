@@ -4,6 +4,13 @@ import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadDataSpecConfig, resolveDefaultPaths } from './dataspec-config.mjs'
+import {
+  formatWorkflowListText,
+  formatWorkflowRecipeText,
+  getWorkflowRecipe,
+  supportedWorkflowRecipeIds,
+  workflowCatalogPayload
+} from './dataspec-workflows.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const DEFAULT_GITHUB_API = 'https://api.github.com'
@@ -59,6 +66,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'doctor') {
       return await runDoctor(rest, io, fetchFn)
     }
+    if (command === 'workflow' || command === 'workflows') {
+      return runWorkflow(rest, io)
+    }
     throw new Error(`未知命令: ${command}\n\n${helpText()}`)
   } catch (error) {
     io.writeErr(`错误: ${error.message}\n`)
@@ -94,6 +104,55 @@ async function runLint(args, io, fetchFn) {
   const result = unwrapResponse(payload)
   io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
   return Number(result.errorCount ?? 0) > 0 ? 1 : 0
+}
+
+function runWorkflow(args, io) {
+  const [subcommand, ...rest] = args
+  if (!subcommand || subcommand === 'list' || subcommand.startsWith('--')) {
+    const { positional, options } = parseArgs(subcommand === 'list' ? rest : args, ['format'])
+    if (positional.length > 0) {
+      throw new Error(`workflow list 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const format = options.format ?? 'text'
+    if (format === 'json') {
+      io.writeOut(`${JSON.stringify(workflowCatalogPayload(), null, 2)}\n`)
+      return 0
+    }
+    if (format !== 'text') {
+      throw new Error('workflow list 仅支持 --format text|json')
+    }
+    io.writeOut(`${formatWorkflowListText()}\n`)
+    return 0
+  }
+  if (subcommand === 'show') {
+    const { positional, options } = parseArgs(rest, ['format'])
+    const recipeId = positional[0]
+    if (!recipeId) {
+      throw new Error('workflow show 需要提供 recipe id')
+    }
+    if (positional.length > 1) {
+      throw new Error(`workflow show 只接受一个 recipe id，收到: ${positional.slice(1).join(', ')}`)
+    }
+    const recipe = getWorkflowRecipe(recipeId)
+    if (!recipe) {
+      throw new Error(`未知 workflow recipe: ${recipeId}。支持的 recipe: ${supportedWorkflowRecipeIds().join(', ')}`)
+    }
+    const format = options.format ?? 'text'
+    if (format === 'json') {
+      io.writeOut(`${JSON.stringify({
+        kind: 'dataspec-workflow-recipe',
+        schemaVersion: 1,
+        recipe
+      }, null, 2)}\n`)
+      return 0
+    }
+    if (format !== 'text') {
+      throw new Error('workflow show 仅支持 --format text|json')
+    }
+    io.writeOut(`${formatWorkflowRecipeText(recipe)}\n`)
+    return 0
+  }
+  throw new Error(`未知 workflow 子命令: ${subcommand}。支持: list, show`)
 }
 
 async function runLintFiles(args, io, fetchFn) {
@@ -1041,6 +1100,8 @@ Usage:
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
   node tools/dataspec-cli.mjs doctor [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
+  node tools/dataspec-cli.mjs workflow list [--format text|json]
+  node tools/dataspec-cli.mjs workflow show <id> [--format text|json]
 
 Options:
   --project 可由 .dataspec/config.json 的 projectId 提供
@@ -1050,6 +1111,7 @@ Options:
   export-context 默认导出完整包；传 --scope/--query/--status/--limit 时导出按需包
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   doctor 默认做轻量 OpenAPI 状态检查；传 --check-openapi 时执行完整 schema 漂移检查
+  workflow 只输出任务计划和命令建议，不会自动执行步骤或调用外部 LLM
 `
 }
 

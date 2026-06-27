@@ -42,7 +42,8 @@ test('resources list and read use configured project', async () => {
   assert.deepEqual(listed.result.resources.map((resource) => resource.uri), [
     'dataspec://project/7/field-catalog',
     'dataspec://project/7/database-rules',
-    'dataspec://project/7/rules-yaml'
+    'dataspec://project/7/rules-yaml',
+    'dataspec://project/7/workflow-recipes'
   ])
 
   const read = await handler({
@@ -56,6 +57,29 @@ test('resources list and read use configured project', async () => {
   assert.equal(read.result.contents[0].uri, 'dataspec://project/7/field-catalog')
   assert.equal(read.result.contents[0].mimeType, 'application/json')
   assert.equal(read.result.contents[0].text, '{"fields":[]}')
+})
+
+test('workflow recipes resource is served locally without external service', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 31,
+    method: 'resources/read',
+    params: { uri: 'dataspec://project/7/workflow-recipes' }
+  })
+
+  const content = read.result.contents[0]
+  const payload = JSON.parse(content.text)
+  assert.equal(content.mimeType, 'application/json')
+  assert.equal(payload.kind, 'dataspec-workflow-recipes')
+  assert.deepEqual(payload.recipes.map((recipe) => recipe.id), [
+    'create-table',
+    'review-pr-sql',
+    'reverse-import-standards',
+    'export-min-context'
+  ])
+  assert.ok(payload.recipes[0].steps.some((step) => step.command.includes('export-context')))
 })
 
 test('prompts list and get return DataSpec workflow guidance', async () => {
