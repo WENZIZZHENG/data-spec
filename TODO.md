@@ -4,7 +4,7 @@
 
 ## 下一步顺序
 
-1. P6-9 规则误报豁免与项目例外说明已完成第一版，下一步推进 P6-10 数据库直连配置预设与无密复用。
+1. P6-10 数据库直连配置预设与无密复用已完成第一版，下一步推进 P6-11 MCP/CLI 任务化工作流模板。
 2. P6 后续继续补 AI contract fixtures、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁和示例反例库。
 3. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
@@ -17,7 +17,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，后续再提升数据库直连复用、AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索、OpenSpec 收口、AI 使用画像、标准契约版本和执行证据包。
+- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，P6-10 已完成数据库直连配置预设第一版，后续再提升 AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索、OpenSpec 收口、AI 使用画像、标准契约版本和执行证据包。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -84,7 +84,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 为什么做：当前前端主流程已经可用，下一步应减少重复输入和上下文丢失，让个人日常使用更顺手。
 - 已有基础：工作台、项目选择、SQL 校验、DDL 生成、反向导入、字段库、规则配置、AI Context 页面均已接后端。
 - 已完成能力：新增前端 `reverseImportMemory` utility 和单测，使用浏览器本地存储保存 databaseType、host、port、databaseName、schemaName、username、tableNames、tableSearch、compareStatusFilter 和 activeMode；明确不保存 password、token、JDBC URL 或完整连接串；导入结果跳转字段库时会携带首个导入字段作为 `keyword`，字段库按 query 初始化筛选。
-- 后续增强：多连接预设、无密复用和重新比对上次来源已放在 P6-10；更完整的前端 E2E 门禁已放在 P6-17。
+- 后续增强：多连接预设和无密复用已在 P6-10 完成第一版；重新比对上次来源快捷入口可结合 P6-57 导入映射继续增强，更完整的前端 E2E 门禁已放在 P6-17。
 - 验收标准：`pnpm test` 覆盖敏感字段剔除、项目隔离、损坏缓存兜底和字段库 query；`pnpm build` 通过。
 - 边界：不做视觉大改版，不引入复杂新状态管理，不改变后端核心模型。
 
@@ -179,12 +179,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不做审批流，不做组织级例外审计，不允许无范围的全局静默。
 
 ### P6-10：数据库直连配置预设与无密复用
-- 状态：待办。
+- 状态：已完成第一版，已新增 `ds_database_connection_preset`、项目级预设 API 和反向导入页选择/保存入口。
 - 为什么做：数据库直连反向导入会成为高频入口，重复输入 host、port、database、schema 和表筛选很繁琐；但又不能为了方便保存密码或完整连接串。
 - 已有基础：反向导入页已有连接测试、表列表、metadata 预览、二次比对、确认导入和来源批次追踪；P5-8 也规划了高频流程细节打磨。
-- 缺口：缺少非敏感连接预设、最近使用 schema/tableNames、默认导入策略和“重新比对上次来源”的快捷入口。
-- 落地产物：新增数据库连接预设模型和前端选择器，只保存 databaseType、host、port、databaseName、schemaName、tableNames、别名和更新时间；密码仍由用户当次输入或环境变量提供；反向导入页可一键加载上次表选择并进入 compare/import。
-- 验收标准：用户可保存和复用多个非敏感连接预设；预设不会包含 password、token 或完整 JDBC URL；使用预设后仍能完成测试连接、加载表、比对和导入。
+- 已完成能力：新增数据库连接预设模型和前端选择器，只保存 databaseType、host、port、databaseName、schemaName、tableNames、别名和更新时间；服务端 request/response 不包含 username、password、token 或完整 JDBC URL；反向导入页可加载预设表选择，并继续使用原测试连接、加载表、比对和导入流程。
+- 验收标准：用户可保存和复用多个非敏感连接预设；预设不会包含 password、token 或完整 JDBC URL；使用预设后仍能完成测试连接、加载表、比对和导入。已通过 `mvn test`、`pnpm test`、`pnpm build` 和 OpenSpec validate 验证。
 - 边界：不做连接池，不做后台定时同步，不把密码写入数据库或浏览器持久存储。
 
 ### P6-11：MCP/CLI 任务化工作流模板

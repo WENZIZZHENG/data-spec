@@ -72,7 +72,42 @@
               <div class="db-panel">
                 <div class="section-header compact-header">
                   <h3>连接信息</h3>
-                  <el-tag :type="connectionTagType" effect="plain">{{ connectionStatusText }}</el-tag>
+                  <div class="inline-actions">
+                    <el-button size="small" :loading="presetLoading" @click="loadPresets">
+                      <el-icon><Refresh /></el-icon>
+                    </el-button>
+                    <el-tag :type="connectionTagType" effect="plain">{{ connectionStatusText }}</el-tag>
+                  </div>
+                </div>
+                <div class="preset-bar">
+                  <el-select
+                    v-model="presetId"
+                    class="preset-select"
+                    filterable
+                    clearable
+                    :loading="presetLoading"
+                    placeholder="选择连接预设"
+                    @change="handlePresetChange"
+                  >
+                    <el-option
+                      v-for="preset in presetOptions"
+                      :key="preset.id"
+                      :label="presetOptionLabel(preset)"
+                      :value="preset.id"
+                    >
+                      <div class="preset-option">
+                        <span class="preset-option-title">{{ presetOptionLabel(preset) }}</span>
+                        <span class="preset-option-summary">{{ presetConnectionSummary(preset) }}</span>
+                      </div>
+                    </el-option>
+                  </el-select>
+                  <el-button type="primary" plain :disabled="!canOpenPresetDialog" @click="openPresetDialog">
+                    <el-icon><Connection /></el-icon>
+                    保存预设
+                  </el-button>
+                </div>
+                <div v-if="selectedPreset" class="preset-summary">
+                  {{ presetConnectionSummary(selectedPreset) }}
                 </div>
                 <el-form class="db-form" label-width="92px">
                   <el-form-item label="数据库">
@@ -129,9 +164,18 @@
                   <el-button :disabled="selectedTableCount === 0" @click="clearSelectedTables">清空</el-button>
                 </div>
 
-                <el-empty v-if="databaseTables.length === 0" class="small-empty" description="暂无表，请先加载" />
-                <el-empty v-else-if="filteredDatabaseTables.length === 0" class="small-empty" description="没有匹配的表" />
-                <el-checkbox-group v-else v-model="dbForm.tableNames" class="table-check-list">
+                <div v-if="databaseTables.length === 0 && selectedTableCount > 0" class="saved-table-list">
+                  <el-tag
+                    v-for="tableName in dbForm.tableNames ?? []"
+                    :key="tableName"
+                    effect="plain"
+                  >
+                    {{ tableName }}
+                  </el-tag>
+                </div>
+                <el-empty v-if="databaseTables.length === 0 && selectedTableCount === 0" class="small-empty" description="暂无表，请先加载" />
+                <el-empty v-else-if="databaseTables.length > 0 && filteredDatabaseTables.length === 0" class="small-empty" description="没有匹配的表" />
+                <el-checkbox-group v-else-if="databaseTables.length > 0" v-model="dbForm.tableNames" class="table-check-list">
                   <el-checkbox
                     v-for="table in filteredDatabaseTables"
                     :key="tableKey(table)"
@@ -156,6 +200,26 @@
           </section>
         </el-tab-pane>
       </el-tabs>
+
+      <el-dialog v-model="presetDialogVisible" title="保存连接预设" width="460px">
+        <el-form label-width="82px">
+          <el-form-item label="预设名">
+            <el-input v-model="presetForm.name" maxlength="100" show-word-limit placeholder="例如：本地只读库" />
+          </el-form-item>
+          <el-form-item label="内容">
+            <div class="preset-preview">
+              {{ currentPresetSummary }}
+            </div>
+          </el-form-item>
+        </el-form>
+        <p class="preset-dialog-hint">仅保存连接元数据和表选择，不保存用户名、密码、token 或 JDBC URL。</p>
+        <template #footer>
+          <el-button @click="presetDialogVisible = false">取消</el-button>
+          <el-button type="primary" :disabled="!canSavePreset" :loading="presetSaving" @click="handleSavePreset">
+            保存
+          </el-button>
+        </template>
+      </el-dialog>
 
       <section v-if="importResult" class="result-section import-result">
         <div class="section-header">
@@ -373,6 +437,10 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import { Check, Connection, Refresh, Search, Upload, View } from '@element-plus/icons-vue'
 import {
+  createDatabaseConnectionPreset,
+  listDatabaseConnectionPresets
+} from '@/api/databaseConnectionPreset'
+import {
   compareDatabaseReverseImport,
   importDatabaseCandidates,
   listDatabaseTables,
@@ -394,8 +462,15 @@ import {
   saveReverseImportMemory,
   type ReverseImportMemoryState
 } from '@/utils/reverseImportMemory'
+import {
+  normalizeDatabaseConnectionPresetPayload,
+  presetConnectionSummary,
+  presetOptionLabel
+} from '@/utils/databaseConnectionPreset'
 import type {
   DatabaseConnectionReq,
+  DatabaseConnectionPreset,
+  DatabaseConnectionPresetReq,
   DatabaseImportResult,
   DatabaseTableInfo,
   FieldCandidate,
@@ -426,12 +501,20 @@ const compareLoading = ref(false)
 const testLoading = ref(false)
 const tableLoading = ref(false)
 const importLoading = ref(false)
+const presetLoading = ref(false)
+const presetSaving = ref(false)
+const presetDialogVisible = ref(false)
 const restoringMemory = ref(false)
 const databaseTables = ref<DatabaseTableInfo[]>([])
 const tableSearch = ref('')
 const connectionStatus = ref<ConnectionStatus>('idle')
 const connectionMessage = ref('')
 const selectedCandidateKeys = ref<Set<string>>(new Set())
+const presets = ref<DatabaseConnectionPreset[]>([])
+const presetId = ref<number | null>(null)
+const presetForm = reactive({
+  name: ''
+})
 const dbForm = reactive<DatabaseConnectionReq>({
   databaseType: 'postgresql',
   host: 'localhost',
@@ -452,6 +535,16 @@ const canUseDatabaseConnection = computed(() =>
   && Boolean(dbForm.databaseName?.trim())
   && Boolean(dbForm.username?.trim())
 )
+const canOpenPresetDialog = computed(() =>
+  hasProject.value
+  && Boolean(dbForm.databaseType)
+  && Boolean(dbForm.host?.trim())
+  && Boolean(dbForm.port)
+  && Boolean(dbForm.databaseName?.trim())
+)
+const canSavePreset = computed(() =>
+  canOpenPresetDialog.value && Boolean(presetForm.name.trim())
+)
 const canPreviewDatabase = computed(() =>
   canUseDatabaseConnection.value && Boolean(dbForm.tableNames?.length)
 )
@@ -466,6 +559,15 @@ const canImportCandidates = computed(() =>
 )
 const filteredDatabaseTables = computed(() =>
   filterDatabaseTables(databaseTables.value, tableSearch.value)
+)
+const presetOptions = computed<Array<DatabaseConnectionPreset & { id: number }>>(() =>
+  presets.value.filter((preset): preset is DatabaseConnectionPreset & { id: number } => typeof preset.id === 'number')
+)
+const selectedPreset = computed(() =>
+  presetOptions.value.find((preset) => preset.id === presetId.value) ?? null
+)
+const currentPresetSummary = computed(() =>
+  presetConnectionSummary(presetPayload())
 )
 const selectedTableCount = computed(() => dbForm.tableNames?.length ?? 0)
 const candidateTotal = computed(() => preview.value?.fieldCandidates?.length ?? 0)
@@ -559,6 +661,7 @@ onMounted(async () => {
     await projectStore.loadProjects()
   }
   applySavedReverseImportMemory()
+  await loadPresets()
 })
 
 watch(
@@ -568,8 +671,11 @@ watch(
     databaseTables.value = []
     dbForm.tableNames = []
     tableSearch.value = ''
+    presetId.value = null
+    presets.value = []
     resetConnectionStatus()
     applySavedReverseImportMemory()
+    void loadPresets()
   }
 )
 
@@ -645,6 +751,121 @@ function resetConnectionStatus() {
 function clearSql() {
   sqlText.value = ''
   resetResults()
+}
+
+async function loadPresets() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    presets.value = []
+    presetId.value = null
+    return
+  }
+  presetLoading.value = true
+  try {
+    presets.value = await listDatabaseConnectionPresets(projectId)
+    if (presetId.value && !presetOptions.value.some((preset) => preset.id === presetId.value)) {
+      presetId.value = null
+    }
+  } finally {
+    presetLoading.value = false
+  }
+}
+
+function openPresetDialog() {
+  presetForm.name = selectedPreset.value?.name?.trim() || defaultPresetName()
+  presetDialogVisible.value = true
+}
+
+async function handleSavePreset() {
+  if (!canSavePreset.value) {
+    ElMessage.warning('请补齐预设名、主机、端口和数据库名')
+    return
+  }
+  const payload = presetPayload()
+  if (!isCompletePresetPayload(payload)) {
+    ElMessage.warning('请补齐预设名、主机、端口和数据库名')
+    return
+  }
+  presetSaving.value = true
+  try {
+    const saved = await createDatabaseConnectionPreset(payload)
+    await loadPresets()
+    presetId.value = saved.id ?? null
+    presetDialogVisible.value = false
+    ElMessage.success('连接预设已保存')
+  } finally {
+    presetSaving.value = false
+  }
+}
+
+function handlePresetChange(value: number | string | null | undefined) {
+  if (!value) {
+    return
+  }
+  const id = Number(value)
+  const preset = presetOptions.value.find((item) => item.id === id)
+  if (!preset) {
+    return
+  }
+  applyDatabasePreset(preset)
+}
+
+function applyDatabasePreset(preset: DatabaseConnectionPreset) {
+  restoringMemory.value = true
+  if (isDatabaseType(preset.databaseType)) {
+    dbForm.databaseType = preset.databaseType
+  }
+  if (preset.host !== undefined) {
+    dbForm.host = preset.host
+  }
+  if (preset.port !== undefined) {
+    dbForm.port = preset.port
+  }
+  if (preset.databaseName !== undefined) {
+    dbForm.databaseName = preset.databaseName
+  }
+  dbForm.schemaName = preset.schemaName ?? ''
+  // 预设只复用连接元数据；切换连接时清空凭据，避免把上一连接的账号密码带到新库。
+  dbForm.username = ''
+  dbForm.password = ''
+  dbForm.tableNames = [...(preset.tableNames ?? [])]
+  databaseTables.value = []
+  tableSearch.value = ''
+  resetConnectionStatus()
+  resetResults()
+  void nextTick(() => {
+    restoringMemory.value = false
+    persistReverseImportMemory()
+  })
+  ElMessage.success(`已加载预设：${presetOptionLabel(preset)}`)
+}
+
+function presetPayload(): DatabaseConnectionPresetReq {
+  return normalizeDatabaseConnectionPresetPayload({
+    ...dbForm,
+    projectId: projectStore.currentProjectId ?? undefined,
+    name: presetForm.name,
+    tableNames: [...(dbForm.tableNames ?? [])]
+  })
+}
+
+function isCompletePresetPayload(payload: DatabaseConnectionPresetReq): payload is Required<Pick<
+  DatabaseConnectionPresetReq,
+  'projectId' | 'name' | 'databaseType' | 'host' | 'port' | 'databaseName'
+>> & DatabaseConnectionPresetReq {
+  return Boolean(
+    payload.projectId
+    && payload.name
+    && payload.databaseType
+    && payload.host
+    && payload.port
+    && payload.databaseName
+  )
+}
+
+function defaultPresetName() {
+  const database = [dbForm.databaseName, dbForm.schemaName].filter(Boolean).join(' / ')
+  return database || [dbForm.host, dbForm.port].filter(Boolean).join(':') || '数据库连接'
 }
 
 function databaseRequest(): DatabaseConnectionReq {
@@ -731,8 +952,14 @@ async function handleLoadTables() {
   }
   tableLoading.value = true
   try {
+    const previousSelection = new Set(dbForm.tableNames ?? [])
     databaseTables.value = await listDatabaseTables(databaseRequest())
-    dbForm.tableNames = []
+    const availableTables = new Set(
+      databaseTables.value
+        .map((table) => table.tableName)
+        .filter((tableName): tableName is string => Boolean(tableName))
+    )
+    dbForm.tableNames = [...previousSelection].filter((tableName) => availableTables.has(tableName))
     tableSearch.value = ''
     connectionStatus.value = 'success'
     connectionMessage.value = `已加载 ${databaseTables.value.length} 张表`
@@ -1023,6 +1250,14 @@ function browserStorage() {
   flex-wrap: wrap;
 }
 
+.inline-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .mode-tabs {
   border-top: 1px solid #ebeef5;
 }
@@ -1066,6 +1301,58 @@ function browserStorage() {
   margin-bottom: 12px;
 }
 
+.preset-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.preset-select {
+  width: 100%;
+}
+
+.preset-option {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.preset-option-title {
+  overflow: hidden;
+  color: #1f2937;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-option-summary,
+.preset-summary,
+.preset-dialog-hint {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.preset-summary {
+  margin: -2px 0 10px;
+}
+
+.preset-preview {
+  min-height: 32px;
+  padding: 7px 10px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  background: #fafafa;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.preset-dialog-hint {
+  margin: 4px 0 0;
+}
+
 .db-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(260px, 1fr));
@@ -1094,6 +1381,13 @@ function browserStorage() {
   max-height: 318px;
   margin-top: 12px;
   overflow: auto;
+}
+
+.saved-table-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
 }
 
 .table-check-item {
@@ -1289,6 +1583,7 @@ function browserStorage() {
   }
 
   .table-tools,
+  .preset-bar,
   .import-lists {
     grid-template-columns: 1fr;
   }

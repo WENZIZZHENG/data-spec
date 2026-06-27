@@ -435,6 +435,31 @@ export interface DatabaseConnectionReq {
   tableNames?: string[]
 }
 
+export interface DatabaseConnectionPreset {
+  id?: number
+  projectId?: number
+  name?: string
+  databaseType?: 'postgresql' | 'mysql'
+  host?: string
+  port?: number
+  databaseName?: string
+  schemaName?: string | null
+  tableNames?: string[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface DatabaseConnectionPresetReq {
+  projectId?: number
+  name?: string
+  databaseType?: 'postgresql' | 'mysql'
+  host?: string
+  port?: number
+  databaseName?: string
+  schemaName?: string | null
+  tableNames?: string[]
+}
+
 export interface DatabaseConnectionResult {
   success?: boolean
   message?: string

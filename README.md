@@ -35,7 +35,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 表名/字段名 snake_case、禁用字段名、推荐字段名、必备列、金额类型、字段后缀/前缀类型和注释缺失等规则。
 - 项目级规则例外，支持按规则编码、表名和字段名声明历史兼容原因；被豁免问题保留在结果中但不计入 active error/warning/suggestion。
 - 修正 SQL 输出、复制、检查记录、分页历史和详情查看。
-- SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项和非标准字段差异，并支持确认导入数标候选；直连模式支持按表生成数据库现状与 DataSpec 标准字段的二次比对，并追踪确认导入后的字段来源批次。
+- SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项和非标准字段差异，并支持确认导入数标候选；直连模式支持按表生成数据库现状与 DataSpec 标准字段的二次比对、项目级非敏感连接预设复用，并追踪确认导入后的字段来源批次。
 - 字段覆盖率报告，支持基于 SQL/DDL 或数据库直连 metadata 统计标准命中、别名命中、未纳管、缺注释和疑似重复字段。
 
 ### 生成与报告
@@ -187,7 +187,16 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 
 `/api/lint` 会返回 lint 结果、结构化修复建议和 `fixedSql`，并保存 SQL 检查记录。前端 SQL 校验页支持查看修正 SQL、复制、最近检查记录分页和详情。
 
-反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。直连模式还可以生成只读二次比对，按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。页面会按项目在浏览器本地记住数据库类型、host、port、database、schema、username、表选择、搜索词和差异筛选，不保存数据库密码、token 或完整连接串。确认导入创建的新字段会记录导入批次、来源 schema/table/column 和原始 metadata 快照，字段库可查看来源摘要；从导入结果跳转字段库时会自动携带字段关键词并筛选当前页结果。直连模式不会修改源数据库，也不会做定时同步。
+反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。直连模式还可以生成只读二次比对，按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。页面会按项目在浏览器本地记住数据库类型、host、port、database、schema、username、表选择、搜索词和差异筛选，不保存数据库密码、token 或完整连接串。当前项目可保存多个数据库连接预设，服务端只持久化预设名、databaseType、host、port、databaseName、schemaName 和 tableNames；反向导入页可选择预设回填连接元数据和表选择，用户名和密码仍由用户当次输入。确认导入创建的新字段会记录导入批次、来源 schema/table/column 和原始 metadata 快照，字段库可查看来源摘要；从导入结果跳转字段库时会自动携带字段关键词并筛选当前页结果。直连模式不会修改源数据库，也不会做定时同步。
+
+数据库连接预设 API：
+
+```bash
+curl "http://localhost:8090/api/database-connection-presets?projectId=1"
+curl -X POST "http://localhost:8090/api/database-connection-presets" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"name":"本地只读库","databaseType":"postgresql","host":"localhost","port":5432,"databaseName":"dataspec_demo","schemaName":"public","tableNames":["users"]}'
+```
 
 ## 字段覆盖率报告
 
@@ -419,6 +428,7 @@ data-spec/
 │       ├── importexport/     # 导入导出
 │       ├── changelog/        # 标准变更日志
 │       ├── standard/         # 标准版本快照
+│       ├── dbpreset/         # 数据库直连非敏感连接预设
 │       ├── reverseimport/    # SQL 反向导入
 │       └── security/         # API Token 认证与管理
 ├── dataspec-web/             # Vue 3 前端
@@ -452,6 +462,7 @@ data-spec/
 | importexport | /api/import-export | 字段导入导出 |
 | changelog | /api/change-logs | 标准变更日志 |
 | standard-snapshots | /api/projects/{projectId}/standard-snapshots | 标准版本快照 |
+| dbpreset | /api/database-connection-presets | 数据库直连非敏感连接预设 |
 | reverse-import | /api/reverse-import | SQL 与数据库直连反向导入 |
 
 ## 规则引擎
@@ -503,6 +514,7 @@ data-spec/
 - [x] 数据库直连二次比对，按表展示标准命中、属性变化、新增、缺注释和非标准字段
 - [x] 数据库直连导入来源与批次追踪，字段库可查看来源摘要
 - [x] 前端反向导入高频流程记忆，按项目恢复非敏感连接信息、表选择、筛选状态和字段库关键词跳转
+- [x] 数据库直连非敏感连接预设，支持项目级保存、选择复用和表选择恢复，不持久化用户名、密码、token 或 JDBC URL
 - [x] DataSpec CLI：`doctor`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置和按需 Context 导出
 - [x] DataSpec MCP Server：resources、prompts、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`generate_table_ddl`，支持 `.dataspec/config.json` 默认项目配置
 - [x] GitHub Actions 示例和 PR 评论式 SQL Review
