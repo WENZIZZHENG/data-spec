@@ -17,6 +17,8 @@ import com.dataspec.lint.rules.TableNameSnakeCaseRule;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
+import com.dataspec.ruleexemption.entity.RuleExemption;
+import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -71,7 +73,8 @@ class SqlLintServiceTest {
                 new ObjectMapper(),
                 new FixedSqlGenerator(),
                 recordService,
-                new NoopAiJobRecordService()
+                new NoopAiJobRecordService(),
+                new NoopRuleExemptionService()
         );
 
         // 验收示例:含 create_time 且缺 created_at 等必备列
@@ -108,7 +111,8 @@ class SqlLintServiceTest {
                 new ObjectMapper(),
                 new FixedSqlGenerator(),
                 recordService,
-                new NoopAiJobRecordService()
+                new NoopAiJobRecordService(),
+                new NoopRuleExemptionService()
         );
 
         LintResult result = service.lint("""
@@ -174,7 +178,8 @@ class SqlLintServiceTest {
                 new ObjectMapper(),
                 new FixedSqlGenerator(),
                 recordService,
-                new NoopAiJobRecordService()
+                new NoopAiJobRecordService(),
+                new NoopRuleExemptionService()
         );
 
         LintResult result = service.lint("CREATE TABLE users (id bigint);", null);
@@ -198,7 +203,8 @@ class SqlLintServiceTest {
                 new ObjectMapper(),
                 new FixedSqlGenerator(),
                 recordService,
-                aiJobRecordService
+                aiJobRecordService,
+                new NoopRuleExemptionService()
         );
     }
 
@@ -222,6 +228,46 @@ class SqlLintServiceTest {
         assertEquals(7L, req.sqlCheckRecordId());
         assertTrue(req.inputPayload().toString().contains("UserOrder"));
         assertTrue(req.outputPayload().toString().contains("fixedSql"));
+    }
+
+    @Test
+    void lintAppliesRuleExemptionAndExcludesSuppressedIssueFromCounts() {
+        RecordingCheckRecordService recordService = new RecordingCheckRecordService();
+        RuleExemption exemption = new RuleExemption();
+        exemption.setId(11L);
+        exemption.setProjectId(1L);
+        exemption.setRuleCode("table_naming_snake_case");
+        exemption.setTableName("UserOrder");
+        exemption.setReason("历史三方表名兼容");
+        exemption.setEnabled(true);
+        SqlLintService service = new SqlLintService(
+                new SqlParserService(),
+                new EmptyRuleConfigService(),
+                List.of(new TableNameSnakeCaseRule()),
+                new ObjectMapper(),
+                new FixedSqlGenerator(),
+                recordService,
+                new NoopAiJobRecordService(),
+                new StaticRuleExemptionService(List.of(exemption))
+        );
+
+        LintResult result = service.lint("""
+                CREATE TABLE UserOrder (
+                    id bigserial PRIMARY KEY
+                );
+                """, 1L);
+
+        LintIssue issue = result.getIssues().stream()
+                .filter(item -> "table_naming_snake_case".equals(item.getRuleCode()))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(issue.getSuppressed());
+        assertEquals(11L, issue.getSuppressionId());
+        assertEquals("历史三方表名兼容", issue.getSuppressionReason());
+        assertEquals(0, result.getErrorCount());
+        assertEquals(1, result.getSuppressedCount());
+        assertNull(result.getFixedSql(), "已豁免的问题不应继续驱动 fixedSql 重命名");
+        assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"suppressed\":true"));
     }
 
     private static class EmptyRuleConfigService implements RuleConfigService {
@@ -323,6 +369,71 @@ class SqlLintServiceTest {
         public AiJobRecord create(AiJobRecordCreateReq req) {
             created.add(req);
             return new AiJobRecord();
+        }
+    }
+
+    private static class NoopRuleExemptionService implements RuleExemptionService {
+        @Override
+        public List<RuleExemption> listByProject(Long projectId) {
+            return List.of();
+        }
+
+        @Override
+        public List<RuleExemption> listActiveByProject(Long projectId) {
+            return List.of();
+        }
+
+        @Override
+        public RuleExemption getById(Long id) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public RuleExemption create(RuleExemption exemption) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void disable(Long id) {
+        }
+
+        @Override
+        public void delete(Long id) {
+        }
+
+        @Override
+        public void applySuppressions(Long projectId, List<LintIssue> issues) {
+        }
+    }
+
+    private static class StaticRuleExemptionService extends NoopRuleExemptionService {
+        private final List<RuleExemption> exemptions;
+
+        private StaticRuleExemptionService(List<RuleExemption> exemptions) {
+            this.exemptions = exemptions;
+        }
+
+        @Override
+        public List<RuleExemption> listActiveByProject(Long projectId) {
+            return exemptions;
+        }
+
+        @Override
+        public void applySuppressions(Long projectId, List<LintIssue> issues) {
+            for (LintIssue issue : issues) {
+                exemptions.stream()
+                        .filter(exemption -> exemption.getRuleCode().equals(issue.getRuleCode()))
+                        .filter(exemption -> exemption.getTableName() == null
+                                || exemption.getTableName().equals(issue.getTableName()))
+                        .filter(exemption -> exemption.getColumnName() == null
+                                || exemption.getColumnName().equals(issue.getColumnName()))
+                        .findFirst()
+                        .ifPresent(exemption -> {
+                            issue.setSuppressed(true);
+                            issue.setSuppressionId(exemption.getId());
+                            issue.setSuppressionReason(exemption.getReason());
+                        });
+            }
         }
     }
 }

@@ -67,4 +67,13 @@ public class LintIssue {
 
     /** 定位类型，如 table、column、comment_column；无法定位时为空 */
     private String locationKind;
+
+    /** 是否被项目规则豁免抑制；被抑制的问题保留展示但不计入 active 统计 */
+    private Boolean suppressed;
+
+    /** 命中的规则豁免 ID */
+    private Long suppressionId;
+
+    /** 命中的规则豁免原因 */
+    private String suppressionReason;
 }

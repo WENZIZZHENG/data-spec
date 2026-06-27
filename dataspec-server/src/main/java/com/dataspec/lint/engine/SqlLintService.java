@@ -7,6 +7,7 @@ import com.dataspec.lint.model.*;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
+import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class SqlLintService {
     private final FixedSqlGenerator fixedSqlGenerator;
     private final SqlCheckRecordService sqlCheckRecordService;
     private final AiJobRecordService aiJobRecordService;
+    private final RuleExemptionService ruleExemptionService;
     private final SqlIssueSourceSpanResolver sourceSpanResolver = new SqlIssueSourceSpanResolver();
     private final SqlDiffGenerator sqlDiffGenerator = new SqlDiffGenerator();
 
@@ -125,6 +127,7 @@ public class SqlLintService {
             issues.addAll(ruleIssues);
         }
         sourceSpanResolver.resolve(sql, issues);
+        ruleExemptionService.applySuppressions(projectId, issues);
 
         LintResult result = LintResult.of(tables, issues);
         // 基于确定性修复建议重建修正 SQL

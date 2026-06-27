@@ -23,7 +23,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 字段质量评分，按注释、别名、示例、分类、敏感标识、代码集和废弃说明识别低质量字段。
 - 字段冲突检测，识别别名冲突、显示名重复、语义疑似重复和关键属性不一致。
 - 字段影响分析，展示字段被模板、导入来源、历史 SQL 检查、标准快照和代码集引用的范围。
-- 数据域、枚举字典、表模板和规则配置管理。
+- 数据域、枚举字典、表模板、规则配置和规则例外管理。
 - 标准快照，支持为当前项目字段、枚举和规则生成版本号、内容 hash 和可追溯 payload。
 - Excel `.xlsx` 模板下载、字段/代码集导出、导入预览和确认导入。
 - 标准变更日志，记录字段、代码集、规则的新增、修改、删除、启停 before/after 和操作者。
@@ -33,6 +33,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - SQL 粘贴校验，返回 error/warning/suggestion 和结构化修复建议。
 - 支持 PostgreSQL `COMMENT ON TABLE/COLUMN`，以及常见 MySQL `CREATE TABLE`、列内注释、表选项、索引定义、`UNSIGNED` 数值类型和 `tinyint(1)` 布尔习惯解析。
 - 表名/字段名 snake_case、禁用字段名、推荐字段名、必备列、金额类型、字段后缀/前缀类型和注释缺失等规则。
+- 项目级规则例外，支持按规则编码、表名和字段名声明历史兼容原因；被豁免问题保留在结果中但不计入 active error/warning/suggestion。
 - 修正 SQL 输出、复制、检查记录、分页历史和详情查看。
 - SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项和非标准字段差异，并支持确认导入数标候选；直连模式支持按表生成数据库现状与 DataSpec 标准字段的二次比对，并追踪确认导入后的字段来源批次。
 - 字段覆盖率报告，支持基于 SQL/DDL 或数据库直连 metadata 统计标准命中、别名命中、未纳管、缺注释和疑似重复字段。
@@ -45,7 +46,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 
 ### AI 与自动化
 
-- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、prompt、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包。
+- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、项目规则例外、prompt、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包。
 - AI Context manifest、字段目录和规则文件携带标准快照版本与 hash；未创建快照时标记为 `unversioned`。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - AI 回放记录，支持查看 Prompt、SQL 检查修正和 DDL 预览的输入输出、promptVersion 与标准快照。
@@ -139,6 +140,8 @@ curl -X POST "http://localhost:8090/api/projects/1/standard-snapshots" \
 ## 结构化命名规则
 
 `rules.yaml` 会导出结构化 `naming:` 模型，包含表/字段 snake_case、必含列、禁用字段名、推荐替换、字段后缀/前缀类型规则。SQL lint 已支持 `field_suffix_type`，默认校验 `_id/_at/_no/_count` 和 `is_` 对应的数据类型；前端规则配置页已为必含列、禁用字段名、推荐替换、后缀/前缀类型提供结构化表单，并保留 JSON 预览和兜底编辑。
+
+前端“模板与规则 / 规则例外”可为历史表、第三方字段或框架约定创建项目级豁免。豁免必须包含 `ruleCode`、原因，以及表名或字段名范围；禁用或过期后不再抑制 lint 问题。`LintIssue` 会保留 `suppressed/suppressionId/suppressionReason`，`LintResult` 的 active 统计会排除 suppressed issue，同时新增 `suppressedCount`。AI Context 的 `.dataspec/rules.yaml` 和 `.dataspec/DATABASE_RULES.md` 会导出规则例外，并说明这些例外不是新建表和新增字段的推荐标准。
 
 ## AI Prompt 生成
 
@@ -439,6 +442,7 @@ data-spec/
 | enumdict | /api/enums | 枚举字典 + 枚举值 |
 | template | /api/templates | 表模板 + 模板字段 |
 | rule | /api/rules | 规则配置管理 |
+| ruleexemption | /api/rule-exemptions | 项目级规则例外管理 |
 | lint | /api/lint | SQL 粘贴校验 |
 | dashboard | /api/dashboard | 个人工作台统计 |
 | auth | /api/auth | API token 当前身份 |
@@ -471,7 +475,7 @@ data-spec/
 
 - [x] 项目空间、顶部当前项目联动和内置 standards 初始化
 - [x] 演示项目与首次使用入口，串联 DDL 生成、SQL 校验和 AI Context 导出
-- [x] 标准字段、数据域、枚举字典、表模板、规则配置 CRUD 与常见规则结构化参数表单
+- [x] 标准字段、数据域、枚举字典、表模板、规则配置、规则例外 CRUD 与常见规则结构化参数表单
 - [x] 标准快照、内容 hash、AI Context 版本标识、SQL 检查记录和 DDL 生成结果快照引用
 - [x] 个人版字段模型：别名、分类、代码集、敏感标记、状态、示例值
 - [x] 结构化命名规则导出和 `field_suffix_type` lint 规则

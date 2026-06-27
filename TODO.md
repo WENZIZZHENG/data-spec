@@ -4,7 +4,7 @@
 
 ## 下一步顺序
 
-1. P6-8 标准字段重复与冲突检测已完成第一版，下一步推进 P6-9 规则误报豁免与项目例外说明。
+1. P6-9 规则误报豁免与项目例外说明已完成第一版，下一步推进 P6-10 数据库直连配置预设与无密复用。
 2. P6 后续继续补 AI contract fixtures、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁和示例反例库。
 3. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
@@ -17,7 +17,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，后续再提升 AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索、OpenSpec 收口、AI 使用画像、标准契约版本和执行证据包。
+- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，后续再提升数据库直连复用、AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索、OpenSpec 收口、AI 使用画像、标准契约版本和执行证据包。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -170,12 +170,12 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不自动合并字段，不自动删除历史字段，不做跨项目统一标准治理。
 
 ### P6-9：规则误报豁免与项目例外说明
-- 状态：待办。
+- 状态：已完成第一版，已新增规则豁免模型/API、SQL lint 抑制、AI Context 例外导出和前端“模板与规则 / 规则例外”页面。
 - 为什么做：个人/小团队真实项目里会有少量历史表、第三方字段或框架约定无法完全满足 DataSpec 规则；如果没有结构化例外，AI 和 CI 会反复报告已知误报。
 - 已有基础：已有规则配置、规则启停、SQL lint、CLI/GitHub Review、AI rules.yaml 导出和结构化修复建议。
-- 缺口：缺少按项目、表、字段、规则编码或 SQL 文件路径声明例外的机制；例外原因也没有导出给 AI。
-- 落地产物：新增轻量 rule exemption 模型/API/前端入口；支持记录 ruleCode、scope、reason、expiresAt/disabledAt；SQL lint 输出中区分 suppressed issue 和 active issue；AI rules 导出包含项目例外说明。
-- 验收标准：已知历史表可被豁免且不会导致 CI 失败；豁免项必须有原因；AI Context 能提醒 agent 这些例外不是推荐新建表继续沿用的标准。
+- 已完成能力：新增 `ds_rule_exemption` 迁移和 `/api/rule-exemptions` API；豁免必须包含 ruleCode、原因和表名/字段名范围，可设置过期时间、禁用或删除；`SqlLintService` 会把命中项标记为 `suppressed=true` 并从 active 统计中排除；`fixedSql` 不再根据 suppressed issue 生成修复；AI Context 的 rules.yaml 和 DATABASE_RULES.md 会导出例外说明；前端支持列表、新建、禁用和删除。
+- 落地产物：新增轻量 rule exemption 模型/API/前端入口；支持记录 ruleCode、scope、reason、expiresAt；SQL lint 输出中区分 suppressed issue 和 active issue；AI rules 导出包含项目例外说明。
+- 验收标准：已知历史表可被豁免且不会导致 CI 失败；豁免项必须有原因；AI Context 能提醒 agent 这些例外不是推荐新建表继续沿用的标准。已通过 `mvn test`、`pnpm test` 和 `pnpm build` 验证。
 - 边界：不做审批流，不做组织级例外审计，不允许无范围的全局静默。
 
 ### P6-10：数据库直连配置预设与无密复用

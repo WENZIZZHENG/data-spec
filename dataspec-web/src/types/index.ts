@@ -140,6 +140,29 @@ export interface FieldImpactReport {
 
 export type RuleConfig = Schemas['RuleConfig']
 export type RuleConfigReq = Schemas['RuleConfigReq']
+
+export interface RuleExemption {
+  id?: number
+  projectId?: number
+  ruleCode?: string
+  tableName?: string | null
+  columnName?: string | null
+  reason?: string
+  enabled?: boolean
+  expiresAt?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface RuleExemptionReq {
+  projectId?: number
+  ruleCode?: string
+  tableName?: string | null
+  columnName?: string | null
+  reason?: string
+  expiresAt?: string | null
+}
+
 export type LintRequest = Schemas['LintRequest']
 export type LintResult = Schemas['LintResult']
 export type LintIssue = Schemas['LintIssue']

@@ -31,6 +31,7 @@ import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
+import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -141,7 +142,8 @@ class CoreGoldenFixturesTest {
                 objectMapper,
                 new FixedSqlGenerator(),
                 new NoopCheckRecordService(),
-                new NoopAiJobRecordService());
+                new NoopAiJobRecordService(),
+                mock(RuleExemptionService.class));
     }
 
     private List<LintRule> commonRules() {

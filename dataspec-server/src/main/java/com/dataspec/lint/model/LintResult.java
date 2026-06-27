@@ -26,6 +26,7 @@ public class LintResult {
     private int errorCount;
     private int warningCount;
     private int suggestionCount;
+    private int suppressedCount;
 
     /** 基于确定性修复建议重建的修正 SQL,无法重建时为 null */
     private String fixedSql;
@@ -34,9 +35,10 @@ public class LintResult {
     private String fixedSqlDiff;
 
     public static LintResult of(List<TableDef> tables, List<LintIssue> issues) {
-        long errors = issues.stream().filter(i -> i.getSeverity() == Severity.ERROR).count();
-        long warnings = issues.stream().filter(i -> i.getSeverity() == Severity.WARNING).count();
-        long suggestions = issues.stream().filter(i -> i.getSeverity() == Severity.SUGGESTION).count();
+        long errors = issues.stream().filter(LintResult::isActive).filter(i -> i.getSeverity() == Severity.ERROR).count();
+        long warnings = issues.stream().filter(LintResult::isActive).filter(i -> i.getSeverity() == Severity.WARNING).count();
+        long suggestions = issues.stream().filter(LintResult::isActive).filter(i -> i.getSeverity() == Severity.SUGGESTION).count();
+        long suppressed = issues.stream().filter(i -> Boolean.TRUE.equals(i.getSuppressed())).count();
 
         return LintResult.builder()
                 .tables(tables)
@@ -44,6 +46,11 @@ public class LintResult {
                 .errorCount((int) errors)
                 .warningCount((int) warnings)
                 .suggestionCount((int) suggestions)
+                .suppressedCount((int) suppressed)
                 .build();
+    }
+
+    private static boolean isActive(LintIssue issue) {
+        return !Boolean.TRUE.equals(issue.getSuppressed());
     }
 }

@@ -72,6 +72,9 @@ public class FixedSqlGenerator {
         }
 
         for (LintIssue issue : issues) {
+            if (Boolean.TRUE.equals(issue.getSuppressed())) {
+                continue;
+            }
             String ruleCode = issue.getRuleCode();
             String tableLower = lower(issue.getTableName());
 

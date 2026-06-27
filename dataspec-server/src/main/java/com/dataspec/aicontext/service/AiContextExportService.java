@@ -9,6 +9,8 @@ import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
+import com.dataspec.ruleexemption.entity.RuleExemption;
+import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.enumdict.entity.EnumDict;
@@ -83,6 +85,7 @@ public class AiContextExportService {
     private final SqlLintService sqlLintService;
     private final ObjectMapper objectMapper;
     private final AiJobRecordService aiJobRecordService;
+    private final RuleExemptionService ruleExemptionService;
 
     /**
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
@@ -122,6 +125,7 @@ public class AiContextExportService {
             }
             md.append("\n");
         }
+        appendRuleExemptionsMarkdown(md, projectId);
 
         // 标准字段
         List<FieldMatch> fields = scopedFields.fields();
@@ -253,6 +257,7 @@ public class AiContextExportService {
                 yaml.append(String.format("    params: %s\n", cfg.getParamsJson()));
             }
         }
+        appendRuleExemptionsYaml(yaml, projectId);
 
         return yaml.toString();
     }
@@ -562,6 +567,62 @@ public class AiContextExportService {
                 yaml.append("      - ").append(value).append("\n");
             }
         }
+    }
+
+    private void appendRuleExemptionsMarkdown(StringBuilder md, Long projectId) {
+        List<RuleExemption> exemptions = activeRuleExemptions(projectId);
+        if (exemptions.isEmpty()) {
+            return;
+        }
+        md.append("## 项目规则例外\n\n");
+        md.append("> 以下例外仅用于兼容历史表、第三方字段或框架约定，不是新建表和新增字段的推荐标准。\n\n");
+        for (RuleExemption exemption : exemptions) {
+            md.append("- `").append(exemption.getRuleCode()).append("`");
+            md.append(" scope: ").append(ruleExemptionScope(exemption));
+            md.append("；原因: ").append(exemption.getReason());
+            if (exemption.getExpiresAt() != null) {
+                md.append("；过期: ").append(exemption.getExpiresAt());
+            }
+            md.append("\n");
+        }
+        md.append("\n");
+    }
+
+    private void appendRuleExemptionsYaml(StringBuilder yaml, Long projectId) {
+        List<RuleExemption> exemptions = activeRuleExemptions(projectId);
+        yaml.append("\nrule_exemptions:\n");
+        yaml.append("  note: ").append(yamlQuote("These are legacy exceptions, not recommended standards for new schema.")).append("\n");
+        yaml.append("  items:\n");
+        for (RuleExemption exemption : exemptions) {
+            yaml.append("    - ruleCode: ").append(yamlQuote(exemption.getRuleCode())).append("\n");
+            yaml.append("      scope: ").append(yamlQuote(ruleExemptionScope(exemption))).append("\n");
+            yaml.append("      reason: ").append(yamlQuote(exemption.getReason())).append("\n");
+            if (exemption.getTableName() != null) {
+                yaml.append("      tableName: ").append(yamlQuote(exemption.getTableName())).append("\n");
+            }
+            if (exemption.getColumnName() != null) {
+                yaml.append("      columnName: ").append(yamlQuote(exemption.getColumnName())).append("\n");
+            }
+            if (exemption.getExpiresAt() != null) {
+                yaml.append("      expiresAt: ").append(yamlQuote(exemption.getExpiresAt().toString())).append("\n");
+            }
+        }
+    }
+
+    private List<RuleExemption> activeRuleExemptions(Long projectId) {
+        List<RuleExemption> exemptions = ruleExemptionService.listActiveByProject(projectId);
+        return exemptions == null ? List.of() : exemptions;
+    }
+
+    private String ruleExemptionScope(RuleExemption exemption) {
+        String table = valueOrDash(exemption.getTableName());
+        String column = valueOrDash(exemption.getColumnName());
+        return "table=" + table + ", column=" + column;
+    }
+
+    private String yamlQuote(String value) {
+        String safe = value == null ? "" : value.replace("'", "''");
+        return "'" + safe + "'";
     }
 
     /**

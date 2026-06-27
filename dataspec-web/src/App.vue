@@ -65,6 +65,10 @@
             <el-icon><Setting /></el-icon>
             <span>规则配置</span>
           </el-menu-item>
+          <el-menu-item index="/rule-exemptions">
+            <el-icon><Warning /></el-icon>
+            <span>规则例外</span>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 校验与生成 -->

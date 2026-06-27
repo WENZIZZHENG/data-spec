@@ -61,6 +61,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '规则配置' }
   },
   {
+    path: '/rule-exemptions',
+    name: 'RuleExemptions',
+    component: () => import('@/views/RuleExemptions.vue'),
+    meta: { title: '规则例外' }
+  },
+  {
     path: '/sql-lint',
     name: 'SqlLint',
     component: () => import('@/views/SqlLint.vue'),

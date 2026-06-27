@@ -16,6 +16,8 @@ import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.rules.TableNameSnakeCaseRule;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.rule.service.RuleConfigService;
+import com.dataspec.ruleexemption.entity.RuleExemption;
+import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.service.StandardSnapshotService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -125,6 +127,38 @@ class AiContextExportServiceTest {
         assertEquals("v1", mapper.readTree(entries.get(".dataspec/field-catalog.json")).path("standard").path("specVersion").asText());
         assertEquals("v1", mapper.readTree(entries.get(".dataspec/manifest.json")).path("standard").path("specVersion").asText());
         assertTrue(entries.get(".dataspec/rules.yaml").contains("spec_version: v1"));
+    }
+
+    @Test
+    void generateRulesYamlAndDatabaseRules_includeRuleExemptions() {
+        RuleExemptionService ruleExemptionService = mock(RuleExemptionService.class);
+        RuleExemption exemption = new RuleExemption();
+        exemption.setId(7L);
+        exemption.setProjectId(PROJECT_ID);
+        exemption.setRuleCode("table_naming_snake_case");
+        exemption.setTableName("UserOrder");
+        exemption.setReason("历史第三方表名兼容");
+        exemption.setEnabled(true);
+        when(ruleExemptionService.listActiveByProject(PROJECT_ID)).thenReturn(List.of(exemption));
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID))
+                .thenReturn(snapshotInfo("v2026.06.24", "hash123"));
+        AiContextExportService service = createService(
+                standardSnapshotService,
+                new NoopAiJobRecordService(),
+                List.of(sampleField()),
+                ruleExemptionService);
+
+        String rulesYaml = service.generateRulesYaml(PROJECT_ID);
+        String databaseRules = service.generateDatabaseRules(PROJECT_ID);
+
+        assertTrue(rulesYaml.contains("rule_exemptions:"));
+        assertTrue(rulesYaml.contains("table_naming_snake_case"));
+        assertTrue(rulesYaml.contains("历史第三方表名兼容"));
+        assertTrue(rulesYaml.contains("not recommended standards"));
+        assertTrue(databaseRules.contains("项目规则例外"));
+        assertTrue(databaseRules.contains("不是新建表和新增字段的推荐标准"));
+        assertTrue(databaseRules.contains("UserOrder"));
     }
 
     @Test
@@ -270,6 +304,17 @@ class AiContextExportServiceTest {
     private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
                                                  AiJobRecordService aiJobRecordService,
                                                  List<Field> fields) {
+        return createService(
+                standardSnapshotService,
+                aiJobRecordService,
+                fields,
+                mock(RuleExemptionService.class));
+    }
+
+    private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
+                                                 AiJobRecordService aiJobRecordService,
+                                                 List<Field> fields,
+                                                 RuleExemptionService ruleExemptionService) {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         FieldService fieldService = mock(FieldService.class);
         EnumDictService enumDictService = mock(EnumDictService.class);
@@ -288,7 +333,8 @@ class AiContextExportServiceTest {
                 objectMapper,
                 new FixedSqlGenerator(),
                 sqlCheckRecordService,
-                aiJobRecordService
+                aiJobRecordService,
+                ruleExemptionService
         );
         return new AiContextExportService(
                 ruleConfigService,
@@ -297,7 +343,8 @@ class AiContextExportServiceTest {
                 standardSnapshotService,
                 sqlLintService,
                 objectMapper,
-                aiJobRecordService
+                aiJobRecordService,
+                ruleExemptionService
         );
     }
 
