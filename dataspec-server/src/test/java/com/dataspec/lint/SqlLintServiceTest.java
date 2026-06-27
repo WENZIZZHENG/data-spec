@@ -19,6 +19,7 @@ import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.ruleexemption.entity.RuleExemption;
 import com.dataspec.ruleexemption.service.RuleExemptionService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -146,6 +147,44 @@ class SqlLintServiceTest {
         assertTrue(columnIssue.getSourceEnd() > columnIssue.getSourceStart());
         assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"line\":1"));
         assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"locationKind\":\"table\""));
+    }
+
+    @Test
+    void lintAiContract_exposesStableIssueAndFixedSqlFields() throws Exception {
+        RecordingCheckRecordService recordService = new RecordingCheckRecordService();
+        SqlLintService service = newService(recordService);
+
+        LintResult result = service.lint("""
+                CREATE TABLE UserOrder (
+                    id bigserial PRIMARY KEY
+                );
+                """, 1L);
+
+        JsonNode root = new ObjectMapper().valueToTree(result);
+        assertEquals(1, root.path("errorCount").asInt());
+        assertEquals(0, root.path("warningCount").asInt());
+        assertEquals(0, root.path("suggestionCount").asInt());
+        assertEquals(0, root.path("suppressedCount").asInt());
+        assertTrue(root.path("fixedSql").asText().contains("CREATE TABLE user_order"));
+        assertTrue(root.path("fixedSqlDiff").asText().contains("-CREATE TABLE UserOrder"));
+
+        JsonNode issue = root.path("issues").get(0);
+        assertEquals("ERROR", issue.path("severity").asText());
+        assertEquals("table_naming_snake_case", issue.path("ruleCode").asText());
+        assertEquals("UserOrder", issue.path("tableName").asText());
+        assertEquals("user_order", issue.path("replacement").asText());
+        assertEquals("UserOrder", issue.path("before").asText());
+        assertEquals("user_order", issue.path("after").asText());
+        assertEquals(90, issue.path("confidence").asInt());
+        assertEquals(1, issue.path("line").asInt());
+        assertEquals(14, issue.path("column").asInt());
+        assertEquals("table", issue.path("locationKind").asText());
+
+        JsonNode persistedIssue = new ObjectMapper()
+                .readTree(recordService.saved.get(0).getIssuesJson())
+                .get(0);
+        assertEquals("table_naming_snake_case", persistedIssue.path("ruleCode").asText());
+        assertEquals("table", persistedIssue.path("locationKind").asText());
     }
 
     @Test

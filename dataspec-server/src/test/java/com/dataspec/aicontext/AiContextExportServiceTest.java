@@ -121,6 +121,46 @@ class AiContextExportServiceTest {
     }
 
     @Test
+    void generateAiContextPackageAiContract_exposesStableContextFields() throws Exception {
+        AiContextExportService service = createService();
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(PROJECT_ID));
+
+        var mapper = new ObjectMapper();
+        var manifest = mapper.readTree(entries.get(".dataspec/manifest.json"));
+        assertEquals("dataspec-ai-context", manifest.path("kind").asText());
+        assertEquals(1, manifest.path("schemaVersion").asInt());
+        assertEquals(PROJECT_ID.longValue(), manifest.path("projectId").asLong());
+        assertEquals("v2026.06.24", manifest.path("standard").path("specVersion").asText());
+        assertEquals("hash123", manifest.path("standard").path("specHash").asText());
+        assertTrue(manifest.path("files").toString().contains(".dataspec/field-catalog.json"));
+        assertTrue(manifest.path("files").toString().contains(".dataspec/workflows.md"));
+
+        var catalog = mapper.readTree(entries.get(".dataspec/field-catalog.json"));
+        assertEquals(PROJECT_ID.longValue(), catalog.path("projectId").asLong());
+        assertTrue(catalog.path("fields").isArray());
+        assertTrue(catalog.path("enums").isArray());
+        var field = catalog.path("fields").get(0);
+        assertEquals("mobile_no", field.path("name").asText());
+        assertEquals("varchar(20)", field.path("dataType").asText());
+        assertFalse(field.path("nullable").asBoolean());
+        assertTrue(field.path("sensitive").asBoolean());
+        assertEquals("enabled", field.path("status").asText());
+        assertEquals("phone", field.path("aliases").get(0).asText());
+
+        String rulesYaml = entries.get(".dataspec/rules.yaml");
+        assertTrue(rulesYaml.contains("standard:"));
+        assertTrue(rulesYaml.contains("naming:"));
+        assertTrue(rulesYaml.contains("rules:"));
+
+        String workflows = entries.get(".dataspec/workflows.md");
+        assertTrue(workflows.contains("## create-table"));
+        assertTrue(workflows.contains("## review-pr-sql"));
+        assertTrue(workflows.contains("## reverse-import-standards"));
+        assertTrue(workflows.contains("## export-min-context"));
+    }
+
+    @Test
     void generateAiContextPackage_usesOneSnapshotAcrossAllVersionedFiles() throws Exception {
         StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
         when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(

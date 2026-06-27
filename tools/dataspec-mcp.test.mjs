@@ -144,7 +144,10 @@ test('lint_sql tool returns structured lint result and json text content', async
 test('get_field_catalog tool parses json catalog when possible', async () => {
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
     assert.equal(url, 'http://dataspec.local/api/ai-context/field-catalog?projectId=7')
-    return jsonResponse({ code: 200, data: '{"fields":[{"name":"created_at"}]}' })
+    return jsonResponse({
+      code: 200,
+      data: '{"projectId":7,"fields":[{"name":"created_at","dataType":"timestamp"}],"futureField":"compatible-addition"}'
+    })
   })
 
   const response = await handler({
@@ -154,8 +157,12 @@ test('get_field_catalog tool parses json catalog when possible', async () => {
     params: { name: 'get_field_catalog', arguments: {} }
   })
 
+  assert.equal(response.result.structuredContent.projectId, 7)
   assert.equal(response.result.structuredContent.fields[0].name, 'created_at')
-  assert.equal(JSON.parse(response.result.content[0].text).fields[0].name, 'created_at')
+  assert.equal(response.result.structuredContent.fields[0].dataType, 'timestamp')
+  const textPayload = JSON.parse(response.result.content[0].text)
+  assert.equal(textPayload.fields[0].name, 'created_at')
+  assert.equal(textPayload.futureField, 'compatible-addition')
 })
 
 test('get_field_catalog tool passes scoped options', async () => {

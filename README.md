@@ -386,6 +386,10 @@ node tools/dataspec-mcp.mjs
 - prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`。
 - tools：`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`generate_table_ddl`；`get_field_catalog` 可传 `scope/query/status/limit`，`search_field_catalog` 默认按当前关键词读取较小字段目录；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
 
+## AI 输出契约
+
+[docs/ai-contracts.md](docs/ai-contracts.md) 记录第一版 AI 可依赖的稳定字段，覆盖 AI Context、SQL lint/fixedSql、字段推荐、DDL 预览、CLI JSON 和 MCP resources/tools。兼容策略是：新增可选字段默认兼容；删除、改名、类型变化或语义变化需要同步更新契约测试和文档。
+
 ## 验证
 
 ```bash
@@ -409,7 +413,7 @@ cd ..
 node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出和反向导入 metadata 预览摘要。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试和 AI contract fixtures，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐和 DDL 预览稳定字段。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent` 和可解析文本内容。
 
 ## 项目结构
 
@@ -507,6 +511,7 @@ data-spec/
 - [x] 字段推荐 API/CLI/MCP
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
 - [x] AI Context zip 导出、按需裁剪、workflow recipes 和业务项目 `.dataspec/` 约定
+- [x] AI 输出契约文档与 contract fixtures，覆盖 AI Context、lint/fixedSql、字段推荐、DDL 预览、CLI/MCP JSON 稳定字段
 - [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
 - [x] AI 回放记录，支持查看 Prompt、lint/fixedSql、DDL 预览的输入输出和标准快照

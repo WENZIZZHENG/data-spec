@@ -584,6 +584,57 @@ test('generate-ddl calls ddl preview api and prints json', async () => {
   assert.equal(io.stderr, '')
 })
 
+test('cli ai contract keeps stable json fields while allowing additive fields', async () => {
+  const io = createIo('CREATE TABLE UserOrder (id bigint);')
+  const fetchFn = async (url, options) => {
+    if (url.endsWith('/api/lint')) {
+      assert.equal(JSON.parse(options.body).projectId, 7)
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            errorCount: 1,
+            warningCount: 0,
+            suggestionCount: 0,
+            suppressedCount: 0,
+            fixedSql: 'CREATE TABLE user_order (id bigint);',
+            issues: [
+              {
+                severity: 'ERROR',
+                ruleCode: 'table_naming_snake_case',
+                message: '表名不符合 snake_case',
+                tableName: 'UserOrder',
+                replacement: 'user_order',
+                line: 1,
+                column: 14,
+                locationKind: 'table',
+                futureField: 'compatible-addition'
+              }
+            ],
+            futureResultField: 'compatible-addition'
+          }
+        })
+      }
+    }
+    throw new Error(`unexpected fetch: ${url}`)
+  }
+
+  const code = await runCli(['lint', '-', '--project', '7', '--format', 'json'], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 1)
+  assert.equal(output.errorCount, 1)
+  assert.equal(output.suppressedCount, 0)
+  assert.equal(output.fixedSql, 'CREATE TABLE user_order (id bigint);')
+  assert.equal(output.issues[0].severity, 'ERROR')
+  assert.equal(output.issues[0].ruleCode, 'table_naming_snake_case')
+  assert.equal(output.issues[0].replacement, 'user_order')
+  assert.equal(output.issues[0].locationKind, 'table')
+  assert.equal(output.futureResultField, 'compatible-addition')
+})
+
 test('doctor prints json checks from local config and returns 0 when ready', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {

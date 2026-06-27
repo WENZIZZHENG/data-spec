@@ -15,6 +15,8 @@ import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.template.entity.Template;
 import com.dataspec.template.entity.TemplateField;
 import com.dataspec.template.service.TemplateService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -64,6 +66,29 @@ class DdlGeneratorServiceTest {
         assertEquals(6L, req.standardSnapshotId());
         assertTrue(req.inputPayload().toString().contains("templateId=10"));
         assertTrue(req.outputPayload().toString().contains("ddl="));
+    }
+
+    @Test
+    void generateFromTemplateAiContract_exposesStableDdlPreviewFields() {
+        TemplateService templateService = mock(TemplateService.class);
+        SqlLintService sqlLintService = mock(SqlLintService.class);
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, standardSnapshotService, new NoopAiJobRecordService());
+        when(standardSnapshotService.getCurrentSnapshot(1L)).thenReturn(snapshotInfo());
+        when(templateService.getById(10L)).thenReturn(template(10L, 1L, "订单模板", "用户订单表"));
+        when(templateService.listFields(10L)).thenReturn(List.of(
+                field(1L, "order_no", "varchar(32)", false, null, "订单编号", 10)
+        ));
+        when(sqlLintService.lint(anyString(), eq(1L))).thenReturn(LintResult.of(List.of(), List.of()));
+
+        DdlGenerateResult result = service.generateFromTemplate(1L, 10L, "user_order");
+
+        JsonNode root = new ObjectMapper().valueToTree(result);
+        assertTrue(root.path("ddl").asText().contains("CREATE TABLE user_order"));
+        assertEquals(0, root.path("lintResult").path("errorCount").asInt());
+        assertTrue(root.path("lintResult").path("issues").isArray());
+        assertEquals("v2026.06.24", root.path("standardSnapshot").path("specVersion").asText());
+        assertEquals("hash123", root.path("standardSnapshot").path("specHash").asText());
     }
 
     @Test

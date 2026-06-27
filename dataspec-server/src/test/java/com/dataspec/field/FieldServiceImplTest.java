@@ -8,6 +8,8 @@ import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.impl.FieldServiceImpl;
 import com.dataspec.security.context.DataSpecSecurityContext;
 import com.dataspec.security.model.ApiTokenPrincipal;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -151,6 +153,36 @@ class FieldServiceImplTest {
         assertTrue(first.matchReason().contains("显示名")
                 || first.matchReason().contains("注释")
                 || first.matchReason().contains("语义词"));
+    }
+
+    @Test
+    void suggestAiContract_exposesStableRecommendationFields() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field mobile = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone,mobile,tel", "enabled");
+        mobile.setSensitive(true);
+        mobile.setCategory("contact");
+        mobile.setCodeSetId(10L);
+        mobile.setExampleValue("13800138000");
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(mobile));
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        FieldSuggestion suggestion = service.suggest(1L, "用户手机号", 5).getFirst();
+
+        JsonNode root = new ObjectMapper().valueToTree(suggestion);
+        assertEquals("mobile_no", root.path("recommendedName").asText());
+        assertTrue(root.path("existing").asBoolean());
+        assertTrue(root.path("score").asInt() > 0);
+        assertFalse(root.path("matchReason").asText().isBlank());
+        JsonNode fieldNode = root.path("field");
+        assertEquals("mobile_no", fieldNode.path("name").asText());
+        assertEquals("手机号", fieldNode.path("displayName").asText());
+        assertEquals("varchar(20)", fieldNode.path("dataType").asText());
+        assertEquals("phone,mobile,tel", fieldNode.path("aliases").asText());
+        assertTrue(fieldNode.path("sensitive").asBoolean());
+        assertEquals("enabled", fieldNode.path("status").asText());
+        assertEquals("contact", fieldNode.path("category").asText());
+        assertEquals(10L, fieldNode.path("codeSetId").asLong());
+        assertEquals("13800138000", fieldNode.path("exampleValue").asText());
     }
 
     @Test

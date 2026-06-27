@@ -4,8 +4,8 @@
 
 ## 下一步顺序
 
-1. P6-11 MCP/CLI 任务化工作流模板已完成第一版，下一步推进 P6-12 AI 输出契约稳定性与兼容测试。
-2. P6 后续继续补 AI contract fixtures、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板和多项目标准复用包。
+1. P6-12 AI 输出契约稳定性与兼容测试已完成第一版，下一步推进 P6-13 GitHub inline review 实战接入。
+2. P6 后续继续补 GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板和多项目标准复用包。
 3. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
@@ -17,7 +17,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，P6-10 已完成数据库直连配置预设第一版，P6-11 已完成 MCP/CLI 任务化工作流模板第一版，后续再提升 AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索、OpenSpec 收口、AI 使用画像、标准契约版本和执行证据包。
+- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，P6-10 已完成数据库直连配置预设第一版，P6-11 已完成 MCP/CLI 任务化工作流模板第一版，P6-12 已完成 AI 输出契约稳定性第一版，后续再提升 GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索、OpenSpec 收口、AI 使用画像、标准契约版本和执行证据包。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -195,12 +195,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不内置外部 LLM，不自动修改业务仓库，第一版以命令/文档/JSON 契约为主。
 
 ### P6-12：AI 输出契约稳定性与兼容测试
-- 状态：待办。
+- 状态：已完成第一版，已新增 [docs/ai-contracts.md](docs/ai-contracts.md) 和后端/CLI/MCP contract fixture 测试。
 - 为什么做：DataSpec 优先给 AI 使用，最怕的是字段目录、规则、lint 结果、推荐结果或 MCP 输出字段悄悄漂移，导致 agent 读错上下文或自动化脚本失效。
 - 已有基础：已有 OpenAPI 契约检查、AI Context JSON Schema、CLI/MCP JSON 输出、字段推荐和 SQL lint 结构化结果。
-- 缺口：缺少面向 AI 消费场景的契约 golden 测试，无法系统覆盖 `field-catalog.json`、`rules.yaml`、`LintIssue`、推荐结果、DDL 生成结果和 MCP tool/resource 返回结构。
-- 落地产物：建立 AI contract fixtures；为 AI Context、CLI JSON、MCP resources/tools、字段推荐和 lint/fixedSql 输出增加 golden 断言；README 或 `.dataspec/README.md` 标明稳定字段与兼容策略。
-- 验收标准：改动 AI 可消费字段时，测试能明确显示契约变化；兼容字段新增不会破坏旧 fixtures；`mvn test`、`node --test` 或前端契约检查能覆盖主要 JSON 输出。
+- 已完成能力：第一版稳定字段清单覆盖 AI Context manifest/field-catalog/rules/workflows、`LintResult`/`LintIssue`/`fixedSql`、字段推荐、DDL 预览、CLI JSON 和 MCP resources/tools；后端测试锁定稳定字段路径、类型和核心枚举，Node 测试锁定 CLI/MCP JSON 结构并验证兼容新增字段不会破坏测试。
+- 验收标准：改动 AI 可消费字段时，测试能明确显示契约变化；兼容字段新增不会破坏旧 fixtures；已通过目标后端契约测试、CLI/MCP 单测、OpenSpec validate 和 diff 检查验证。
 - 边界：不冻结所有内部 DTO，不阻止向后兼容新增字段，不引入外部契约服务。
 
 ### P6-13：GitHub inline review 实战接入
