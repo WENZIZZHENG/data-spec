@@ -31,3 +31,13 @@ DataSpec 已经有单条规则配置、AI `rules.yaml` 和项目初始化，但�
 - AI/CLI/MCP：AI Context 输出新增 baseline metadata；CLI/MCP 可通过现有 API 或后续命令读取导出结果。
 - 文档与待办：README/TODO 标明 P6-23 完成范围和边界。
 - 边界：不做组织级发布审批，不强制所有项目统一规则，不自动覆盖用户已调整的规则。
+
+## Verification Evidence
+
+- `mvn test`：235 tests，0 failures，0 errors。
+- `pnpm test`：56 tests，0 failures。
+- `pnpm build`：通过，保留第三方 `@vueuse/core` pure annotation 与 chunk size warning。
+- `node --test tools\dataspec-cli.test.mjs tools\dataspec-config.test.mjs tools\dataspec-mcp.test.mjs`：62 tests，0 failures。
+- `npx.cmd openspec validate add-rule-template-baseline-suites`：valid。
+- `git diff --check`：通过，仅输出 Windows LF/CRLF 提示。
+- 代码评审：按 `code-review-checklist` 做直接评审，未使用子 agent；已修复演示项目重复应用默认基线、内置基线模板未校验真实 ruleCode、基线包时间戳不一致，以及导入包 severity 未校验的问题。
