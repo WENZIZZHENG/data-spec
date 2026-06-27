@@ -4,6 +4,10 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldGroupSummary;
+import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
+import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
+import com.dataspec.field.model.FieldGroupingSummaries;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.FieldService;
@@ -32,6 +36,7 @@ public class FieldServiceImpl implements FieldService {
     private static final Set<String> ALLOWED_STATUSES = Set.of("enabled", "disabled", "deprecated");
     private static final int DEFAULT_SUGGEST_LIMIT = 5;
     private static final int MAX_SUGGEST_LIMIT = 20;
+    private static final Set<String> GROUPING_UPDATE_KEYS = Set.of("domainId", "category", "tags");
     private static final Map<String, String> FALLBACK_TERMS = fallbackTerms();
     private static final Map<String, SemanticGroup> SEMANTIC_GROUPS = semanticGroups();
     private static final int SPECIFIC_SEMANTIC_SCORE = 88;
@@ -129,6 +134,57 @@ public class FieldServiceImpl implements FieldService {
     }
 
     @Override
+    public FieldGroupSummary groupSummary(Long projectId) {
+        ProjectAccessGuard.requireProjectAccess(projectId);
+        return FieldGroupingSummaries.fromFields(projectId, fieldRepository.findAllByProjectId(projectId));
+    }
+
+    @Override
+    public FieldGroupingBatchUpdateResult batchUpdateGrouping(FieldGroupingBatchUpdateReq req) {
+        if (req.projectId() == null) {
+            throw new BizException("项目ID不能为空");
+        }
+        ProjectAccessGuard.requireProjectAccess(req.projectId());
+        if (req.fieldIds() == null || req.fieldIds().isEmpty()) {
+            throw new BizException("字段ID不能为空");
+        }
+        if (req.updates() == null || req.updates().isEmpty()) {
+            throw new BizException("归组更新内容不能为空");
+        }
+        validateGroupingKeys(req.updates());
+
+        List<Long> fieldIds = new ArrayList<>(new LinkedHashSet<>(req.fieldIds()));
+        List<Field> fields = new ArrayList<>();
+        for (Long fieldId : fieldIds) {
+            if (fieldId == null || fieldId <= 0) {
+                throw new BizException("无效字段ID: " + fieldId);
+            }
+            Field field = fieldRepository.findById(fieldId)
+                    .orElseThrow(() -> new BizException("字段不存在: " + fieldId));
+            if (!req.projectId().equals(field.getProjectId())) {
+                throw new BizException("字段不属于当前项目: " + fieldId);
+            }
+            fields.add(field);
+        }
+
+        int updated = 0;
+        for (Field field : fields) {
+            String beforeJson = changeLogService.snapshot(field);
+            applyGroupingUpdates(field, req.updates());
+            fieldRepository.update(field);
+            changeLogService.recordChange(
+                    field.getProjectId(),
+                    StandardChangeLogService.TARGET_FIELD,
+                    field.getId(),
+                    StandardChangeLogService.ACTION_UPDATE,
+                    beforeJson,
+                    changeLogService.snapshot(field));
+            updated += 1;
+        }
+        return new FieldGroupingBatchUpdateResult(req.projectId(), req.fieldIds().size(), updated);
+    }
+
+    @Override
     public List<FieldSuggestion> suggest(Long projectId, String query, int limit) {
         if (projectId == null) {
             throw new BizException("项目ID不能为空");
@@ -186,6 +242,46 @@ public class FieldServiceImpl implements FieldService {
     private void applyPersonalMetadataDefaults(Field field) {
         field.setSensitive(field.getSensitive() != null ? field.getSensitive() : false);
         field.setStatus(normalizeStatus(field.getStatus()));
+    }
+
+    private void validateGroupingKeys(Map<String, Object> updates) {
+        for (String key : updates.keySet()) {
+            if (!GROUPING_UPDATE_KEYS.contains(key)) {
+                throw new BizException("不支持的归组字段: " + key);
+            }
+        }
+    }
+
+    private void applyGroupingUpdates(Field field, Map<String, Object> updates) {
+        if (updates.containsKey("domainId")) {
+            field.setDomainId(parseOptionalLong(updates.get("domainId"), "domainId"));
+        }
+        if (updates.containsKey("category")) {
+            field.setCategory(FieldGroupingSummaries.normalizeText(asString(updates.get("category"))));
+        }
+        if (updates.containsKey("tags")) {
+            field.setTags(FieldGroupingSummaries.normalizeTags(asString(updates.get("tags"))));
+        }
+    }
+
+    private Long parseOptionalLong(Object value, String label) {
+        String text = FieldGroupingSummaries.normalizeText(asString(value));
+        if (text == null) {
+            return null;
+        }
+        try {
+            long parsed = Long.parseLong(text);
+            if (parsed <= 0) {
+                throw new NumberFormatException("not positive");
+            }
+            return parsed;
+        } catch (NumberFormatException e) {
+            throw new BizException("无效" + label + ": " + value);
+        }
+    }
+
+    private String asString(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     private String normalizeStatus(String status) {

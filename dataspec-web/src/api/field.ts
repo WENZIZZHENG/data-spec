@@ -2,6 +2,9 @@ import request from '@/api/request'
 import type {
   Field,
   FieldConflictReport,
+  FieldGroupSummary,
+  FieldGroupingBatchUpdateReq,
+  FieldGroupingBatchUpdateResult,
   FieldImpactReport,
   FieldQualityReport,
   FieldReq,
@@ -20,6 +23,16 @@ export function listFields(projectId: number) {
   return request.get<unknown, Field[]>('/fields/all', {
     params: { projectId }
   })
+}
+
+export function getFieldGroupSummary(projectId: number) {
+  return request.get<unknown, FieldGroupSummary>('/fields/groups', {
+    params: { projectId }
+  })
+}
+
+export function batchUpdateFieldGrouping(data: FieldGroupingBatchUpdateReq) {
+  return request.post<unknown, FieldGroupingBatchUpdateResult>('/fields/groups/batch-update', data)
 }
 
 export function suggestFields(projectId: number, query: string, limit = 5) {

@@ -4,6 +4,9 @@ import com.dataspec.aicontext.model.AiContextScopeOptions;
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldGroupItem;
+import com.dataspec.field.model.FieldGroupSummary;
+import com.dataspec.field.model.FieldGroupingSummaries;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintResult;
@@ -888,6 +891,13 @@ public class AiContextExportService {
             warnings.add("命中字段已按 limit=" + options.limit() + " 截断，请缩小 query 或提高 limit。");
         }
 
+        FieldGroupSummary groupSummary = FieldGroupingSummaries.fromFields(
+                projectId,
+                returnedFields.stream().map(FieldMatch::field).toList());
+        if (options.scoped() && groupSummary.ungroupedFieldCount() > 0) {
+            warnings.add("返回字段中有 " + groupSummary.ungroupedFieldCount() + " 个未分组字段，请按数据域、分类或标签补齐。");
+        }
+
         ScopeSummary summary = new ScopeSummary(
                 options.scoped() || !warnings.isEmpty(),
                 effectiveScope,
@@ -897,7 +907,8 @@ public class AiContextExportService {
                 allFields.size(),
                 matchedCount,
                 returnedFields.size(),
-                List.copyOf(warnings)
+                List.copyOf(warnings),
+                groupSummary
         );
         return new ScopedFields(List.copyOf(returnedFields), summary);
     }
@@ -997,6 +1008,9 @@ public class AiContextExportService {
         for (String warning : scopeSummary.warnings()) {
             md.append("- warning: ").append(warning).append("\n");
         }
+        if (scopeSummary.groupSummary() != null) {
+            md.append("- ungroupedFields: ").append(scopeSummary.groupSummary().ungroupedFieldCount()).append("\n");
+        }
         md.append("\n");
     }
 
@@ -1015,9 +1029,33 @@ public class AiContextExportService {
         node.put("totalFieldCount", summary.totalFieldCount());
         node.put("matchedFieldCount", summary.matchedFieldCount());
         node.put("returnedFieldCount", summary.returnedFieldCount());
+        if (summary.groupSummary() != null) {
+            node.set("groupSummary", groupSummaryNode(mapper, summary.groupSummary()));
+        }
         ArrayNode warningsNode = mapper.createArrayNode();
         summary.warnings().forEach(warningsNode::add);
         node.set("warnings", warningsNode);
+        return node;
+    }
+
+    private ObjectNode groupSummaryNode(ObjectMapper mapper, FieldGroupSummary summary) {
+        ObjectNode node = mapper.createObjectNode();
+        node.put("totalFieldCount", summary.totalFieldCount());
+        node.put("ungroupedFieldCount", summary.ungroupedFieldCount());
+        ArrayNode groupsNode = mapper.createArrayNode();
+        for (FieldGroupItem group : summary.groups()) {
+            ObjectNode groupNode = mapper.createObjectNode();
+            groupNode.put("groupType", group.groupType());
+            groupNode.put("groupKey", group.groupKey());
+            groupNode.put("groupName", group.groupName());
+            groupNode.put("fieldCount", group.fieldCount());
+            groupNode.put("ungrouped", group.ungrouped());
+            ArrayNode sampleFieldsNode = mapper.createArrayNode();
+            group.sampleFields().forEach(sampleFieldsNode::add);
+            groupNode.set("sampleFields", sampleFieldsNode);
+            groupsNode.add(groupNode);
+        }
+        node.set("groups", groupsNode);
         return node;
     }
 
@@ -1081,6 +1119,34 @@ public class AiContextExportService {
                         "warnings": {
                           "type": "array",
                           "items": { "type": "string" }
+                        },
+                        "groupSummary": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["totalFieldCount", "ungroupedFieldCount", "groups"],
+                          "properties": {
+                            "totalFieldCount": { "type": "integer" },
+                            "ungroupedFieldCount": { "type": "integer" },
+                            "groups": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": ["groupType", "groupKey", "groupName", "fieldCount", "sampleFields", "ungrouped"],
+                                "properties": {
+                                  "groupType": { "type": "string", "enum": ["category", "domain", "tag", "ungrouped"] },
+                                  "groupKey": { "type": "string" },
+                                  "groupName": { "type": "string" },
+                                  "fieldCount": { "type": "integer" },
+                                  "sampleFields": {
+                                    "type": "array",
+                                    "items": { "type": "string" }
+                                  },
+                                  "ungrouped": { "type": "boolean" }
+                                }
+                              }
+                            }
+                          }
                         }
                       }
                     },
@@ -1320,10 +1386,11 @@ public class AiContextExportService {
             int totalFieldCount,
             int matchedFieldCount,
             int returnedFieldCount,
-            List<String> warnings
+            List<String> warnings,
+            FieldGroupSummary groupSummary
     ) {
         static ScopeSummary full() {
-            return new ScopeSummary(false, "all", null, null, null, 0, 0, 0, List.of());
+            return new ScopeSummary(false, "all", null, null, null, 0, 0, 0, List.of(), null);
         }
     }
 }

@@ -4,22 +4,6 @@
  */
 
 export interface paths {
-    "/api/auth/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["me"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/templates/{id}": {
         parameters: {
             query?: never;
@@ -75,10 +59,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getById_2"];
+        get: operations["getById_3"];
         put: operations["update_2"];
         post?: never;
-        delete: operations["delete_2"];
+        delete: operations["delete_3"];
         options?: never;
         head?: never;
         patch?: never;
@@ -91,10 +75,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getById_3"];
+        get: operations["getById_4"];
         put: operations["update_3"];
         post?: never;
-        delete: operations["delete_3"];
+        delete: operations["delete_4"];
         options?: never;
         head?: never;
         patch?: never;
@@ -107,10 +91,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getById_4"];
+        get: operations["getById_5"];
         put: operations["update_4"];
         post?: never;
-        delete: operations["delete_4"];
+        delete: operations["delete_5"];
         options?: never;
         head?: never;
         patch?: never;
@@ -139,10 +123,42 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getById_5"];
+        get: operations["getById_6"];
         put: operations["update_5"];
         post?: never;
-        delete: operations["delete_5"];
+        delete: operations["delete_6"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/database-connection-presets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getById_7"];
+        put: operations["update_6"];
+        post?: never;
+        delete: operations["delete_7"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTokens"];
+        put?: never;
+        post: operations["createToken"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -196,7 +212,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/projects": {
+    "/api/rule-exemptions": {
         parameters: {
             query?: never;
             header?: never;
@@ -206,6 +222,134 @@ export interface paths {
         get: operations["list_2"];
         put?: never;
         post: operations["create_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reverse-import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reverse-import/database/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["testDatabaseConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reverse-import/database/tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["listDatabaseTables"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reverse-import/database/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewDatabase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reverse-import/database/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["importDatabaseCandidates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reverse-import/database/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["compareDatabase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_3"];
+        put?: never;
+        post: operations["create_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/standard-snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSnapshots"];
+        put?: never;
+        post: operations["createSnapshot"];
         delete?: never;
         options?: never;
         head?: never;
@@ -244,38 +388,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/lint/records/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getRecord"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/lint/records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listRecords"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/import-export/fields/import": {
         parameters: {
             query?: never;
@@ -292,6 +404,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/import-export/excel/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewExcel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/import-export/excel/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["importExcel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fields": {
         parameters: {
             query?: never;
@@ -301,7 +445,23 @@ export interface paths {
         };
         get: operations["page"];
         put?: never;
-        post: operations["create_3"];
+        post: operations["create_4"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/groups/batch-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["batchUpdateGrouping"];
         delete?: never;
         options?: never;
         head?: never;
@@ -315,9 +475,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_3"];
+        get: operations["list_4"];
         put?: never;
-        post: operations["create_4"];
+        post: operations["create_5"];
         delete?: never;
         options?: never;
         head?: never;
@@ -347,16 +507,32 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_4"];
+        get: operations["list_5"];
         put?: never;
-        post: operations["create_5"];
+        post: operations["create_6"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/rules/{id}/toggle": {
+    "/api/database-connection-presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_6"];
+        put?: never;
+        post: operations["create_7"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/coverage/sql": {
         parameters: {
             query?: never;
             header?: never;
@@ -365,199 +541,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["toggle"];
-        trace?: never;
-    };
-    "/api/lint/rules": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listRules"];
-        put?: never;
-        post?: never;
+        post: operations["reportSql"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/import-export/fields/export": {
+    "/api/coverage/database": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["exportFields"];
+        get?: never;
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/generator/markdown/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["previewMarkdown"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/generator/html/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["previewHtml"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/generator/erd/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["previewErd"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/generator/ddl/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["previewDdl"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/generator/markdown/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["downloadMarkdown"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/generator/html/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["downloadHtml"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/generator/erd/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["downloadErd"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/fields/all": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listAll"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/fields/suggest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["suggest"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-context/rules-yaml": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["previewRulesYaml"];
-        put?: never;
-        post?: never;
+        post: operations["reportDatabase"];
         delete?: never;
         options?: never;
         head?: never;
@@ -590,6 +590,502 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["generateCreateTablePrompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tokens/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["disableToken"];
+        trace?: never;
+    };
+    "/api/rules/{id}/toggle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["toggle"];
+        trace?: never;
+    };
+    "/api/rule-exemptions/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["disable"];
+        trace?: never;
+    };
+    "/api/rule-exemptions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getById_2"];
+        put?: never;
+        post?: never;
+        delete: operations["delete_2"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/standard-snapshots/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["currentSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lint/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lint/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lint/records/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getRecord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/import-export/fields/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportFields"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/import-export/excel/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportExcelTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/import-export/excel/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportExcel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generator/markdown/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewMarkdown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generator/markdown/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadMarkdown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generator/html/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewHtml"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generator/html/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadHtml"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generator/erd/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewErd"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generator/erd/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadErd"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generator/ddl/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewDdl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/{id}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/{id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["suggest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["report_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["groupSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["report_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/change-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["page_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_7"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-context/rules-yaml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previewRulesYaml"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -696,23 +1192,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        RVoid: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: Record<string, never>;
-        };
-        AuthMe: {
-            operatorName?: string;
-            allProjects?: boolean;
-            projectIds?: number[];
-        };
-        RAuthMe: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["AuthMe"];
-        };
         TemplateReq: {
             /** Format: int64 */
             projectId: number;
@@ -834,21 +1313,6 @@ export interface components {
             message?: string;
             data?: components["schemas"]["Project"];
         };
-        DemoProjectResult: {
-            project?: components["schemas"]["Project"];
-            /** Format: int64 */
-            templateId?: number;
-            sampleTableName?: string;
-            badExampleSql?: string;
-            goodExampleSql?: string;
-            created?: boolean;
-        };
-        RDemoProjectResult: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["DemoProjectResult"];
-        };
         FieldReq: {
             /** Format: int64 */
             projectId: number;
@@ -907,14 +1371,6 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
             isDeleted?: boolean;
-        };
-        FieldSuggestion: {
-            field?: components["schemas"]["Field"] | null;
-            /** Format: int32 */
-            score?: number;
-            matchReason?: string;
-            recommendedName?: string;
-            existing?: boolean;
         };
         RField: {
             /** Format: int32 */
@@ -1005,10 +1461,114 @@ export interface components {
             message?: string;
             data?: components["schemas"]["Domain"];
         };
-        LintRequest: {
-            sql: string;
+        PresetReq: {
+            /** Format: int64 */
+            projectId: number;
+            name: string;
+            databaseType: string;
+            host: string;
+            /** Format: int32 */
+            port: number;
+            databaseName: string;
+            schemaName?: string;
+            tableNames?: string[];
+        };
+        DatabaseConnectionPreset: {
+            /** Format: int64 */
+            id?: number;
             /** Format: int64 */
             projectId?: number;
+            name?: string;
+            databaseType?: string;
+            host?: string;
+            /** Format: int32 */
+            port?: number;
+            databaseName?: string;
+            schemaName?: string;
+            tableNames?: string[];
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        RDatabaseConnectionPreset: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseConnectionPreset"];
+        };
+        ApiTokenCreateReq: {
+            name?: string;
+            operatorName?: string;
+            allProjects?: boolean;
+            projectIds?: number[];
+        };
+        ApiTokenCreateResp: {
+            plainToken?: string;
+            token?: components["schemas"]["ApiTokenInfo"];
+        };
+        ApiTokenInfo: {
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            operatorName?: string;
+            allProjects?: boolean;
+            projectIds?: number[];
+            enabled?: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            /** Format: date-time */
+            disabledAt?: string;
+            /** Format: date-time */
+            lastUsedAt?: string;
+        };
+        RApiTokenCreateResp: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ApiTokenCreateResp"];
+        };
+        RuleExemptionReq: {
+            /** Format: int64 */
+            projectId: number;
+            ruleCode: string;
+            tableName?: string;
+            columnName?: string;
+            reason: string;
+            /** Format: date-time */
+            expiresAt?: string;
+        };
+        RRuleExemption: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["RuleExemption"];
+        };
+        RuleExemption: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            ruleCode?: string;
+            tableName?: string;
+            columnName?: string;
+            reason?: string;
+            enabled?: boolean;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        ReverseImportReq: {
+            /** Format: int64 */
+            projectId: number;
+            sql: string;
         };
         ColumnDef: {
             name?: string;
@@ -1016,6 +1576,209 @@ export interface components {
             nullable?: boolean;
             defaultValue?: string;
             comment?: string;
+        };
+        FieldCandidate: {
+            tableName?: string;
+            columnName?: string;
+            dataType?: string;
+            nullable?: boolean;
+            defaultValue?: string;
+            comment?: string;
+        };
+        MissingCommentIssue: {
+            tableName?: string;
+            columnName?: string;
+            targetType?: string;
+        };
+        NonStandardField: {
+            tableName?: string;
+            columnName?: string;
+            dataType?: string;
+            recommendedName?: string;
+            reason?: string;
+        };
+        RReverseImportPreview: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ReverseImportPreview"];
+        };
+        ReverseImportPreview: {
+            summary?: components["schemas"]["ReverseImportSummary"];
+            tables?: components["schemas"]["TableDef"][];
+            fieldCandidates?: components["schemas"]["FieldCandidate"][];
+            missingComments?: components["schemas"]["MissingCommentIssue"][];
+            nonStandardFields?: components["schemas"]["NonStandardField"][];
+        };
+        ReverseImportSummary: {
+            /** Format: int32 */
+            tableCount?: number;
+            /** Format: int32 */
+            columnCount?: number;
+            /** Format: int32 */
+            candidateCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            nonStandardFieldCount?: number;
+        };
+        TableDef: {
+            name?: string;
+            comment?: string;
+            columns?: components["schemas"]["ColumnDef"][];
+        };
+        DatabaseConnectionReq: {
+            /** Format: int64 */
+            projectId: number;
+            databaseType: string;
+            host: string;
+            /** Format: int32 */
+            port?: number;
+            databaseName: string;
+            schemaName?: string;
+            username: string;
+            password?: string;
+            tableNames?: string[];
+        };
+        DatabaseConnectionResult: {
+            success?: boolean;
+            message?: string;
+        };
+        RDatabaseConnectionResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseConnectionResult"];
+        };
+        DatabaseTableInfo: {
+            schemaName?: string;
+            tableName?: string;
+            tableType?: string;
+            comment?: string;
+        };
+        RListDatabaseTableInfo: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseTableInfo"][];
+        };
+        DatabaseImportReq: {
+            /** Format: int64 */
+            projectId: number;
+            candidates?: components["schemas"]["FieldCandidate"][];
+            databaseType?: string;
+            databaseName?: string;
+            schemaName?: string;
+            tableNames?: string[];
+        };
+        DatabaseImportResult: {
+            /** Format: int32 */
+            importedCount?: number;
+            /** Format: int32 */
+            skippedCount?: number;
+            importedFields?: string[];
+            skippedFields?: string[];
+        };
+        RDatabaseImportResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseImportResult"];
+        };
+        RReverseImportCompareResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ReverseImportCompareResult"];
+        };
+        ReverseImportCompareResult: {
+            summary?: components["schemas"]["ReverseImportCompareSummary"];
+            tableDiffs?: components["schemas"]["ReverseImportTableDiff"][];
+        };
+        ReverseImportCompareSummary: {
+            /** Format: int32 */
+            tableCount?: number;
+            /** Format: int32 */
+            columnCount?: number;
+            /** Format: int32 */
+            matchedCount?: number;
+            /** Format: int32 */
+            changedCount?: number;
+            /** Format: int32 */
+            newCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            nonStandardCount?: number;
+        };
+        ReverseImportFieldChange: {
+            property?: string;
+            currentValue?: string;
+            standardValue?: string;
+        };
+        ReverseImportFieldDiff: {
+            tableName?: string;
+            columnName?: string;
+            dataType?: string;
+            nullable?: boolean;
+            defaultValue?: string;
+            comment?: string;
+            standardFieldName?: string;
+            standardDisplayName?: string;
+            /** @enum {string} */
+            status?: "MATCHED" | "CHANGED" | "NEW" | "MISSING_COMMENT" | "NON_STANDARD";
+            reason?: string;
+            nonStandard?: boolean;
+            changes?: components["schemas"]["ReverseImportFieldChange"][];
+        };
+        ReverseImportTableDiff: {
+            tableName?: string;
+            comment?: string;
+            fieldDiffs?: components["schemas"]["ReverseImportFieldDiff"][];
+        };
+        StandardSnapshotCreateReq: {
+            version?: string;
+            name?: string;
+            description?: string;
+        };
+        RStandardSnapshotInfo: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardSnapshotInfo"];
+        };
+        StandardSnapshotInfo: {
+            /** Format: int64 */
+            snapshotId?: number;
+            /** Format: int64 */
+            projectId?: number;
+            specVersion?: string;
+            name?: string;
+            description?: string;
+            specHash?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            versioned?: boolean;
+        };
+        DemoProjectResult: {
+            project?: components["schemas"]["Project"];
+            /** Format: int64 */
+            templateId?: number;
+            sampleTableName?: string;
+            badExampleSql?: string;
+            goodExampleSql?: string;
+            created?: boolean;
+        };
+        RDemoProjectResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DemoProjectResult"];
+        };
+        LintRequest: {
+            sql: string;
+            /** Format: int64 */
+            projectId?: number;
         };
         LintIssue: {
             /** @enum {string} */
@@ -1044,6 +1807,10 @@ export interface components {
             /** Format: int32 */
             sourceEnd?: number;
             locationKind?: string;
+            suppressed?: boolean;
+            /** Format: int64 */
+            suppressionId?: number;
+            suppressionReason?: string;
         };
         LintResult: {
             tables?: components["schemas"]["TableDef"][];
@@ -1054,6 +1821,8 @@ export interface components {
             warningCount?: number;
             /** Format: int32 */
             suggestionCount?: number;
+            /** Format: int32 */
+            suppressedCount?: number;
             fixedSql?: string;
             fixedSqlDiff?: string;
         };
@@ -1063,74 +1832,201 @@ export interface components {
             message?: string;
             data?: components["schemas"]["LintResult"];
         };
-        RecordDetail: {
-            record?: components["schemas"]["SqlCheckRecord"];
-            issues?: components["schemas"]["LintIssue"][];
-        };
-        SqlCheckRecord: {
-            /** Format: int64 */
-            id?: number;
-            /** Format: int64 */
-            projectId?: number;
-            originalSql?: string;
-            fixedSql?: string;
-            /** Format: int32 */
-            errorCount?: number;
-            /** Format: int32 */
-            warningCount?: number;
-            /** Format: int32 */
-            suggestionCount?: number;
-            issuesJson?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            /** Format: date-time */
-            updatedAt?: string;
-            isDeleted?: boolean;
-        };
-        RRecordDetail: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["RecordDetail"];
-        };
-        PageResultSqlCheckRecord: {
-            records?: components["schemas"]["SqlCheckRecord"][];
-            /** Format: int64 */
-            total?: number;
-            /** Format: int64 */
-            current?: number;
-            /** Format: int64 */
-            size?: number;
-            /** Format: int64 */
-            pages?: number;
-        };
-        RPageResultSqlCheckRecord: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["PageResultSqlCheckRecord"];
-        };
-        DdlGenerateResult: {
-            ddl?: string;
-            lintResult?: components["schemas"]["LintResult"];
-        };
-        RDdlGenerateResult: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["DdlGenerateResult"];
-        };
-        TableDef: {
-            name?: string;
-            comment?: string;
-            columns?: components["schemas"]["ColumnDef"][];
-        };
         RInteger: {
             /** Format: int32 */
             code?: number;
             message?: string;
             /** Format: int32 */
             data?: number;
+        };
+        ExcelImportDiff: {
+            field?: string;
+            beforeValue?: string;
+            afterValue?: string;
+        };
+        ExcelImportError: {
+            sheet?: string;
+            /** Format: int32 */
+            rowNumber?: number;
+            field?: string;
+            message?: string;
+        };
+        ExcelImportPreview: {
+            valid?: boolean;
+            fields?: components["schemas"]["ExcelSheetSummary"];
+            enumDicts?: components["schemas"]["ExcelSheetSummary"];
+            enumValues?: components["schemas"]["ExcelSheetSummary"];
+            errors?: components["schemas"]["ExcelImportError"][];
+            items?: components["schemas"]["ExcelImportPreviewItem"][];
+        };
+        ExcelImportPreviewItem: {
+            sheet?: string;
+            /** Format: int32 */
+            rowNumber?: number;
+            key?: string;
+            action?: string;
+            status?: string;
+            reason?: string;
+            diffs?: components["schemas"]["ExcelImportDiff"][];
+        };
+        ExcelSheetSummary: {
+            /** Format: int32 */
+            total?: number;
+            /** Format: int32 */
+            createCount?: number;
+            /** Format: int32 */
+            updateCount?: number;
+            /** Format: int32 */
+            conflictCount?: number;
+        };
+        RExcelImportPreview: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ExcelImportPreview"];
+        };
+        ExcelImportResult: {
+            /** Format: int32 */
+            importedFields?: number;
+            /** Format: int32 */
+            importedEnumDicts?: number;
+            /** Format: int32 */
+            importedEnumValues?: number;
+            errors?: components["schemas"]["ExcelImportError"][];
+            success?: boolean;
+        };
+        RExcelImportResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ExcelImportResult"];
+        };
+        FieldGroupingBatchUpdateReq: {
+            /** Format: int64 */
+            projectId: number;
+            fieldIds: number[];
+            updates: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        FieldGroupingBatchUpdateResult: {
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int32 */
+            requestedCount?: number;
+            /** Format: int32 */
+            updatedCount?: number;
+        };
+        RFieldGroupingBatchUpdateResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldGroupingBatchUpdateResult"];
+        };
+        SqlCoverageReq: {
+            /** Format: int64 */
+            projectId: number;
+            sql: string;
+        };
+        FieldCoverageItem: {
+            tableName?: string;
+            columnName?: string;
+            dataType?: string;
+            comment?: string;
+            /** @enum {string} */
+            status?: "STANDARD_MATCH" | "ALIAS_MATCH" | "MISSING_COMMENT" | "POSSIBLE_DUPLICATE" | "UNMANAGED";
+            covered?: boolean;
+            standardFieldName?: string;
+            standardDisplayName?: string;
+            matchType?: string;
+            recommendedFieldName?: string;
+            reason?: string;
+        };
+        FieldCoverageReport: {
+            summary?: components["schemas"]["FieldCoverageSummary"];
+            tables?: components["schemas"]["FieldCoverageTable"][];
+            unmanagedRankings?: components["schemas"]["UnmanagedFieldRanking"][];
+        };
+        FieldCoverageSummary: {
+            /** Format: int32 */
+            tableCount?: number;
+            /** Format: int32 */
+            columnCount?: number;
+            /** Format: int32 */
+            coveredCount?: number;
+            /** Format: int32 */
+            unmanagedCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            possibleDuplicateCount?: number;
+            /** Format: double */
+            coverageRate?: number;
+        };
+        FieldCoverageTable: {
+            tableName?: string;
+            comment?: string;
+            /** Format: int32 */
+            columnCount?: number;
+            /** Format: int32 */
+            coveredCount?: number;
+            /** Format: int32 */
+            unmanagedCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            possibleDuplicateCount?: number;
+            /** Format: double */
+            coverageRate?: number;
+            fields?: components["schemas"]["FieldCoverageItem"][];
+        };
+        RFieldCoverageReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldCoverageReport"];
+        };
+        UnmanagedFieldRanking: {
+            columnName?: string;
+            /** Format: int32 */
+            count?: number;
+            tables?: string[];
+            recommendedFieldName?: string;
+            reason?: string;
+        };
+        FixSqlPromptReq: {
+            /** Format: int64 */
+            projectId: number;
+            sql: string;
+        };
+        RString: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: string;
+        };
+        CreateTablePromptReq: {
+            /** Format: int64 */
+            projectId: number;
+            businessDescription?: string;
+        };
+        RApiTokenInfo: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ApiTokenInfo"];
+        };
+        RVoid: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: Record<string, never>;
+        };
+        RListApiTokenInfo: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ApiTokenInfo"][];
         };
         RListTemplate: {
             /** Format: int32 */
@@ -1150,11 +2046,23 @@ export interface components {
             message?: string;
             data?: components["schemas"]["RuleConfig"][];
         };
+        RListRuleExemption: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["RuleExemption"][];
+        };
         RListProject: {
             /** Format: int32 */
             code?: number;
             message?: string;
             data?: components["schemas"]["Project"][];
+        };
+        RListStandardSnapshotInfo: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardSnapshotInfo"][];
         };
         RListMapStringString: {
             /** Format: int32 */
@@ -1164,21 +2072,67 @@ export interface components {
                 [key: string]: string;
             }[];
         };
-        RString: {
+        PageResultSqlCheckRecord: {
+            records?: components["schemas"]["SqlCheckRecord"][];
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            current?: number;
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            pages?: number;
+        };
+        RPageResultSqlCheckRecord: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            data?: string;
+            data?: components["schemas"]["PageResultSqlCheckRecord"];
         };
-        FixSqlPromptReq: {
+        SqlCheckRecord: {
             /** Format: int64 */
-            projectId: number;
-            sql: string;
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            originalSql?: string;
+            fixedSql?: string;
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            suggestionCount?: number;
+            issuesJson?: string;
+            /** Format: int64 */
+            standardSnapshotId?: number;
+            standardSnapshotVersion?: string;
+            standardSnapshotHash?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
         };
-        CreateTablePromptReq: {
-            /** Format: int64 */
-            projectId: number;
-            businessDescription?: string;
+        RRecordDetail: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["RecordDetail"];
+        };
+        RecordDetail: {
+            record?: components["schemas"]["SqlCheckRecord"];
+            issues?: components["schemas"]["LintIssue"][];
+        };
+        DdlGenerateResult: {
+            ddl?: string;
+            lintResult?: components["schemas"]["LintResult"];
+            standardSnapshot?: components["schemas"]["StandardSnapshotInfo"];
+        };
+        RDdlGenerateResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DdlGenerateResult"];
         };
         PageResultField: {
             records?: components["schemas"]["Field"][];
@@ -1197,17 +2151,265 @@ export interface components {
             message?: string;
             data?: components["schemas"]["PageResultField"];
         };
-        RListField: {
+        FieldSource: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int64 */
+            fieldId?: number;
+            /** Format: int64 */
+            batchId?: number;
+            sourceType?: string;
+            schemaName?: string;
+            tableName?: string;
+            columnName?: string;
+            dataType?: string;
+            nullable?: boolean;
+            defaultValue?: string;
+            comment?: string;
+            metadataJson?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        FieldSourceDetail: {
+            source?: components["schemas"]["FieldSource"];
+            batch?: components["schemas"]["ReverseImportBatch"];
+        };
+        RListFieldSourceDetail: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            data?: components["schemas"]["Field"][];
+            data?: components["schemas"]["FieldSourceDetail"][];
+        };
+        ReverseImportBatch: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            sourceType?: string;
+            databaseType?: string;
+            databaseName?: string;
+            schemaName?: string;
+            tableNamesJson?: string;
+            /** Format: int32 */
+            importedCount?: number;
+            /** Format: int32 */
+            skippedCount?: number;
+            operatorName?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        FieldEditWarning: {
+            attribute?: string;
+            /** @enum {string} */
+            severity?: "HIGH" | "WARNING" | "INFO";
+            message?: string;
+        };
+        FieldImpactItem: {
+            /** @enum {string} */
+            impactType?: "TEMPLATE" | "IMPORT_SOURCE" | "SQL_CHECK" | "STANDARD_SNAPSHOT" | "CODE_SET";
+            /** @enum {string} */
+            severity?: "HIGH" | "WARNING" | "INFO";
+            /** Format: int64 */
+            sourceId?: number;
+            sourceName?: string;
+            /** Format: int32 */
+            count?: number;
+            possibleReference?: boolean;
+            description?: string;
+            metadata?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        FieldImpactReport: {
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int64 */
+            fieldId?: number;
+            fieldName?: string;
+            displayName?: string;
+            summary?: components["schemas"]["FieldImpactSummary"];
+            impacts?: components["schemas"]["FieldImpactItem"][];
+            editWarnings?: components["schemas"]["FieldEditWarning"][];
+        };
+        FieldImpactSummary: {
+            /** Format: int32 */
+            totalImpactCount?: number;
+            /** Format: int32 */
+            templateImpactCount?: number;
+            /** Format: int32 */
+            importSourceImpactCount?: number;
+            /** Format: int32 */
+            sqlCheckImpactCount?: number;
+            /** Format: int32 */
+            snapshotImpactCount?: number;
+            /** Format: int32 */
+            codeSetImpactCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+        };
+        RFieldImpactReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldImpactReport"];
+        };
+        FieldSuggestion: {
+            field?: components["schemas"]["Field"];
+            /** Format: int32 */
+            score?: number;
+            matchReason?: string;
+            recommendedName?: string;
+            existing?: boolean;
         };
         RListFieldSuggestion: {
             /** Format: int32 */
             code?: number;
             message?: string;
             data?: components["schemas"]["FieldSuggestion"][];
+        };
+        FieldQualityIssue: {
+            code?: string;
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING" | "SUGGESTION";
+            message?: string;
+            suggestedAction?: string;
+            /** Format: int32 */
+            scorePenalty?: number;
+        };
+        FieldQualityItem: {
+            /** Format: int64 */
+            fieldId?: number;
+            name?: string;
+            displayName?: string;
+            dataType?: string;
+            status?: string;
+            sensitive?: boolean;
+            /** Format: int64 */
+            codeSetId?: number;
+            /** Format: int32 */
+            score?: number;
+            /** @enum {string} */
+            level?: "GOOD" | "WARNING" | "POOR";
+            issues?: components["schemas"]["FieldQualityIssue"][];
+            suggestions?: string[];
+        };
+        FieldQualityReport: {
+            summary?: components["schemas"]["FieldQualitySummary"];
+            fields?: components["schemas"]["FieldQualityItem"][];
+        };
+        FieldQualitySummary: {
+            /** Format: int32 */
+            totalFieldCount?: number;
+            /** Format: int32 */
+            averageScore?: number;
+            /** Format: int32 */
+            goodCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            poorCount?: number;
+            /** Format: int32 */
+            lowQualityCount?: number;
+            /** Format: int32 */
+            errorIssueCount?: number;
+            /** Format: int32 */
+            warningIssueCount?: number;
+            /** Format: int32 */
+            suggestionIssueCount?: number;
+        };
+        RFieldQualityReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldQualityReport"];
+        };
+        FieldGroupItem: {
+            groupType?: string;
+            groupKey?: string;
+            groupName?: string;
+            /** Format: int32 */
+            fieldCount?: number;
+            sampleFields?: string[];
+            ungrouped?: boolean;
+        };
+        FieldGroupSummary: {
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int32 */
+            totalFieldCount?: number;
+            /** Format: int32 */
+            ungroupedFieldCount?: number;
+            groups?: components["schemas"]["FieldGroupItem"][];
+        };
+        RFieldGroupSummary: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldGroupSummary"];
+        };
+        FieldConflictField: {
+            /** Format: int64 */
+            fieldId?: number;
+            name?: string;
+            displayName?: string;
+            dataType?: string;
+            /** Format: int64 */
+            codeSetId?: number;
+            sensitive?: boolean;
+            status?: string;
+            aliases?: string[];
+        };
+        FieldConflictGroup: {
+            groupKey?: string;
+            /** @enum {string} */
+            conflictType?: "NAME_DUPLICATE" | "ALIAS_CONFLICT" | "DISPLAY_NAME_DUPLICATE" | "SEMANTIC_DUPLICATE";
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING" | "INFO";
+            title?: string;
+            description?: string;
+            fields?: components["schemas"]["FieldConflictField"][];
+            evidence?: string[];
+            suggestedAction?: string;
+        };
+        FieldConflictReport: {
+            /** Format: int64 */
+            projectId?: number;
+            summary?: components["schemas"]["FieldConflictSummary"];
+            groups?: components["schemas"]["FieldConflictGroup"][];
+        };
+        FieldConflictSummary: {
+            /** Format: int32 */
+            totalFieldCount?: number;
+            /** Format: int32 */
+            conflictGroupCount?: number;
+            /** Format: int32 */
+            affectedFieldCount?: number;
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            infoCount?: number;
+            /** Format: int32 */
+            aliasConflictCount?: number;
+            /** Format: int32 */
+            semanticDuplicateCount?: number;
+            /** Format: int32 */
+            attributeMismatchCount?: number;
+        };
+        RFieldConflictReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldConflictReport"];
+        };
+        RListField: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["Field"][];
         };
         RListEnumDict: {
             /** Format: int32 */
@@ -1227,6 +2429,182 @@ export interface components {
             message?: string;
             data?: components["schemas"]["Domain"][];
         };
+        RListDatabaseConnectionPreset: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseConnectionPreset"][];
+        };
+        DashboardSummary: {
+            /** Format: int32 */
+            fieldCount?: number;
+            /** Format: int32 */
+            enumDictCount?: number;
+            /** Format: int32 */
+            ruleCount?: number;
+            /** Format: int32 */
+            forbiddenTermCount?: number;
+            /** Format: int64 */
+            recentCheckCount?: number;
+            /** Format: int32 */
+            fieldHitRate?: number;
+            recentChecks?: components["schemas"]["RecentSqlCheck"][];
+            trend?: components["schemas"]["IssueTrendPoint"][];
+        };
+        IssueTrendPoint: {
+            /** Format: int64 */
+            recordId?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: int32 */
+            issueCount?: number;
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            suggestionCount?: number;
+        };
+        RDashboardSummary: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DashboardSummary"];
+        };
+        RecentSqlCheck: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            suggestionCount?: number;
+            /** Format: int32 */
+            issueCount?: number;
+        };
+        PageResultStandardChangeLog: {
+            records?: components["schemas"]["StandardChangeLog"][];
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            current?: number;
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            pages?: number;
+        };
+        RPageResultStandardChangeLog: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["PageResultStandardChangeLog"];
+        };
+        StandardChangeLog: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            targetType?: string;
+            /** Format: int64 */
+            targetId?: number;
+            action?: string;
+            beforeJson?: string;
+            afterJson?: string;
+            operatorName?: string;
+            /** Format: date-time */
+            changedAt?: string;
+        };
+        AuthMe: {
+            operatorName?: string;
+            allProjects?: boolean;
+            projectIds?: number[];
+        };
+        RAuthMe: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AuthMe"];
+        };
+        AiJobRecordListItem: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            jobType?: string;
+            title?: string;
+            inputSummary?: string;
+            promptVersion?: string;
+            status?: string;
+            /** Format: int64 */
+            sqlCheckRecordId?: number;
+            /** Format: int64 */
+            standardSnapshotId?: number;
+            standardSnapshotVersion?: string;
+            standardSnapshotHash?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        PageResultAiJobRecordListItem: {
+            records?: components["schemas"]["AiJobRecordListItem"][];
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            current?: number;
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            pages?: number;
+        };
+        RPageResultAiJobRecordListItem: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["PageResultAiJobRecordListItem"];
+        };
+        AiJobRecord: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            jobType?: string;
+            title?: string;
+            inputSummary?: string;
+            promptVersion?: string;
+            status?: string;
+            inputPayloadJson?: string;
+            outputPayloadJson?: string;
+            /** Format: int64 */
+            sqlCheckRecordId?: number;
+            /** Format: int64 */
+            standardSnapshotId?: number;
+            standardSnapshotVersion?: string;
+            standardSnapshotHash?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        AiJobRecordDetail: {
+            record?: components["schemas"]["AiJobRecord"];
+            inputPayload?: Record<string, never>;
+            outputPayload?: Record<string, never>;
+            replayPayload?: {
+                [key: string]: Record<string, never>;
+            };
+            replayCommand?: string;
+        };
+        RAiJobRecordDetail: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiJobRecordDetail"];
+        };
     };
     responses: never;
     parameters: never;
@@ -1236,44 +2614,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    me: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RAuthMe"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
     getById: {
         parameters: {
             query?: never;
@@ -1292,24 +2632,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RTemplate"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -1338,24 +2660,6 @@ export interface operations {
                     "*/*": components["schemas"]["RTemplate"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
     delete: {
@@ -1371,24 +2675,6 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1422,24 +2708,6 @@ export interface operations {
                     "*/*": components["schemas"]["RTemplateField"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
     deleteField: {
@@ -1455,24 +2723,6 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1502,24 +2752,6 @@ export interface operations {
                     "*/*": components["schemas"]["RRuleConfig"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
     update_1: {
@@ -1546,24 +2778,6 @@ export interface operations {
                     "*/*": components["schemas"]["RRuleConfig"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
     delete_1: {
@@ -1586,27 +2800,9 @@ export interface operations {
                     "*/*": components["schemas"]["RVoid"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    getById_2: {
+    getById_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -1624,24 +2820,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RProject"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -1670,27 +2848,9 @@ export interface operations {
                     "*/*": components["schemas"]["RProject"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    delete_2: {
+    delete_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -1710,27 +2870,9 @@ export interface operations {
                     "*/*": components["schemas"]["RVoid"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    getById_3: {
+    getById_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -1748,24 +2890,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RField"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -1794,27 +2918,9 @@ export interface operations {
                     "*/*": components["schemas"]["RField"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    delete_3: {
+    delete_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -1834,27 +2940,9 @@ export interface operations {
                     "*/*": components["schemas"]["RVoid"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    getById_4: {
+    getById_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -1872,24 +2960,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["REnumDict"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -1918,27 +2988,9 @@ export interface operations {
                     "*/*": components["schemas"]["REnumDict"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    delete_4: {
+    delete_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -1951,24 +3003,6 @@ export interface operations {
         responses: {
             /** @description OK */
             200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2002,24 +3036,6 @@ export interface operations {
                     "*/*": components["schemas"]["REnumValue"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
     deleteValue: {
@@ -2042,27 +3058,9 @@ export interface operations {
                     "*/*": components["schemas"]["RVoid"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    getById_5: {
+    getById_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -2080,24 +3078,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RDomain"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -2126,27 +3106,9 @@ export interface operations {
                     "*/*": components["schemas"]["RDomain"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    delete_5: {
+    delete_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -2166,8 +3128,69 @@ export interface operations {
                     "*/*": components["schemas"]["RVoid"];
                 };
             };
-            /** @description Bad Request */
-            400: {
+        };
+    };
+    getById_7: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDatabaseConnectionPreset"];
+                };
+            };
+        };
+    };
+    update_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PresetReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDatabaseConnectionPreset"];
+                };
+            };
+        };
+    };
+    delete_7: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2175,13 +3198,48 @@ export interface operations {
                     "*/*": components["schemas"]["RVoid"];
                 };
             };
-            /** @description Internal Server Error */
-            500: {
+        };
+    };
+    listTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RVoid"];
+                    "*/*": components["schemas"]["RListApiTokenInfo"];
+                };
+            };
+        };
+    };
+    createToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiTokenCreateReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RApiTokenCreateResp"];
                 };
             };
         };
@@ -2204,24 +3262,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RListTemplate"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -2248,24 +3288,6 @@ export interface operations {
                     "*/*": components["schemas"]["RTemplate"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
     listFields: {
@@ -2286,24 +3308,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RListTemplateField"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -2332,24 +3336,6 @@ export interface operations {
                     "*/*": components["schemas"]["RTemplateField"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
     list_1: {
@@ -2370,24 +3356,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RListRuleConfig"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -2414,27 +3382,199 @@ export interface operations {
                     "*/*": components["schemas"]["RRuleConfig"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
+        };
+    };
+    list_2: {
+        parameters: {
+            query: {
+                projectId: number;
             };
-            /** @description Internal Server Error */
-            500: {
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RVoid"];
+                    "*/*": components["schemas"]["RListRuleExemption"];
                 };
             };
         };
     };
-    list_2: {
+    create_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleExemptionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRuleExemption"];
+                };
+            };
+        };
+    };
+    preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseImportReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RReverseImportPreview"];
+                };
+            };
+        };
+    };
+    testDatabaseConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseConnectionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDatabaseConnectionResult"];
+                };
+            };
+        };
+    };
+    listDatabaseTables: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseConnectionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListDatabaseTableInfo"];
+                };
+            };
+        };
+    };
+    previewDatabase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseConnectionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RReverseImportPreview"];
+                };
+            };
+        };
+    };
+    importDatabaseCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseImportReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDatabaseImportResult"];
+                };
+            };
+        };
+    };
+    compareDatabase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseConnectionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RReverseImportCompareResult"];
+                };
+            };
+        };
+    };
+    list_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -2452,27 +3592,9 @@ export interface operations {
                     "*/*": components["schemas"]["RListProject"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    create_2: {
+    create_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -2494,22 +3616,52 @@ export interface operations {
                     "*/*": components["schemas"]["RProject"];
                 };
             };
-            /** @description Bad Request */
-            400: {
+        };
+    };
+    listSnapshots: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RVoid"];
+                    "*/*": components["schemas"]["RListStandardSnapshotInfo"];
                 };
             };
-            /** @description Internal Server Error */
-            500: {
+        };
+    };
+    createSnapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardSnapshotCreateReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RVoid"];
+                    "*/*": components["schemas"]["RStandardSnapshotInfo"];
                 };
             };
         };
@@ -2530,24 +3682,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RDemoProjectResult"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -2572,106 +3706,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RLintResult"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    getRecord: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RRecordDetail"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    listRecords: {
-        parameters: {
-            query: {
-                projectId?: number;
-                current?: number;
-                size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RPageResultSqlCheckRecord"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -2703,22 +3737,62 @@ export interface operations {
                     "*/*": components["schemas"]["RInteger"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
+        };
+    };
+    previewExcel: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
                 };
             };
-            /** @description Internal Server Error */
-            500: {
+        };
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RVoid"];
+                    "*/*": components["schemas"]["RExcelImportPreview"];
+                };
+            };
+        };
+    };
+    importExcel: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RExcelImportResult"];
                 };
             };
         };
@@ -2745,27 +3819,9 @@ export interface operations {
                     "*/*": components["schemas"]["RPageResultField"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    create_3: {
+    create_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -2787,27 +3843,33 @@ export interface operations {
                     "*/*": components["schemas"]["RField"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
+        };
+    };
+    batchUpdateGrouping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldGroupingBatchUpdateReq"];
             };
-            /** @description Internal Server Error */
-            500: {
+        };
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RVoid"];
+                    "*/*": components["schemas"]["RFieldGroupingBatchUpdateResult"];
                 };
             };
         };
     };
-    list_3: {
+    list_4: {
         parameters: {
             query: {
                 projectId: number;
@@ -2827,27 +3889,9 @@ export interface operations {
                     "*/*": components["schemas"]["RListEnumDict"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    create_4: {
+    create_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -2867,24 +3911,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["REnumDict"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -2907,24 +3933,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RListEnumValue"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -2953,27 +3961,9 @@ export interface operations {
                     "*/*": components["schemas"]["REnumValue"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    list_4: {
+    list_5: {
         parameters: {
             query: {
                 projectId: number;
@@ -2993,27 +3983,9 @@ export interface operations {
                     "*/*": components["schemas"]["RListDomain"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    create_5: {
+    create_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -3035,35 +4007,15 @@ export interface operations {
                     "*/*": components["schemas"]["RDomain"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
-    toggle: {
+    list_6: {
         parameters: {
             query: {
-                enabled: boolean;
+                projectId: number;
             };
             header?: never;
-            path: {
-                id: number;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -3074,37 +4026,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
+                    "*/*": components["schemas"]["RListDatabaseConnectionPreset"];
                 };
             };
         };
     };
-    listRules: {
+    create_7: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PresetReq"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -3112,39 +4050,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RListMapStringString"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
+                    "*/*": components["schemas"]["RDatabaseConnectionPreset"];
                 };
             };
         };
     };
-    exportFields: {
+    reportSql: {
         parameters: {
-            query: {
-                projectId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SqlCoverageReq"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -3152,39 +4074,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": string;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
+                    "*/*": components["schemas"]["RFieldCoverageReport"];
                 };
             };
         };
     };
-    previewMarkdown: {
+    reportDatabase: {
         parameters: {
-            query: {
-                projectId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseConnectionReq"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -3192,429 +4098,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RString"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    previewHtml: {
-        parameters: {
-            query: {
-                projectId: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RString"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    previewErd: {
-        parameters: {
-            query: {
-                projectId: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RString"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    previewDdl: {
-        parameters: {
-            query: {
-                projectId: number;
-                templateId: number;
-                tableName: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RDdlGenerateResult"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    downloadHtml: {
-        parameters: {
-            query: {
-                projectId: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": string;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    downloadErd: {
-        parameters: {
-            query: {
-                projectId: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": string;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    downloadMarkdown: {
-        parameters: {
-            query: {
-                projectId: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": string;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    listAll: {
-        parameters: {
-            query: {
-                projectId: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RListField"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    suggest: {
-        parameters: {
-            query: {
-                projectId: number;
-                query: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RListFieldSuggestion"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    previewRulesYaml: {
-        parameters: {
-            query: {
-                projectId: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RString"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    downloadRulesYaml: {
-        parameters: {
-            query: {
-                projectId: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": string;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
+                    "*/*": components["schemas"]["RFieldCoverageReport"];
                 };
             };
         };
@@ -3641,24 +4125,6 @@ export interface operations {
                     "*/*": components["schemas"]["RString"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
     generateCreateTablePrompt: {
@@ -3683,8 +4149,45 @@ export interface operations {
                     "*/*": components["schemas"]["RString"];
                 };
             };
-            /** @description Bad Request */
-            400: {
+        };
+    };
+    disableToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RApiTokenInfo"];
+                };
+            };
+        };
+    };
+    toggle: {
+        parameters: {
+            query: {
+                enabled: boolean;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3692,13 +4195,695 @@ export interface operations {
                     "*/*": components["schemas"]["RVoid"];
                 };
             };
-            /** @description Internal Server Error */
-            500: {
+        };
+    };
+    disable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    getById_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRuleExemption"];
+                };
+            };
+        };
+    };
+    delete_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    currentSnapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardSnapshotInfo"];
+                };
+            };
+        };
+    };
+    listRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListMapStringString"];
+                };
+            };
+        };
+    };
+    listRecords: {
+        parameters: {
+            query?: {
+                projectId?: number;
+                current?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RPageResultSqlCheckRecord"];
+                };
+            };
+        };
+    };
+    getRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRecordDetail"];
+                };
+            };
+        };
+    };
+    exportFields: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    exportExcelTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    exportExcel: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    previewMarkdown: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RString"];
+                };
+            };
+        };
+    };
+    downloadMarkdown: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    previewHtml: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RString"];
+                };
+            };
+        };
+    };
+    downloadHtml: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    previewErd: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RString"];
+                };
+            };
+        };
+    };
+    downloadErd: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    previewDdl: {
+        parameters: {
+            query: {
+                projectId: number;
+                templateId: number;
+                tableName: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDdlGenerateResult"];
+                };
+            };
+        };
+    };
+    listSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListFieldSourceDetail"];
+                };
+            };
+        };
+    };
+    report: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldImpactReport"];
+                };
+            };
+        };
+    };
+    suggest: {
+        parameters: {
+            query: {
+                projectId: number;
+                query: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListFieldSuggestion"];
+                };
+            };
+        };
+    };
+    report_1: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldQualityReport"];
+                };
+            };
+        };
+    };
+    groupSummary: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldGroupSummary"];
+                };
+            };
+        };
+    };
+    report_2: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldConflictReport"];
+                };
+            };
+        };
+    };
+    listAll: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListField"];
+                };
+            };
+        };
+    };
+    summary: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDashboardSummary"];
+                };
+            };
+        };
+    };
+    page_1: {
+        parameters: {
+            query: {
+                projectId: number;
+                targetType?: string;
+                targetId?: number;
+                current?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RPageResultStandardChangeLog"];
+                };
+            };
+        };
+    };
+    me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAuthMe"];
+                };
+            };
+        };
+    };
+    list_7: {
+        parameters: {
+            query: {
+                projectId: number;
+                jobType?: string;
+                current?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RPageResultAiJobRecordListItem"];
+                };
+            };
+        };
+    };
+    detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiJobRecordDetail"];
+                };
+            };
+        };
+    };
+    previewRulesYaml: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RString"];
+                };
+            };
+        };
+    };
+    downloadRulesYaml: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
                 };
             };
         };
@@ -3706,11 +4891,11 @@ export interface operations {
     downloadAiContextPackage: {
         parameters: {
             query: {
+                projectId: number;
                 scope?: string;
                 query?: string;
                 status?: string;
                 limit?: number;
-                projectId: number;
             };
             header?: never;
             path?: never;
@@ -3725,24 +4910,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -3750,11 +4917,11 @@ export interface operations {
     previewFieldCatalog: {
         parameters: {
             query: {
+                projectId: number;
                 scope?: string;
                 query?: string;
                 status?: string;
                 limit?: number;
-                projectId: number;
             };
             header?: never;
             path?: never;
@@ -3769,24 +4936,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RString"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };
@@ -3794,11 +4943,11 @@ export interface operations {
     downloadFieldCatalog: {
         parameters: {
             query: {
+                projectId: number;
                 scope?: string;
                 query?: string;
                 status?: string;
                 limit?: number;
-                projectId: number;
             };
             header?: never;
             path?: never;
@@ -3815,34 +4964,16 @@ export interface operations {
                     "*/*": string;
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
     previewDatabaseRules: {
         parameters: {
             query: {
+                projectId: number;
                 scope?: string;
                 query?: string;
                 status?: string;
                 limit?: number;
-                projectId: number;
             };
             header?: never;
             path?: never;
@@ -3859,34 +4990,16 @@ export interface operations {
                     "*/*": components["schemas"]["RString"];
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
         };
     };
     downloadDatabaseRules: {
         parameters: {
             query: {
+                projectId: number;
                 scope?: string;
                 query?: string;
                 status?: string;
                 limit?: number;
-                projectId: number;
             };
             header?: never;
             path?: never;
@@ -3901,24 +5014,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RVoid"];
                 };
             };
         };

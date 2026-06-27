@@ -233,6 +233,48 @@ class AiContextExportServiceTest {
     }
 
     @Test
+    void generateFieldCatalogJson_includesGroupingSummaryForScopedCatalog() throws Exception {
+        Field mobile = sampleField("mobile_no", "手机号", "contact", "pii,customer", "phone, mobile");
+        mobile.setDomainId(10L);
+        Field raw = sampleField("raw_payload", "原始报文", "", "", "");
+        raw.setSensitive(false);
+        AiContextExportService service = createService(List.of(mobile, raw));
+
+        String content = service.generateFieldCatalogJson(
+                PROJECT_ID,
+                new AiContextScopeOptions("all", null, "enabled", null)
+        );
+
+        var root = new ObjectMapper().readTree(content);
+        var groupSummary = root.path("contextScope").path("groupSummary");
+        assertEquals(2, groupSummary.path("totalFieldCount").asInt());
+        assertEquals(1, groupSummary.path("ungroupedFieldCount").asInt());
+        assertTrue(groupSummary.path("groups").toString().contains("contact"));
+        assertTrue(groupSummary.path("groups").toString().contains("ungrouped"));
+        assertTrue(root.path("contextScope").path("warnings").toString().contains("未分组"));
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(
+                PROJECT_ID,
+                new AiContextScopeOptions("all", null, "enabled", null)
+        ));
+        var schema = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.schema.json"));
+        assertTrue(schema.path("properties").path("contextScope").path("properties").has("groupSummary"));
+    }
+
+    @Test
+    void generateFieldCatalogJson_fullCatalogKeepsScopeMetadataOptional() throws Exception {
+        Field raw = sampleField("raw_payload", "原始报文", "", "", "");
+        raw.setSensitive(false);
+        AiContextExportService service = createService(List.of(raw));
+
+        String content = service.generateFieldCatalogJson(PROJECT_ID, AiContextScopeOptions.full());
+
+        var root = new ObjectMapper().readTree(content);
+        assertFalse(root.has("contextScope"));
+        assertEquals(1, root.path("fields").size());
+    }
+
+    @Test
     void generateAiContextPackage_scopedPackageContainsScopeSummaryAndTrimmedFields() throws Exception {
         AiContextExportService service = createService(List.of(
                 sampleField("mobile_no", "手机号", "contact", "pii,customer", "phone, mobile"),

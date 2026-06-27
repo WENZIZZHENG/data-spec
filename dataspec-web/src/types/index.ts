@@ -8,6 +8,17 @@ export type DemoProjectResult = Schemas['DemoProjectResult']
 export type Field = Schemas['Field']
 export type FieldReq = Schemas['FieldReq']
 export type FieldSuggestion = Schemas['FieldSuggestion']
+export type Domain = Schemas['Domain']
+export type FieldGroupItem = Schemas['FieldGroupItem']
+export type FieldGroupSummary = Schemas['FieldGroupSummary']
+export type FieldGroupingBatchUpdateReq = Omit<Schemas['FieldGroupingBatchUpdateReq'], 'updates'> & {
+  updates: {
+    domainId?: number | string | null
+    category?: string | null
+    tags?: string | null
+  }
+}
+export type FieldGroupingBatchUpdateResult = Schemas['FieldGroupingBatchUpdateResult']
 
 export type FieldQualitySeverity = 'ERROR' | 'WARNING' | 'SUGGESTION'
 export type FieldQualityLevel = 'GOOD' | 'WARNING' | 'POOR'

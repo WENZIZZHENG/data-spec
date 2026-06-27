@@ -46,7 +46,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 
 ### AI 与自动化
 
-- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、项目规则例外、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包。
+- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、项目规则例外、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包，并输出分组摘要辅助 AI 判断上下文范围。
 - AI Context manifest、字段目录和规则文件携带标准快照版本与 hash；未创建快照时标记为 `unversioned`。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - AI 回放记录，支持查看 Prompt、SQL 检查修正和 DDL 预览的输入输出、promptVersion 与标准快照。
@@ -135,7 +135,7 @@ curl -X POST "http://localhost:8090/api/projects/1/standard-snapshots" \
 
 ## 标准字段模型
 
-标准字段支持 `aliases`、`category`、`codeSetId`、`sensitive`、`status`、`exampleValue` 等个人版元数据。AI 导出的 `field-catalog.json` 会把 `aliases` 转成数组，并输出敏感标记、字段状态、代码集关联和示例值，方便 AI 按业务语义复用标准字段。
+标准字段支持 `aliases`、`category`、`domainId`、`tags`、`codeSetId`、`sensitive`、`status`、`exampleValue` 等个人版元数据。字段库支持按数据域、分类、标签和未分组状态浏览字段，并可对选中字段批量设置或清空数据域、分类和标签。AI 导出的 `field-catalog.json` 会把 `aliases` 转成数组，并输出敏感标记、字段状态、代码集关联、示例值和可选 `contextScope.groupSummary`，方便 AI 按业务语义复用标准字段并识别未分组字段。
 
 ## 结构化命名规则
 
@@ -501,7 +501,8 @@ data-spec/
 - [x] 演示项目与首次使用入口，串联 DDL 生成、SQL 校验和 AI Context 导出
 - [x] 标准字段、数据域、枚举字典、表模板、规则配置、规则例外 CRUD 与常见规则结构化参数表单
 - [x] 标准快照、内容 hash、AI Context 版本标识、SQL 检查记录和 DDL 生成结果快照引用
-- [x] 个人版字段模型：别名、分类、代码集、敏感标记、状态、示例值
+- [x] 个人版字段模型：别名、数据域、分类、标签、代码集、敏感标记、状态、示例值
+- [x] 字段库分组视图与批量归组，支持按数据域、分类、标签和未分组字段筛选维护
 - [x] 结构化命名规则导出和 `field_suffix_type` lint 规则
 - [x] SQL 粘贴校验、结构化 issue、修复建议和 `fixedSql`
 - [x] SQL 检查记录、最近记录分页和详情
@@ -513,7 +514,7 @@ data-spec/
 - [x] 字段影响分析，支持模板、导入来源、SQL 检查记录、标准快照和代码集影响提示
 - [x] 字段推荐 API/CLI/MCP
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
-- [x] AI Context zip 导出、按需裁剪、workflow recipes 和业务项目 `.dataspec/` 约定
+- [x] AI Context zip 导出、按需裁剪、分组摘要、workflow recipes 和业务项目 `.dataspec/` 约定
 - [x] AI 输出契约文档与 contract fixtures，覆盖 AI Context、lint/fixedSql、字段推荐、DDL 预览、CLI/MCP JSON 稳定字段
 - [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成

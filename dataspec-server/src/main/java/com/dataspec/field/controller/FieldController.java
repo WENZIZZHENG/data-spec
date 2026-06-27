@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.common.result.PageResult;
 import com.dataspec.common.result.R;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldGroupSummary;
+import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
+import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.reverseimport.model.FieldSourceDetail;
@@ -44,6 +47,19 @@ public class FieldController {
     @GetMapping("/all")
     public R<List<Field>> listAll(@RequestParam Long projectId) {
         return R.ok(fieldService.listByProject(projectId));
+    }
+
+    /** 查询项目字段分组摘要 */
+    @GetMapping("/groups")
+    public R<FieldGroupSummary> groupSummary(@RequestParam Long projectId) {
+        return R.ok(fieldService.groupSummary(projectId));
+    }
+
+    /** 批量更新字段归组元数据 */
+    @PostMapping("/groups/batch-update")
+    public R<FieldGroupingBatchUpdateResult> batchUpdateGrouping(
+            @Valid @RequestBody FieldGroupingBatchUpdateReq req) {
+        return R.ok(fieldService.batchUpdateGrouping(req));
     }
 
     /** 根据业务描述推荐标准字段 */

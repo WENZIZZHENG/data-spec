@@ -2,6 +2,10 @@ package com.dataspec.field;
 
 import com.dataspec.field.controller.FieldController;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldGroupItem;
+import com.dataspec.field.model.FieldGroupSummary;
+import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
+import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.reverseimport.entity.FieldSource;
@@ -10,6 +14,7 @@ import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -54,5 +59,39 @@ class FieldControllerTest {
         assertEquals(1, response.getData().size());
         verify(service).getById(99L);
         verify(sourceService).listByFieldId(99L);
+    }
+
+    @Test
+    void groupSummary_returnsServiceSummary() {
+        FieldService service = mock(FieldService.class);
+        FieldGroupSummary summary = new FieldGroupSummary(
+                1L,
+                2,
+                1,
+                List.of(new FieldGroupItem("category", "contact", "contact", 2, List.of("mobile_no"), false)));
+        when(service.groupSummary(1L)).thenReturn(summary);
+        FieldController controller = new FieldController(service, mock(ReverseImportSourceService.class));
+
+        var response = controller.groupSummary(1L);
+
+        assertEquals(2, response.getData().totalFieldCount());
+        assertEquals("contact", response.getData().groups().getFirst().groupKey());
+    }
+
+    @Test
+    void batchUpdateGrouping_forwardsRequestToService() {
+        FieldService service = mock(FieldService.class);
+        FieldGroupingBatchUpdateReq req = new FieldGroupingBatchUpdateReq(
+                1L,
+                List.of(1L, 2L),
+                Map.of("category", "contact"));
+        when(service.batchUpdateGrouping(req))
+                .thenReturn(new FieldGroupingBatchUpdateResult(1L, 2, 2));
+        FieldController controller = new FieldController(service, mock(ReverseImportSourceService.class));
+
+        var response = controller.batchUpdateGrouping(req);
+
+        assertEquals(2, response.getData().updatedCount());
+        verify(service).batchUpdateGrouping(req);
     }
 }

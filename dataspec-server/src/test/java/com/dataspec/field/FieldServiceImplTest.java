@@ -3,6 +3,9 @@ package com.dataspec.field;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldGroupSummary;
+import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
+import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.impl.FieldServiceImpl;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -131,6 +135,168 @@ class FieldServiceImplTest {
                 "update",
                 "varchar(20)|phone",
                 "varchar(30)|phone,mobile");
+    }
+
+    @Test
+    void groupingSummary_groupsDomainCategoryTagAndUngroupedFields() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field mobile = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone,mobile", "enabled");
+        mobile.setDomainId(10L);
+        mobile.setCategory("contact");
+        mobile.setTags("pii, customer");
+        Field email = field("email", "邮箱", "varchar(128)", "邮箱", "mail", "enabled");
+        email.setDomainId(10L);
+        email.setCategory("contact");
+        email.setTags("pii");
+        Field orderNo = field("order_no", "订单号", "varchar(64)", "订单号", "order", "enabled");
+        orderNo.setCategory("order");
+        Field raw = field("raw_payload", "原始报文", "jsonb", "原始报文", "", "enabled");
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(mobile, email, orderNo, raw));
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        FieldGroupSummary summary = service.groupSummary(1L);
+
+        assertEquals(4, summary.totalFieldCount());
+        assertEquals(1, summary.ungroupedFieldCount());
+        assertTrue(summary.groups().stream().anyMatch(group ->
+                "domain".equals(group.groupType())
+                        && "10".equals(group.groupKey())
+                        && group.fieldCount() == 2
+                        && group.sampleFields().contains("mobile_no")));
+        assertTrue(summary.groups().stream().anyMatch(group ->
+                "category".equals(group.groupType())
+                        && "contact".equals(group.groupKey())
+                        && group.fieldCount() == 2));
+        assertTrue(summary.groups().stream().anyMatch(group ->
+                "tag".equals(group.groupType())
+                        && "pii".equals(group.groupKey())
+                        && group.fieldCount() == 2));
+        assertTrue(summary.groups().stream().anyMatch(group ->
+                "ungrouped".equals(group.groupType())
+                        && group.ungrouped()
+                        && group.sampleFields().contains("raw_payload")));
+    }
+
+    @Test
+    void batchUpdateGrouping_updatesExplicitFieldsAndRecordsChangeLogs() {
+        FieldRepository repository = mock(FieldRepository.class);
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        Field mobile = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        mobile.setId(1L);
+        mobile.setProjectId(1L);
+        mobile.setCategory("old");
+        mobile.setTags("legacy");
+        Field email = field("email", "邮箱", "varchar(128)", "邮箱", "mail", "enabled");
+        email.setId(2L);
+        email.setProjectId(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(mobile));
+        when(repository.findById(2L)).thenReturn(Optional.of(email));
+        when(changeLogService.snapshot(any(Field.class))).thenAnswer(invocation -> {
+            Field field = invocation.getArgument(0);
+            return field.getName() + "|" + field.getDomainId() + "|" + field.getCategory() + "|" + field.getTags();
+        });
+        FieldServiceImpl service = new FieldServiceImpl(repository, changeLogService);
+
+        FieldGroupingBatchUpdateResult result = service.batchUpdateGrouping(new FieldGroupingBatchUpdateReq(
+                1L,
+                List.of(1L, 2L),
+                Map.of(
+                        "domainId", 10,
+                        "category", "contact",
+                        "tags", "pii, customer"
+                )));
+
+        assertEquals(2, result.updatedCount());
+        assertEquals(10L, mobile.getDomainId());
+        assertEquals("contact", mobile.getCategory());
+        assertEquals("customer,pii", mobile.getTags());
+        assertEquals("contact", email.getCategory());
+        verify(repository).update(mobile);
+        verify(repository).update(email);
+        verify(changeLogService).recordChange(eq(1L), eq("field"), eq(1L), eq("update"),
+                eq("mobile_no|null|old|legacy"), eq("mobile_no|10|contact|customer,pii"));
+        verify(changeLogService).recordChange(eq(1L), eq("field"), eq(2L), eq("update"),
+                eq("email|null|null|null"), eq("email|10|contact|customer,pii"));
+    }
+
+    @Test
+    void batchUpdateGrouping_rejectsCrossProjectWithoutPartialUpdate() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field own = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        own.setId(1L);
+        own.setProjectId(1L);
+        Field foreign = field("email", "邮箱", "varchar(128)", "邮箱", "mail", "enabled");
+        foreign.setId(2L);
+        foreign.setProjectId(2L);
+        when(repository.findById(1L)).thenReturn(Optional.of(own));
+        when(repository.findById(2L)).thenReturn(Optional.of(foreign));
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        assertThrows(BizException.class, () -> service.batchUpdateGrouping(new FieldGroupingBatchUpdateReq(
+                1L,
+                List.of(1L, 2L),
+                Map.of("category", "contact"))));
+        verify(repository, never()).update(any());
+    }
+
+    @Test
+    void batchUpdateGrouping_canClearGroupingFields() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field mobile = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        mobile.setId(1L);
+        mobile.setProjectId(1L);
+        mobile.setDomainId(10L);
+        mobile.setCategory("contact");
+        mobile.setTags("pii");
+        when(repository.findById(1L)).thenReturn(Optional.of(mobile));
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        service.batchUpdateGrouping(new FieldGroupingBatchUpdateReq(
+                1L,
+                List.of(1L),
+                Map.of(
+                        "domainId", "",
+                        "category", "",
+                        "tags", ""
+                )));
+
+        assertNull(mobile.getDomainId());
+        assertNull(mobile.getCategory());
+        assertNull(mobile.getTags());
+    }
+
+    @Test
+    void batchUpdateGrouping_deduplicatesFieldIds() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field mobile = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        mobile.setId(1L);
+        mobile.setProjectId(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(mobile));
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        FieldGroupingBatchUpdateResult result = service.batchUpdateGrouping(new FieldGroupingBatchUpdateReq(
+                1L,
+                List.of(1L, 1L),
+                Map.of("category", "contact")));
+
+        assertEquals(2, result.requestedCount());
+        assertEquals(1, result.updatedCount());
+        verify(repository, times(1)).findById(1L);
+        verify(repository, times(1)).update(mobile);
+    }
+
+    @Test
+    void batchUpdateGrouping_rejectsInvalidFieldIdsBeforeRepositoryLookup() {
+        FieldRepository repository = mock(FieldRepository.class);
+        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+
+        assertThrows(BizException.class, () -> service.batchUpdateGrouping(new FieldGroupingBatchUpdateReq(
+                1L,
+                List.of(0L),
+                Map.of("category", "contact"))));
+
+        verify(repository, never()).findById(any());
+        verify(repository, never()).update(any());
     }
 
     @Test
