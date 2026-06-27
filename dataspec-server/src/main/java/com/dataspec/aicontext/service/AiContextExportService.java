@@ -6,6 +6,8 @@ import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
+import com.dataspec.standard.dto.StandardSnapshotInfo;
+import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.service.EnumDictService;
@@ -66,6 +68,7 @@ public class AiContextExportService {
     private final RuleConfigService ruleConfigService;
     private final FieldService fieldService;
     private final EnumDictService enumDictService;
+    private final StandardSnapshotService standardSnapshotService;
     private final SqlLintService sqlLintService;
     private final ObjectMapper objectMapper;
 
@@ -120,12 +123,17 @@ public class AiContextExportService {
      * 生成 field-catalog.json —— 字段目录 JSON
      */
     public String generateFieldCatalogJson(Long projectId) {
+        return generateFieldCatalogJson(projectId, currentSnapshot(projectId));
+    }
+
+    private String generateFieldCatalogJson(Long projectId, StandardSnapshotInfo snapshot) {
         try {
             ObjectMapper mapper = objectMapper.copy()
                     .enable(SerializationFeature.INDENT_OUTPUT);
 
             ObjectNode root = mapper.createObjectNode();
             root.put("projectId", projectId);
+            root.set("standard", standardNode(mapper, snapshot));
 
             // 字段目录
             ArrayNode fieldsNode = mapper.createArrayNode();
@@ -178,9 +186,14 @@ public class AiContextExportService {
      * 生成 rules.yaml —— 规则配置 YAML
      */
     public String generateRulesYaml(Long projectId) {
+        return generateRulesYaml(projectId, currentSnapshot(projectId));
+    }
+
+    private String generateRulesYaml(Long projectId, StandardSnapshotInfo snapshot) {
         StringBuilder yaml = new StringBuilder();
         yaml.append("# DataSpec 规则配置\n");
         yaml.append("# 此文件由 DataSpec 自动生成\n\n");
+        appendStandardYaml(yaml, snapshot);
 
         List<RuleConfig> configs = ruleConfigService.listByProject(projectId);
         appendStructuredNamingRules(yaml, configs);
@@ -206,6 +219,7 @@ public class AiContextExportService {
         String description = businessDescription == null || businessDescription.isBlank()
                 ? "请根据后续业务描述设计数据表。"
                 : businessDescription.trim();
+        StandardSnapshotInfo snapshot = currentSnapshot(projectId);
         return """
                 # DataSpec 建表 Prompt
 
@@ -241,8 +255,8 @@ public class AiContextExportService {
                 - 必须包含必含列；新增非标准字段时说明命名理由和建议是否加入标准字段库。
                 """.formatted(
                 description,
-                generateFieldCatalogJson(projectId),
-                generateRulesYaml(projectId),
+                generateFieldCatalogJson(projectId, snapshot),
+                generateRulesYaml(projectId, snapshot),
                 generateDatabaseRules(projectId)
         );
     }
@@ -252,6 +266,7 @@ public class AiContextExportService {
      */
     public String generateFixSqlPrompt(Long projectId, String sql) {
         LintResult lintResult = sqlLintService.lint(sql, projectId);
+        StandardSnapshotInfo snapshot = currentSnapshot(projectId);
         return """
                 # DataSpec SQL 修正 Prompt
 
@@ -298,8 +313,8 @@ public class AiContextExportService {
                 lintResult.getWarningCount(),
                 lintResult.getSuggestionCount(),
                 writePrettyJson(lintResult.getIssues()),
-                generateFieldCatalogJson(projectId),
-                generateRulesYaml(projectId)
+                generateFieldCatalogJson(projectId, snapshot),
+                generateRulesYaml(projectId, snapshot)
         );
     }
 
@@ -421,12 +436,13 @@ public class AiContextExportService {
     public byte[] generateAiContextPackage(Long projectId) {
         try (ByteArrayOutputStream output = new ByteArrayOutputStream();
              ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
+            StandardSnapshotInfo snapshot = currentSnapshot(projectId);
             addTextEntry(zip, ".dataspec/DATABASE_RULES.md", generateDatabaseRules(projectId));
-            addTextEntry(zip, ".dataspec/field-catalog.json", generateFieldCatalogJson(projectId));
+            addTextEntry(zip, ".dataspec/field-catalog.json", generateFieldCatalogJson(projectId, snapshot));
             addTextEntry(zip, ".dataspec/field-catalog.schema.json", generateFieldCatalogSchemaJson());
-            addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId));
+            addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId, snapshot));
             addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId));
-            addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(projectId));
+            addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(projectId, snapshot));
             addTextEntry(zip, ".dataspec/prompts.md", generatePromptsMarkdown());
             addTextEntry(zip, ".dataspec/examples/good.sql", loadExampleSql(
                     "../examples/good-example.sql",
@@ -446,12 +462,13 @@ public class AiContextExportService {
         }
     }
 
-    private String generateManifestJson(Long projectId) {
+    private String generateManifestJson(Long projectId, StandardSnapshotInfo snapshot) {
         try {
             ObjectNode root = objectMapper.createObjectNode();
             root.put("schemaVersion", DATASPEC_CONTEXT_SCHEMA_VERSION);
             root.put("kind", "dataspec-ai-context");
             root.put("projectId", projectId);
+            root.set("standard", standardNode(objectMapper, snapshot));
             root.put("generatedAt", Instant.now().toString());
 
             ArrayNode files = root.putArray("files");
@@ -484,6 +501,7 @@ public class AiContextExportService {
                 ## 文件约定
 
                 - `.dataspec/manifest.json`：上下文包元数据，包含 schemaVersion、projectId、生成时间、文件清单和推荐命令。
+                - `.dataspec/manifest.json` 中的 `standard`：当前标准快照版本和 hash；`unversioned` 表示尚未创建快照。
                 - `.dataspec/DATABASE_RULES.md`：数据库命名、类型、注释和公共字段规则。
                 - `.dataspec/field-catalog.json`：标准字段目录，包含字段名、类型、别名、敏感标记、状态、代码集和示例值。
                 - `.dataspec/field-catalog.schema.json`：字段目录 JSON Schema。
@@ -530,6 +548,18 @@ public class AiContextExportService {
                   "required": ["projectId", "fields", "enums"],
                   "properties": {
                     "projectId": { "type": "integer" },
+                    "standard": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["specVersion", "versioned"],
+                      "properties": {
+                        "snapshotId": { "type": "integer" },
+                        "specVersion": { "type": "string" },
+                        "specHash": { "type": "string" },
+                        "name": { "type": "string" },
+                        "versioned": { "type": "boolean" }
+                      }
+                    },
                     "fields": {
                       "type": "array",
                       "items": {
@@ -657,6 +687,7 @@ public class AiContextExportService {
                 - `.dataspec/rules.yaml`
 
                 工作要求:
+                - 先检查 `.dataspec/manifest.json` 的 `standard.specVersion` 和 `standard.specHash`，在输出说明中标明使用的标准版本。
                 - 优先使用 `.dataspec/field-catalog.json` 中已有标准字段。
                 - 新增表必须符合 `.dataspec/DATABASE_RULES.md` 的命名、类型、注释和公共字段规则。
                 - 生成 SQL 时参考 `.dataspec/examples/good.sql`，避免 `.dataspec/examples/bad.sql` 中的反例。
@@ -711,5 +742,37 @@ public class AiContextExportService {
                     status int NOT NULL
                 );
                 """;
+    }
+
+    private StandardSnapshotInfo currentSnapshot(Long projectId) {
+        return standardSnapshotService.getCurrentSnapshot(projectId);
+    }
+
+    private ObjectNode standardNode(ObjectMapper mapper, StandardSnapshotInfo snapshot) {
+        ObjectNode node = mapper.createObjectNode();
+        if (snapshot.snapshotId() != null) {
+            node.put("snapshotId", snapshot.snapshotId());
+        }
+        node.put("specVersion", snapshot.specVersion());
+        if (snapshot.specHash() != null) {
+            node.put("specHash", snapshot.specHash());
+        }
+        if (snapshot.name() != null) {
+            node.put("name", snapshot.name());
+        }
+        node.put("versioned", snapshot.versioned());
+        return node;
+    }
+
+    private void appendStandardYaml(StringBuilder yaml, StandardSnapshotInfo snapshot) {
+        yaml.append("standard:\n");
+        if (snapshot.snapshotId() != null) {
+            yaml.append("  snapshot_id: ").append(snapshot.snapshotId()).append("\n");
+        }
+        yaml.append("  spec_version: ").append(snapshot.specVersion()).append("\n");
+        if (snapshot.specHash() != null) {
+            yaml.append("  spec_hash: ").append(snapshot.specHash()).append("\n");
+        }
+        yaml.append("  versioned: ").append(snapshot.versioned()).append("\n\n");
     }
 }

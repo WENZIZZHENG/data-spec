@@ -83,6 +83,12 @@ const routes: RouteRecordRaw[] = [
     name: 'TokenManage',
     component: () => import('@/views/TokenManage.vue'),
     meta: { title: 'API Token 管理' }
+  },
+  {
+    path: '/standard-snapshots',
+    name: 'StandardSnapshot',
+    component: () => import('@/views/StandardSnapshot.vue'),
+    meta: { title: '标准快照' }
   }
 ]
 

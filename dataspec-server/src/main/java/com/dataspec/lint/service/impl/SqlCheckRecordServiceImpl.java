@@ -7,6 +7,8 @@ import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.lint.repository.SqlCheckRecordRepository;
 import com.dataspec.lint.service.SqlCheckRecordService;
+import com.dataspec.standard.dto.StandardSnapshotInfo;
+import com.dataspec.standard.service.StandardSnapshotService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ public class SqlCheckRecordServiceImpl implements SqlCheckRecordService {
 
     private final SqlCheckRecordRepository sqlCheckRecordRepository;
     private final ObjectMapper objectMapper;
+    private final StandardSnapshotService standardSnapshotService;
 
     @Override
     public SqlCheckRecord save(Long projectId, String originalSql, LintResult result) {
@@ -36,6 +39,7 @@ public class SqlCheckRecordServiceImpl implements SqlCheckRecordService {
         record.setWarningCount(result.getWarningCount());
         record.setSuggestionCount(result.getSuggestionCount());
         record.setIssuesJson(serializeIssues(result.getIssues()));
+        attachStandardSnapshot(projectId, record);
         sqlCheckRecordRepository.insert(record);
         return record;
     }
@@ -74,6 +78,22 @@ public class SqlCheckRecordServiceImpl implements SqlCheckRecordService {
         } catch (Exception e) {
             log.warn("检查记录 issues 序列化失败: {}", e.getMessage());
             return "[]";
+        }
+    }
+
+    private void attachStandardSnapshot(Long projectId, SqlCheckRecord record) {
+        if (projectId == null) {
+            return;
+        }
+        try {
+            StandardSnapshotInfo snapshot = standardSnapshotService.getCurrentSnapshot(projectId);
+            if (snapshot.versioned()) {
+                record.setStandardSnapshotId(snapshot.snapshotId());
+                record.setStandardSnapshotVersion(snapshot.specVersion());
+                record.setStandardSnapshotHash(snapshot.specHash());
+            }
+        } catch (Exception e) {
+            log.warn("检查记录标准快照引用失败: {}", e.getMessage());
         }
     }
 }

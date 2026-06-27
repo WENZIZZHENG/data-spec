@@ -4,6 +4,7 @@ import com.dataspec.common.exception.BizException;
 import com.dataspec.generator.model.DdlGenerateResult;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintResult;
+import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.template.entity.Template;
 import com.dataspec.template.entity.TemplateField;
 import com.dataspec.template.service.TemplateService;
@@ -32,6 +33,7 @@ public class DdlGeneratorService {
 
     private final TemplateService templateService;
     private final SqlLintService sqlLintService;
+    private final StandardSnapshotService standardSnapshotService;
 
     /**
      * 基于表模板生成 PostgreSQL CREATE TABLE DDL，并使用现有 lint 入口做自检。
@@ -62,7 +64,7 @@ public class DdlGeneratorService {
 
         String ddl = buildDdl(template, fields, normalizedTableName);
         LintResult lintResult = sqlLintService.lint(ddl, projectId);
-        return new DdlGenerateResult(ddl, lintResult);
+        return new DdlGenerateResult(ddl, lintResult, standardSnapshotService.getCurrentSnapshot(projectId));
     }
 
     private String buildDdl(Template template, List<TemplateField> fields, String tableName) {

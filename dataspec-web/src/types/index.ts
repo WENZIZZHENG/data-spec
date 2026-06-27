@@ -47,6 +47,23 @@ export interface ApiTokenCreateResp {
   token?: ApiTokenInfo
 }
 
+export interface StandardSnapshotInfo {
+  snapshotId?: number
+  projectId?: number
+  specVersion?: string
+  name?: string
+  description?: string
+  specHash?: string
+  createdAt?: string
+  versioned?: boolean
+}
+
+export interface StandardSnapshotCreateReq {
+  version?: string
+  name?: string
+  description?: string
+}
+
 export interface PageResult<T> {
   records?: T[]
   total?: number

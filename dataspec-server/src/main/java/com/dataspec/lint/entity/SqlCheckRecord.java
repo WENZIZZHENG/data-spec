@@ -41,6 +41,15 @@ public class SqlCheckRecord {
     /** 结构化校验问题 JSON(序列化后的 List<LintIssue>) */
     private String issuesJson;
 
+    /** 本次校验引用的标准快照 ID */
+    private Long standardSnapshotId;
+
+    /** 本次校验引用的标准版本 */
+    private String standardSnapshotVersion;
+
+    /** 本次校验引用的标准快照 hash */
+    private String standardSnapshotHash;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

@@ -5,6 +5,8 @@ import com.dataspec.generator.model.DdlGenerateResult;
 import com.dataspec.generator.service.DdlGeneratorService;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintResult;
+import com.dataspec.standard.dto.StandardSnapshotInfo;
+import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.template.entity.Template;
 import com.dataspec.template.entity.TemplateField;
 import com.dataspec.template.service.TemplateService;
@@ -25,8 +27,10 @@ class DdlGeneratorServiceTest {
     void generateFromTemplate_buildsPostgresDdlAndRunsLintSelfCheck() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService);
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, standardSnapshotService);
         LintResult lintResult = LintResult.of(List.of(), List.of());
+        when(standardSnapshotService.getCurrentSnapshot(1L)).thenReturn(snapshotInfo());
         when(templateService.getById(10L)).thenReturn(template(10L, 1L, "订单模板", "用户'订单表"));
         when(templateService.listFields(10L)).thenReturn(List.of(
                 field(2L, "user_id", "bigint", false, null, "用户ID", 20),
@@ -37,6 +41,8 @@ class DdlGeneratorServiceTest {
         DdlGenerateResult result = service.generateFromTemplate(1L, 10L, "user_order");
 
         assertSame(lintResult, result.lintResult());
+        assertEquals("v2026.06.24", result.standardSnapshot().specVersion());
+        assertEquals("hash123", result.standardSnapshot().specHash());
         String ddl = result.ddl();
         assertTrue(ddl.contains("CREATE TABLE user_order ("));
         assertTrue(ddl.contains("    order_no varchar(32) NOT NULL DEFAULT 'PENDING',"));
@@ -51,7 +57,7 @@ class DdlGeneratorServiceTest {
     void generateFromTemplate_rejectsTemplateFromAnotherProject() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService);
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class));
         when(templateService.getById(10L)).thenReturn(template(10L, 2L, "订单模板", "用户订单表"));
 
         assertThrows(BizException.class, () -> service.generateFromTemplate(1L, 10L, "user_order"));
@@ -64,7 +70,7 @@ class DdlGeneratorServiceTest {
     void generateFromTemplate_rejectsUnsafeIdentifierBeforeLoadingTemplate() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService);
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class));
 
         assertThrows(BizException.class, () -> service.generateFromTemplate(1L, 10L, "UserOrder"));
 
@@ -75,7 +81,9 @@ class DdlGeneratorServiceTest {
     void generateFromTemplate_normalizesAcceptedSqlFragmentsBeforeRendering() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService);
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, standardSnapshotService);
+        when(standardSnapshotService.getCurrentSnapshot(1L)).thenReturn(snapshotInfo());
         when(templateService.getById(10L)).thenReturn(template(10L, 1L, "订单模板", "用户订单表"));
         when(templateService.listFields(10L)).thenReturn(List.of(
                 field(1L, " order_no ", " varchar(32) ", false, " 'PENDING' ", "订单编号", 10)
@@ -94,7 +102,7 @@ class DdlGeneratorServiceTest {
     void generateFromTemplate_rejectsTemplateWithoutFields() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService);
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class));
         when(templateService.getById(10L)).thenReturn(template(10L, 1L, "订单模板", "用户订单表"));
         when(templateService.listFields(10L)).thenReturn(List.of());
 
@@ -107,7 +115,7 @@ class DdlGeneratorServiceTest {
     void generateFromTemplate_rejectsDataTypeThatCouldRenderExtraColumns() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService);
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class));
         when(templateService.getById(10L)).thenReturn(template(10L, 1L, "订单模板", "用户订单表"));
         when(templateService.listFields(10L)).thenReturn(List.of(
                 field(1L, "order_no", "bigint, hacked text", false, null, "订单编号", 10)
@@ -122,7 +130,7 @@ class DdlGeneratorServiceTest {
     void generateFromTemplate_rejectsDefaultValueThatCouldRenderExtraColumns() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService);
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class));
         when(templateService.getById(10L)).thenReturn(template(10L, 1L, "订单模板", "用户订单表"));
         when(templateService.listFields(10L)).thenReturn(List.of(
                 field(1L, "order_no", "varchar(32)", false, "'PENDING', hacked text", "订单编号", 10)
@@ -140,6 +148,10 @@ class DdlGeneratorServiceTest {
         template.setName(name);
         template.setDescription(description);
         return template;
+    }
+
+    private StandardSnapshotInfo snapshotInfo() {
+        return new StandardSnapshotInfo(6L, 1L, "v2026.06.24", "P6-1", null, "hash123", null, true);
     }
 
     private TemplateField field(Long id, String name, String dataType, boolean nullable,

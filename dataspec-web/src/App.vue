@@ -105,6 +105,10 @@
             <el-icon><Key /></el-icon>
             <span>API Token</span>
           </el-menu-item>
+          <el-menu-item index="/standard-snapshots">
+            <el-icon><Clock /></el-icon>
+            <span>标准快照</span>
+          </el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>

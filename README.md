@@ -21,6 +21,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 项目空间管理，创建项目时可导入内置 standards，并支持一键创建演示项目。
 - 标准字段库，支持别名、分类、代码集关联、敏感标记、状态和示例值。
 - 数据域、枚举字典、表模板和规则配置管理。
+- 标准快照，支持为当前项目字段、枚举和规则生成版本号、内容 hash 和可追溯 payload。
 - Excel `.xlsx` 模板下载、字段/代码集导出、导入预览和确认导入。
 - 标准变更日志，记录字段、代码集、规则的新增、修改、删除、启停 before/after 和操作者。
 
@@ -41,6 +42,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 ### AI 与自动化
 
 - AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、prompt、示例 SQL 和 `AGENTS.md.fragment`。
+- AI Context manifest、字段目录和规则文件携带标准快照版本与 hash；未创建快照时标记为 `unversioned`。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - 字段推荐 API/CLI/MCP。
 - DDL 生成 API/CLI/MCP。
@@ -105,6 +107,22 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1" -o d
 ```
 
 解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前读取字段标准和规则。
+
+导出包的 `.dataspec/manifest.json`、`.dataspec/field-catalog.json` 和 `.dataspec/rules.yaml` 会包含 `specVersion` / `specHash` 元数据。若项目尚未创建标准快照，版本显示为 `unversioned`，不阻断导出；创建快照后，后续 SQL 检查记录和 DDL 生成结果会记录当前快照 ID、版本和 hash。
+
+## 标准快照
+
+前端“系统设置 / 标准快照”提供项目级快照入口。创建快照时，DataSpec 会把当前项目字段、枚举和规则生成确定性 JSON payload，并计算 SHA-256 hash；同一份标准内容会得到稳定 hash，方便 AI Context、SQL 检查记录和 DDL 生成结果追溯当时使用的标准版本。
+
+后端 API：
+
+```bash
+curl -X POST "http://localhost:8090/api/projects/1/standard-snapshots" \
+  -H "Content-Type: application/json" \
+  -d '{"version":"v2026.06.24","name":"AI Context 可复现基线"}'
+```
+
+第一版不做审批、发布流或按历史快照完整回放；快照 payload 已保存，为后续复现和回放能力打基础。
 
 ## 标准字段模型
 
@@ -306,6 +324,7 @@ data-spec/
 │       ├── generator/        # Markdown 数据字典与 DDL 生成
 │       ├── importexport/     # 导入导出
 │       ├── changelog/        # 标准变更日志
+│       ├── standard/         # 标准版本快照
 │       ├── reverseimport/    # SQL 反向导入
 │       └── security/         # API Token 认证与管理
 ├── dataspec-web/             # Vue 3 前端
@@ -335,6 +354,7 @@ data-spec/
 | aicontext | /api/ai-context | AI 规则导出 |
 | importexport | /api/import-export | 字段导入导出 |
 | changelog | /api/change-logs | 标准变更日志 |
+| standard-snapshots | /api/projects/{projectId}/standard-snapshots | 标准版本快照 |
 | reverse-import | /api/reverse-import | SQL 与数据库直连反向导入 |
 
 ## 规则引擎
@@ -359,6 +379,7 @@ data-spec/
 - [x] 项目空间、顶部当前项目联动和内置 standards 初始化
 - [x] 演示项目与首次使用入口，串联 DDL 生成、SQL 校验和 AI Context 导出
 - [x] 标准字段、数据域、枚举字典、表模板、规则配置 CRUD 与常见规则结构化参数表单
+- [x] 标准快照、内容 hash、AI Context 版本标识、SQL 检查记录和 DDL 生成结果快照引用
 - [x] 个人版字段模型：别名、分类、代码集、敏感标记、状态、示例值
 - [x] 结构化命名规则导出和 `field_suffix_type` lint 规则
 - [x] SQL 粘贴校验、结构化 issue、修复建议和 `fixedSql`

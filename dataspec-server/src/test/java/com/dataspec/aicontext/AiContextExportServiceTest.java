@@ -10,6 +10,8 @@ import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.rules.TableNameSnakeCaseRule;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.rule.service.RuleConfigService;
+import com.dataspec.standard.dto.StandardSnapshotInfo;
+import com.dataspec.standard.service.StandardSnapshotService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -52,6 +54,8 @@ class AiContextExportServiceTest {
         assertTrue(entries.get(".dataspec/DATABASE_RULES.md").contains("table_naming_snake_case"));
         assertTrue(entries.get(".dataspec/field-catalog.json").contains("mobile_no"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("naming:"));
+        assertTrue(entries.get(".dataspec/rules.yaml").contains("spec_version: v2026.06.24"));
+        assertTrue(entries.get(".dataspec/rules.yaml").contains("spec_hash: hash123"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("required_columns:"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("suffix_types:"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("prefix_types:"));
@@ -68,11 +72,15 @@ class AiContextExportServiceTest {
         var manifest = new ObjectMapper().readTree(entries.get(".dataspec/manifest.json"));
         assertEquals(1, manifest.path("schemaVersion").asInt());
         assertEquals(PROJECT_ID.longValue(), manifest.path("projectId").asLong());
+        assertEquals("v2026.06.24", manifest.path("standard").path("specVersion").asText());
+        assertEquals("hash123", manifest.path("standard").path("specHash").asText());
         assertFalse(manifest.path("generatedAt").asText().isBlank());
         assertTrue(manifest.path("files").isArray());
         assertTrue(manifest.path("commands").path("lint").asText().contains("--project 1"));
 
         var catalog = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.json"));
+        assertEquals("v2026.06.24", catalog.path("standard").path("specVersion").asText());
+        assertEquals("hash123", catalog.path("standard").path("specHash").asText());
         var field = catalog.path("fields").get(0);
         assertEquals("phone", field.path("aliases").get(0).asText());
         assertEquals("mobile", field.path("aliases").get(1).asText());
@@ -84,6 +92,7 @@ class AiContextExportServiceTest {
 
         var schema = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.schema.json"));
         assertTrue(schema.path("properties").has("projectId"));
+        assertTrue(schema.path("properties").has("standard"));
         assertTrue(schema.path("properties").has("fields"));
         assertTrue(schema.path("properties").has("enums"));
         var fieldProperties = schema.path("properties").path("fields").path("items").path("properties");
@@ -92,6 +101,23 @@ class AiContextExportServiceTest {
         assertTrue(fieldProperties.has("status"));
         assertTrue(fieldProperties.has("codeSetId"));
         assertTrue(fieldProperties.has("example"));
+    }
+
+    @Test
+    void generateAiContextPackage_usesOneSnapshotAcrossAllVersionedFiles() throws Exception {
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(
+                snapshotInfo("v1", "hash1"),
+                snapshotInfo("v2", "hash2"),
+                snapshotInfo("v3", "hash3"));
+        AiContextExportService service = createService(standardSnapshotService);
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(PROJECT_ID));
+
+        var mapper = new ObjectMapper();
+        assertEquals("v1", mapper.readTree(entries.get(".dataspec/field-catalog.json")).path("standard").path("specVersion").asText());
+        assertEquals("v1", mapper.readTree(entries.get(".dataspec/manifest.json")).path("standard").path("specVersion").asText());
+        assertTrue(entries.get(".dataspec/rules.yaml").contains("spec_version: v1"));
     }
 
     @Test
@@ -121,6 +147,12 @@ class AiContextExportServiceTest {
     }
 
     private AiContextExportService createService() {
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
+        return createService(standardSnapshotService);
+    }
+
+    private AiContextExportService createService(StandardSnapshotService standardSnapshotService) {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         FieldService fieldService = mock(FieldService.class);
         EnumDictService enumDictService = mock(EnumDictService.class);
@@ -144,9 +176,22 @@ class AiContextExportServiceTest {
                 ruleConfigService,
                 fieldService,
                 enumDictService,
+                standardSnapshotService,
                 sqlLintService,
                 objectMapper
         );
+    }
+
+    private StandardSnapshotInfo snapshotInfo(String version, String hash) {
+        return new StandardSnapshotInfo(
+                6L,
+                PROJECT_ID,
+                version,
+                "P6-1",
+                null,
+                hash,
+                null,
+                true);
     }
 
     private Field sampleField() {

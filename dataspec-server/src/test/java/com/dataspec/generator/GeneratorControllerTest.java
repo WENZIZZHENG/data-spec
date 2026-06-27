@@ -6,6 +6,7 @@ import com.dataspec.generator.service.DdlGeneratorService;
 import com.dataspec.generator.service.HtmlDataDictionaryService;
 import com.dataspec.generator.service.MarkdownGeneratorService;
 import com.dataspec.lint.model.LintResult;
+import com.dataspec.standard.dto.StandardSnapshotInfo;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -30,7 +31,8 @@ class GeneratorControllerTest {
                 ddlGeneratorService);
         DdlGenerateResult result = new DdlGenerateResult(
                 "CREATE TABLE user_order (id bigserial);",
-                LintResult.of(List.of(), List.of())
+                LintResult.of(List.of(), List.of()),
+                StandardSnapshotInfo.unversioned(1L)
         );
         when(ddlGeneratorService.generateFromTemplate(1L, 10L, "user_order")).thenReturn(result);
 
