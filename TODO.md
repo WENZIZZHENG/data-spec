@@ -6,7 +6,8 @@
 
 1. P6-18 AI 可读错误码与下一步建议已完成第一版，下一步推进 P6-19 字段标准检索 API 与语义查询增强。
 2. P6 后续继续补前端回归门禁、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板、多项目标准复用包、AI 写入安全策略、规则调试器、元数据增量缓存、CLI/MCP 兼容握手、前端类型化 API Client、标准演练沙箱、MCP/CLI 工具契约验收、业务对象关系图、派生字段规则、fixedSql 文件补丁、标准问答入口、规则模板 diff 包、浏览器级 E2E、真实数据库集成测试、文档状态一致性、可访问性、本地数据清理和前端性能体验。
-3. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+3. 新增优化建议已补为 P6-87 到 P6-92：数据库迁移计划、业务代码字段引用、MCP prompt/resource、AI 上下文预算、本地 pre-commit/IDE 检查和标准样例生成。
+4. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -861,6 +862,60 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 落地产物：新增前端 performance markers 和慢页面提示；对字段库、反向导入 preview/compare、覆盖率报告和 AI 回放记录输出 renderMs、rowCount、requestMs、slowReason 和 recommendedAction；必要处引入分页或虚拟列表。
 - 验收标准：大字段库或大 metadata 结果下页面给出明确加载/慢查询提示；性能摘要可复制给 AI 分析；前端构建和 smoke 测试覆盖关键状态文案。
 - 边界：不引入复杂 APM，不上传用户数据，不为了性能一次性重写所有表格组件。
+
+### P6-87：数据库 Schema 变更计划与迁移脚本预览
+- 状态：待办。
+- 为什么做：DataSpec 已能生成 DDL、检查 SQL 和反向导入现有数据库，但真实落地还需要回答“从当前数据库变到目标标准要改哪些表/字段、风险是什么、怎么回退”；AI 不能只输出一段不可审计的 ALTER SQL。
+- 已有基础：已有表模板、DDL 生成、数据库直连 metadata、二次比对、标准快照、fixedSql diff、备份迁移包待办和 Atlas/Terraform 风格 plan/apply 参考。
+- 缺口：缺少以 DataSpec 标准和当前数据库 metadata 为输入的 schema change plan；不能稳定输出 add/alter/rename/drop 的风险、依赖、dry-run SQL、回滚提示和人工确认点。
+- 落地产物：新增只读 schema plan API/CLI/前端预览；输出 currentSchemaHash、targetSpecHash、changeSet、riskLevel、migrationSql、rollbackHint、manualChecks、blockedReasons 和 nextActions；默认只生成预览，不执行数据库写入。
+- 验收标准：连接数据库后可生成“当前库 -> DataSpec 标准”的变更计划；高风险 drop/rename 默认标红且不自动执行；AI 可读取 JSON 计划并决定补标准、生成迁移文件或停止等待人工确认。
+- 边界：第一版不直接执行迁移，不替代 Flyway/Liquibase/Atlas 等迁移工具，不自动推断所有字段重命名；只服务个人/小团队的迁移草案和风险说明。
+
+### P6-88：业务代码字段引用索引与重命名风险分析
+- 状态：待办。
+- 为什么做：修改字段名、废弃字段或合并标准前，用户和 AI 需要知道业务仓库里哪些 SQL、迁移文件、ORM 模型、报表或配置正在引用该字段，否则标准变更容易造成代码与数据库脱节。
+- 已有基础：已有 `.dataspec/config.json` 默认扫描路径、CLI 批量 lint、PR review、字段影响分析、变更感知扫描、fixedSql 文件补丁和业务仓库初始化。
+- 缺口：字段影响分析主要聚焦 DataSpec 内部对象，缺少对业务仓库文件的字段引用索引、引用类型、置信度、文件位置和重命名风险。
+- 落地产物：新增 `dataspec index-refs` 或等价 API/CLI；扫描 SQL、DDL、常见 ORM/配置文件，输出 fieldName、referenceKind、file、line、confidence、suggestedAction 和 renameRisk；前端字段影响弹窗可读取摘要。
+- 验收标准：给定一个标准字段，能列出业务仓库内主要引用位置；准备重命名或停用字段时能看到风险清单；扫描只读且遵守 defaultPaths/ignorePatterns。
+- 边界：不做完整代码智能平台，不解析所有语言 AST，不自动改业务代码；第一版优先覆盖 SQL、迁移文件和常见 schema/model 文件。
+
+### P6-89：MCP Prompt/Resource 一等化与 Agent 引导包
+- 状态：待办。
+- 为什么做：当前 MCP 重点是 tools/resources，但 AI agent 很多时候需要先拿到“该怎么问、先读什么、什么不能做”的 prompt 引导；如果这些只散落在 README 和 AGENTS 片段里，工具调用仍容易绕远。
+- 已有基础：已有 MCP server、AI Context package、workflow recipes、AI 能力清单、CLI/MCP 契约验收、AI 会话启动包和 `AGENTS.md.fragment`。
+- 缺口：缺少稳定的 MCP prompts/resource templates，把建表、SQL review、反向导入、字段检索、标准问答等常用任务封装成可枚举、可复用、可版本化的 agent 引导。
+- 落地产物：扩展 MCP 暴露 prompts 和更细的 resources；提供 `create_table_with_dataspec`、`review_sql_with_dataspec`、`reverse_import_standards`、`answer_field_standard_question` 等 prompt 模板，包含 requiredInputs、safeDefaults、toolSequence、stopConditions 和 evidenceRequirements。
+- 验收标准：MCP 客户端能枚举 DataSpec prompt/resource；AI 选择任务模板后能按推荐顺序读取标准、执行工具和返回证据；模板变更纳入 MCP/CLI 契约测试。
+- 边界：不绑定单一 IDE 或 agent 产品，不调用外部 LLM，不把 prompts 做成复杂审批流。
+
+### P6-90：AI 上下文预算评估与自动裁剪策略
+- 状态：待办。
+- 为什么做：字段标准、规则、模板、样例和历史记录越来越多后，AI Context 很容易过大；仅靠手动 scope/query/limit 不够，AI 需要知道不同预算下应该保留哪些标准、舍弃哪些上下文以及风险是什么。
+- 已有基础：已有 AI Context 按需裁剪、字段检索、标准快照、业务术语表、AI 会话启动包、上下文握手和 prompt 评测待办。
+- 缺口：缺少 token/context budget 估算、裁剪策略说明、召回质量指标和低预算降级提示；AI 也无法判断“当前包够不够完成这个任务”。
+- 落地产物：新增 context budget planner；输入任务类型、query、目标表/文件、预算上限，输出 selectedArtifacts、estimatedTokens、droppedArtifacts、qualityRisk、fallbackSteps 和 recommendedNextActions；前端 AI Context 页面展示预算预估。
+- 验收标准：同一项目可生成完整包、标准包和极简包；AI 能解释为什么保留某些字段/规则并标出缺失风险；裁剪策略有 fixture 或快照测试防漂移。
+- 边界：不依赖特定模型的精确 tokenizer，不上传标准内容到外部服务，不保证一次裁剪覆盖所有复杂任务。
+
+### P6-91：本地 pre-commit 与 IDE 保存前 SQL 标准检查
+- 状态：待办。
+- 为什么做：CI/PR review 发现问题已经偏晚；个人使用时更希望在本地提交前或保存 SQL/迁移文件时就看到 DataSpec 诊断，让 AI 和开发者少走返工。
+- 已有基础：已有 CLI `lint-files`、PR review、`.dataspec/config.json`、GitHub Action 示例、质量门禁、changed-file 扫描和 fixedSql 文件补丁待办。
+- 缺口：缺少官方 pre-commit hook、轻量 IDE/编辑器任务配置示例和本地失败输出规范；不同业务仓库要自己拼命令。
+- 落地产物：新增 `dataspec install-hook` 或模板文档；生成 pre-commit 配置、VS Code task/Problem Matcher 示例和 `lint-changed` 快捷命令；输出 file/line/rule/severity/suggestion 便于 IDE 跳转。
+- 验收标准：业务仓库执行初始化后可一键启用本地 SQL 标准检查；提交前能只检查变更 SQL/DDL 文件；失败输出不泄漏 token/password，且可被 AI 读取继续修复。
+- 边界：不强制所有项目安装 hook，不绕过用户本地 Git 配置，不替代 CI/GitHub Review。
+
+### P6-92：标准样例自动生成与合成业务场景库
+- 状态：待办。
+- 为什么做：规则、字段推荐、DDL 生成和 Prompt 评测都依赖高质量样例；手写少量 good/bad SQL 容易覆盖不足，AI 也缺少“典型业务场景下标准如何使用”的可复用素材。
+- 已有基础：已有演示项目、golden fixtures、字段使用示例与反例库、领域 Starter Kit、Prompt 评测、规则模板库和标准变更演练沙箱待办。
+- 缺口：缺少从标准字段、模板、代码集和业务对象关系自动生成 SQL/DDL/Prompt 样例的能力，也缺少按场景组织的 synthetic cases。
+- 落地产物：新增样例生成器；支持用户、订单、支付、审计等场景，生成 good SQL、bad SQL、DDL preview 输入、字段推荐问题、标准问答案例和预期诊断；样例带 specHash 与生成参数。
+- 验收标准：新规则或字段变更后可快速生成一组覆盖样例；样例可接入现有后端 fixture、前端 smoke 或 Prompt 评测；生成内容不包含真实业务数据行。
+- 边界：不替代人工维护的高价值真实样例，不引入外部 LLM 自动造数据，不生成可直接写入生产库的数据。
 
 ## 参考项目索引
 
