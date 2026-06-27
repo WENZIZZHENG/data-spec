@@ -5,7 +5,7 @@
 ## 下一步顺序
 
 1. P6-17 前端关键流程冒烟与回归门禁已完成第一版，下一步推进 P6-18 AI 可读错误码与下一步建议标准化。
-2. P6 后续继续补前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板、多项目标准复用包、AI 写入安全策略、规则调试器、元数据增量缓存、CLI/MCP 兼容握手、前端类型化 API Client、标准演练沙箱、MCP/CLI 工具契约验收、业务对象关系图、派生字段规则、fixedSql 文件补丁、标准问答入口和规则模板 diff 包。
+2. P6 后续继续补前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板、多项目标准复用包、AI 写入安全策略、规则调试器、元数据增量缓存、CLI/MCP 兼容握手、前端类型化 API Client、标准演练沙箱、MCP/CLI 工具契约验收、业务对象关系图、派生字段规则、fixedSql 文件补丁、标准问答入口、规则模板 diff 包、浏览器级 E2E、真实数据库集成测试、文档状态一致性、可访问性、本地数据清理和前端性能体验。
 3. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
@@ -809,6 +809,60 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：调整一条规则参数或模板后，能看到命中样例和生成结果差异；AI 可读取 diff 包决定是否需要补测试或更新 Context；回滚说明不依赖人工记忆。
 - 边界：不做审批流，不替代 OpenSpec proposal，不要求所有历史模板补齐 diff；优先覆盖新变更。
 
+### P6-81：浏览器级 E2E 验收与失败截图
+- 状态：待办。
+- 为什么做：P6-17 已有源码级冒烟门禁，但它不启动真实浏览器，也无法发现路由渲染、Monaco、Element Plus 弹层、响应式布局和真实用户操作中的问题。
+- 已有基础：已有前端源码级冒烟测试、演示项目初始化、README 验证命令、SQL 校验、反向导入、字段库、AI Context 和覆盖率报告页面。
+- 缺口：缺少 Playwright 等浏览器级用例；关键流程失败时没有截图、trace 或复现步骤，AI agent 很难判断是接口、页面还是浏览器交互问题。
+- 落地产物：新增浏览器级 E2E 脚本和测试夹具；覆盖创建/选择项目、SQL 校验 fixedSql、检查记录详情、数据库直连预览、字段库筛选和 AI Context 预览；失败时保存截图、trace 和当前 URL。
+- 验收标准：一条命令可在本地跑核心浏览器流程；破坏主导航、项目选择、关键按钮或结果渲染时测试失败并给出可复现证据；README 说明与源码级 smoke 的边界差异。
+- 边界：不追求全量页面覆盖，不做像素级视觉回归，不要求普通 `pnpm test` 默认依赖浏览器；第一版可作为可选验证入口。
+
+### P6-82：真实数据库 Testcontainers 集成测试矩阵
+- 状态：待办。
+- 为什么做：数据库直连反向导入、覆盖率和二次比对已经是核心能力，但当前主要依赖 fixture 和 H2/单测；真实 PostgreSQL/MySQL 元数据、COMMENT、schema、大小写和权限行为仍可能漂移。
+- 已有基础：已有 Flyway、PostgreSQL/MySQL 直连 metadata、反向导入预览、数据库覆盖率、二次比对、metadata fixture 和多方言兼容矩阵待办。
+- 缺口：缺少基于真实数据库容器的集成测试；无法稳定验证 COMMENT ON、MySQL 注释、schema/table 过滤、索引元数据、只读权限和大小写边界。
+- 落地产物：新增 Testcontainers 测试 profile；启动 PostgreSQL/MySQL 容器，加载最小 schema fixture，验证表列表、metadata preview、compare、coverage 和连接诊断的关键字段。
+- 验收标准：开发者可通过专门 profile 运行真实数据库集成测试；默认 `mvn test` 不强制依赖 Docker；失败信息能定位具体方言和 metadata 字段。
+- 边界：不替代数据库供应商完整兼容认证，不把 Docker 作为所有开发环境的必需前提，不扫描业务数据行。
+
+### P6-83：README/TODO/OpenSpec 状态一致性检查
+- 状态：待办。
+- 为什么做：项目能力迭代很快，README、TODO、OpenSpec active/archive 和实际代码容易出现“文档说已完成但入口不可用”或“待办仍写缺口但功能已实现”的漂移。
+- 已有基础：已有 README 功能清单、TODO 状态行、OpenSpec change、OpenSpec validate、AI 输出契约测试和完成项归档习惯。
+- 缺口：缺少自动检查文档状态一致性的脚本；AI agent 接手时仍需要人工比对多个入口，容易基于过期上下文继续开发。
+- 落地产物：新增 docs/status-check 脚本或等价验证入口；扫描 TODO 状态、README 已完成功能清单、OpenSpec active/archive、关键 API/页面入口和参考链接，输出 mismatch、missingEvidence 和 suggestedFix。
+- 验收标准：文档改动后能一条命令检查明显状态漂移；新增完成项时会提示补 README/TODO/OpenSpec 入口；检查结果不依赖外部网络。
+- 边界：不做自然语言完美理解，不强制阻断所有文档变更；第一版只覆盖编号、状态、标题、链接和关键入口的确定性规则。
+
+### P6-84：前端可访问性与键盘操作基线
+- 状态：待办。
+- 为什么做：DataSpec 会成为日常工作台，字段库、反向导入、SQL 校验和命令面板都需要键盘可操作、焦点清晰、表单标签明确；这也会让 AI/browser automation 更稳定。
+- 已有基础：已有 Vue 3、Element Plus、Monaco、前端关键流程 smoke、命令面板待办、统一前端状态待办和浏览器级 E2E 待办。
+- 缺口：当前页面主要关注功能可用，缺少焦点顺序、aria label、表格操作按钮名称、弹窗焦点恢复、键盘快捷入口和颜色对比度基线。
+- 落地产物：为核心页面建立可访问性检查清单和少量自动化规则；补齐关键按钮/输入的可读名称、焦点状态、弹窗关闭/恢复逻辑和键盘路径；把检查接入可选前端验证。
+- 验收标准：不用鼠标也能完成项目切换、SQL 校验、查看记录、字段库筛选和反向导入预览的核心路径；关键按钮对自动化工具有稳定名称；可访问性检查不出现高危问题。
+- 边界：不一次性改完整视觉系统，不承诺 WCAG 全量认证；第一版聚焦高频工作流和自动化稳定性。
+
+### P6-85：本地数据清理、重置与演示项目重建
+- 状态：待办。
+- 为什么做：个人使用和 AI 开发过程中会频繁生成项目、字段、检查记录、AI 回放和导入批次；没有安全的清理/重置入口时，本地库会越来越乱，复现问题也更困难。
+- 已有基础：已有演示项目初始化、Flyway、标准快照、SQL 检查记录、AI 回放、反向导入来源批次、API Token 和本地启动包待办。
+- 缺口：缺少项目级清理、演示项目重建、过期记录清理和 dry-run 摘要；开发者只能手动删库或写 SQL，容易误删 token、连接预设或重要标准。
+- 落地产物：新增 CLI/API 或前端设置入口；支持 dry-run 展示将删除的 SQL 检查记录、AI jobs、导入批次、快照和演示数据；支持重建演示项目，默认保留 token 和非敏感连接预设。
+- 验收标准：用户可以安全重置演示项目或清理旧记录；所有破坏性操作先输出 dry-run 摘要并要求显式确认；README 说明不会删除源数据库数据。
+- 边界：不做企业级数据保留策略，不自动清理用户标准字段，不绕过备份/恢复待办。
+
+### P6-86：前端性能体验指标与慢页面提示
+- 状态：待办。
+- 为什么做：后端已有大字段库性能基线，但前端字段库、反向导入、覆盖率、AI 回放和 Monaco 页面在数据量变大后仍可能卡顿；用户和 AI automation 需要知道页面是在加载、计算还是异常。
+- 已有基础：已有性能基线、字段分页、SQL 检查记录分页、前端 smoke、统一请求状态、元数据增量缓存和大库扫描计划待办。
+- 缺口：缺少前端渲染耗时、列表数量、虚拟滚动阈值、慢请求提示和长任务定位；页面卡顿时没有可复制的诊断摘要。
+- 落地产物：新增前端 performance markers 和慢页面提示；对字段库、反向导入 preview/compare、覆盖率报告和 AI 回放记录输出 renderMs、rowCount、requestMs、slowReason 和 recommendedAction；必要处引入分页或虚拟列表。
+- 验收标准：大字段库或大 metadata 结果下页面给出明确加载/慢查询提示；性能摘要可复制给 AI 分析；前端构建和 smoke 测试覆盖关键状态文案。
+- 边界：不引入复杂 APM，不上传用户数据，不为了性能一次性重写所有表格组件。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -835,7 +889,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`Redocly/redocly-cli`](https://github.com/Redocly/redocly-cli)：OpenAPI lint、bundle 和契约治理参考。
 - [`Schemathesis/schemathesis`](https://github.com/schemathesis/schemathesis)：基于 OpenAPI 的契约测试和接口行为回归参考。
 - [`sqlmesh/sqlmesh`](https://github.com/TobikoData/sqlmesh)：数据模型依赖、plan/apply 和变更影响分析参考。
+- [`microsoft/playwright`](https://github.com/microsoft/playwright)：浏览器级 E2E、trace、截图和稳定选择器参考。
+- [`testcontainers/testcontainers-java`](https://github.com/testcontainers/testcontainers-java)：Java 集成测试中启动真实 PostgreSQL/MySQL 容器的参考。
 - [`TanStack/query`](https://github.com/TanStack/query)：前端 server state、请求缓存、重试和错误状态收口参考。
+- [`dequelabs/axe-core`](https://github.com/dequelabs/axe-core)：前端可访问性自动检查规则参考。
+- [`GoogleChrome/lighthouse`](https://github.com/GoogleChrome/lighthouse)：页面性能、可访问性和最佳实践审计参考。
 - [`gitleaks/gitleaks`](https://github.com/gitleaks/gitleaks)：敏感信息检测、日志脱敏和 secret 防泄漏参考。
 - [Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)：AI 应用接入 resources、prompts、tools 的协议基础。
 - [`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)：MCP server 参考实现集合。
