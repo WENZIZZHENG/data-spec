@@ -447,9 +447,12 @@ pnpm check:api -- --source ./api-docs.json
 # CLI/MCP 单元测试
 cd ..
 node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs
+
+# OpenSpec 主规格与 active change 验证
+npx openspec validate --all
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、筛选与批量维护、DDL 生成、AI Context、覆盖率报告和 AI 回放的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、筛选与批量维护、DDL 生成、AI Context、覆盖率报告和 AI 回放的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
 
 ## 性能基线
 
@@ -491,7 +494,7 @@ data-spec/
 ├── dataspec-web/             # Vue 3 前端
 ├── standards/                # 内置标准 YAML/JSON
 ├── tools/                    # CLI 与 MCP adapter
-├── openspec/                 # OpenSpec 变更记录
+├── openspec/                 # OpenSpec 主规格、active change 与 archive 历史记录
 └── examples/                 # 示例 SQL
 ```
 
