@@ -4,8 +4,8 @@
 
 ## 下一步顺序
 
-1. P6-4 业务仓库 `dataspec init` 初始化向导已完成第一版，下一步推进 P6-5 标准字段质量评分与修复建议。
-2. P6 后续继续补标准质量评分、轻量影响分析、AI contract fixtures、按需 AI Context、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议和 TODO 到 OpenSpec 交接。
+1. P6-5 标准字段质量评分与修复建议已完成第一版，下一步推进 P6-6 轻量字段影响分析。
+2. P6 后续继续补轻量影响分析、AI contract fixtures、按需 AI Context、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描和健康趋势。
 3. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
@@ -17,7 +17,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，后续再提升质量评分、影响分析、AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索、OpenSpec 收口、AI 使用画像、标准契约版本和执行证据包。
+- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，后续再提升影响分析、AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索、OpenSpec 收口、AI 使用画像、标准契约版本和执行证据包。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -132,12 +132,12 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不修改业务代码，不自动提交业务仓库，不把明文 token 写入可提交文件。
 
 ### P6-5：标准字段质量评分与修复建议
-- 状态：待办。
+- 状态：已完成第一版，已新增字段质量评分后端 API 和前端“基础数据 / 字段质量”页面。
 - 为什么做：字段标准越多，越需要识别哪些字段缺少别名、示例、枚举、敏感标识或注释，否则 AI 会得到看似完整但语义不足的字段目录。
 - 已有基础：字段模型已有别名、标签、状态、敏感标识、示例值、代码集关联、变更日志和字段推荐原因。
-- 缺口：缺少字段健康度评分、低质量字段筛选、推荐补全动作和批量修复入口。
-- 落地产物：新增标准质量检查服务和前端质量视图；按字段输出缺注释、缺别名、缺示例、疑似敏感未标记、枚举未关联、废弃字段仍推荐等问题；提供修复建议和跳转编辑。
-- 验收标准：字段库能按质量分排序；低质量字段可一键定位编辑；质量检查结果能被 CLI/MCP 或 AI Context 消费。
+- 已完成能力：实时生成项目级质量报告，输出 total/average/issue count、字段 score、level、issues 和 suggestions；检查缺注释、缺别名、缺示例值、缺分类/标签、疑似敏感未标记、枚举/状态字段未关联代码集、废弃/停用字段缺替代说明；前端支持等级和 issue 筛选并跳转字段库编辑。
+- 后续增强：CLI/MCP 或 AI Context 消费质量报告、批量修复入口和质量趋势统计分别留给 P6-11、P6-15、P6-27 等后续任务。
+- 验收标准：字段库能按质量分排序；低质量字段可一键定位编辑；质量检查结果结构化返回，后续可被 CLI/MCP 或 AI Context 消费。
 - 边界：不自动改字段标准，不引入外部 LLM 自动补全，不做组织级质量 KPI。
 
 ### P6-6：轻量字段影响分析
@@ -518,6 +518,60 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：选择一个 P6 待办后，可快速生成符合项目格式的 OpenSpec 草稿；生成内容保留原待办边界和验收标准；OpenSpec validate 能通过基础格式检查。
 - 边界：不自动实现代码，不自动归档 change，不把模糊待办强行变成无需确认的需求。
 
+### P6-48：业务术语表与同义词词根库
+- 状态：待办。
+- 为什么做：字段别名散落在单个字段上后，AI 很难稳定理解“用户/账号/会员”“手机号/电话/mobile”“金额/费用/price”等项目级术语关系；需要一层轻量术语表来提升推荐、检索和 Context 裁剪质量。
+- 已有基础：字段已有 alias、category、tags、字段推荐原因、字段检索待办和 AI Context 导出。
+- 缺口：缺少项目级 glossary，把中文术语、英文词根、拼音缩写、禁用词、推荐 canonical 字段和适用范围统一管理。
+- 落地产物：新增术语表模型/API/前端维护入口；支持术语、同义词、英文词根、适用分组、禁用说明和示例字段；字段推荐、检索、AI Context 和 Prompt 可引用术语命中原因。
+- 验收标准：AI 查询“会员手机号”“订单费用”等自然语言时能稳定映射到对应标准字段集合；术语冲突可被检测并提示；导出的 Context 包含精简 glossary。
+- 边界：不做企业级本体/知识图谱，不引入向量数据库，不自动覆盖字段已有别名。
+
+### P6-49：自然语言需求到标准候选草案
+- 状态：待办。
+- 为什么做：用户和 AI 常从“我要建一个订单表/会员表/支付流水表”这类自然语言开始；系统应先把需求拆成可选标准字段、缺失候选和歧义点，再生成 DDL 或 Prompt。
+- 已有基础：已有字段推荐、字段检索待办、DDL 生成、AI Prompt、表模板和 AI Context。
+- 缺口：缺少面向自然语言需求的结构化草案入口；当前需要 AI 自己拼接检索、推荐、模板和 DDL 生成，容易漏字段或误选泛化字段。
+- 落地产物：新增需求草案 API/CLI/MCP 或前端入口，输入业务描述、目标表名和可选分组，输出 matchedFields、missingCandidates、ambiguousTerms、recommendedTemplate、nextActions 和可复制 Prompt。
+- 验收标准：输入一段建表需求后，系统能列出建议采用的标准字段、需要新增的候选字段和不确定问题；结果可继续进入 DDL 预览或标准候选 Inbox。
+- 边界：第一版不调用外部 LLM，不自动写入字段库，不承诺完整领域建模，只做确定性检索和模板化草案。
+
+### P6-50：AI 输出引用证据与 Explain Trace
+- 状态：待办。
+- 为什么做：AI 采用某个字段、规则或 fixedSql 修复时，用户需要知道依据来自哪个标准字段、规则、快照、术语或质量诊断；没有证据链时，AI 输出很难复盘和信任。
+- 已有基础：已有标准快照、字段推荐原因、SQL 检查记录、fixedSql、AI 回放、字段质量评分和执行证据包待办。
+- 缺口：推荐、lint、DDL、Prompt 和 Context 输出的 evidence 结构不统一，无法稳定追踪“这个建议为什么出现”。
+- 落地产物：定义轻量 explain trace 契约；核心输出附带 evidence 数组，包含 sourceType、sourceId、snapshotVersion、matchReason、confidence、ruleCode 和 docsRef；前端详情页展示证据来源。
+- 验收标准：AI 生成或修复结果中的关键字段和规则都有可读证据；回放记录能展示当时使用的标准版本和命中原因；契约有 golden 测试防漂移。
+- 边界：不引入完整分布式 tracing 平台，不记录业务数据行，不把 evidence 作为强审批依据。
+
+### P6-51：标准字段生命周期状态机
+- 状态：待办。
+- 为什么做：字段已有状态，但 AI 使用时更需要明确哪些字段是草稿、可用、废弃、停用，以及废弃字段应替换成什么；否则 AI 可能继续推荐历史字段。
+- 已有基础：字段模型已有 status、变更日志、标准快照、质量评分中的废弃说明检查和字段推荐。
+- 缺口：字段状态语义还不够统一，缺少结构化 replacementFieldId/replacementReason、状态流转校验和导出给 AI 的稳定说明。
+- 落地产物：定义轻量生命周期状态和流转规则；为废弃/停用字段增加结构化替代字段或替代说明；字段推荐、AI Context、DDL 生成和质量评分统一读取生命周期约束。
+- 验收标准：废弃字段不会被默认推荐给 AI；需要保留历史兼容时能说明原因和替代字段；字段状态变更进入变更日志和快照。
+- 边界：不做审批流，不做组织级发布治理，不阻止个人快速维护标准。
+
+### P6-52：业务仓库变更感知扫描与最小上下文
+- 状态：待办。
+- 为什么做：AI 在业务仓库中工作时，通常只需要处理本次 git diff 中的 SQL、迁移文件或模型文件；如果每次都扫描全仓和导出完整 Context，会浪费上下文并增加误报。
+- 已有基础：已有 `dataspec init`、`.dataspec/config.json` 默认路径、`doctor`、`lint-files`、`review-pr`、AI Context 导出和按需裁剪待办。
+- 缺口：CLI 还缺少基于 git diff/defaultPaths 的 changed-file 发现、只对变更文件 lint、并按变更内容导出最小 Context 的稳定入口。
+- 落地产物：新增 `dataspec changed`、`lint-changed` 或等价工作流；读取 `.dataspec/config.json`、git diff 和默认路径，输出变更 SQL/DDL 文件、推荐 Context scope、lint 摘要和下一步命令。
+- 验收标准：在业务仓库改动少量 SQL 文件后，AI 可一条命令拿到变更文件列表、对应 lint 结果和最小标准上下文；无 git 仓库或无变更时有可恢复提示。
+- 边界：不自动修改业务代码，不自动提交，不扫描未配置的大型目录。
+
+### P6-53：标准健康趋势与改进计划
+- 状态：待办。
+- 为什么做：字段质量、覆盖率、AI 使用反馈和规则误报都是持续改进信号；只看单次报告无法判断标准系统是否真的越来越好。
+- 已有基础：已有字段质量评分、覆盖率报告、AI 回放、检查记录、候选 Inbox、项目活动时间线和执行证据包待办。
+- 缺口：缺少按时间保存的健康快照、趋势对比、Top 改进项和 AI 可读的下一步维护计划。
+- 落地产物：新增标准健康快照和趋势视图；按项目记录质量均分、低质量字段数、覆盖率、未纳管 Top、规则误报、AI 推荐未命中和候选采纳率；生成可复制的改进计划摘要。
+- 验收标准：用户能看到本周/本月标准质量和覆盖率变化；AI 可读取 Top actions 并按优先级补字段、修别名或调整规则；趋势数据不包含业务数据行。
+- 边界：不做组织 KPI，不接外部 BI，不采集用户行为监控。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -538,6 +592,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`OpenAPITools/openapi-generator`](https://github.com/OpenAPITools/openapi-generator)：契约优先、代码生成和版本兼容策略参考。
 - [`backstage/backstage`](https://github.com/backstage/backstage)：项目模板、开发者入口和脚手架体验参考。
 - [`dbeaver/dbeaver`](https://github.com/dbeaver/dbeaver)：数据库连接配置、metadata 浏览和多方言体验参考。
+- [`reviewdog/reviewdog`](https://github.com/reviewdog/reviewdog)：基于 diff 的代码审查评论、诊断聚合和 PR 反馈参考。
+- [`pre-commit/pre-commit`](https://github.com/pre-commit/pre-commit)：本地变更钩子、按文件质量门禁和轻量开发工作流参考。
 - [Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)：AI 应用接入 resources、prompts、tools 的协议基础。
 - [`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)：MCP server 参考实现集合。
 - [`agents.md`](https://agents.md/)：面向 coding agent 的项目指令文件约定。

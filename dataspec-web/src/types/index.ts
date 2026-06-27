@@ -8,6 +8,49 @@ export type DemoProjectResult = Schemas['DemoProjectResult']
 export type Field = Schemas['Field']
 export type FieldReq = Schemas['FieldReq']
 export type FieldSuggestion = Schemas['FieldSuggestion']
+
+export type FieldQualitySeverity = 'ERROR' | 'WARNING' | 'SUGGESTION'
+export type FieldQualityLevel = 'GOOD' | 'WARNING' | 'POOR'
+
+export interface FieldQualityIssue {
+  code?: string
+  severity?: FieldQualitySeverity
+  message?: string
+  suggestedAction?: string
+  scorePenalty?: number
+}
+
+export interface FieldQualityItem {
+  fieldId?: number
+  name?: string
+  displayName?: string
+  dataType?: string
+  status?: string
+  sensitive?: boolean
+  codeSetId?: number
+  score?: number
+  level?: FieldQualityLevel
+  issues?: FieldQualityIssue[]
+  suggestions?: string[]
+}
+
+export interface FieldQualitySummary {
+  totalFieldCount?: number
+  averageScore?: number
+  goodCount?: number
+  warningCount?: number
+  poorCount?: number
+  lowQualityCount?: number
+  errorIssueCount?: number
+  warningIssueCount?: number
+  suggestionIssueCount?: number
+}
+
+export interface FieldQualityReport {
+  summary?: FieldQualitySummary
+  fields?: FieldQualityItem[]
+}
+
 export type RuleConfig = Schemas['RuleConfig']
 export type RuleConfigReq = Schemas['RuleConfigReq']
 export type LintRequest = Schemas['LintRequest']

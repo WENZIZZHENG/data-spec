@@ -251,7 +251,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
-import { createField, deleteField, listFieldSources, pageFields, updateField } from '@/api/field'
+import { createField, deleteField, getField, listFieldSources, pageFields, updateField } from '@/api/field'
 import { useProjectStore } from '@/stores/project'
 import type { Field, FieldReq, FieldSourceDetail, PageResult } from '@/types'
 
@@ -268,6 +268,7 @@ const sourceField = ref<Field | null>(null)
 const fieldSources = ref<FieldSourceDetail[]>([])
 const sourceLoading = ref(false)
 const formRef = ref<FormInstance>()
+const openedRouteFieldId = ref<number | null>(null)
 
 const pagination = reactive({
   current: 1,
@@ -348,6 +349,7 @@ watch(
   () => projectStore.currentProjectId,
   () => {
     pagination.current = 1
+    openedRouteFieldId.value = null
     void loadFields()
   },
   { immediate: true }
@@ -359,6 +361,14 @@ watch(
     fieldKeyword.value = routeKeyword(keyword)
   },
   { immediate: true }
+)
+
+watch(
+  () => route.query.fieldId,
+  () => {
+    openedRouteFieldId.value = null
+    void openFieldFromRoute()
+  }
 )
 
 async function loadFields() {
@@ -373,6 +383,7 @@ async function loadFields() {
     const page: PageResult<Field> = await pageFields(projectId, pagination.current, pagination.size)
     fields.value = page.records ?? []
     pagination.total = page.total ?? 0
+    await openFieldFromRoute()
   } finally {
     loading.value = false
   }
@@ -416,6 +427,27 @@ function openEditDialog(field: Field) {
   editingField.value = field
   resetForm(field)
   dialogVisible.value = true
+}
+
+async function openFieldFromRoute() {
+  const fieldId = routeFieldId(route.query.fieldId)
+  const projectId = projectStore.currentProjectId
+  if (!fieldId || !projectId || openedRouteFieldId.value === fieldId) {
+    return
+  }
+  let field = fields.value.find((item) => item.id === fieldId)
+  if (!field) {
+    try {
+      field = await getField(fieldId)
+    } catch {
+      return
+    }
+  }
+  if (field?.projectId !== projectId) {
+    return
+  }
+  openedRouteFieldId.value = fieldId
+  openEditDialog(field)
 }
 
 async function openSourceDialog(field: Field) {
@@ -533,6 +565,15 @@ function routeKeyword(value: unknown) {
     return value[0] ?? ''
   }
   return typeof value === 'string' ? value : ''
+}
+
+function routeFieldId(value: unknown) {
+  const rawValue = Array.isArray(value) ? value[0] : value
+  if (typeof rawValue !== 'string' || rawValue.trim() === '') {
+    return null
+  }
+  const id = Number(rawValue)
+  return Number.isInteger(id) && id > 0 ? id : null
 }
 </script>
 

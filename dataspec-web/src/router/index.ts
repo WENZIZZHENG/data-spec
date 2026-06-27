@@ -25,6 +25,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '标准字段库' }
   },
   {
+    path: '/field-quality',
+    name: 'FieldQuality',
+    component: () => import('@/views/FieldQuality.vue'),
+    meta: { title: '字段质量' }
+  },
+  {
     path: '/domains',
     name: 'DomainManage',
     component: () => import('@/views/DomainManage.vue'),

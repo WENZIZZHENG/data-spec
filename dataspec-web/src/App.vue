@@ -33,6 +33,10 @@
             <el-icon><List /></el-icon>
             <span>标准字段库</span>
           </el-menu-item>
+          <el-menu-item index="/field-quality">
+            <el-icon><TrendCharts /></el-icon>
+            <span>字段质量</span>
+          </el-menu-item>
           <el-menu-item index="/domains">
             <el-icon><Grid /></el-icon>
             <span>数据域管理</span>
