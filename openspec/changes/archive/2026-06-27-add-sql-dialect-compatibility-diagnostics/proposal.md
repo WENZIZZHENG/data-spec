@@ -31,3 +31,13 @@ DataSpec 已经部分支持 PostgreSQL/MySQL 的 SQL 解析、lint、DDL 生成�
 - CLI/MCP：CLI lint 输出展示方言诊断，JSON 输出保留新增字段；MCP 可通过现有 API 透传。
 - 文档：README 增加方言能力矩阵与已知边界说明，TODO 更新 P6-22 状态。
 - 边界：不新增数据库写入行为，不引入完整 parser 重写，不宣称 Oracle/SQL Server 全量支持。
+
+## Verification Evidence
+
+- `mvn test`：229 tests，0 failures，0 errors。
+- `pnpm test`：55 tests，0 failures。
+- `pnpm build`：通过，保留第三方 `@vueuse/core` pure annotation 与 chunk size warning。
+- `node --test tools\dataspec-cli.test.mjs tools\dataspec-config.test.mjs tools\dataspec-mcp.test.mjs`：62 tests，0 failures。
+- `npx.cmd openspec validate add-sql-dialect-compatibility-diagnostics`：valid。
+- `git diff --check`：通过，仅输出 Windows LF/CRLF 提示。
+- 代码评审：按 `code-review-checklist` 做直接评审，未使用子 agent；已修复 MySQL `UNSIGNED/KEY` 弱特征识别不足和前端方言摘要标签未按最严重诊断染色的问题。
