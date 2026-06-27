@@ -1847,6 +1847,7 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
             versioned?: boolean;
+            source?: string;
         };
         DemoProjectResult: {
             project?: components["schemas"]["Project"];
@@ -2300,6 +2301,24 @@ export interface components {
         RecordDetail: {
             record?: components["schemas"]["SqlCheckRecord"];
             issues?: components["schemas"]["LintIssue"][];
+            replay?: components["schemas"]["SqlCheckReplay"];
+        };
+        SqlCheckReplay: {
+            recordedStandard?: components["schemas"]["StandardSnapshotInfo"];
+            currentStandard?: components["schemas"]["StandardSnapshotInfo"];
+            status?: string;
+            summary?: components["schemas"]["SqlCheckReplaySummary"];
+            nextActions?: string[];
+        };
+        SqlCheckReplaySummary: {
+            sameAsCurrent?: boolean;
+            /** Format: int32 */
+            fieldCount?: number;
+            /** Format: int32 */
+            enumCount?: number;
+            /** Format: int32 */
+            ruleCount?: number;
+            exportCommand?: string;
         };
         DdlGenerateResult: {
             ddl?: string;
@@ -5194,6 +5213,8 @@ export interface operations {
         parameters: {
             query: {
                 projectId: number;
+                snapshotId?: number;
+                snapshotVersion?: string;
             };
             header?: never;
             path?: never;
@@ -5216,6 +5237,8 @@ export interface operations {
         parameters: {
             query: {
                 projectId: number;
+                snapshotId?: number;
+                snapshotVersion?: string;
             };
             header?: never;
             path?: never;
@@ -5242,6 +5265,8 @@ export interface operations {
                 query?: string;
                 status?: string;
                 limit?: number;
+                snapshotId?: number;
+                snapshotVersion?: string;
             };
             header?: never;
             path?: never;
@@ -5268,6 +5293,8 @@ export interface operations {
                 query?: string;
                 status?: string;
                 limit?: number;
+                snapshotId?: number;
+                snapshotVersion?: string;
             };
             header?: never;
             path?: never;
@@ -5294,6 +5321,8 @@ export interface operations {
                 query?: string;
                 status?: string;
                 limit?: number;
+                snapshotId?: number;
+                snapshotVersion?: string;
             };
             header?: never;
             path?: never;
@@ -5320,6 +5349,8 @@ export interface operations {
                 query?: string;
                 status?: string;
                 limit?: number;
+                snapshotId?: number;
+                snapshotVersion?: string;
             };
             header?: never;
             path?: never;
@@ -5346,6 +5377,8 @@ export interface operations {
                 query?: string;
                 status?: string;
                 limit?: number;
+                snapshotId?: number;
+                snapshotVersion?: string;
             };
             header?: never;
             path?: never;

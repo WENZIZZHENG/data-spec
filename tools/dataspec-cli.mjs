@@ -234,7 +234,20 @@ async function runReviewPr(args, io, fetchFn) {
 }
 
 async function runExportContext(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'output', 'server', 'dataspec-token', 'scope', 'query', 'status', 'limit'])
+  const { positional, options } = parseArgs(args, [
+    'project',
+    'output',
+    'server',
+    'dataspec-token',
+    'scope',
+    'query',
+    'status',
+    'limit',
+    'snapshot-id',
+    'snapshotId',
+    'snapshot-version',
+    'snapshotVersion'
+  ])
   const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length > 0) {
     throw new Error(`export-context 不接受位置参数: ${positional.join(', ')}`)
@@ -485,6 +498,11 @@ function buildAiContextPackageUrl(server, projectId, options) {
   appendOptionalParam(params, 'scope', options.scope)
   appendOptionalParam(params, 'query', options.query)
   appendOptionalParam(params, 'status', options.status)
+  const snapshotId = options.snapshotId ?? options['snapshot-id']
+  if (snapshotId !== undefined && snapshotId !== null && String(snapshotId).trim() !== '') {
+    params.set('snapshotId', String(parsePositiveInteger(snapshotId, 'snapshot id')))
+  }
+  appendOptionalParam(params, 'snapshotVersion', options.snapshotVersion ?? options['snapshot-version'])
   if (options.limit !== undefined) {
     params.set('limit', String(parseLimit(options.limit)))
   }
@@ -1480,7 +1498,7 @@ Usage:
   node tools/dataspec-cli.mjs lint <path|-> [--project <id>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>]
-  node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
@@ -1494,7 +1512,7 @@ Options:
   --server  可由 .dataspec/config.json 的 server 提供
   --dataspec-token 可由 .dataspec/config.json 的 apiToken 或 DATASPEC_TOKEN 环境变量提供
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
-  export-context 默认导出完整包；传 --scope/--query/--status/--limit 时导出按需包
+  export-context 默认导出完整包；传 --scope/--query/--status/--limit 时导出按需包；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   doctor 默认做轻量 OpenAPI 状态检查；传 --check-openapi 时执行完整 schema 漂移检查

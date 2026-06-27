@@ -12,6 +12,7 @@ import com.dataspec.security.context.DataSpecSecurityContext;
 import com.dataspec.security.model.ApiTokenPrincipal;
 import com.dataspec.standard.dto.StandardSnapshotCreateReq;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
+import com.dataspec.standard.dto.StandardSnapshotPayload;
 import com.dataspec.standard.entity.StandardSnapshot;
 import com.dataspec.standard.repository.StandardSnapshotRepository;
 import com.dataspec.standard.service.impl.StandardSnapshotServiceImpl;
@@ -20,7 +21,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
+import java.util.HexFormat;
 import java.util.Optional;
 import java.util.Set;
 
@@ -70,6 +74,7 @@ class StandardSnapshotServiceImplTest {
         assertTrue(saved.getPayloadJson().indexOf("field_naming_snake_case") < saved.getPayloadJson().indexOf("required_columns"));
         assertEquals(saved.getSnapshotHash(), info.specHash());
         assertEquals("v2026.06.24", info.specVersion());
+        assertEquals("current", info.source());
         assertTrue(info.versioned());
     }
 
@@ -88,7 +93,111 @@ class StandardSnapshotServiceImplTest {
 
         assertFalse(info.versioned());
         assertEquals("unversioned", info.specVersion());
+        assertEquals("unversioned", info.source());
         assertNull(info.specHash());
+    }
+
+    @Test
+    void listSnapshots_marksRowsAsSnapshotSource() {
+        StandardSnapshotRepository repository = mock(StandardSnapshotRepository.class);
+        StandardSnapshotServiceImpl service = new StandardSnapshotServiceImpl(
+                repository,
+                mock(FieldService.class),
+                mock(EnumDictService.class),
+                mock(RuleConfigService.class),
+                new ObjectMapper());
+        when(repository.findByProjectId(1L)).thenReturn(List.of(snapshot(6L, 1L, "v1", """
+                {"projectId":1,"fields":[],"enums":[],"rules":[]}
+                """)));
+
+        List<StandardSnapshotInfo> snapshots = service.listSnapshots(1L);
+
+        assertEquals(1, snapshots.size());
+        assertEquals("snapshot", snapshots.get(0).source());
+    }
+
+    @Test
+    void getSnapshotPayload_loadsPayloadByIdWithinProject() {
+        StandardSnapshotRepository repository = mock(StandardSnapshotRepository.class);
+        StandardSnapshotServiceImpl service = new StandardSnapshotServiceImpl(
+                repository,
+                mock(FieldService.class),
+                mock(EnumDictService.class),
+                mock(RuleConfigService.class),
+                new ObjectMapper());
+        StandardSnapshot snapshot = snapshot(6L, 1L, "v1", """
+                {"projectId":1,"fields":[{"name":"user_id"}],"enums":[],"rules":[{"ruleCode":"field_naming_snake_case"}]}
+                """);
+        when(repository.findByProjectIdAndId(1L, 6L)).thenReturn(Optional.of(snapshot));
+
+        StandardSnapshotPayload payload = service.getSnapshotPayload(1L, 6L);
+
+        assertEquals(6L, payload.standard().snapshotId());
+        assertEquals("v1", payload.standard().specVersion());
+        assertEquals("snapshot", payload.standard().source());
+        assertEquals(1, payload.fieldCount());
+        assertEquals(0, payload.enumCount());
+        assertEquals(1, payload.ruleCount());
+        assertEquals("user_id", payload.payload().path("fields").get(0).path("name").asText());
+    }
+
+    @Test
+    void getSnapshotPayloadByVersion_trimsVersionAndLoadsPayload() {
+        StandardSnapshotRepository repository = mock(StandardSnapshotRepository.class);
+        StandardSnapshotServiceImpl service = new StandardSnapshotServiceImpl(
+                repository,
+                mock(FieldService.class),
+                mock(EnumDictService.class),
+                mock(RuleConfigService.class),
+                new ObjectMapper());
+        StandardSnapshot snapshot = snapshot(7L, 1L, "v2", """
+                {"projectId":1,"fields":[],"enums":[{"code":"status"}],"rules":[]}
+                """);
+        when(repository.findByProjectIdAndVersion(1L, "v2")).thenReturn(Optional.of(snapshot));
+
+        StandardSnapshotPayload payload = service.getSnapshotPayloadByVersion(1L, " v2 ");
+
+        assertEquals(7L, payload.standard().snapshotId());
+        assertEquals(1, payload.enumCount());
+        verify(repository).findByProjectIdAndVersion(1L, "v2");
+    }
+
+    @Test
+    void getSnapshotPayload_rejectsMissingOrCrossProjectSnapshot() {
+        StandardSnapshotRepository repository = mock(StandardSnapshotRepository.class);
+        StandardSnapshotServiceImpl service = new StandardSnapshotServiceImpl(
+                repository,
+                mock(FieldService.class),
+                mock(EnumDictService.class),
+                mock(RuleConfigService.class),
+                new ObjectMapper());
+        when(repository.findByProjectIdAndId(1L, 99L)).thenReturn(Optional.empty());
+
+        BizException ex = assertThrows(BizException.class, () -> service.getSnapshotPayload(1L, 99L));
+
+        assertEquals(404, ex.getCode());
+        assertTrue(ex.getMessage().contains("不属于当前项目"));
+    }
+
+    @Test
+    void getSnapshotPayload_rejectsHashMismatch() {
+        StandardSnapshotRepository repository = mock(StandardSnapshotRepository.class);
+        StandardSnapshotServiceImpl service = new StandardSnapshotServiceImpl(
+                repository,
+                mock(FieldService.class),
+                mock(EnumDictService.class),
+                mock(RuleConfigService.class),
+                new ObjectMapper());
+        StandardSnapshot snapshot = snapshot(6L, 1L, "v1", """
+                {"projectId":1,"fields":[],"enums":[],"rules":[]}
+                """);
+        snapshot.setSnapshotHash("bad-hash");
+        when(repository.findByProjectIdAndId(1L, 6L)).thenReturn(Optional.of(snapshot));
+
+        BizException ex = assertThrows(BizException.class, () -> service.getSnapshotPayload(1L, 6L));
+
+        assertEquals(500, ex.getCode());
+        assertTrue(ex.getMessage().contains("hash 校验失败"));
     }
 
     @Test
@@ -169,5 +278,24 @@ class StandardSnapshotServiceImplTest {
         rule.setEnabled(true);
         rule.setParamsJson("{}");
         return rule;
+    }
+
+    private StandardSnapshot snapshot(Long id, Long projectId, String version, String payloadJson) {
+        StandardSnapshot snapshot = new StandardSnapshot();
+        snapshot.setId(id);
+        snapshot.setProjectId(projectId);
+        snapshot.setVersion(version);
+        snapshot.setPayloadJson(payloadJson);
+        snapshot.setSnapshotHash(sha256(payloadJson));
+        return snapshot;
+    }
+
+    private String sha256(String payloadJson) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(payloadJson.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

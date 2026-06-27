@@ -19,6 +19,7 @@ import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.ruleexemption.entity.RuleExemption;
 import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
+import com.dataspec.standard.dto.StandardSnapshotPayload;
 import com.dataspec.standard.service.StandardSnapshotService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -175,6 +176,73 @@ class AiContextExportServiceTest {
         assertEquals("v1", mapper.readTree(entries.get(".dataspec/field-catalog.json")).path("standard").path("specVersion").asText());
         assertEquals("v1", mapper.readTree(entries.get(".dataspec/manifest.json")).path("standard").path("specVersion").asText());
         assertTrue(entries.get(".dataspec/rules.yaml").contains("spec_version: v1"));
+    }
+
+    @Test
+    void generateAiContextFromSnapshot_usesSavedPayloadInsteadOfCurrentStandards() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        StandardSnapshotPayload payload = new StandardSnapshotPayload(
+                new StandardSnapshotInfo(9L, PROJECT_ID, "v-history", "历史版本", null, "history-hash", null, true, "snapshot"),
+                mapper.readTree("""
+                        {
+                          "projectId": 1,
+                          "fields": [
+                            {
+                              "name": "legacy_user_id",
+                              "displayName": "历史用户ID",
+                              "dataType": "bigint",
+                              "nullable": false,
+                              "comment": "历史用户ID",
+                              "aliases": "uid, user_id",
+                              "status": "enabled"
+                            }
+                          ],
+                          "enums": [
+                            {
+                              "code": "legacy_status",
+                              "name": "历史状态",
+                              "valueType": "string",
+                              "values": [{"value": "Y", "label": "是"}]
+                            }
+                          ],
+                          "rules": [
+                            {
+                              "ruleCode": "field_naming_snake_case",
+                              "ruleName": "字段 snake_case",
+                              "severity": "ERROR",
+                              "enabled": true,
+                              "paramsJson": "{}"
+                            }
+                          ]
+                        }
+                        """),
+                1,
+                1,
+                1);
+        when(standardSnapshotService.getSnapshotPayload(PROJECT_ID, 9L)).thenReturn(payload);
+        AiContextExportService service = createService(
+                standardSnapshotService,
+                new NoopAiJobRecordService(),
+                List.of(sampleField("current_mobile", "当前手机号", "contact", "pii", "phone")),
+                mock(RuleExemptionService.class));
+
+        String catalogJson = service.generateFieldCatalogJson(PROJECT_ID, AiContextScopeOptions.full(), 9L, null);
+        String rulesYaml = service.generateRulesYaml(PROJECT_ID, 9L, null);
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(PROJECT_ID, AiContextScopeOptions.full(), 9L, null));
+
+        var catalog = mapper.readTree(catalogJson);
+        assertEquals("snapshot", catalog.path("standard").path("source").asText());
+        assertEquals("v-history", catalog.path("standard").path("specVersion").asText());
+        assertEquals("legacy_user_id", catalog.path("fields").get(0).path("name").asText());
+        assertEquals("user_id", catalog.path("fields").get(0).path("aliases").get(1).asText());
+        assertEquals("legacy_status", catalog.path("enums").get(0).path("code").asText());
+        assertFalse(catalogJson.contains("current_mobile"));
+        assertTrue(rulesYaml.contains("source: snapshot"));
+        assertTrue(rulesYaml.contains("field_naming_snake_case"));
+        assertEquals("snapshot", mapper.readTree(entries.get(".dataspec/manifest.json")).path("standard").path("source").asText());
+        assertEquals("legacy_user_id", mapper.readTree(entries.get(".dataspec/field-catalog.json")).path("fields").get(0).path("name").asText());
+        assertTrue(entries.get(".dataspec/rules.yaml").contains("source: snapshot"));
     }
 
     @Test

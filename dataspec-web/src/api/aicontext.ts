@@ -13,9 +13,9 @@ export function previewFieldCatalog(projectId: number, options: AiContextScopePa
   })
 }
 
-export function previewRulesYaml(projectId: number) {
+export function previewRulesYaml(projectId: number, options: AiContextScopeParams = {}) {
   return request.get<unknown, string>('/ai-context/rules-yaml', {
-    params: { projectId }
+    params: snapshotParams(projectId, options)
   })
 }
 
@@ -32,6 +32,16 @@ function scopeParams(projectId: number, options: AiContextScopeParams) {
     ...(options.scope ? { scope: options.scope } : {}),
     ...(options.query ? { query: options.query } : {}),
     ...(options.status ? { status: options.status } : {}),
-    ...(options.limit ? { limit: options.limit } : {})
+    ...(options.limit ? { limit: options.limit } : {}),
+    ...(options.snapshotId ? { snapshotId: options.snapshotId } : {}),
+    ...(options.snapshotVersion ? { snapshotVersion: options.snapshotVersion } : {})
+  }
+}
+
+function snapshotParams(projectId: number, options: AiContextScopeParams) {
+  return {
+    projectId,
+    ...(options.snapshotId ? { snapshotId: options.snapshotId } : {}),
+    ...(options.snapshotVersion ? { snapshotVersion: options.snapshotVersion } : {})
   }
 }

@@ -15,6 +15,7 @@ import com.dataspec.lint.model.ColumnDef;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.lint.model.LintRule;
+import com.dataspec.lint.model.SqlCheckReplay;
 import com.dataspec.lint.model.TableDef;
 import com.dataspec.lint.rules.AmountFieldRule;
 import com.dataspec.lint.rules.CommentMissingRule;
@@ -244,6 +245,11 @@ class CoreGoldenFixturesTest {
         @Override
         public List<LintIssue> parseIssues(SqlCheckRecord record) {
             return List.of();
+        }
+
+        @Override
+        public SqlCheckReplay buildReplay(SqlCheckRecord record) {
+            throw new UnsupportedOperationException();
         }
     }
 

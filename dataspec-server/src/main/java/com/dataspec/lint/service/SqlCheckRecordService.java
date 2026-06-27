@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.LintResult;
+import com.dataspec.lint.model.SqlCheckReplay;
 
 import java.util.List;
 
@@ -23,4 +24,7 @@ public interface SqlCheckRecordService {
 
     /** 解析记录中的结构化问题列表 */
     List<LintIssue> parseIssues(SqlCheckRecord record);
+
+    /** 构建检查记录的标准快照回放信息 */
+    SqlCheckReplay buildReplay(SqlCheckRecord record);
 }

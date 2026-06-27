@@ -36,6 +36,20 @@ public class StandardSnapshotRepository {
                 .last("limit 1")));
     }
 
+    public Optional<StandardSnapshot> findByProjectIdAndId(Long projectId, Long snapshotId) {
+        return Optional.ofNullable(standardSnapshotMapper.selectOne(new LambdaQueryWrapper<StandardSnapshot>()
+                .eq(StandardSnapshot::getProjectId, projectId)
+                .eq(StandardSnapshot::getId, snapshotId)
+                .last("limit 1")));
+    }
+
+    public Optional<StandardSnapshot> findByProjectIdAndVersion(Long projectId, String version) {
+        return Optional.ofNullable(standardSnapshotMapper.selectOne(new LambdaQueryWrapper<StandardSnapshot>()
+                .eq(StandardSnapshot::getProjectId, projectId)
+                .eq(StandardSnapshot::getVersion, version)
+                .last("limit 1")));
+    }
+
     public List<StandardSnapshot> findByProjectId(Long projectId) {
         return standardSnapshotMapper.selectList(new LambdaQueryWrapper<StandardSnapshot>()
                 .eq(StandardSnapshot::getProjectId, projectId)

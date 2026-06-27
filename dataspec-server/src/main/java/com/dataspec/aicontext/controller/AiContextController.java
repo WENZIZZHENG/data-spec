@@ -32,8 +32,14 @@ public class AiContextController {
                                           @RequestParam(required = false) String scope,
                                           @RequestParam(required = false) String query,
                                           @RequestParam(required = false) String status,
-                                          @RequestParam(required = false) Integer limit) {
-        return R.ok(aiContextExportService.generateDatabaseRules(projectId, scopeOptions(scope, query, status, limit)));
+                                          @RequestParam(required = false) Integer limit,
+                                          @RequestParam(required = false) Long snapshotId,
+                                          @RequestParam(required = false) String snapshotVersion) {
+        return R.ok(aiContextExportService.generateDatabaseRules(
+                projectId,
+                scopeOptions(scope, query, status, limit),
+                snapshotId,
+                snapshotVersion));
     }
 
     /** 下载 DATABASE_RULES.md */
@@ -43,8 +49,14 @@ public class AiContextController {
                                                         @RequestParam(required = false) String scope,
                                                         @RequestParam(required = false) String query,
                                                         @RequestParam(required = false) String status,
-                                                        @RequestParam(required = false) Integer limit) {
-        String content = aiContextExportService.generateDatabaseRules(projectId, scopeOptions(scope, query, status, limit));
+                                                        @RequestParam(required = false) Integer limit,
+                                                        @RequestParam(required = false) Long snapshotId,
+                                                        @RequestParam(required = false) String snapshotVersion) {
+        String content = aiContextExportService.generateDatabaseRules(
+                projectId,
+                scopeOptions(scope, query, status, limit),
+                snapshotId,
+                snapshotVersion);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=DATABASE_RULES.md")
                 .contentType(MediaType.TEXT_MARKDOWN)
@@ -58,8 +70,14 @@ public class AiContextController {
                                          @RequestParam(required = false) String scope,
                                          @RequestParam(required = false) String query,
                                          @RequestParam(required = false) String status,
-                                         @RequestParam(required = false) Integer limit) {
-        return R.ok(aiContextExportService.generateFieldCatalogJson(projectId, scopeOptions(scope, query, status, limit)));
+                                         @RequestParam(required = false) Integer limit,
+                                         @RequestParam(required = false) Long snapshotId,
+                                         @RequestParam(required = false) String snapshotVersion) {
+        return R.ok(aiContextExportService.generateFieldCatalogJson(
+                projectId,
+                scopeOptions(scope, query, status, limit),
+                snapshotId,
+                snapshotVersion));
     }
 
     /** 下载 field-catalog.json */
@@ -69,8 +87,14 @@ public class AiContextController {
                                                        @RequestParam(required = false) String scope,
                                                        @RequestParam(required = false) String query,
                                                        @RequestParam(required = false) String status,
-                                                       @RequestParam(required = false) Integer limit) {
-        String content = aiContextExportService.generateFieldCatalogJson(projectId, scopeOptions(scope, query, status, limit));
+                                                       @RequestParam(required = false) Integer limit,
+                                                       @RequestParam(required = false) Long snapshotId,
+                                                       @RequestParam(required = false) String snapshotVersion) {
+        String content = aiContextExportService.generateFieldCatalogJson(
+                projectId,
+                scopeOptions(scope, query, status, limit),
+                snapshotId,
+                snapshotVersion);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=field-catalog.json")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -80,8 +104,10 @@ public class AiContextController {
     /** 预览 rules.yaml */
 
     @GetMapping("/rules-yaml")
-    public R<String> previewRulesYaml(@RequestParam Long projectId) {
-        return R.ok(aiContextExportService.generateRulesYaml(projectId));
+    public R<String> previewRulesYaml(@RequestParam Long projectId,
+                                      @RequestParam(required = false) Long snapshotId,
+                                      @RequestParam(required = false) String snapshotVersion) {
+        return R.ok(aiContextExportService.generateRulesYaml(projectId, snapshotId, snapshotVersion));
     }
 
     /** 生成 AI 建表 Prompt */
@@ -101,8 +127,10 @@ public class AiContextController {
     /** 下载 rules.yaml */
 
     @GetMapping("/rules-yaml/download")
-    public ResponseEntity<byte[]> downloadRulesYaml(@RequestParam Long projectId) {
-        String content = aiContextExportService.generateRulesYaml(projectId);
+    public ResponseEntity<byte[]> downloadRulesYaml(@RequestParam Long projectId,
+                                                    @RequestParam(required = false) Long snapshotId,
+                                                    @RequestParam(required = false) String snapshotVersion) {
+        String content = aiContextExportService.generateRulesYaml(projectId, snapshotId, snapshotVersion);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=rules.yaml")
                 .contentType(MediaType.parseMediaType("text/yaml"))
@@ -116,8 +144,14 @@ public class AiContextController {
                                                            @RequestParam(required = false) String scope,
                                                            @RequestParam(required = false) String query,
                                                            @RequestParam(required = false) String status,
-                                                           @RequestParam(required = false) Integer limit) {
-        byte[] content = aiContextExportService.generateAiContextPackage(projectId, scopeOptions(scope, query, status, limit));
+                                                           @RequestParam(required = false) Integer limit,
+                                                           @RequestParam(required = false) Long snapshotId,
+                                                           @RequestParam(required = false) String snapshotVersion) {
+        byte[] content = aiContextExportService.generateAiContextPackage(
+                projectId,
+                scopeOptions(scope, query, status, limit),
+                snapshotId,
+                snapshotVersion);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=dataspec-ai-context.zip")
                 .contentType(MediaType.parseMediaType("application/zip"))

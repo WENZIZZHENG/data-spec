@@ -16,7 +16,26 @@ test('normalizes scoped AI context params', () => {
   )
 })
 
+test('normalizes snapshot AI context params', () => {
+  assert.deepEqual(
+    normalizeAiContextScopeParams({
+      scope: 'all',
+      query: '',
+      status: '',
+      limit: null,
+      snapshotId: 42,
+      snapshotVersion: ' v-history '
+    }),
+    { scope: 'all', snapshotId: 42, snapshotVersion: 'v-history' }
+  )
+})
+
 test('builds scoped context filename', () => {
   assert.equal(aiContextScopeFilename({}), 'dataspec-ai-context.zip')
   assert.equal(aiContextScopeFilename({ scope: 'domain' }), 'dataspec-ai-context-domain.zip')
+  assert.equal(aiContextScopeFilename({ snapshotId: 42 }), 'dataspec-ai-context-snapshot-42.zip')
+  assert.equal(
+    aiContextScopeFilename({ snapshotVersion: '2026/06 快照' }),
+    'dataspec-ai-context-snapshot-2026-06.zip'
+  )
 })

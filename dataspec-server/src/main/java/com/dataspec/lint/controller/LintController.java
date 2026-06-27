@@ -7,6 +7,7 @@ import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.LintResult;
+import com.dataspec.lint.model.SqlCheckReplay;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -64,7 +65,8 @@ public class LintController {
     public R<RecordDetail> getRecord(@PathVariable Long id) {
         SqlCheckRecord record = sqlCheckRecordService.getById(id);
         List<LintIssue> issues = sqlCheckRecordService.parseIssues(record);
-        return R.ok(new RecordDetail(record, issues));
+        SqlCheckReplay replay = sqlCheckRecordService.buildReplay(record);
+        return R.ok(new RecordDetail(record, issues, replay));
     }
 
     public record LintRequest(
@@ -73,5 +75,5 @@ public class LintController {
     ) {}
 
     /** 检查记录详情:记录本身 + 反序列化后的结构化问题 */
-    public record RecordDetail(SqlCheckRecord record, List<LintIssue> issues) {}
+    public record RecordDetail(SqlCheckRecord record, List<LintIssue> issues, SqlCheckReplay replay) {}
 }

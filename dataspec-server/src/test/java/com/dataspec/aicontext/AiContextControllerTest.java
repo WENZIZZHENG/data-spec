@@ -21,10 +21,10 @@ class AiContextControllerTest {
     @Test
     void downloadAiContextPackage_returnsZipAttachment() {
         AiContextExportService service = mock(AiContextExportService.class);
-        when(service.generateAiContextPackage(eq(1L), eq(AiContextScopeOptions.full()))).thenReturn(new byte[] { 1, 2, 3 });
+        when(service.generateAiContextPackage(eq(1L), eq(AiContextScopeOptions.full()), eq(null), eq(null))).thenReturn(new byte[] { 1, 2, 3 });
         AiContextController controller = new AiContextController(service);
 
-        var response = controller.downloadAiContextPackage(1L, null, null, null, null);
+        var response = controller.downloadAiContextPackage(1L, null, null, null, null, null, null);
 
         assertEquals(MediaType.parseMediaType("application/zip"), response.getHeaders().getContentType());
         assertEquals("attachment; filename=dataspec-ai-context.zip",
@@ -36,13 +36,26 @@ class AiContextControllerTest {
     void previewFieldCatalog_forwardsScopeOptions() {
         AiContextExportService service = mock(AiContextExportService.class);
         AiContextScopeOptions options = new AiContextScopeOptions("field", "手机", "enabled", 20);
-        when(service.generateFieldCatalogJson(1L, options)).thenReturn("{\"fields\":[]}");
+        when(service.generateFieldCatalogJson(1L, options, null, null)).thenReturn("{\"fields\":[]}");
         AiContextController controller = new AiContextController(service);
 
-        var response = controller.previewFieldCatalog(1L, "field", "手机", "enabled", 20);
+        var response = controller.previewFieldCatalog(1L, "field", "手机", "enabled", 20, null, null);
 
         assertEquals("{\"fields\":[]}", response.getData());
-        verify(service).generateFieldCatalogJson(1L, options);
+        verify(service).generateFieldCatalogJson(1L, options, null, null);
+    }
+
+    @Test
+    void previewDatabaseRules_forwardsSnapshotOptions() {
+        AiContextExportService service = mock(AiContextExportService.class);
+        AiContextScopeOptions options = new AiContextScopeOptions("all", null, null, null);
+        when(service.generateDatabaseRules(1L, options, 42L, "v-history")).thenReturn("# rules");
+        AiContextController controller = new AiContextController(service);
+
+        var response = controller.previewDatabaseRules(1L, null, null, null, null, 42L, "v-history");
+
+        assertEquals("# rules", response.getData());
+        verify(service).generateDatabaseRules(1L, options, 42L, "v-history");
     }
 
     @Test

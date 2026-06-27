@@ -52,6 +52,20 @@
           controls-position="right"
           placeholder="上限"
         />
+        <el-select
+          v-model="scopeForm.snapshotId"
+          class="snapshot-select"
+          :loading="snapshotLoading"
+          placeholder="标准版本"
+        >
+          <el-option label="当前标准" :value="0" />
+          <el-option
+            v-for="snapshot in snapshotOptions"
+            :key="snapshot.snapshotId"
+            :label="snapshotOptionLabel(snapshot)"
+            :value="snapshot.snapshotId"
+          />
+        </el-select>
         <el-button @click="handleResetScope">重置</el-button>
       </div>
 
@@ -80,7 +94,9 @@ import {
   previewFieldCatalog,
   previewRulesYaml
 } from '@/api/aicontext'
+import { listStandardSnapshots } from '@/api/standardSnapshot'
 import { useProjectStore } from '@/stores/project'
+import type { StandardSnapshotInfo } from '@/types'
 import {
   aiContextScopeFilename,
   normalizeAiContextScopeParams,
@@ -95,16 +111,20 @@ const rulesYaml = ref('')
 const previewLoading = ref(false)
 const downloadLoading = ref(false)
 const demoLoading = ref(false)
+const snapshotLoading = ref(false)
+const snapshots = ref<StandardSnapshotInfo[]>([])
 const scopeForm = reactive<{
   scope: AiContextScope
   query: string
   status: string
   limit: number | null
+  snapshotId: number | null
 }>({
   scope: 'all',
   query: '',
   status: '',
-  limit: null
+  limit: null,
+  snapshotId: 0
 })
 
 const scopeOptions: Array<{ label: string; value: AiContextScope }> = [
@@ -118,16 +138,31 @@ const scopeOptions: Array<{ label: string; value: AiContextScope }> = [
 
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
 const currentScopeParams = computed(() => normalizeAiContextScopeParams(scopeForm))
+const snapshotOptions = computed(() =>
+  snapshots.value.filter((snapshot): snapshot is StandardSnapshotInfo & { snapshotId: number } =>
+    typeof snapshot.snapshotId === 'number'
+  )
+)
 
 onMounted(async () => {
   if (!projectStore.currentProjectId && projectStore.projects.length === 0) {
     await projectStore.loadProjects()
   }
+  await loadSnapshots()
   await loadPreviews()
 })
 
 watch(
   () => projectStore.currentProjectId,
+  () => {
+    scopeForm.snapshotId = 0
+    void loadSnapshots()
+    void loadPreviews()
+  }
+)
+
+watch(
+  () => scopeForm.snapshotId,
   () => {
     void loadPreviews()
   }
@@ -147,13 +182,27 @@ async function loadPreviews() {
     const [rules, fields, yaml] = await Promise.all([
       previewDatabaseRules(projectId, scopeParams),
       previewFieldCatalog(projectId, scopeParams),
-      previewRulesYaml(projectId)
+      previewRulesYaml(projectId, scopeParams)
     ])
     databaseRules.value = rules
     fieldCatalog.value = fields
     rulesYaml.value = yaml
   } finally {
     previewLoading.value = false
+  }
+}
+
+async function loadSnapshots() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    snapshots.value = []
+    return
+  }
+  snapshotLoading.value = true
+  try {
+    snapshots.value = await listStandardSnapshots(projectId)
+  } finally {
+    snapshotLoading.value = false
   }
 }
 
@@ -199,7 +248,15 @@ function handleResetScope() {
   scopeForm.query = ''
   scopeForm.status = ''
   scopeForm.limit = null
+  scopeForm.snapshotId = 0
   void loadPreviews()
+}
+
+function snapshotOptionLabel(snapshot: StandardSnapshotInfo) {
+  const version = snapshot.specVersion || 'unversioned'
+  const name = snapshot.name ? ` ${snapshot.name}` : ''
+  const hash = snapshot.specHash ? ` / ${snapshot.specHash.slice(0, 8)}` : ''
+  return `${version}${name}${hash}`
 }
 </script>
 
@@ -263,6 +320,10 @@ function handleResetScope() {
   width: 132px;
 }
 
+.snapshot-select {
+  width: 230px;
+}
+
 .preview-code {
   min-height: 520px;
   max-height: calc(100vh - 270px);
@@ -291,7 +352,8 @@ function handleResetScope() {
 
   .scope-query,
   .scope-status,
-  .scope-limit {
+  .scope-limit,
+  .snapshot-select {
     width: 100%;
   }
 }

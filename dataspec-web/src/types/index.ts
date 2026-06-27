@@ -234,6 +234,7 @@ export type LintResult = Schemas['LintResult']
 export type LintIssue = Schemas['LintIssue']
 export type SqlCheckRecord = Schemas['SqlCheckRecord']
 export type RecordDetail = Schemas['RecordDetail']
+export type SqlCheckReplay = Schemas['SqlCheckReplay']
 export type AuthMe = Schemas['AuthMe']
 export type DdlGenerateResult = Schemas['DdlGenerateResult']
 export type Template = Schemas['Template']
@@ -275,6 +276,7 @@ export interface StandardSnapshotInfo {
   specHash?: string
   createdAt?: string
   versioned?: boolean
+  source?: 'current' | 'snapshot' | 'unversioned' | string
 }
 
 export interface StandardSnapshotCreateReq {

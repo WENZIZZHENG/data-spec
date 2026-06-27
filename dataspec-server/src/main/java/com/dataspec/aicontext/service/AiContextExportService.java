@@ -16,11 +16,13 @@ import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.ruleexemption.entity.RuleExemption;
 import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
+import com.dataspec.standard.dto.StandardSnapshotPayload;
 import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.service.EnumDictService;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -104,6 +106,14 @@ public class AiContextExportService {
         return generateDatabaseRules(projectId, buildScopedFields(projectId, options));
     }
 
+    public String generateDatabaseRules(Long projectId, AiContextScopeOptions options, Long snapshotId, String snapshotVersion) {
+        StandardSnapshotPayload snapshotPayload = resolveSnapshotPayload(projectId, snapshotId, snapshotVersion);
+        if (snapshotPayload == null) {
+            return generateDatabaseRules(projectId, options);
+        }
+        return generateDatabaseRules(projectId, snapshotPayload);
+    }
+
     private String generateDatabaseRules(Long projectId, ScopedFields scopedFields) {
         StringBuilder md = new StringBuilder();
         md.append("# Database Rules\n\n");
@@ -162,6 +172,14 @@ public class AiContextExportService {
         return PerformanceProbe.measure("ai-context.fieldCatalog", FIELD_CATALOG_WARN_MS,
                 "AI Context 字段目录变慢时优先使用 scope/query/status/limit 按需裁剪",
                 () -> generateFieldCatalogJson(projectId, currentSnapshot(projectId), buildScopedFields(projectId, options)));
+    }
+
+    public String generateFieldCatalogJson(Long projectId, AiContextScopeOptions options, Long snapshotId, String snapshotVersion) {
+        StandardSnapshotPayload snapshotPayload = resolveSnapshotPayload(projectId, snapshotId, snapshotVersion);
+        if (snapshotPayload == null) {
+            return generateFieldCatalogJson(projectId, options);
+        }
+        return generateFieldCatalogJson(projectId, snapshotPayload);
     }
 
     private String generateFieldCatalogJson(Long projectId, StandardSnapshotInfo snapshot) {
@@ -239,11 +257,76 @@ public class AiContextExportService {
         }
     }
 
+    private String generateFieldCatalogJson(Long projectId, StandardSnapshotPayload snapshotPayload) {
+        try {
+            ObjectMapper mapper = objectMapper.copy()
+                    .enable(SerializationFeature.INDENT_OUTPUT);
+            ObjectNode root = mapper.createObjectNode();
+            root.put("projectId", projectId);
+            root.set("standard", standardNode(mapper, snapshotPayload.standard()));
+
+            ArrayNode fieldsNode = mapper.createArrayNode();
+            for (JsonNode field : snapshotArray(snapshotPayload, "fields")) {
+                ObjectNode fn = mapper.createObjectNode();
+                copyText(fn, field, "name", "name");
+                copyText(fn, field, "dataType", "dataType");
+                copyBoolean(fn, field, "nullable", "nullable");
+                copyBoolean(fn, field, "sensitive", "sensitive");
+                copyText(fn, field, "status", "status");
+                copyText(fn, field, "comment", "comment");
+                copyText(fn, field, "defaultValue", "defaultValue");
+                copyText(fn, field, "displayName", "displayName");
+                copyText(fn, field, "category", "category");
+                copyText(fn, field, "tags", "tags");
+                copyLong(fn, field, "codeSetId", "codeSetId");
+                copyText(fn, field, "exampleValue", "example");
+                ArrayNode aliasesNode = aliasesToArrayNode(mapper, field.path("aliases").asText(null));
+                if (!aliasesNode.isEmpty()) {
+                    fn.set("aliases", aliasesNode);
+                }
+                fieldsNode.add(fn);
+            }
+            root.set("fields", fieldsNode);
+
+            ArrayNode enumsNode = mapper.createArrayNode();
+            for (JsonNode enumNode : snapshotArray(snapshotPayload, "enums")) {
+                ObjectNode en = mapper.createObjectNode();
+                copyText(en, enumNode, "code", "code");
+                copyText(en, enumNode, "name", "name");
+                copyText(en, enumNode, "valueType", "valueType");
+                ArrayNode valuesNode = mapper.createArrayNode();
+                JsonNode values = enumNode.path("values");
+                if (values.isArray()) {
+                    for (JsonNode value : values) {
+                        ObjectNode vn = mapper.createObjectNode();
+                        copyText(vn, value, "value", "value");
+                        copyText(vn, value, "label", "label");
+                        valuesNode.add(vn);
+                    }
+                }
+                en.set("values", valuesNode);
+                enumsNode.add(en);
+            }
+            root.set("enums", enumsNode);
+            return mapper.writeValueAsString(root);
+        } catch (Exception e) {
+            throw new RuntimeException("生成历史 field-catalog.json 失败", e);
+        }
+    }
+
     /**
      * 生成 rules.yaml —— 规则配置 YAML
      */
     public String generateRulesYaml(Long projectId) {
         return generateRulesYaml(projectId, currentSnapshot(projectId));
+    }
+
+    public String generateRulesYaml(Long projectId, Long snapshotId, String snapshotVersion) {
+        StandardSnapshotPayload snapshotPayload = resolveSnapshotPayload(projectId, snapshotId, snapshotVersion);
+        if (snapshotPayload == null) {
+            return generateRulesYaml(projectId);
+        }
+        return generateRulesYaml(snapshotPayload);
     }
 
     private String generateRulesYaml(Long projectId, StandardSnapshotInfo snapshot) {
@@ -267,6 +350,28 @@ public class AiContextExportService {
         }
         appendRuleExemptionsYaml(yaml, projectId);
 
+        return yaml.toString();
+    }
+
+    private String generateRulesYaml(StandardSnapshotPayload snapshotPayload) {
+        StringBuilder yaml = new StringBuilder();
+        yaml.append("# DataSpec 规则配置\n");
+        yaml.append("# 此文件由 DataSpec 历史标准快照生成\n\n");
+        appendStandardYaml(yaml, snapshotPayload.standard());
+
+        List<RuleConfig> configs = snapshotRuleConfigs(snapshotPayload);
+        appendStructuredNamingRules(yaml, configs);
+
+        yaml.append("rules:\n");
+        for (RuleConfig cfg : configs) {
+            yaml.append(String.format("  - code: %s\n", cfg.getRuleCode()));
+            yaml.append(String.format("    name: %s\n", cfg.getRuleName()));
+            yaml.append(String.format("    severity: %s\n", cfg.getSeverity()));
+            yaml.append(String.format("    enabled: %s\n", cfg.getEnabled()));
+            if (cfg.getParamsJson() != null && !cfg.getParamsJson().isBlank()) {
+                yaml.append(String.format("    params: %s\n", cfg.getParamsJson()));
+            }
+        }
         return yaml.toString();
     }
 
@@ -671,6 +776,44 @@ public class AiContextExportService {
                         return output.toByteArray();
                     } catch (IOException e) {
                         throw new RuntimeException("生成 " + PACKAGE_FILE_NAME + " 失败", e);
+                    }
+                });
+    }
+
+    public byte[] generateAiContextPackage(Long projectId, AiContextScopeOptions options, Long snapshotId, String snapshotVersion) {
+        StandardSnapshotPayload snapshotPayload = resolveSnapshotPayload(projectId, snapshotId, snapshotVersion);
+        if (snapshotPayload == null) {
+            return generateAiContextPackage(projectId, options);
+        }
+        return PerformanceProbe.measure("ai-context.package", CONTEXT_PACKAGE_WARN_MS,
+                "AI Context zip 变慢时优先导出按需包，或检查字段/规则/例外数量",
+                () -> {
+                    try (ByteArrayOutputStream output = new ByteArrayOutputStream();
+                         ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
+                        ScopeSummary scopeSummary = ScopeSummary.full();
+                        addTextEntry(zip, ".dataspec/DATABASE_RULES.md", generateDatabaseRules(projectId, snapshotPayload));
+                        addTextEntry(zip, ".dataspec/field-catalog.json", generateFieldCatalogJson(projectId, snapshotPayload));
+                        addTextEntry(zip, ".dataspec/field-catalog.schema.json", generateFieldCatalogSchemaJson());
+                        addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId, snapshotPayload.standard(), scopeSummary));
+                        addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId, scopeSummary));
+                        addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(snapshotPayload));
+                        addTextEntry(zip, ".dataspec/prompts.md", generatePromptsMarkdown());
+                        addTextEntry(zip, ".dataspec/workflows.md", generateWorkflowsMarkdown(projectId));
+                        addTextEntry(zip, ".dataspec/examples/good.sql", loadExampleSql(
+                                "../examples/good-example.sql",
+                                "examples/good-example.sql",
+                                defaultGoodExampleSql()
+                        ));
+                        addTextEntry(zip, ".dataspec/examples/bad.sql", loadExampleSql(
+                                "../examples/bad-example.sql",
+                                "examples/bad-example.sql",
+                                defaultBadExampleSql()
+                        ));
+                        addTextEntry(zip, "AGENTS.md.fragment", generateAgentsFragment(projectId));
+                        zip.finish();
+                        return output.toByteArray();
+                    } catch (IOException e) {
+                        throw new RuntimeException("生成历史 " + PACKAGE_FILE_NAME + " 失败", e);
                     }
                 });
     }
@@ -1110,7 +1253,8 @@ public class AiContextExportService {
                         "specVersion": { "type": "string" },
                         "specHash": { "type": "string" },
                         "name": { "type": "string" },
-                        "versioned": { "type": "boolean" }
+                        "versioned": { "type": "boolean" },
+                        "source": { "type": "string", "enum": ["current", "snapshot", "unversioned"] }
                       }
                     },
                     "contextScope": {
@@ -1352,6 +1496,16 @@ public class AiContextExportService {
         return standardSnapshotService.getCurrentSnapshot(projectId);
     }
 
+    private StandardSnapshotPayload resolveSnapshotPayload(Long projectId, Long snapshotId, String snapshotVersion) {
+        if (snapshotId != null) {
+            return standardSnapshotService.getSnapshotPayload(projectId, snapshotId);
+        }
+        if (snapshotVersion != null && !snapshotVersion.isBlank()) {
+            return standardSnapshotService.getSnapshotPayloadByVersion(projectId, snapshotVersion);
+        }
+        return null;
+    }
+
     private ObjectNode standardNode(ObjectMapper mapper, StandardSnapshotInfo snapshot) {
         ObjectNode node = mapper.createObjectNode();
         if (snapshot.snapshotId() != null) {
@@ -1365,6 +1519,7 @@ public class AiContextExportService {
             node.put("name", snapshot.name());
         }
         node.put("versioned", snapshot.versioned());
+        node.put("source", snapshot.source());
         return node;
     }
 
@@ -1377,7 +1532,91 @@ public class AiContextExportService {
         if (snapshot.specHash() != null) {
             yaml.append("  spec_hash: ").append(snapshot.specHash()).append("\n");
         }
-        yaml.append("  versioned: ").append(snapshot.versioned()).append("\n\n");
+        yaml.append("  versioned: ").append(snapshot.versioned()).append("\n");
+        yaml.append("  source: ").append(snapshot.source()).append("\n\n");
+    }
+
+    private Iterable<JsonNode> snapshotArray(StandardSnapshotPayload snapshotPayload, String fieldName) {
+        JsonNode node = snapshotPayload.payload().path(fieldName);
+        return node.isArray() ? node : objectMapper.createArrayNode();
+    }
+
+    private List<RuleConfig> snapshotRuleConfigs(StandardSnapshotPayload snapshotPayload) {
+        List<RuleConfig> configs = new ArrayList<>();
+        for (JsonNode ruleNode : snapshotArray(snapshotPayload, "rules")) {
+            RuleConfig rule = new RuleConfig();
+            rule.setId(ruleNode.path("id").isNumber() ? ruleNode.path("id").asLong() : null);
+            rule.setRuleCode(ruleNode.path("ruleCode").asText(null));
+            rule.setRuleName(ruleNode.path("ruleName").asText(null));
+            rule.setSeverity(ruleNode.path("severity").asText(null));
+            rule.setEnabled(ruleNode.path("enabled").isMissingNode() || ruleNode.path("enabled").asBoolean());
+            rule.setParamsJson(ruleNode.path("paramsJson").asText(null));
+            configs.add(rule);
+        }
+        return configs;
+    }
+
+    private String generateDatabaseRules(Long projectId, StandardSnapshotPayload snapshotPayload) {
+        StringBuilder md = new StringBuilder();
+        md.append("# Database Rules\n\n");
+        md.append("<!-- 此文件由 DataSpec 历史标准快照生成，供 AI 编程工具参考 -->\n\n");
+
+        List<Map<String, String>> rules = sqlLintService.listAvailableRules();
+        md.append("## 校验规则\n\n");
+        for (Map<String, String> rule : rules) {
+            md.append(String.format("- **%s** (%s)\n", rule.get("name"), rule.get("code")));
+        }
+        md.append("\n");
+
+        List<RuleConfig> configs = snapshotRuleConfigs(snapshotPayload);
+        if (!configs.isEmpty()) {
+            md.append("## 项目规则配置\n\n");
+            for (RuleConfig cfg : configs) {
+                md.append(String.format("- `%s` [%s] %s\n",
+                        cfg.getRuleCode(), cfg.getSeverity(), cfg.getRuleName()));
+                if (cfg.getParamsJson() != null && !cfg.getParamsJson().isBlank()) {
+                    md.append(String.format("  - 参数: %s\n", cfg.getParamsJson()));
+                }
+            }
+            md.append("\n");
+        }
+
+        JsonNode fields = snapshotPayload.payload().path("fields");
+        if (fields.isArray() && !fields.isEmpty()) {
+            md.append("## 标准字段\n\n");
+            for (JsonNode field : fields) {
+                md.append(String.format("- `%s` %s",
+                        field.path("name").asText(""),
+                        field.path("dataType").asText("")));
+                if (!field.path("comment").asText("").isBlank()) {
+                    md.append(" — ").append(field.path("comment").asText());
+                }
+                md.append("\n");
+            }
+            md.append("\n");
+        }
+        return md.toString();
+    }
+
+    private void copyText(ObjectNode target, JsonNode source, String sourceName, String targetName) {
+        JsonNode node = source.path(sourceName);
+        if (!node.isMissingNode() && !node.isNull() && !node.asText("").isBlank()) {
+            target.put(targetName, node.asText());
+        }
+    }
+
+    private void copyBoolean(ObjectNode target, JsonNode source, String sourceName, String targetName) {
+        JsonNode node = source.path(sourceName);
+        if (!node.isMissingNode() && !node.isNull()) {
+            target.put(targetName, node.asBoolean());
+        }
+    }
+
+    private void copyLong(ObjectNode target, JsonNode source, String sourceName, String targetName) {
+        JsonNode node = source.path(sourceName);
+        if (!node.isMissingNode() && !node.isNull() && node.canConvertToLong()) {
+            target.put(targetName, node.asLong());
+        }
     }
 
     private record ScopedFields(List<FieldMatch> fields, ScopeSummary summary) {

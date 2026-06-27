@@ -2,6 +2,7 @@ package com.dataspec.standard.service;
 
 import com.dataspec.standard.dto.StandardSnapshotCreateReq;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
+import com.dataspec.standard.dto.StandardSnapshotPayload;
 
 import java.util.List;
 
@@ -15,4 +16,8 @@ public interface StandardSnapshotService {
     StandardSnapshotInfo getCurrentSnapshot(Long projectId);
 
     List<StandardSnapshotInfo> listSnapshots(Long projectId);
+
+    StandardSnapshotPayload getSnapshotPayload(Long projectId, Long snapshotId);
+
+    StandardSnapshotPayload getSnapshotPayloadByVersion(Long projectId, String version);
 }

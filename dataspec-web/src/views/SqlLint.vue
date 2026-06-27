@@ -152,6 +152,50 @@
           <span class="record-time">{{ formatDate(activeRecord.record.createdAt) }}</span>
         </div>
 
+        <div v-if="activeRecord.replay" class="detail-section replay-section">
+          <div class="detail-title replay-title">
+            <span>标准回放</span>
+            <el-tag size="small" :type="replayStatusType(activeRecord.replay.status)">
+              {{ replayStatusLabel(activeRecord.replay.status) }}
+            </el-tag>
+          </div>
+          <div class="replay-grid">
+            <div class="replay-meta">
+              <span class="replay-label">记录标准</span>
+              <span>{{ standardLabel(activeRecord.replay.recordedStandard) }}</span>
+            </div>
+            <div class="replay-meta">
+              <span class="replay-label">当前标准</span>
+              <span>{{ standardLabel(activeRecord.replay.currentStandard) }}</span>
+            </div>
+            <div class="replay-meta">
+              <span class="replay-label">计数</span>
+              <span>
+                字段 {{ activeRecord.replay.summary?.fieldCount ?? 0 }} /
+                枚举 {{ activeRecord.replay.summary?.enumCount ?? 0 }} /
+                规则 {{ activeRecord.replay.summary?.ruleCount ?? 0 }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="activeRecord.replay.summary?.exportCommand" class="replay-command">
+            <div class="fixed-sql-header compact-header">
+              <span>历史 Context 导出命令</span>
+              <el-button size="small" text type="primary" @click="handleCopyReplayCommand">
+                <el-icon><CopyDocument /></el-icon>
+                复制
+              </el-button>
+            </div>
+            <pre class="sql-code compact">{{ activeRecord.replay.summary.exportCommand }}</pre>
+          </div>
+
+          <ul v-if="activeRecord.replay.nextActions?.length" class="replay-actions">
+            <li v-for="(action, index) in activeRecord.replay.nextActions" :key="index">
+              {{ action }}
+            </li>
+          </ul>
+        </div>
+
         <div class="detail-section">
           <div class="detail-title">原始 SQL</div>
           <pre class="sql-code compact">{{ activeRecord.record.originalSql }}</pre>
@@ -204,7 +248,7 @@ import { ElMessage } from 'element-plus'
 import * as monaco from 'monaco-editor'
 import { getLintRecord, lintSql, listLintRecords } from '@/api/lint'
 import { useProjectStore } from '@/stores/project'
-import type { LintIssue, LintResult, RecordDetail, SqlCheckRecord } from '@/types'
+import type { LintIssue, LintResult, RecordDetail, SqlCheckRecord, StandardSnapshotInfo } from '@/types'
 
 const editorContainer = ref<HTMLElement>()
 const lintResult = ref<LintResult | null>(null)
@@ -342,11 +386,23 @@ async function handleCopySql() {
   if (!fixedSql) {
     return
   }
+  await copyToClipboard(fixedSql, '已复制修正 SQL', '复制失败，请手动选择修正 SQL')
+}
+
+async function handleCopyReplayCommand() {
+  const command = activeRecord.value?.replay?.summary?.exportCommand
+  if (!command) {
+    return
+  }
+  await copyToClipboard(command, '已复制回放命令', '复制失败，请手动选择回放命令')
+}
+
+async function copyToClipboard(text: string, successMessage: string, errorMessage: string) {
   try {
-    await navigator.clipboard.writeText(fixedSql)
-    ElMessage.success('已复制修正 SQL')
+    await navigator.clipboard.writeText(text)
+    ElMessage.success(successMessage)
   } catch {
-    ElMessage.error('复制失败，请手动选择修正 SQL')
+    ElMessage.error(errorMessage)
   }
 }
 
@@ -431,6 +487,40 @@ function formatDate(value?: string) {
     return value
   }
   return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function replayStatusLabel(status?: string) {
+  const map: Record<string, string> = {
+    current: '当前一致',
+    historical: '历史标准',
+    unversioned: '未版本化',
+    missing_snapshot: '快照缺失'
+  }
+  return status ? map[status] ?? status : '-'
+}
+
+function replayStatusType(status?: string) {
+  const map: Record<string, 'success' | 'warning' | 'info' | 'danger'> = {
+    current: 'success',
+    historical: 'warning',
+    unversioned: 'info',
+    missing_snapshot: 'danger'
+  }
+  return status ? map[status] ?? 'info' : 'info'
+}
+
+function standardLabel(standard?: StandardSnapshotInfo) {
+  if (!standard) {
+    return '-'
+  }
+  const version = standard.specVersion || 'unversioned'
+  const hash = standard.specHash ? ` / ${shortHash(standard.specHash)}` : ''
+  const source = standard.source ? ` / ${standard.source}` : ''
+  return `${version}${hash}${source}`
+}
+
+function shortHash(hash: string) {
+  return hash.length > 12 ? `${hash.slice(0, 12)}...` : hash
 }
 
 function initialSql() {
@@ -710,8 +800,63 @@ function buildDiffLines(originalLines: string[], fixedLines: string[]) {
   color: #303133;
 }
 
+.replay-section {
+  padding: 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background: #f9fafb;
+}
+
+.replay-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.replay-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.replay-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 13px;
+  color: #303133;
+}
+
+.replay-label {
+  color: #909399;
+  font-size: 12px;
+}
+
+.replay-command {
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.compact-header {
+  padding: 8px 10px;
+}
+
+.replay-actions {
+  margin: 0;
+  padding-left: 18px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
 @media (max-width: 1100px) {
   .lint-content {
+    grid-template-columns: 1fr;
+  }
+
+  .replay-grid {
     grid-template-columns: 1fr;
   }
 }

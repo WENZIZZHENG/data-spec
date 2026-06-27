@@ -11,9 +11,11 @@ import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.security.context.ProjectAccessGuard;
 import com.dataspec.standard.dto.StandardSnapshotCreateReq;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
+import com.dataspec.standard.dto.StandardSnapshotPayload;
 import com.dataspec.standard.entity.StandardSnapshot;
 import com.dataspec.standard.repository.StandardSnapshotRepository;
 import com.dataspec.standard.service.StandardSnapshotService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -63,7 +65,7 @@ public class StandardSnapshotServiceImpl implements StandardSnapshotService {
         snapshot.setPayloadJson(payloadJson);
         snapshot.setSnapshotHash(sha256(payloadJson));
         standardSnapshotRepository.save(snapshot);
-        return toInfo(snapshot);
+        return toInfo(snapshot).withSource("current");
     }
 
     @Override
@@ -72,6 +74,7 @@ public class StandardSnapshotServiceImpl implements StandardSnapshotService {
         ProjectAccessGuard.requireProjectAccess(projectId);
         return standardSnapshotRepository.findLatestByProjectId(projectId)
                 .map(this::toInfo)
+                .map(snapshot -> snapshot.withSource("current"))
                 .orElseGet(() -> StandardSnapshotInfo.unversioned(projectId));
     }
 
@@ -82,6 +85,28 @@ public class StandardSnapshotServiceImpl implements StandardSnapshotService {
         return standardSnapshotRepository.findByProjectId(projectId).stream()
                 .map(this::toInfo)
                 .toList();
+    }
+
+    @Override
+    public StandardSnapshotPayload getSnapshotPayload(Long projectId, Long snapshotId) {
+        requireProject(projectId);
+        ProjectAccessGuard.requireProjectAccess(projectId);
+        if (snapshotId == null) {
+            throw new BizException(400, "标准快照 ID 不能为空");
+        }
+        StandardSnapshot snapshot = standardSnapshotRepository.findByProjectIdAndId(projectId, snapshotId)
+                .orElseThrow(() -> new BizException(404, "标准快照不存在或不属于当前项目: " + snapshotId));
+        return toPayload(snapshot);
+    }
+
+    @Override
+    public StandardSnapshotPayload getSnapshotPayloadByVersion(Long projectId, String version) {
+        requireProject(projectId);
+        ProjectAccessGuard.requireProjectAccess(projectId);
+        String normalizedVersion = requiredVersion(version);
+        StandardSnapshot snapshot = standardSnapshotRepository.findByProjectIdAndVersion(projectId, normalizedVersion)
+                .orElseThrow(() -> new BizException(404, "标准版本不存在或不属于当前项目: " + normalizedVersion));
+        return toPayload(snapshot);
     }
 
     private String buildPayloadJson(Long projectId) {
@@ -181,7 +206,34 @@ public class StandardSnapshotServiceImpl implements StandardSnapshotService {
                 snapshot.getDescription(),
                 snapshot.getSnapshotHash(),
                 snapshot.getCreatedAt(),
-                true);
+                true,
+                "snapshot");
+    }
+
+    private StandardSnapshotPayload toPayload(StandardSnapshot snapshot) {
+        try {
+            String payloadJson = snapshot.getPayloadJson();
+            String actualHash = sha256(payloadJson);
+            if (!actualHash.equals(snapshot.getSnapshotHash())) {
+                throw new BizException(500, "标准快照 payload hash 校验失败: " + snapshot.getId());
+            }
+            JsonNode payload = objectMapper.readTree(payloadJson);
+            return new StandardSnapshotPayload(
+                    toInfo(snapshot).withSource("snapshot"),
+                    payload,
+                    countArray(payload, "fields"),
+                    countArray(payload, "enums"),
+                    countArray(payload, "rules"));
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(500, "读取标准快照 payload 失败: " + e.getMessage());
+        }
+    }
+
+    private int countArray(JsonNode payload, String fieldName) {
+        JsonNode node = payload == null ? null : payload.get(fieldName);
+        return node != null && node.isArray() ? node.size() : 0;
     }
 
     private void requireProject(Long projectId) {

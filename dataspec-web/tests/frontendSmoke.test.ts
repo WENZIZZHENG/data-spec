@@ -71,7 +71,9 @@ test('keeps SQL lint fixed SQL and record history flow wired', () => {
     'projectId: projectStore.currentProjectId ?? undefined',
     'lintResult.fixedSql',
     'handleCopySql',
-    'navigator.clipboard.writeText(fixedSql)',
+    'copyToClipboard(fixedSql',
+    'handleCopyReplayCommand',
+    'activeRecord.replay',
     'async function loadRecords()',
     'await listLintRecords(projectId, recordCurrent.value, recordSize.value)',
     'async function handleViewRecord(id?: number)',
@@ -181,8 +183,9 @@ test('keeps DDL generation and AI Context export flows project-scoped', () => {
     'normalizeAiContextScopeParams(scopeForm)',
     'previewDatabaseRules(projectId, scopeParams)',
     'previewFieldCatalog(projectId, scopeParams)',
-    'previewRulesYaml(projectId)',
+    'previewRulesYaml(projectId, scopeParams)',
     'downloadAiContextPackage(projectId, scopeParams)',
+    'listStandardSnapshots(projectId)',
     'projectStore.createDemoProjectAndSelect()'
   ], 'AiExport.vue')
 

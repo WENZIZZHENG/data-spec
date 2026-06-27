@@ -855,6 +855,66 @@ test('export-context passes scoped AI context options', async () => {
   }
 })
 
+test('export-context passes snapshot options without secrets', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    const outputPath = path.join(dir, 'dataspec-ai-context.zip')
+    const fetchFn = async (url, init) => {
+      assert.equal(
+        url,
+        'http://localhost:8090/api/ai-context/package/download?projectId=9&snapshotId=42&snapshotVersion=v-history'
+      )
+      assert.equal(init.headers.Authorization, 'Bearer test-token')
+      assert.equal(url.includes('test-token'), false)
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => Uint8Array.from([7, 8]).buffer
+      }
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'export-context',
+      '--project',
+      '9',
+      '--snapshot-id',
+      '42',
+      '--snapshot-version',
+      'v-history',
+      '--dataspec-token',
+      'test-token',
+      '--output',
+      outputPath
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.deepEqual([...await readFile(outputPath)], [7, 8])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('export-context rejects invalid snapshot id before calling server', async () => {
+  const io = createIo()
+  const fetchFn = async () => {
+    throw new Error('fetch should not be called')
+  }
+
+  const code = await runCli([
+    'export-context',
+    '--project',
+    '9',
+    '--snapshot-id',
+    'bad',
+    '--output',
+    'dataspec-ai-context.zip'
+  ], io, fetchFn)
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /无效 snapshot id: bad/)
+})
+
 test('suggest-field calls field suggestion api and prints json', async () => {
   const calls = []
   const fetchFn = async (url) => {

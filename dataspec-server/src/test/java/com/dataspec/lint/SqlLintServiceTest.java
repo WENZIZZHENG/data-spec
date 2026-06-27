@@ -11,6 +11,7 @@ import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.lint.model.LintIssue;
+import com.dataspec.lint.model.SqlCheckReplay;
 import com.dataspec.lint.rules.RecommendedFieldNameRule;
 import com.dataspec.lint.rules.RequiredColumnsRule;
 import com.dataspec.lint.rules.TableNameSnakeCaseRule;
@@ -381,6 +382,11 @@ class SqlLintServiceTest {
         @Override
         public List<LintIssue> parseIssues(SqlCheckRecord record) {
             return List.of();
+        }
+
+        @Override
+        public SqlCheckReplay buildReplay(SqlCheckRecord record) {
+            throw new UnsupportedOperationException();
         }
     }
 
