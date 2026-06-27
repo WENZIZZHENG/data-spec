@@ -5,7 +5,7 @@
 ## 下一步顺序
 
 1. P6-12 AI 输出契约稳定性与兼容测试已完成第一版，下一步推进 P6-13 GitHub inline review 实战接入。
-2. P6 后续继续补 GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板和多项目标准复用包。
+2. P6 后续继续补 GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板、多项目标准复用包、AI 写入安全策略、规则调试器、元数据增量缓存、CLI/MCP 兼容握手、前端类型化 API Client 和标准演练沙箱。
 3. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
@@ -706,6 +706,60 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：新项目可从共享包初始化通用标准；共享包升级后能看到本项目覆盖项和漂移项；AI Context 能说明字段来自共享包还是项目覆盖。
 - 边界：不做企业组织层级、审批发布、跨团队权限或复杂包仓库；第一版只服务个人/小团队复用。
 
+### P6-69：AI 写入安全策略与 dry-run 协议
+- 状态：待办。
+- 为什么做：DataSpec 越来越多入口会被 AI 通过 CLI/MCP 调用，个人工具也需要避免“AI 一次误写很多标准字段、规则或导入记录”；安全策略应偏产品内建约束，而不是企业审批流。
+- 已有基础：已有 API Token、`doctor`、workflow recipes、AI 能力清单待办、AI 任务卡待办、幂等锁待办和敏感信息脱敏待办。
+- 缺口：CLI/MCP/API 对写操作缺少统一 machine-readable safety metadata；AI 不容易判断哪些操作只读、哪些需要 dry-run、哪些必须带 idempotency key 或可撤销证据。
+- 落地产物：为高风险写操作定义 safety metadata，包含 `readOnly`、`writesProject`、`requiresDryRun`、`supportsUndo`、`requiresIdempotencyKey`、`sensitiveInputs` 和 `nextActions`；CLI/MCP 输出并校验该协议，前端批量写入前展示 dry-run 摘要。
+- 验收标准：AI 能先枚举安全等级再执行写操作；批量导入、批量维护、标准合并等写入默认可 dry-run；缺少必要幂等参数时返回结构化错误；日志不输出密码/token。
+- 边界：不做组织审批、多人审核或复杂 RBAC；不阻塞单条低风险个人 CRUD。
+
+### P6-70：SQL 规则调试器与可解释匹配面板
+- 状态：待办。
+- 为什么做：规则越来越多后，用户和 AI 需要知道某条 SQL 为什么被某个规则命中、命中的 AST/文本范围是什么、参数如何影响结果，否则只能靠猜。
+- 已有基础：已有 SQL lint、source range、fixedSql、规则配置、golden fixtures、AI 可读错误码待办和多方言兼容矩阵待办。
+- 缺口：当前 lint 结果面向最终问题展示，缺少 rule trace、匹配上下文、参数快照和“为什么没命中”的调试视图。
+- 落地产物：新增规则调试 API 或 CLI 模式；返回 ruleCode、severity、enabled、paramsSnapshot、matchTrace、sourceRange、fixStrategy、suppressionStatus 和 debugNotes；前端 SQL 校验页提供调试面板。
+- 验收标准：输入一段 SQL 后能查看每条规则的启用状态和命中理由；规则误报可直接跳转到豁免建议或规则参数；调试输出可被 AI 用来修规则或补标准。
+- 边界：不暴露完整复杂 AST 编辑器，不要求所有规则第一版都有深度 trace；不改变现有 lint 结果兼容字段。
+
+### P6-71：数据库元数据增量缓存与变更指纹
+- 状态：待办。
+- 为什么做：数据库直连反向导入、覆盖率报告和元数据浏览会反复读取同一批 schema；没有增量缓存时，大库会慢，AI 也无法判断“这次和上次相比变了什么”。
+- 已有基础：已有数据库直连、连接预设、metadata 预览、覆盖率报告、字段来源批次、schema dump 待办、大库扫描计划待办和变更感知扫描待办。
+- 缺口：缺少 metadata fingerprint、lastSeenAt、changeSummary 和缓存失效策略；每次扫描结果也没有稳定 hash 供 AI 判断是否需要重新生成 Context 或导入候选。
+- 落地产物：新增只保存结构信息的 metadata cache；按连接预设、schema、table 计算 fingerprint；输出新增/删除/变更表字段摘要、缓存时间、刷新方式和源数据库版本。
+- 验收标准：重复扫描同一数据库可复用缓存并提示是否过期；字段变化能生成差异摘要；缓存不保存密码、不保存业务数据行；AI 可根据 fingerprint 决定是否重跑反向导入。
+- 边界：不做实时同步，不监听数据库 binlog，不默认后台扫描全库。
+
+### P6-72：CLI/MCP 与服务端版本兼容握手
+- 状态：待办。
+- 为什么做：业务仓库里的 CLI/MCP 脚本可能落后于 DataSpec 服务端，OpenAPI 和 AI 契约也会演进；AI 遇到版本不兼容时应得到明确诊断，而不是运行到一半才失败。
+- 已有基础：已有 `doctor`、OpenAPI 防漂移、AI 输出契约测试、workflow recipes、CLI/MCP 和 README 启动说明。
+- 缺口：缺少统一 `capabilities/version` 握手；CLI 不知道服务端最小兼容版本、schema hash、功能开关和已废弃字段。
+- 落地产物：新增服务端 capability endpoint 或复用现有健康检查扩展；CLI/MCP 在关键命令前读取 serverVersion、apiSchemaHash、minCliVersion、supportedCapabilities、deprecatedFields 和 upgradeHints。
+- 验收标准：CLI 版本过旧、服务端未启用某能力、OpenAPI schema 漂移时都有明确中文诊断和修复命令；AI 可读取 JSON 结果决定升级、降级或停止。
+- 边界：不做自动在线升级，不强制所有历史 CLI 版本兼容无限期；不引入远程遥测。
+
+### P6-73：前端类型化 API Client 与请求状态收口
+- 状态：待办。
+- 为什么做：前端已有 OpenAPI 类型生成，但请求封装仍是手写薄层；随着页面增多，字段漂移、loading/error 重复处理和分页参数不一致会继续消耗维护成本。
+- 已有基础：已有 `openapi-typescript` schema、`request.ts` 拦截器、项目 store、前端统一数据状态待办、OpenAPI 防漂移和关键流程 E2E 待办。
+- 缺口：缺少以 OpenAPI paths 为核心的 typed client 约束；列表分页、项目 ID、错误码、空状态和重试提示仍散落在各页面。
+- 落地产物：封装轻量 typed API client 或生成 request helper；统一 `PageResult`、项目参数、错误响应、取消请求、重试建议和 loading state；优先迁移高频页面。
+- 验收标准：新增 API 调用默认能从 OpenAPI paths 推导请求/响应类型；前端 build 能发现路径或字段漂移；常见错误在页面显示一致 nextActions。
+- 边界：不一次性重写所有页面，不引入大型运行时 SDK；保留现有 Axios 拦截器和 token 行为。
+
+### P6-74：标准变更演练沙箱与样例回归
+- 状态：待办。
+- 为什么做：修改字段、规则或模板前，用户想知道会影响哪些 SQL、DDL、AI Prompt 和反向导入候选；需要一个轻量“先演练再保存”的入口。
+- 已有基础：已有标准快照、What-if 预览待办、Prompt 评测、golden fixtures、SQL 检查记录、DDL 生成、AI 回放和标准质量门禁待办。
+- 缺口：现有能力分散，缺少一次性把“改动草案 -> 样例集合 -> lint/DDL/prompt 结果 diff -> 保存建议”串起来的沙箱。
+- 落地产物：新增标准草案演练入口；支持选择字段/规则/模板草案和样例集，运行 lint、DDL preview、Prompt preview、Context diff，并输出风险、收益和建议保存步骤。
+- 验收标准：用户在保存规则或字段变更前能看到对 good/bad SQL、模板 DDL 和 AI Context 的影响；AI 可读取演练报告决定是否继续修改；演练不写入正式标准。
+- 边界：不做多人审批发布，不替代完整 CI；第一版只覆盖项目内 fixture、历史检查记录和用户手动粘贴样例。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -728,6 +782,10 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`dbeaver/dbeaver`](https://github.com/dbeaver/dbeaver)：数据库连接配置、metadata 浏览和多方言体验参考。
 - [`reviewdog/reviewdog`](https://github.com/reviewdog/reviewdog)：基于 diff 的代码审查评论、诊断聚合和 PR 反馈参考。
 - [`pre-commit/pre-commit`](https://github.com/pre-commit/pre-commit)：本地变更钩子、按文件质量门禁和轻量开发工作流参考。
+- [`hashicorp/terraform`](https://github.com/hashicorp/terraform)：plan/apply、状态记录和 dry-run 风格的写入前演练参考。
+- [`Redocly/redocly-cli`](https://github.com/Redocly/redocly-cli)：OpenAPI lint、bundle 和契约治理参考。
+- [`TanStack/query`](https://github.com/TanStack/query)：前端 server state、请求缓存、重试和错误状态收口参考。
+- [`gitleaks/gitleaks`](https://github.com/gitleaks/gitleaks)：敏感信息检测、日志脱敏和 secret 防泄漏参考。
 - [Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)：AI 应用接入 resources、prompts、tools 的协议基础。
 - [`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)：MCP server 参考实现集合。
 - [`agents.md`](https://agents.md/)：面向 coding agent 的项目指令文件约定。
