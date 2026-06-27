@@ -93,6 +93,10 @@
             <el-icon><Search /></el-icon>
             <span>反向导入</span>
           </el-menu-item>
+          <el-menu-item index="/field-coverage">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>覆盖率报告</span>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 系统设置 -->

@@ -315,3 +315,60 @@ export interface FieldSourceDetail {
   source?: FieldSource
   batch?: ReverseImportBatch | null
 }
+
+export type FieldCoverageStatus =
+  | 'STANDARD_MATCH'
+  | 'ALIAS_MATCH'
+  | 'MISSING_COMMENT'
+  | 'POSSIBLE_DUPLICATE'
+  | 'UNMANAGED'
+
+export interface FieldCoverageSummary {
+  tableCount?: number
+  columnCount?: number
+  coveredCount?: number
+  unmanagedCount?: number
+  missingCommentCount?: number
+  possibleDuplicateCount?: number
+  coverageRate?: number
+}
+
+export interface FieldCoverageItem {
+  tableName?: string
+  columnName?: string
+  dataType?: string
+  comment?: string
+  status?: FieldCoverageStatus
+  covered?: boolean
+  standardFieldName?: string
+  standardDisplayName?: string
+  matchType?: string
+  recommendedFieldName?: string
+  reason?: string
+}
+
+export interface FieldCoverageTable {
+  tableName?: string
+  comment?: string
+  columnCount?: number
+  coveredCount?: number
+  unmanagedCount?: number
+  missingCommentCount?: number
+  possibleDuplicateCount?: number
+  coverageRate?: number
+  fields?: FieldCoverageItem[]
+}
+
+export interface UnmanagedFieldRanking {
+  columnName?: string
+  count?: number
+  tables?: string[]
+  recommendedFieldName?: string
+  reason?: string
+}
+
+export interface FieldCoverageReport {
+  summary?: FieldCoverageSummary
+  tables?: FieldCoverageTable[]
+  unmanagedRankings?: UnmanagedFieldRanking[]
+}

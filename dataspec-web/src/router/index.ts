@@ -79,6 +79,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '反向导入' }
   },
   {
+    path: '/field-coverage',
+    name: 'FieldCoverage',
+    component: () => import('@/views/FieldCoverage.vue'),
+    meta: { title: '覆盖率报告' }
+  },
+  {
     path: '/tokens',
     name: 'TokenManage',
     component: () => import('@/views/TokenManage.vue'),

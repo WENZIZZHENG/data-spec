@@ -1,6 +1,8 @@
 package com.dataspec.reverseimport.service.impl;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.coverage.model.FieldCoverageReport;
+import com.dataspec.coverage.service.FieldCoverageService;
 import com.dataspec.lint.model.ColumnDef;
 import com.dataspec.lint.model.TableDef;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
@@ -35,16 +37,25 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     private static final String TYPE_MYSQL = "mysql";
 
     private final ReverseImportService reverseImportService;
+    private final FieldCoverageService fieldCoverageService;
     private final ConnectionProvider connectionProvider;
 
     @Autowired
-    public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService) {
-        this(reverseImportService, new DriverManagerConnectionProvider());
+    public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
+                                            FieldCoverageService fieldCoverageService) {
+        this(reverseImportService, fieldCoverageService, new DriverManagerConnectionProvider());
     }
 
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
                                             ConnectionProvider connectionProvider) {
+        this(reverseImportService, null, connectionProvider);
+    }
+
+    public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
+                                            FieldCoverageService fieldCoverageService,
+                                            ConnectionProvider connectionProvider) {
         this.reverseImportService = reverseImportService;
+        this.fieldCoverageService = fieldCoverageService;
         this.connectionProvider = connectionProvider;
     }
 
@@ -90,6 +101,23 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         try (Connection connection = connectionProvider.open(req)) {
             List<TableDef> tables = readSelectedTables(connection, req);
             return reverseImportService.compareTables(req.getProjectId(), tables);
+        } catch (SQLException e) {
+            throw new BizException("读取数据库表结构失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public FieldCoverageReport coverage(DatabaseConnectionReq req) {
+        validateConnectionReq(req);
+        if (req.getTableNames() == null || req.getTableNames().isEmpty()) {
+            throw new BizException("请至少选择一张表");
+        }
+        if (fieldCoverageService == null) {
+            throw new BizException("字段覆盖率服务未初始化");
+        }
+        try (Connection connection = connectionProvider.open(req)) {
+            List<TableDef> tables = readSelectedTables(connection, req);
+            return fieldCoverageService.reportTables(req.getProjectId(), tables);
         } catch (SQLException e) {
             throw new BizException("读取数据库表结构失败: " + e.getMessage());
         }

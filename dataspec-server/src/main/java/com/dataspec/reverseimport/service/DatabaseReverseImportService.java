@@ -1,5 +1,6 @@
 package com.dataspec.reverseimport.service;
 
+import com.dataspec.coverage.model.FieldCoverageReport;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
@@ -20,4 +21,6 @@ public interface DatabaseReverseImportService {
     ReverseImportPreview preview(DatabaseConnectionReq req);
 
     ReverseImportCompareResult compare(DatabaseConnectionReq req);
+
+    FieldCoverageReport coverage(DatabaseConnectionReq req);
 }

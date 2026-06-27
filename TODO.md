@@ -4,8 +4,8 @@
 
 ## 下一步顺序
 
-1. P6-1 标准版本快照已完成第一版，下一步推进 P6-2 字段使用覆盖率与未纳管字段盘点。
-2. P6 后续继续补 AI 回放、业务仓库初始化向导、标准质量评分、轻量影响分析、AI contract fixtures、按需 AI Context、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断和 AI 批量任务。
+1. P6-2 字段使用覆盖率已完成第一版，下一步推进 P6-3 AI 生成与修复决策回放。
+2. P6 后续继续补业务仓库初始化向导、标准质量评分、轻量影响分析、AI contract fixtures、按需 AI Context、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包和 fixedSql 策略化。
 3. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
@@ -17,7 +17,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，后续再提升覆盖率、AI 回放、初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索和 OpenSpec 收口。
+- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，后续再提升 AI 回放、初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索和 OpenSpec 收口。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -107,13 +107,12 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：第一版不做复杂发布审批、多人审核、语义化版本治理、按历史快照完整还原或跨项目标准合并；快照 payload 已保存，后续可继续发展回放能力。
 
 ### P6-2：字段使用覆盖率与未纳管字段盘点
-- 状态：待办。
+- 状态：已完成第一版，已新增字段覆盖率报告后端 API、数据库直连 metadata 报告、SQL/DDL 报告和前端“数据管理 / 覆盖率报告”页面。
 - 为什么做：个人/小团队维护数标时，最有价值的反馈是“真实数据库里哪些字段已经被标准覆盖，哪些还在野生生长”，这能直接指导下一轮补标准。
 - 已有基础：已有数据库直连 metadata、SQL 反向导入、字段推荐、差异预览和字段来源追踪待办。
-- 缺口：缺少按项目/表/字段统计的标准覆盖率、未知字段清单、重复语义字段和高频未纳管字段排行。
-- 落地产物：基于数据库直连或 SQL/DDL 输入生成覆盖率报告；展示标准命中、别名命中、未命中、疑似重复和缺注释字段；前端提供按表和状态筛选。
+- 已完成能力：基于 SQL/DDL 或数据库直连选表生成即时覆盖率报告；输出项目级 summary、表级统计、字段明细和未纳管字段排行；字段状态区分标准命中、别名命中、缺注释、疑似重复和未纳管；前端支持连接、加载表、生成报告、按表/状态筛选，并可跳转字段库或反向导入。
 - 验收标准：连接数据库后能输出字段覆盖率百分比和未纳管字段 Top 列表；用户可从报告跳转到反向导入或字段库补标准。
-- 边界：不扫描业务数据行，不做敏感数据采样，不做定时后台同步。
+- 边界：第一版不扫描业务数据行，不做敏感数据采样，不做定时后台同步，不保存数据库密码，不自动导入或合并标准字段。
 
 ### P6-3：AI 生成与修复决策回放
 - 状态：待办。
@@ -340,6 +339,78 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：用户能看到标准系统被 AI 使用后的高频问题；能从反馈直接跳转到字段库、规则配置、质量检查或例外管理；统计不采集业务数据行。
 - 边界：不做用户行为监控，不调用外部分析服务，不把反馈自动写成标准变更。
 
+### P6-28：标准候选 Inbox 与采纳工作台
+- 状态：待办。
+- 为什么做：覆盖率报告、反向导入、字段推荐未命中和 AI 使用反馈都会产生“可能应该进入标准库”的候选项；如果散落在各页面，用户和 AI 都很难形成持续改进闭环。
+- 已有基础：已有反向导入预览、字段覆盖率报告、字段推荐、导入来源批次、字段变更日志和 AI 使用反馈待办。
+- 缺口：候选字段、疑似重复字段、待补别名和待修质量问题缺少统一入口；接受、忽略、合并、延后这些决策也没有结构化记录。
+- 落地产物：新增轻量标准候选 Inbox；聚合反向导入、覆盖率、字段推荐和质量检查产生的候选；支持接受为新字段、合并到已有字段、忽略并填写原因、延后处理；决策结果写入来源和变更日志。
+- 验收标准：用户能在一个页面处理“未纳管字段 -> 标准字段”的采纳流程；AI 能读取候选状态和用户决策，避免反复推荐已忽略项。
+- 边界：不做审批流，不自动合并标准字段，不把 Inbox 变成团队工单系统。
+
+### P6-29：离线 AI Context 与业务仓库缓存模式
+- 状态：待办。
+- 为什么做：AI agent 在业务仓库中工作时，不一定随时能连上 DataSpec 服务；需要一个可提交或可缓存的离线上下文，让 AI 至少能按最近标准进行 lint、检索和生成提示。
+- 已有基础：已有 AI Context zip、标准快照、`.dataspec/config.json`、`dataspec doctor`、CLI/MCP 和按历史快照导出待办。
+- 缺口：当前 AI Context 更像一次性下载包，缺少业务仓库内缓存目录、过期提示、离线读取优先级和缓存与服务端快照的一致性诊断。
+- 落地产物：新增 `dataspec context export --cache` 或等价命令；把 field catalog、rules、snapshot metadata 和 AGENTS 片段写入 `.dataspec/context/`；CLI/MCP 支持在服务不可用时读取缓存并提示 stale 状态。
+- 验收标准：后端服务未启动时，AI 仍能读取最近一次缓存的标准上下文；`dataspec doctor` 能报告缓存版本、过期时间和与远端快照的差异。
+- 边界：不缓存 token、数据库密码或业务数据行；离线模式不允许写入 DataSpec 服务端状态。
+
+### P6-30：数据库元数据适配层与离线 schema dump
+- 状态：待办。
+- 为什么做：数据库直连反向导入、二次比对和覆盖率报告都依赖 metadata 读取；后续支持更多方言或离线排查时，需要把 JDBC 读取、方言映射和标准分析解耦。
+- 已有基础：已有 PostgreSQL/MySQL 直连 metadata、反向导入、二次比对、覆盖率报告、多方言兼容矩阵待办和数据库只读安全诊断待办。
+- 缺口：metadata 提取逻辑还偏连接时流程，缺少统一 schema snapshot 数据结构、适配器测试和从离线 dump 生成报告的入口。
+- 落地产物：抽象数据库 metadata adapter；支持把选定 schema/table 导出为 DataSpec schema dump JSON；覆盖率、反向导入和比对可以从直连或 dump 两种输入运行。
+- 验收标准：同一份数据库 metadata dump 可复现反向导入候选、覆盖率和差异报告；PostgreSQL/MySQL 适配器有 fixture 覆盖；离线 dump 不包含数据行。
+- 边界：不扫描业务数据，不执行写操作，不一次性承诺所有数据库方言。
+
+### P6-31：Prompt 模板版本化与效果评测
+- 状态：待办。
+- 为什么做：AI Prompt、DDL 生成和 SQL 修复提示会持续调整；如果没有模板版本和样例评测，prompt 改动可能让 AI 输出格式、字段选择或修复策略悄悄退化。
+- 已有基础：已有 AI Prompt 生成、DDL 生成、fixedSql、标准快照、AI 输出契约稳定性待办和 AI 生成回放待办。
+- 缺口：Prompt 模板缺少版本号、变更说明、样例输入输出 fixture 和可重复评测入口；AI 回放记录也难以说明“当时用的是哪版 prompt”。
+- 落地产物：建立 Prompt template registry；为建表、修 SQL、字段推荐解释等模板记录版本、适用场景和稳定输出约束；新增 prompt fixture/eval 脚本，对关键样例做输出结构和差异检查。
+- 验收标准：修改 prompt 后能看到样例输出差异；AI 作业记录能引用 promptVersion；破坏 JSON/Markdown 契约时验证失败。
+- 边界：第一版不强制调用外部 LLM，不做复杂在线实验平台，不保存第三方 API key。
+
+### P6-32：项目活动时间线与轻量审计视图
+- 状态：待办。
+- 为什么做：个人/小团队虽然不需要重审批，但仍需要知道最近谁或哪个 AI/CLI 做了标准快照、导入、字段修改、SQL 检查、token 使用和 Context 导出，便于回滚和排查。
+- 已有基础：已有字段变更日志、导入来源批次、标准快照、SQL 检查记录、DDL 生成记录、token lastUsedAt 和项目工作台。
+- 缺口：活动信息分散在不同页面，缺少按项目聚合的时间线、操作者来源、动作类型和跳转详情。
+- 落地产物：新增项目活动 API 和前端时间线；聚合字段变更、快照创建、导入批次、SQL 检查、DDL 生成、AI Context 导出和 token 使用摘要；支持按动作类型筛选。
+- 验收标准：打开项目工作台能看到最近关键活动并跳转详情；AI/CLI 操作能留下可读来源；排查“标准什么时候变了”不再需要翻多张表。
+- 边界：不做企业级审计留存，不引入复杂权限模型，不记录业务数据内容。
+
+### P6-33：前端任务式导航与空状态收口
+- 状态：待办。
+- 为什么做：功能增多后，左侧按模块导航对熟手可用，但新项目或 AI 辅助操作更需要按任务入口开始，例如“接入项目”“导入现有库”“检查 SQL”“补标准”“导出给 AI”。
+- 已有基础：已有工作台、项目选择、字段库、SQL 校验、DDL 生成、反向导入、覆盖率报告、AI Context 和 token 管理页面。
+- 缺口：跨页面任务链路缺少统一入口、面包屑、空项目引导、最近使用动作和失败后的下一步建议；部分页面的空状态还偏孤立。
+- 落地产物：重整工作台任务入口和关键页面空状态；补充任务式快捷入口、面包屑、最近使用项目/动作、空项目引导和错误后的可执行跳转。
+- 验收标准：用户从首页能直接进入导入数据库、生成覆盖率、校验 SQL、补字段和导出 AI Context；新项目没有数据时能按引导完成第一条标准闭环。
+- 边界：不做大规模视觉改版，不替换 Element Plus 体系，不引入复杂工作流引擎。
+
+### P6-34：本地部署与演示数据一键启动包
+- 状态：待办。
+- 为什么做：项目优先个人/小团队使用，安装启动成本会直接影响采用；同时 AI agent 和回归测试也需要一个可重复的本地演示环境。
+- 已有基础：已有 Flyway、README 启动说明、演示项目初始化、后端/前端验证命令和 Docker 化可扩展空间。
+- 缺口：启动后端、前端、数据库和 demo 数据仍需要手动串命令；演示数据与验收路径没有形成一键 smoke 流程。
+- 落地产物：新增本地启动脚本或 docker compose；包含 PostgreSQL、后端、前端和 demo seed；提供 health check、端口冲突提示和一键 smoke 验证命令。
+- 验收标准：新机器能通过一条命令启动可用环境；demo 项目包含字段、规则、SQL 样例和覆盖率样例；README 明确个人本地与开发模式差异。
+- 边界：不做生产级部署方案，不引入 Kubernetes，不替代正式数据库备份。
+
+### P6-35：fixedSql 修复策略配置与 dry-run 解释
+- 状态：待办。
+- 为什么做：fixedSql 对 AI 很有用，但自动修复天然有风险；用户需要知道每一次修改来自哪个规则、是否安全、能否关闭某类修复，以及是否只做 dry-run 解释。
+- 已有基础：已有 SQL lint、fixedSql、diff 展示、规则配置、检查记录、AI 可读 lint 输出和结构化修复建议。
+- 缺口：修复策略还不够可配置，fixedSql 与 issue、规则、变更片段之间的映射说明不稳定；AI 难以只请求“低风险格式/注释修复”。
+- 落地产物：新增修复策略配置和 dry-run 输出；为每个 fixer 标注 ruleCode、riskLevel、enabled、explain；fixedSql 返回变更列表、原片段、目标片段和不可自动修复原因。
+- 验收标准：用户可关闭高风险修复；AI 能请求 safe-only 修复并获得机器可读解释；前端 diff 能显示每个变更对应的规则和风险级别。
+- 边界：不自动写回业务仓库，不承诺所有 SQL issue 都能自动修复，不跳过人工确认。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -352,6 +423,10 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`great-expectations/great_expectations`](https://github.com/great-expectations/great_expectations)：数据质量规则、验证结果和文档化体验参考。
 - [`datahub-project/datahub`](https://github.com/datahub-project/datahub)：数据目录、字段影响分析和元数据关系参考。
 - [`open-metadata/OpenMetadata`](https://github.com/open-metadata/OpenMetadata)：元数据采集、数据质量和资产视图参考。
+- [`schemacrawler/SchemaCrawler`](https://github.com/schemacrawler/SchemaCrawler)：数据库 metadata 抽取、schema 快照和文档化参考。
+- [`prisma/prisma`](https://github.com/prisma/prisma)：schema introspection、开发期数据库工具和本地工作流参考。
+- [`promptfoo/promptfoo`](https://github.com/promptfoo/promptfoo)：prompt 输出评测、回归样例和批量评估参考。
+- [`langfuse/langfuse`](https://github.com/langfuse/langfuse)：AI trace、prompt 版本和生成任务观测参考。
 - [Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)：AI 应用接入 resources、prompts、tools 的协议基础。
 - [`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)：MCP server 参考实现集合。
 - [`agents.md`](https://agents.md/)：面向 coding agent 的项目指令文件约定。

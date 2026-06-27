@@ -2,6 +2,8 @@ package com.dataspec.reverseimport;
 
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.coverage.model.FieldCoverageStatus;
+import com.dataspec.coverage.service.impl.FieldCoverageServiceImpl;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
@@ -108,6 +110,37 @@ class DatabaseReverseImportServiceTest {
     }
 
     @Test
+    void coverage_readsMetadataAndBuildsFieldCoverageReport() throws Exception {
+        prepareMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        Field id = standardField("id", null);
+        Field mobileNo = standardField("mobile_no", "phone,mobile");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(id, mobileNo));
+        when(fieldService.suggest(1L, "USER_NAME", 1)).thenReturn(List.of(new com.dataspec.field.model.FieldSuggestion(
+                null,
+                0,
+                "未命中已有标准字段",
+                "user_name",
+                false)));
+        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseConnectionReq req = connectionReq();
+        req.setTableNames(List.of("USER_ORDER"));
+
+        var report = service.coverage(req);
+
+        assertThat(report.getSummary().getColumnCount()).isEqualTo(3);
+        assertThat(report.getSummary().getCoveredCount()).isEqualTo(2);
+        assertThat(report.getSummary().getUnmanagedCount()).isEqualTo(1);
+        assertThat(report.getTables().get(0).getFields())
+                .extracting("columnName", "status")
+                .contains(
+                        org.assertj.core.groups.Tuple.tuple("ID", FieldCoverageStatus.MISSING_COMMENT),
+                        org.assertj.core.groups.Tuple.tuple("PHONE", FieldCoverageStatus.MISSING_COMMENT),
+                        org.assertj.core.groups.Tuple.tuple("USER_NAME", FieldCoverageStatus.UNMANAGED)
+                );
+    }
+
+    @Test
     void importCandidates_createsNewFieldsAndSkipsExistingNames() {
         FieldService fieldService = mock(FieldService.class);
         when(fieldService.listByProject(1L)).thenReturn(List.of(
@@ -148,7 +181,10 @@ class DatabaseReverseImportServiceTest {
                 new com.dataspec.lint.engine.SqlParserService(),
                 fieldService,
                 mock(ReverseImportSourceService.class));
-        return new DatabaseReverseImportServiceImpl(reverseImportService, req -> openMetadataConnection());
+        return new DatabaseReverseImportServiceImpl(
+                reverseImportService,
+                new FieldCoverageServiceImpl(fieldService, new com.dataspec.lint.engine.SqlParserService()),
+                req -> openMetadataConnection());
     }
 
     private void prepareMetadataDatabase() throws Exception {

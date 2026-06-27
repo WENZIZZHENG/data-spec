@@ -32,6 +32,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 表名/字段名 snake_case、禁用字段名、推荐字段名、必备列、金额类型、字段后缀/前缀类型和注释缺失等规则。
 - 修正 SQL 输出、复制、检查记录、分页历史和详情查看。
 - SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项和非标准字段差异，并支持确认导入数标候选；直连模式支持按表生成数据库现状与 DataSpec 标准字段的二次比对，并追踪确认导入后的字段来源批次。
+- 字段覆盖率报告，支持基于 SQL/DDL 或数据库直连 metadata 统计标准命中、别名命中、未纳管、缺注释和疑似重复字段。
 
 ### 生成与报告
 
@@ -164,6 +165,20 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 `/api/lint` 会返回 lint 结果、结构化修复建议和 `fixedSql`，并保存 SQL 检查记录。前端 SQL 校验页支持查看修正 SQL、复制、最近检查记录分页和详情。
 
 反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。直连模式还可以生成只读二次比对，按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。页面会按项目在浏览器本地记住数据库类型、host、port、database、schema、username、表选择、搜索词和差异筛选，不保存数据库密码、token 或完整连接串。确认导入创建的新字段会记录导入批次、来源 schema/table/column 和原始 metadata 快照，字段库可查看来源摘要；从导入结果跳转字段库时会自动携带字段关键词并筛选当前页结果。直连模式不会修改源数据库，也不会做定时同步。
+
+## 字段覆盖率报告
+
+前端“数据管理 / 覆盖率报告”可用 SQL DDL 或数据库直连生成即时覆盖率报告。报告包含项目级覆盖率、表级统计、字段明细和未纳管字段排行，并区分标准命中、别名命中、缺注释、疑似重复和未纳管状态。
+
+后端 API：
+
+```bash
+curl -X POST "http://localhost:8090/api/coverage/sql" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"sql":"CREATE TABLE user_order (id bigint NOT NULL);"}'
+```
+
+数据库直连报告使用 `/api/coverage/database`，请求体与反向导入直连请求一致。第一版只读取 metadata，不扫描业务数据行，不保存数据库密码，不自动导入未纳管字段。
 
 ## 数据字典与导入导出
 
@@ -311,6 +326,7 @@ data-spec/
 ├── dataspec-server/          # Spring Boot 后端
 │   └── src/main/java/com/dataspec/
 │       ├── common/           # 通用：响应封装、异常处理、配置
+│       ├── coverage/         # 字段覆盖率报告
 │       ├── project/          # 项目空间
 │       ├── field/            # 标准字段库
 │       ├── domain/           # 数据域
@@ -341,6 +357,7 @@ data-spec/
 | 模块 | 路径 | 说明 |
 |------|------|------|
 | project | /api/projects | 项目空间管理 |
+| coverage | /api/coverage | 字段覆盖率报告 |
 | field | /api/fields | 标准字段库 CRUD |
 | domain | /api/domains | 数据域管理 |
 | enumdict | /api/enums | 枚举字典 + 枚举值 |
@@ -386,6 +403,7 @@ data-spec/
 - [x] SQL 检查记录、最近记录分页和详情
 - [x] SQL issue source range，支持表/字段/COMMENT 定位、前端跳转和 PR 汇总评论行列范围展示
 - [x] PostgreSQL `COMMENT ON` 解析和常见 MySQL `CREATE TABLE` / `UNSIGNED` / 表选项解析
+- [x] 字段覆盖率报告，支持 SQL/DDL 和数据库直连 metadata 生成覆盖率与未纳管字段排行
 - [x] 字段推荐 API/CLI/MCP
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
 - [x] AI Context zip 导出和业务项目 `.dataspec/` 约定
