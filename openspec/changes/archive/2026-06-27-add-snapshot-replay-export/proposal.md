@@ -26,3 +26,14 @@ P6-1 已经保存标准快照和 hash，但 AI 排查旧 SQL 检查、旧 DDL �
 - 前端：SQL 校验记录详情、AI Context 页面或快照页面新增历史快照导出/回放入口。
 - CLI/MCP：优先补 CLI 参数或命令，MCP 可复用现有资源参数；不引入新的外部依赖。
 - 数据库：第一版不新增表，复用 `ds_standard_snapshot.payload_json` 和已有记录快照字段。
+
+## Verification Evidence
+
+- 实现提交：`034ec7b feat: 支持历史标准快照回放导出`。
+- 直接代码评审：未使用子 agent；已修复回放命令缺少 `--output`、历史快照 `source` 语义不清和 CLI `--snapshot-id` 本地校验不足。
+- `mvn test`：222 tests，0 failures，0 errors，0 skipped。
+- `pnpm test`：55 tests，0 failures。
+- `pnpm build`：exit 0；仅有第三方 pure annotation 与 chunk size 提示。
+- `node --test tools/dataspec-cli.test.mjs tools/dataspec-config.test.mjs tools/dataspec-mcp.test.mjs`：61 tests，0 failures。
+- `npx.cmd openspec validate add-snapshot-replay-export`：valid。
+- `git diff --check` / `git diff --cached --check`：exit 0；仅有 LF/CRLF 提示。
