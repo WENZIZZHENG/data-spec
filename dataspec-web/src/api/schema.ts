@@ -3706,6 +3706,10 @@ export interface operations {
     downloadAiContextPackage: {
         parameters: {
             query: {
+                scope?: string;
+                query?: string;
+                status?: string;
+                limit?: number;
                 projectId: number;
             };
             header?: never;
@@ -3746,6 +3750,10 @@ export interface operations {
     previewFieldCatalog: {
         parameters: {
             query: {
+                scope?: string;
+                query?: string;
+                status?: string;
+                limit?: number;
                 projectId: number;
             };
             header?: never;
@@ -3786,6 +3794,10 @@ export interface operations {
     downloadFieldCatalog: {
         parameters: {
             query: {
+                scope?: string;
+                query?: string;
+                status?: string;
+                limit?: number;
                 projectId: number;
             };
             header?: never;
@@ -3826,6 +3838,10 @@ export interface operations {
     previewDatabaseRules: {
         parameters: {
             query: {
+                scope?: string;
+                query?: string;
+                status?: string;
+                limit?: number;
                 projectId: number;
             };
             header?: never;
@@ -3866,6 +3882,10 @@ export interface operations {
     downloadDatabaseRules: {
         parameters: {
             query: {
+                scope?: string;
+                query?: string;
+                status?: string;
+                limit?: number;
                 projectId: number;
             };
             header?: never;

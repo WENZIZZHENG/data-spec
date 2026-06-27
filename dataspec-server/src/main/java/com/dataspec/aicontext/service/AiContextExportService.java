@@ -1,5 +1,6 @@
 package com.dataspec.aicontext.service;
 
+import com.dataspec.aicontext.model.AiContextScopeOptions;
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.field.entity.Field;
@@ -28,10 +29,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -83,9 +88,18 @@ public class AiContextExportService {
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
      */
     public String generateDatabaseRules(Long projectId) {
+        return generateDatabaseRules(projectId, AiContextScopeOptions.full());
+    }
+
+    public String generateDatabaseRules(Long projectId, AiContextScopeOptions options) {
+        return generateDatabaseRules(projectId, buildScopedFields(projectId, options));
+    }
+
+    private String generateDatabaseRules(Long projectId, ScopedFields scopedFields) {
         StringBuilder md = new StringBuilder();
         md.append("# Database Rules\n\n");
         md.append("<!-- 此文件由 DataSpec 自动生成，供 AI 编程工具参考 -->\n\n");
+        appendScopeMarkdown(md, scopedFields.summary());
 
         // 内置规则说明
         List<Map<String, String>> rules = sqlLintService.listAvailableRules();
@@ -110,10 +124,11 @@ public class AiContextExportService {
         }
 
         // 标准字段
-        List<Field> fields = fieldService.listByProject(projectId);
+        List<FieldMatch> fields = scopedFields.fields();
         if (!fields.isEmpty()) {
             md.append("## 标准字段\n\n");
-            for (Field f : fields) {
+            for (FieldMatch match : fields) {
+                Field f = match.field();
                 md.append(String.format("- `%s` %s", f.getName(), f.getDataType()));
                 if (f.getComment() != null) {
                     md.append(" — ").append(f.getComment());
@@ -130,10 +145,18 @@ public class AiContextExportService {
      * 生成 field-catalog.json —— 字段目录 JSON
      */
     public String generateFieldCatalogJson(Long projectId) {
-        return generateFieldCatalogJson(projectId, currentSnapshot(projectId));
+        return generateFieldCatalogJson(projectId, AiContextScopeOptions.full());
+    }
+
+    public String generateFieldCatalogJson(Long projectId, AiContextScopeOptions options) {
+        return generateFieldCatalogJson(projectId, currentSnapshot(projectId), buildScopedFields(projectId, options));
     }
 
     private String generateFieldCatalogJson(Long projectId, StandardSnapshotInfo snapshot) {
+        return generateFieldCatalogJson(projectId, snapshot, buildScopedFields(projectId, AiContextScopeOptions.full()));
+    }
+
+    private String generateFieldCatalogJson(Long projectId, StandardSnapshotInfo snapshot, ScopedFields scopedFields) {
         try {
             ObjectMapper mapper = objectMapper.copy()
                     .enable(SerializationFeature.INDENT_OUTPUT);
@@ -141,10 +164,14 @@ public class AiContextExportService {
             ObjectNode root = mapper.createObjectNode();
             root.put("projectId", projectId);
             root.set("standard", standardNode(mapper, snapshot));
+            if (scopedFields.summary().includeMetadata()) {
+                root.set("contextScope", contextScopeNode(mapper, scopedFields.summary()));
+            }
 
             // 字段目录
             ArrayNode fieldsNode = mapper.createArrayNode();
-            for (Field f : fieldService.listByProject(projectId)) {
+            for (FieldMatch match : scopedFields.fields()) {
+                Field f = match.field();
                 ObjectNode fn = mapper.createObjectNode();
                 fn.put("name", f.getName());
                 fn.put("dataType", f.getDataType());
@@ -155,17 +182,28 @@ public class AiContextExportService {
                 if (f.getDefaultValue() != null) fn.put("defaultValue", f.getDefaultValue());
                 if (f.getDisplayName() != null) fn.put("displayName", f.getDisplayName());
                 if (f.getCategory() != null) fn.put("category", f.getCategory());
+                if (f.getTags() != null) fn.put("tags", f.getTags());
                 if (f.getCodeSetId() != null) fn.put("codeSetId", f.getCodeSetId());
                 if (f.getExampleValue() != null) fn.put("example", f.getExampleValue());
                 ArrayNode aliasesNode = aliasesToArrayNode(mapper, f.getAliases());
                 if (!aliasesNode.isEmpty()) fn.set("aliases", aliasesNode);
+                if (scopedFields.summary().includeMetadata() && !match.reasons().isEmpty()) {
+                    ArrayNode reasonsNode = mapper.createArrayNode();
+                    match.reasons().forEach(reasonsNode::add);
+                    fn.set("matchReasons", reasonsNode);
+                }
                 fieldsNode.add(fn);
             }
             root.set("fields", fieldsNode);
 
             // 枚举目录
             ArrayNode enumsNode = mapper.createArrayNode();
+            Set<Long> scopedCodeSetIds = codeSetIds(scopedFields.fields());
             for (EnumDict e : enumDictService.listByProject(projectId)) {
+                if (scopedFields.summary().includeMetadata()
+                        && (e.getId() == null || !scopedCodeSetIds.contains(e.getId()))) {
+                    continue;
+                }
                 ObjectNode en = mapper.createObjectNode();
                 en.put("code", e.getCode());
                 en.put("name", e.getName());
@@ -530,14 +568,19 @@ public class AiContextExportService {
      * 生成 AI Context zip 包 —— 可直接复制到业务项目供 AI 编程工具读取
      */
     public byte[] generateAiContextPackage(Long projectId) {
+        return generateAiContextPackage(projectId, AiContextScopeOptions.full());
+    }
+
+    public byte[] generateAiContextPackage(Long projectId, AiContextScopeOptions options) {
         try (ByteArrayOutputStream output = new ByteArrayOutputStream();
              ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
             StandardSnapshotInfo snapshot = currentSnapshot(projectId);
-            addTextEntry(zip, ".dataspec/DATABASE_RULES.md", generateDatabaseRules(projectId));
-            addTextEntry(zip, ".dataspec/field-catalog.json", generateFieldCatalogJson(projectId, snapshot));
+            ScopedFields scopedFields = buildScopedFields(projectId, options);
+            addTextEntry(zip, ".dataspec/DATABASE_RULES.md", generateDatabaseRules(projectId, scopedFields));
+            addTextEntry(zip, ".dataspec/field-catalog.json", generateFieldCatalogJson(projectId, snapshot, scopedFields));
             addTextEntry(zip, ".dataspec/field-catalog.schema.json", generateFieldCatalogSchemaJson());
-            addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId, snapshot));
-            addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId));
+            addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId, snapshot, scopedFields.summary()));
+            addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId, scopedFields.summary()));
             addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(projectId, snapshot));
             addTextEntry(zip, ".dataspec/prompts.md", generatePromptsMarkdown());
             addTextEntry(zip, ".dataspec/examples/good.sql", loadExampleSql(
@@ -559,6 +602,10 @@ public class AiContextExportService {
     }
 
     private String generateManifestJson(Long projectId, StandardSnapshotInfo snapshot) {
+        return generateManifestJson(projectId, snapshot, ScopeSummary.full());
+    }
+
+    private String generateManifestJson(Long projectId, StandardSnapshotInfo snapshot, ScopeSummary scopeSummary) {
         try {
             ObjectNode root = objectMapper.createObjectNode();
             root.put("schemaVersion", DATASPEC_CONTEXT_SCHEMA_VERSION);
@@ -566,6 +613,9 @@ public class AiContextExportService {
             root.put("projectId", projectId);
             root.set("standard", standardNode(objectMapper, snapshot));
             root.put("generatedAt", Instant.now().toString());
+            if (scopeSummary.includeMetadata()) {
+                root.set("contextScope", contextScopeNode(objectMapper, scopeSummary));
+            }
 
             ArrayNode files = root.putArray("files");
             files.add(".dataspec/manifest.json");
@@ -581,7 +631,7 @@ public class AiContextExportService {
 
             ObjectNode commands = root.putObject("commands");
             commands.put("lint", "dataspec lint <path|-> --project " + projectId + " --format json");
-            commands.put("exportContext", "dataspec export-context --project " + projectId + " --output dataspec-ai-context.zip");
+            commands.put("exportContext", exportContextCommand(projectId, scopeSummary));
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
         } catch (Exception e) {
             throw new RuntimeException("生成 .dataspec/manifest.json 失败", e);
@@ -589,10 +639,44 @@ public class AiContextExportService {
     }
 
     private String generateDataspecReadme(Long projectId) {
+        return generateDataspecReadme(projectId, ScopeSummary.full());
+    }
+
+    private String generateDataspecReadme(Long projectId, ScopeSummary scopeSummary) {
+        String scopeText = scopeSummary.includeMetadata()
+                ? """
+
+                ## 当前包裁剪条件
+
+                - scope: %s
+                - query: %s
+                - status: %s
+                - limit: %s
+                - fields: %d / %d returned, %d matched before limit
+
+                这是按需包，适合当前建表、修 SQL 或字段设计任务。若任务涉及跨域模型、全库字段梳理或标准治理，请重新导出完整包。
+                """.formatted(
+                        scopeSummary.scope(),
+                        valueOrDash(scopeSummary.query()),
+                        valueOrDash(scopeSummary.status()),
+                        scopeSummary.limit() == null ? "-" : scopeSummary.limit(),
+                        scopeSummary.returnedFieldCount(),
+                        scopeSummary.totalFieldCount(),
+                        scopeSummary.matchedFieldCount()
+                )
+                : """
+
+                ## 完整包与按需包
+
+                - 完整包适合初始化业务仓库、全局建模和标准盘点。
+                - 按需包适合单个建表、修 SQL、字段命名或当前需求上下文，能减少 AI 读取无关字段。
+                - 可通过 `dataspec export-context --scope field --query <关键词> --output dataspec-ai-context.zip` 导出按需包。
+                """;
         return """
                 # .dataspec
 
                 本目录由 DataSpec 导出，供 AI 编程工具和开发者在业务项目中读取数据库字段标准。
+                %s
 
                 ## 文件约定
 
@@ -625,13 +709,209 @@ public class AiContextExportService {
                 ## 更新约定
 
                 当 DataSpec 中的字段、规则、枚举或 prompt 更新后，重新下载 AI Context 包，并整体替换业务项目中的 `.dataspec/` 目录和 `AGENTS.md.fragment`。
-                """.formatted(projectId, projectId);
+                """.formatted(scopeText, projectId, projectId);
     }
 
     private void addTextEntry(ZipOutputStream zip, String entryName, String content) throws IOException {
         zip.putNextEntry(new ZipEntry(entryName));
         zip.write(content.getBytes(StandardCharsets.UTF_8));
         zip.closeEntry();
+    }
+
+    private ScopedFields buildScopedFields(Long projectId, AiContextScopeOptions rawOptions) {
+        AiContextScopeOptions options = rawOptions == null ? AiContextScopeOptions.full() : rawOptions;
+        List<Field> allFields = fieldService.listByProject(projectId);
+        List<String> warnings = new ArrayList<>();
+        String effectiveScope = options.scopeSupported() ? options.scope() : "all";
+        if (!options.scopeSupported()) {
+            warnings.add("未知 scope=" + options.scope() + "，已按完整字段文本匹配处理。");
+        }
+        if ("changed".equals(effectiveScope)) {
+            warnings.add("changed 第一版基于 query 做任务相关裁剪，尚未启用快照 diff。");
+        }
+        if (!"all".equals(effectiveScope) && options.query() == null && options.status() == null) {
+            warnings.add("scope=" + effectiveScope + " 需要 query 或 status 才能确定裁剪范围。");
+        }
+
+        List<FieldMatch> matchedFields = new ArrayList<>();
+        for (Field field : allFields) {
+            List<String> reasons = new ArrayList<>();
+            if (!matchesStatus(field, options.status())) {
+                continue;
+            }
+            if (options.status() != null) {
+                reasons.add("状态匹配: " + fieldStatusForExport(field.getStatus()));
+            }
+
+            boolean includeByText = includeByTextScope(field, effectiveScope, options.query(), reasons);
+            boolean includeByStatusOnly = options.query() == null && options.status() != null;
+            boolean includeFull = "all".equals(effectiveScope) && options.query() == null;
+            if (includeFull || includeByText || includeByStatusOnly) {
+                matchedFields.add(new FieldMatch(field, List.copyOf(reasons)));
+            }
+        }
+
+        int matchedCount = matchedFields.size();
+        List<FieldMatch> returnedFields = matchedFields;
+        if (options.limit() != null && matchedFields.size() > options.limit()) {
+            returnedFields = matchedFields.subList(0, options.limit());
+            warnings.add("命中字段已按 limit=" + options.limit() + " 截断，请缩小 query 或提高 limit。");
+        }
+
+        ScopeSummary summary = new ScopeSummary(
+                options.scoped() || !warnings.isEmpty(),
+                effectiveScope,
+                options.query(),
+                options.status(),
+                options.limit(),
+                allFields.size(),
+                matchedCount,
+                returnedFields.size(),
+                List.copyOf(warnings)
+        );
+        return new ScopedFields(List.copyOf(returnedFields), summary);
+    }
+
+    private boolean includeByTextScope(Field field, String scope, String query, List<String> reasons) {
+        if (query == null) {
+            return false;
+        }
+        return switch (scope) {
+            case "domain" -> collectDomainReasons(field, query, reasons);
+            case "tag" -> collectTagReasons(field, query, reasons);
+            case "table", "changed", "field", "all" -> collectGeneralTextReasons(field, query, reasons);
+            default -> collectGeneralTextReasons(field, query, reasons);
+        };
+    }
+
+    private boolean collectGeneralTextReasons(Field field, String query, List<String> reasons) {
+        addReasonIfContains(reasons, "字段名匹配", field.getName(), query);
+        addReasonIfContains(reasons, "显示名匹配", field.getDisplayName(), query);
+        addReasonIfContains(reasons, "别名匹配", field.getAliases(), query);
+        addReasonIfContains(reasons, "注释匹配", field.getComment(), query);
+        addReasonIfContains(reasons, "分类匹配", field.getCategory(), query);
+        addReasonIfContains(reasons, "标签匹配", field.getTags(), query);
+        addReasonIfContains(reasons, "类型匹配", field.getDataType(), query);
+        addReasonIfContains(reasons, "示例匹配", field.getExampleValue(), query);
+        addReasonIfContains(reasons, "状态匹配", fieldStatusForExport(field.getStatus()), query);
+        return hasTextReason(reasons);
+    }
+
+    private boolean collectDomainReasons(Field field, String query, List<String> reasons) {
+        addReasonIfContains(reasons, "数据域匹配", field.getCategory(), query);
+        if (field.getDomainId() != null && containsIgnoreCase(String.valueOf(field.getDomainId()), query)) {
+            reasons.add("数据域ID匹配: " + field.getDomainId());
+        }
+        addReasonIfContains(reasons, "标签匹配", field.getTags(), query);
+        addReasonIfContains(reasons, "显示名匹配", field.getDisplayName(), query);
+        addReasonIfContains(reasons, "注释匹配", field.getComment(), query);
+        return hasTextReason(reasons);
+    }
+
+    private boolean collectTagReasons(Field field, String query, List<String> reasons) {
+        addReasonIfContains(reasons, "标签匹配", field.getTags(), query);
+        addReasonIfContains(reasons, "别名匹配", field.getAliases(), query);
+        addReasonIfContains(reasons, "显示名匹配", field.getDisplayName(), query);
+        addReasonIfContains(reasons, "分类匹配", field.getCategory(), query);
+        addReasonIfContains(reasons, "注释匹配", field.getComment(), query);
+        return hasTextReason(reasons);
+    }
+
+    private boolean hasTextReason(List<String> reasons) {
+        return reasons.stream().anyMatch(reason -> !reason.startsWith("状态匹配:"));
+    }
+
+    private void addReasonIfContains(List<String> reasons, String label, String value, String query) {
+        if (containsIgnoreCase(value, query)) {
+            reasons.add(label + ": " + value);
+        }
+    }
+
+    private boolean containsIgnoreCase(String value, String query) {
+        if (value == null || query == null) {
+            return false;
+        }
+        return value.toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT));
+    }
+
+    private boolean matchesStatus(Field field, String status) {
+        return status == null || fieldStatusForExport(field.getStatus()).equalsIgnoreCase(status);
+    }
+
+    private Set<Long> codeSetIds(List<FieldMatch> fields) {
+        Set<Long> ids = new LinkedHashSet<>();
+        for (FieldMatch match : fields) {
+            Long codeSetId = match.field().getCodeSetId();
+            if (codeSetId != null) {
+                ids.add(codeSetId);
+            }
+        }
+        return ids;
+    }
+
+    private void appendScopeMarkdown(StringBuilder md, ScopeSummary scopeSummary) {
+        if (!scopeSummary.includeMetadata()) {
+            return;
+        }
+        md.append("## 上下文裁剪\n\n");
+        md.append("- scope: ").append(scopeSummary.scope()).append("\n");
+        md.append("- query: ").append(valueOrDash(scopeSummary.query())).append("\n");
+        md.append("- status: ").append(valueOrDash(scopeSummary.status())).append("\n");
+        md.append("- fields: ")
+                .append(scopeSummary.returnedFieldCount())
+                .append(" returned / ")
+                .append(scopeSummary.matchedFieldCount())
+                .append(" matched / ")
+                .append(scopeSummary.totalFieldCount())
+                .append(" total\n");
+        for (String warning : scopeSummary.warnings()) {
+            md.append("- warning: ").append(warning).append("\n");
+        }
+        md.append("\n");
+    }
+
+    private ObjectNode contextScopeNode(ObjectMapper mapper, ScopeSummary summary) {
+        ObjectNode node = mapper.createObjectNode();
+        node.put("scope", summary.scope());
+        if (summary.query() != null) {
+            node.put("query", summary.query());
+        }
+        if (summary.status() != null) {
+            node.put("status", summary.status());
+        }
+        if (summary.limit() != null) {
+            node.put("limit", summary.limit());
+        }
+        node.put("totalFieldCount", summary.totalFieldCount());
+        node.put("matchedFieldCount", summary.matchedFieldCount());
+        node.put("returnedFieldCount", summary.returnedFieldCount());
+        ArrayNode warningsNode = mapper.createArrayNode();
+        summary.warnings().forEach(warningsNode::add);
+        node.set("warnings", warningsNode);
+        return node;
+    }
+
+    private String exportContextCommand(Long projectId, ScopeSummary scopeSummary) {
+        StringBuilder command = new StringBuilder("dataspec export-context --project ")
+                .append(projectId)
+                .append(" --output dataspec-ai-context.zip");
+        if (scopeSummary.includeMetadata()) {
+            command.append(" --scope ").append(scopeSummary.scope());
+            if (scopeSummary.query() != null) {
+                command.append(" --query \"").append(scopeSummary.query()).append("\"");
+            }
+            if (scopeSummary.status() != null) {
+                command.append(" --status ").append(scopeSummary.status());
+            }
+            if (scopeSummary.limit() != null) {
+                command.append(" --limit ").append(scopeSummary.limit());
+            }
+        }
+        return command.toString();
+    }
+
+    private String valueOrDash(String value) {
+        return value == null || value.isBlank() ? "-" : value;
     }
 
     private String generateFieldCatalogSchemaJson() {
@@ -642,7 +922,7 @@ public class AiContextExportService {
                   "type": "object",
                   "additionalProperties": false,
                   "required": ["projectId", "fields", "enums"],
-                  "properties": {
+                    "properties": {
                     "projectId": { "type": "integer" },
                     "standard": {
                       "type": "object",
@@ -654,6 +934,24 @@ public class AiContextExportService {
                         "specHash": { "type": "string" },
                         "name": { "type": "string" },
                         "versioned": { "type": "boolean" }
+                      }
+                    },
+                    "contextScope": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["scope", "totalFieldCount", "matchedFieldCount", "returnedFieldCount", "warnings"],
+                      "properties": {
+                        "scope": { "type": "string", "enum": ["all", "field", "domain", "tag", "table", "changed"] },
+                        "query": { "type": "string" },
+                        "status": { "type": "string" },
+                        "limit": { "type": "integer" },
+                        "totalFieldCount": { "type": "integer" },
+                        "matchedFieldCount": { "type": "integer" },
+                        "returnedFieldCount": { "type": "integer" },
+                        "warnings": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        }
                       }
                     },
                     "fields": {
@@ -679,6 +977,11 @@ public class AiContextExportService {
                           "status": {
                             "type": "string",
                             "enum": ["enabled", "disabled", "deprecated"]
+                          },
+                          "tags": { "type": "string" },
+                          "matchReasons": {
+                            "type": "array",
+                            "items": { "type": "string" }
                           },
                           "example": { "type": "string" }
                         }
@@ -870,5 +1173,27 @@ public class AiContextExportService {
             yaml.append("  spec_hash: ").append(snapshot.specHash()).append("\n");
         }
         yaml.append("  versioned: ").append(snapshot.versioned()).append("\n\n");
+    }
+
+    private record ScopedFields(List<FieldMatch> fields, ScopeSummary summary) {
+    }
+
+    private record FieldMatch(Field field, List<String> reasons) {
+    }
+
+    private record ScopeSummary(
+            boolean includeMetadata,
+            String scope,
+            String query,
+            String status,
+            Integer limit,
+            int totalFieldCount,
+            int matchedFieldCount,
+            int returnedFieldCount,
+            List<String> warnings
+    ) {
+        static ScopeSummary full() {
+            return new ScopeSummary(false, "all", null, null, null, 0, 0, 0, List.of());
+        }
     }
 }

@@ -29,6 +29,32 @@
     </el-empty>
 
     <template v-else>
+      <div class="scope-toolbar">
+        <el-segmented v-model="scopeForm.scope" :options="scopeOptions" />
+        <el-input
+          v-model="scopeForm.query"
+          class="scope-query"
+          clearable
+          placeholder="关键词"
+          @keyup.enter="loadPreviews"
+        />
+        <el-select v-model="scopeForm.status" class="scope-status" clearable placeholder="状态">
+          <el-option label="enabled" value="enabled" />
+          <el-option label="disabled" value="disabled" />
+          <el-option label="deprecated" value="deprecated" />
+        </el-select>
+        <el-input-number
+          v-model="scopeForm.limit"
+          class="scope-limit"
+          :min="1"
+          :max="500"
+          :step="10"
+          controls-position="right"
+          placeholder="上限"
+        />
+        <el-button @click="handleResetScope">重置</el-button>
+      </div>
+
       <el-tabs v-model="activeTab" class="preview-tabs">
         <el-tab-pane label="DATABASE_RULES.md" name="databaseRules">
           <pre class="preview-code">{{ databaseRules || '暂无预览' }}</pre>
@@ -45,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download, Refresh } from '@element-plus/icons-vue'
 import {
@@ -55,6 +81,11 @@ import {
   previewRulesYaml
 } from '@/api/aicontext'
 import { useProjectStore } from '@/stores/project'
+import {
+  aiContextScopeFilename,
+  normalizeAiContextScopeParams,
+  type AiContextScope
+} from '@/utils/aiContextScope'
 
 const projectStore = useProjectStore()
 const activeTab = ref<'databaseRules' | 'fieldCatalog' | 'rulesYaml'>('databaseRules')
@@ -64,8 +95,29 @@ const rulesYaml = ref('')
 const previewLoading = ref(false)
 const downloadLoading = ref(false)
 const demoLoading = ref(false)
+const scopeForm = reactive<{
+  scope: AiContextScope
+  query: string
+  status: string
+  limit: number | null
+}>({
+  scope: 'all',
+  query: '',
+  status: '',
+  limit: null
+})
+
+const scopeOptions: Array<{ label: string; value: AiContextScope }> = [
+  { label: '全部', value: 'all' },
+  { label: '字段', value: 'field' },
+  { label: '数据域', value: 'domain' },
+  { label: '标签', value: 'tag' },
+  { label: '表', value: 'table' },
+  { label: '变更', value: 'changed' }
+]
 
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
+const currentScopeParams = computed(() => normalizeAiContextScopeParams(scopeForm))
 
 onMounted(async () => {
   if (!projectStore.currentProjectId && projectStore.projects.length === 0) {
@@ -91,9 +143,10 @@ async function loadPreviews() {
   }
   previewLoading.value = true
   try {
+    const scopeParams = currentScopeParams.value
     const [rules, fields, yaml] = await Promise.all([
-      previewDatabaseRules(projectId),
-      previewFieldCatalog(projectId),
+      previewDatabaseRules(projectId, scopeParams),
+      previewFieldCatalog(projectId, scopeParams),
       previewRulesYaml(projectId)
     ])
     databaseRules.value = rules
@@ -112,7 +165,8 @@ async function handleDownloadPackage() {
   }
   downloadLoading.value = true
   try {
-    saveBlob(await downloadAiContextPackage(projectId), 'dataspec-ai-context.zip')
+    const scopeParams = currentScopeParams.value
+    saveBlob(await downloadAiContextPackage(projectId, scopeParams), aiContextScopeFilename(scopeParams))
   } finally {
     downloadLoading.value = false
   }
@@ -138,6 +192,14 @@ function saveBlob(blob: Blob, filename: string) {
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
+}
+
+function handleResetScope() {
+  scopeForm.scope = 'all'
+  scopeForm.query = ''
+  scopeForm.status = ''
+  scopeForm.limit = null
+  void loadPreviews()
 }
 </script>
 
@@ -178,6 +240,29 @@ function saveBlob(blob: Blob, filename: string) {
   margin-top: 8px;
 }
 
+.scope-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #f9fafb;
+}
+
+.scope-query {
+  width: min(260px, 100%);
+}
+
+.scope-status {
+  width: 150px;
+}
+
+.scope-limit {
+  width: 132px;
+}
+
 .preview-code {
   min-height: 520px;
   max-height: calc(100vh - 270px);
@@ -198,6 +283,16 @@ function saveBlob(blob: Blob, filename: string) {
 @media (max-width: 720px) {
   .page-header {
     flex-direction: column;
+  }
+
+  .scope-toolbar {
+    align-items: stretch;
+  }
+
+  .scope-query,
+  .scope-status,
+  .scope-limit {
+    width: 100%;
   }
 }
 </style>

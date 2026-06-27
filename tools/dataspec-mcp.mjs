@@ -284,15 +284,61 @@ function listTools() {
       },
       {
         name: 'get_field_catalog',
-        description: '读取 DataSpec 标准字段目录。',
+        description: '读取 DataSpec 标准字段目录，可按 scope/query/status/limit 裁剪。',
         inputSchema: {
           type: 'object',
           properties: {
             projectId: {
               type: 'integer',
               description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            scope: {
+              type: 'string',
+              description: '可选裁剪范围: all、field、domain、tag、table、changed。'
+            },
+            query: {
+              type: 'string',
+              description: '可选检索关键词。'
+            },
+            status: {
+              type: 'string',
+              description: '可选字段状态，如 enabled、disabled、deprecated。'
+            },
+            limit: {
+              type: 'integer',
+              description: '可选返回字段上限。'
             }
           }
+        }
+      },
+      {
+        name: 'search_field_catalog',
+        description: '按当前任务关键词检索较小的 DataSpec 标准字段目录。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: '当前 SQL、表名、字段名或业务需求关键词。'
+            },
+            scope: {
+              type: 'string',
+              description: '可选裁剪范围，默认 field。'
+            },
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            status: {
+              type: 'string',
+              description: '可选字段状态。'
+            },
+            limit: {
+              type: 'integer',
+              description: '可选返回字段上限，默认 20。'
+            }
+          },
+          required: ['query']
         }
       },
       {
@@ -352,6 +398,9 @@ async function callTool(params, context) {
   if (name === 'get_field_catalog') {
     return await callGetFieldCatalog(args, context)
   }
+  if (name === 'search_field_catalog') {
+    return await callSearchFieldCatalog(args, context)
+  }
   if (name === 'suggest_fields') {
     return await callSuggestFields(args, context)
   }
@@ -378,9 +427,24 @@ async function callLintSql(args, context) {
 
 async function callGetFieldCatalog(args, context) {
   const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
-  const text = await fetchAiContextText(context, RESOURCE_DEFS['field-catalog'].path, projectId)
+  const text = await fetchAiContextText(context, RESOURCE_DEFS['field-catalog'].path, projectId, scopedCatalogParams(args))
   const structured = parseJsonOrFallback(text)
   return toolJsonResult(structured)
+}
+
+async function callSearchFieldCatalog(args, context) {
+  const query = args.query
+  if (typeof query !== 'string' || query.trim() === '') {
+    throw new JsonRpcError(-32602, 'search_field_catalog 需要非空 query')
+  }
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  const scopedArgs = {
+    ...args,
+    scope: args.scope ?? 'field',
+    limit: args.limit ?? 20
+  }
+  const text = await fetchAiContextText(context, RESOURCE_DEFS['field-catalog'].path, projectId, scopedCatalogParams(scopedArgs))
+  return toolJsonResult(parseJsonOrFallback(text))
 }
 
 async function callSuggestFields(args, context) {
@@ -409,10 +473,41 @@ async function callGenerateTableDdl(args, context) {
   return toolJsonResult(result)
 }
 
-async function fetchAiContextText(context, path, projectId) {
-  const url = `${context.server}${path}?projectId=${encodeURIComponent(projectId)}`
+async function fetchAiContextText(context, path, projectId, extraParams = {}) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'scope', extraParams.scope)
+  appendOptionalParam(params, 'query', extraParams.query)
+  appendOptionalParam(params, 'status', extraParams.status)
+  appendOptionalParam(params, 'limit', extraParams.limit)
+  const url = `${context.server}${path}?${params.toString()}`
   const response = await context.fetchFn(url, { headers: dataSpecHeaders(context.apiToken) })
   return await readDataSpecJson(response)
+}
+
+function scopedCatalogParams(args) {
+  return {
+    scope: normalizeOptionalText(args.scope),
+    query: normalizeOptionalText(args.query),
+    status: normalizeOptionalText(args.status),
+    limit: args.limit === undefined || args.limit === null || args.limit === ''
+      ? undefined
+      : optionalLimit(args.limit, 20)
+  }
+}
+
+function appendOptionalParam(params, key, value) {
+  if (value !== undefined && value !== null && String(value).trim() !== '') {
+    params.set(key, String(value).trim())
+  }
+}
+
+function normalizeOptionalText(value) {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  const normalized = String(value).trim()
+  return normalized === '' ? undefined : normalized
 }
 
 async function readDataSpecJson(response) {

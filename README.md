@@ -44,7 +44,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 
 ### AI 与自动化
 
-- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、prompt、示例 SQL 和 `AGENTS.md.fragment`。
+- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、prompt、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包。
 - AI Context manifest、字段目录和规则文件携带标准快照版本与 hash；未创建快照时标记为 `unversioned`。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - AI 回放记录，支持查看 Prompt、SQL 检查修正和 DDL 预览的输入输出、promptVersion 与标准快照。
@@ -104,15 +104,18 @@ pnpm dev
 
 ## AI Context 导出包
 
-DataSpec 可为 AI 编程工具导出完整上下文包：
+DataSpec 可为 AI 编程工具导出完整上下文包，也可以按当前建表、修 SQL 或字段设计任务导出更小的按需包：
 
 ```bash
 curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1" -o dataspec-ai-context.zip
+curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1&scope=field&query=用户手机号&status=enabled&limit=20" -o dataspec-ai-context-field.zip
 ```
 
 解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前读取字段标准和规则。
 
 导出包的 `.dataspec/manifest.json`、`.dataspec/field-catalog.json` 和 `.dataspec/rules.yaml` 会包含 `specVersion` / `specHash` 元数据。若项目尚未创建标准快照，版本显示为 `unversioned`，不阻断导出；创建快照后，后续 SQL 检查记录和 DDL 生成结果会记录当前快照 ID、版本和 hash。
+
+按需导出支持 `scope=all|field|domain|tag|table|changed`，可叠加 `query`、`status` 和 `limit`。裁剪后的 `field-catalog.json` 会输出 `contextScope` 摘要和字段级 `matchReasons`，说明命中条件、字段总数、命中数量、返回数量和缺失或截断提示；`.dataspec/README.md` 会标明当前包是完整包还是按需包。前端“AI Context”页面也提供同样的范围、关键词、状态和上限筛选，预览与下载共用同一组条件。
 
 ## 标准快照
 
@@ -311,6 +314,9 @@ node tools/dataspec-cli.mjs review-pr . --project 1 --repo owner/repo --pr 123 -
 # 导出 AI Context zip 包
 node tools/dataspec-cli.mjs export-context --project 1 --output dataspec-ai-context.zip
 
+# 导出按需 AI Context zip 包
+node tools/dataspec-cli.mjs export-context --project 1 --scope field --query "用户手机号" --status enabled --limit 20 --output dataspec-ai-context-field.zip
+
 # 推荐标准字段
 node tools/dataspec-cli.mjs suggest-field "用户手机号" --project 1 --format json
 
@@ -347,7 +353,7 @@ node tools/dataspec-mcp.mjs
 
 - resources：`field-catalog`、`database-rules`、`rules-yaml`，URI 形如 `dataspec://project/1/field-catalog`。
 - prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`。
-- tools：`lint_sql`、`get_field_catalog`、`suggest_fields`、`generate_table_ddl`；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
+- tools：`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`generate_table_ddl`；`get_field_catalog` 可传 `scope/query/status/limit`，`search_field_catalog` 默认按当前关键词读取较小字段目录；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
 
 ## 验证
 
@@ -465,7 +471,7 @@ data-spec/
 - [x] 字段影响分析，支持模板、导入来源、SQL 检查记录、标准快照和代码集影响提示
 - [x] 字段推荐 API/CLI/MCP
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
-- [x] AI Context zip 导出和业务项目 `.dataspec/` 约定
+- [x] AI Context zip 导出、按需裁剪和业务项目 `.dataspec/` 约定
 - [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
 - [x] AI 回放记录，支持查看 Prompt、lint/fixedSql、DDL 预览的输入输出和标准快照
@@ -479,8 +485,8 @@ data-spec/
 - [x] 数据库直连二次比对，按表展示标准命中、属性变化、新增、缺注释和非标准字段
 - [x] 数据库直连导入来源与批次追踪，字段库可查看来源摘要
 - [x] 前端反向导入高频流程记忆，按项目恢复非敏感连接信息、表选择、筛选状态和字段库关键词跳转
-- [x] DataSpec CLI：`doctor`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置
-- [x] DataSpec MCP Server：resources、prompts、`lint_sql`、`get_field_catalog`、`suggest_fields`、`generate_table_ddl`，支持 `.dataspec/config.json` 默认项目配置
+- [x] DataSpec CLI：`doctor`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置和按需 Context 导出
+- [x] DataSpec MCP Server：resources、prompts、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`generate_table_ddl`，支持 `.dataspec/config.json` 默认项目配置
 - [x] GitHub Actions 示例和 PR 评论式 SQL Review
 
 ## 暂缓探索

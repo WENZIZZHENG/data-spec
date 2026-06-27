@@ -146,7 +146,7 @@ async function runReviewPr(args, io, fetchFn) {
 }
 
 async function runExportContext(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'output', 'server', 'dataspec-token'])
+  const { positional, options } = parseArgs(args, ['project', 'output', 'server', 'dataspec-token', 'scope', 'query', 'status', 'limit'])
   const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length > 0) {
     throw new Error(`export-context 不接受位置参数: ${positional.join(', ')}`)
@@ -158,7 +158,7 @@ async function runExportContext(args, io, fetchFn) {
   }
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
-  const url = `${server}/api/ai-context/package/download?projectId=${encodeURIComponent(projectId)}`
+  const url = buildAiContextPackageUrl(server, projectId, options)
   const response = await fetchFn(url, { headers: dataSpecHeaders(apiToken) })
   if (!response.ok) {
     throw new Error(`导出 AI Context 失败，HTTP ${response.status}`)
@@ -340,6 +340,24 @@ function parseArgs(args, allowedOptions, flagOptions = [], repeatableOptions = [
     i += 1
   }
   return { positional, options }
+}
+
+function buildAiContextPackageUrl(server, projectId, options) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'scope', options.scope)
+  appendOptionalParam(params, 'query', options.query)
+  appendOptionalParam(params, 'status', options.status)
+  if (options.limit !== undefined) {
+    params.set('limit', String(parseLimit(options.limit)))
+  }
+  return `${server}/api/ai-context/package/download?${params.toString()}`
+}
+
+function appendOptionalParam(params, key, value) {
+  if (value !== undefined && value !== null && String(value).trim() !== '') {
+    params.set(key, String(value).trim())
+  }
 }
 
 async function buildDoctorResult({ config, options, io, fetchFn }) {
@@ -624,6 +642,7 @@ function renderInitReadme({ projectId, server, defaultPaths }) {
 node tools/dataspec-cli.mjs doctor --format json
 node tools/dataspec-cli.mjs lint-files --format json
 node tools/dataspec-cli.mjs export-context --output dataspec-ai-context.zip
+node tools/dataspec-cli.mjs export-context --scope field --query 用户手机号 --output dataspec-ai-context.zip
 \`\`\`
 
 ## Token
@@ -640,7 +659,7 @@ export DATASPEC_TOKEN=ds_xxx
 
 - 修改 SQL、migration 或 ORM entity 前，先运行 \`doctor\` 确认 DataSpec 可用。
 - 未显式传路径时，\`lint-files\` 会读取 \`.dataspec/config.json\` 的 \`defaultPaths\`。
-- 需要完整上下文时，运行 \`export-context\` 并让 AI 读取导出的 \`.dataspec/\` 内容。
+- 需要完整上下文时，运行 \`export-context\` 并让 AI 读取导出的 \`.dataspec/\` 内容；单个建表或修 SQL 任务可加 \`--scope field --query <关键词>\` 导出按需包。
 `
 }
 
@@ -1017,7 +1036,7 @@ Usage:
   node tools/dataspec-cli.mjs lint <path|-> [--project <id>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--server <url>] [--dataspec-token <token>]
-  node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
@@ -1028,6 +1047,7 @@ Options:
   --server  可由 .dataspec/config.json 的 server 提供
   --dataspec-token 可由 .dataspec/config.json 的 apiToken 或 DATASPEC_TOKEN 环境变量提供
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
+  export-context 默认导出完整包；传 --scope/--query/--status/--limit 时导出按需包
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   doctor 默认做轻量 OpenAPI 状态检查；传 --check-openapi 时执行完整 schema 漂移检查
 `

@@ -1,5 +1,6 @@
 package com.dataspec.aicontext.controller;
 
+import com.dataspec.aicontext.model.AiContextScopeOptions;
 import com.dataspec.aicontext.service.AiContextExportService;
 import com.dataspec.common.result.R;
 import jakarta.validation.Valid;
@@ -27,15 +28,23 @@ public class AiContextController {
     /** 预览 DATABASE_RULES.md */
 
     @GetMapping("/database-rules")
-    public R<String> previewDatabaseRules(@RequestParam Long projectId) {
-        return R.ok(aiContextExportService.generateDatabaseRules(projectId));
+    public R<String> previewDatabaseRules(@RequestParam Long projectId,
+                                          @RequestParam(required = false) String scope,
+                                          @RequestParam(required = false) String query,
+                                          @RequestParam(required = false) String status,
+                                          @RequestParam(required = false) Integer limit) {
+        return R.ok(aiContextExportService.generateDatabaseRules(projectId, scopeOptions(scope, query, status, limit)));
     }
 
     /** 下载 DATABASE_RULES.md */
 
     @GetMapping("/database-rules/download")
-    public ResponseEntity<byte[]> downloadDatabaseRules(@RequestParam Long projectId) {
-        String content = aiContextExportService.generateDatabaseRules(projectId);
+    public ResponseEntity<byte[]> downloadDatabaseRules(@RequestParam Long projectId,
+                                                        @RequestParam(required = false) String scope,
+                                                        @RequestParam(required = false) String query,
+                                                        @RequestParam(required = false) String status,
+                                                        @RequestParam(required = false) Integer limit) {
+        String content = aiContextExportService.generateDatabaseRules(projectId, scopeOptions(scope, query, status, limit));
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=DATABASE_RULES.md")
                 .contentType(MediaType.TEXT_MARKDOWN)
@@ -45,15 +54,23 @@ public class AiContextController {
     /** 预览 field-catalog.json */
 
     @GetMapping("/field-catalog")
-    public R<String> previewFieldCatalog(@RequestParam Long projectId) {
-        return R.ok(aiContextExportService.generateFieldCatalogJson(projectId));
+    public R<String> previewFieldCatalog(@RequestParam Long projectId,
+                                         @RequestParam(required = false) String scope,
+                                         @RequestParam(required = false) String query,
+                                         @RequestParam(required = false) String status,
+                                         @RequestParam(required = false) Integer limit) {
+        return R.ok(aiContextExportService.generateFieldCatalogJson(projectId, scopeOptions(scope, query, status, limit)));
     }
 
     /** 下载 field-catalog.json */
 
     @GetMapping("/field-catalog/download")
-    public ResponseEntity<byte[]> downloadFieldCatalog(@RequestParam Long projectId) {
-        String content = aiContextExportService.generateFieldCatalogJson(projectId);
+    public ResponseEntity<byte[]> downloadFieldCatalog(@RequestParam Long projectId,
+                                                       @RequestParam(required = false) String scope,
+                                                       @RequestParam(required = false) String query,
+                                                       @RequestParam(required = false) String status,
+                                                       @RequestParam(required = false) Integer limit) {
+        String content = aiContextExportService.generateFieldCatalogJson(projectId, scopeOptions(scope, query, status, limit));
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=field-catalog.json")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -95,8 +112,12 @@ public class AiContextController {
     /** 下载 AI Context zip 包 */
 
     @GetMapping("/package/download")
-    public ResponseEntity<byte[]> downloadAiContextPackage(@RequestParam Long projectId) {
-        byte[] content = aiContextExportService.generateAiContextPackage(projectId);
+    public ResponseEntity<byte[]> downloadAiContextPackage(@RequestParam Long projectId,
+                                                           @RequestParam(required = false) String scope,
+                                                           @RequestParam(required = false) String query,
+                                                           @RequestParam(required = false) String status,
+                                                           @RequestParam(required = false) Integer limit) {
+        byte[] content = aiContextExportService.generateAiContextPackage(projectId, scopeOptions(scope, query, status, limit));
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=dataspec-ai-context.zip")
                 .contentType(MediaType.parseMediaType("application/zip"))
@@ -112,4 +133,8 @@ public class AiContextController {
             @NotNull(message = "项目ID不能为空") Long projectId,
             @NotBlank(message = "SQL 不能为空") String sql
     ) {}
+
+    private AiContextScopeOptions scopeOptions(String scope, String query, String status, Integer limit) {
+        return new AiContextScopeOptions(scope, query, status, limit);
+    }
 }

@@ -461,6 +461,46 @@ test('export-context downloads zip bytes to output path', async () => {
   }
 })
 
+test('export-context passes scoped AI context options', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    const outputPath = path.join(dir, 'dataspec-ai-context.zip')
+    const fetchFn = async (url) => {
+      assert.equal(
+        url,
+        'http://localhost:8090/api/ai-context/package/download?projectId=9&scope=field&query=%E7%94%A8%E6%88%B7%E6%89%8B%E6%9C%BA&status=enabled&limit=20'
+      )
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => Uint8Array.from([5, 6]).buffer
+      }
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'export-context',
+      '--project',
+      '9',
+      '--scope',
+      'field',
+      '--query',
+      '用户手机',
+      '--status',
+      'enabled',
+      '--limit',
+      '20',
+      '--output',
+      outputPath
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.deepEqual([...await readFile(outputPath)], [5, 6])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('suggest-field calls field suggestion api and prints json', async () => {
   const calls = []
   const fetchFn = async (url) => {

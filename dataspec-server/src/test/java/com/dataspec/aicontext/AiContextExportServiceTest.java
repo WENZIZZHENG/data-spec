@@ -1,6 +1,7 @@
 package com.dataspec.aicontext;
 
 import com.dataspec.aicontext.service.AiContextExportService;
+import com.dataspec.aicontext.model.AiContextScopeOptions;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.aireplay.entity.AiJobRecord;
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
@@ -127,6 +128,55 @@ class AiContextExportServiceTest {
     }
 
     @Test
+    void generateFieldCatalogJson_filtersFieldsAndAddsScopeMetadata() throws Exception {
+        AiContextExportService service = createService(List.of(
+                sampleField("mobile_no", "手机号", "contact", "pii,customer", "phone, mobile"),
+                sampleField("order_amount", "订单金额", "money", "order", "amount")
+        ));
+
+        String content = service.generateFieldCatalogJson(
+                PROJECT_ID,
+                new AiContextScopeOptions("field", "手机", "enabled", 10)
+        );
+
+        var root = new ObjectMapper().readTree(content);
+        assertEquals(1, root.path("fields").size());
+        assertEquals("mobile_no", root.path("fields").get(0).path("name").asText());
+        assertTrue(root.path("fields").get(0).path("matchReasons").isArray());
+        assertEquals("field", root.path("contextScope").path("scope").asText());
+        assertEquals("手机", root.path("contextScope").path("query").asText());
+        assertEquals(2, root.path("contextScope").path("totalFieldCount").asInt());
+        assertEquals(1, root.path("contextScope").path("matchedFieldCount").asInt());
+        assertEquals(1, root.path("contextScope").path("returnedFieldCount").asInt());
+    }
+
+    @Test
+    void generateAiContextPackage_scopedPackageContainsScopeSummaryAndTrimmedFields() throws Exception {
+        AiContextExportService service = createService(List.of(
+                sampleField("mobile_no", "手机号", "contact", "pii,customer", "phone, mobile"),
+                sampleField("email", "邮箱", "contact", "pii", "mail"),
+                sampleField("order_amount", "订单金额", "money", "order", "amount")
+        ));
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(
+                PROJECT_ID,
+                new AiContextScopeOptions("tag", "pii", "enabled", 1)
+        ));
+
+        var mapper = new ObjectMapper();
+        var catalog = mapper.readTree(entries.get(".dataspec/field-catalog.json"));
+        assertEquals(1, catalog.path("fields").size());
+        assertEquals("tag", catalog.path("contextScope").path("scope").asText());
+        assertEquals(2, catalog.path("contextScope").path("matchedFieldCount").asInt());
+        assertEquals(1, catalog.path("contextScope").path("returnedFieldCount").asInt());
+        assertTrue(catalog.path("contextScope").path("warnings").get(0).asText().contains("截断"));
+
+        var manifest = mapper.readTree(entries.get(".dataspec/manifest.json"));
+        assertEquals("tag", manifest.path("contextScope").path("scope").asText());
+        assertTrue(entries.get(".dataspec/README.md").contains("按需包"));
+    }
+
+    @Test
     void generateCreateTablePrompt_containsBusinessContextAndStandards() {
         AiContextExportService service = createService();
 
@@ -196,6 +246,12 @@ class AiContextExportServiceTest {
         return createService(standardSnapshotService, new NoopAiJobRecordService());
     }
 
+    private AiContextExportService createService(List<Field> fields) {
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
+        return createService(standardSnapshotService, new NoopAiJobRecordService(), fields);
+    }
+
     private AiContextExportService createService(AiJobRecordService aiJobRecordService) {
         StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
         when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
@@ -208,6 +264,12 @@ class AiContextExportServiceTest {
 
     private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
                                                  AiJobRecordService aiJobRecordService) {
+        return createService(standardSnapshotService, aiJobRecordService, List.of(sampleField()));
+    }
+
+    private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
+                                                 AiJobRecordService aiJobRecordService,
+                                                 List<Field> fields) {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         FieldService fieldService = mock(FieldService.class);
         EnumDictService enumDictService = mock(EnumDictService.class);
@@ -216,7 +278,7 @@ class AiContextExportServiceTest {
 
         when(ruleConfigService.listByProject(PROJECT_ID)).thenReturn(List.of());
         when(ruleConfigService.listEnabledByProject(PROJECT_ID)).thenReturn(List.of());
-        when(fieldService.listByProject(PROJECT_ID)).thenReturn(List.of(sampleField()));
+        when(fieldService.listByProject(PROJECT_ID)).thenReturn(fields);
         when(enumDictService.listByProject(PROJECT_ID)).thenReturn(List.of());
 
         SqlLintService sqlLintService = new SqlLintService(
@@ -252,15 +314,20 @@ class AiContextExportServiceTest {
     }
 
     private Field sampleField() {
+        return sampleField("mobile_no", "手机号", "contact", "pii,customer", "phone, mobile, tel, user_phone");
+    }
+
+    private Field sampleField(String name, String displayName, String category, String tags, String aliases) {
         Field field = new Field();
-        field.setName("mobile_no");
-        field.setDisplayName("手机号");
+        field.setName(name);
+        field.setDisplayName(displayName);
         field.setDataType("varchar(20)");
         field.setNullable(false);
-        field.setComment("用户手机号");
+        field.setComment(displayName);
         field.setDefaultValue("");
-        field.setAliases("phone, mobile, tel, user_phone");
-        field.setCategory("contact");
+        field.setAliases(aliases);
+        field.setCategory(category);
+        field.setTags(tags);
         field.setSensitive(true);
         field.setStatus("enabled");
         field.setCodeSetId(10L);

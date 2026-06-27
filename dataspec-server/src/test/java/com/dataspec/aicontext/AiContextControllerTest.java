@@ -1,13 +1,16 @@
 package com.dataspec.aicontext;
 
 import com.dataspec.aicontext.controller.AiContextController;
+import com.dataspec.aicontext.model.AiContextScopeOptions;
 import com.dataspec.aicontext.service.AiContextExportService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -18,15 +21,28 @@ class AiContextControllerTest {
     @Test
     void downloadAiContextPackage_returnsZipAttachment() {
         AiContextExportService service = mock(AiContextExportService.class);
-        when(service.generateAiContextPackage(1L)).thenReturn(new byte[] { 1, 2, 3 });
+        when(service.generateAiContextPackage(eq(1L), eq(AiContextScopeOptions.full()))).thenReturn(new byte[] { 1, 2, 3 });
         AiContextController controller = new AiContextController(service);
 
-        var response = controller.downloadAiContextPackage(1L);
+        var response = controller.downloadAiContextPackage(1L, null, null, null, null);
 
         assertEquals(MediaType.parseMediaType("application/zip"), response.getHeaders().getContentType());
         assertEquals("attachment; filename=dataspec-ai-context.zip",
                 response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION));
         assertArrayEquals(new byte[] { 1, 2, 3 }, response.getBody());
+    }
+
+    @Test
+    void previewFieldCatalog_forwardsScopeOptions() {
+        AiContextExportService service = mock(AiContextExportService.class);
+        AiContextScopeOptions options = new AiContextScopeOptions("field", "手机", "enabled", 20);
+        when(service.generateFieldCatalogJson(1L, options)).thenReturn("{\"fields\":[]}");
+        AiContextController controller = new AiContextController(service);
+
+        var response = controller.previewFieldCatalog(1L, "field", "手机", "enabled", 20);
+
+        assertEquals("{\"fields\":[]}", response.getData());
+        verify(service).generateFieldCatalogJson(1L, options);
     }
 
     @Test

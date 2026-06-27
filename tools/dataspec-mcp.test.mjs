@@ -134,6 +134,54 @@ test('get_field_catalog tool parses json catalog when possible', async () => {
   assert.equal(JSON.parse(response.result.content[0].text).fields[0].name, 'created_at')
 })
 
+test('get_field_catalog tool passes scoped options', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    assert.equal(
+      url,
+      'http://dataspec.local/api/ai-context/field-catalog?projectId=7&scope=domain&query=contact&status=enabled&limit=10'
+    )
+    return jsonResponse({ code: 200, data: '{"contextScope":{"scope":"domain"},"fields":[]}' })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 12,
+    method: 'tools/call',
+    params: {
+      name: 'get_field_catalog',
+      arguments: { scope: 'domain', query: 'contact', status: 'enabled', limit: 10 }
+    }
+  })
+
+  assert.equal(response.result.structuredContent.contextScope.scope, 'domain')
+})
+
+test('search_field_catalog tool reads scoped field catalog', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    assert.equal(
+      url,
+      'http://dataspec.local/api/ai-context/field-catalog?projectId=8&scope=field&query=%E6%89%8B%E6%9C%BA&limit=5'
+    )
+    return jsonResponse({
+      code: 200,
+      data: '{"contextScope":{"scope":"field","query":"手机"},"fields":[{"name":"mobile_no"}]}'
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 13,
+    method: 'tools/call',
+    params: {
+      name: 'search_field_catalog',
+      arguments: { projectId: 8, query: '手机', limit: 5 }
+    }
+  })
+
+  assert.equal(response.result.structuredContent.fields[0].name, 'mobile_no')
+  assert.equal(JSON.parse(response.result.content[0].text).contextScope.query, '手机')
+})
+
 test('suggest_fields tool returns structured suggestions', async () => {
   const calls = []
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {

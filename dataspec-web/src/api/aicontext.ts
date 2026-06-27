@@ -1,14 +1,15 @@
 import request from '@/api/request'
+import type { AiContextScopeParams } from '@/utils/aiContextScope'
 
-export function previewDatabaseRules(projectId: number) {
+export function previewDatabaseRules(projectId: number, options: AiContextScopeParams = {}) {
   return request.get<unknown, string>('/ai-context/database-rules', {
-    params: { projectId }
+    params: scopeParams(projectId, options)
   })
 }
 
-export function previewFieldCatalog(projectId: number) {
+export function previewFieldCatalog(projectId: number, options: AiContextScopeParams = {}) {
   return request.get<unknown, string>('/ai-context/field-catalog', {
-    params: { projectId }
+    params: scopeParams(projectId, options)
   })
 }
 
@@ -18,9 +19,19 @@ export function previewRulesYaml(projectId: number) {
   })
 }
 
-export function downloadAiContextPackage(projectId: number) {
+export function downloadAiContextPackage(projectId: number, options: AiContextScopeParams = {}) {
   return request.get<unknown, Blob>('/ai-context/package/download', {
-    params: { projectId },
+    params: scopeParams(projectId, options),
     responseType: 'blob'
   })
+}
+
+function scopeParams(projectId: number, options: AiContextScopeParams) {
+  return {
+    projectId,
+    ...(options.scope ? { scope: options.scope } : {}),
+    ...(options.query ? { query: options.query } : {}),
+    ...(options.status ? { status: options.status } : {}),
+    ...(options.limit ? { limit: options.limit } : {})
+  }
 }
