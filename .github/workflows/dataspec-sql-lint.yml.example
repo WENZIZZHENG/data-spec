@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # issues:write 用于更新汇总评论；pull-requests:write 用于发布 diff inline review comment。
       issues: write
       pull-requests: write
 
@@ -43,6 +44,7 @@ jobs:
 
       - name: Review SQL files
         run: |
+          # 可映射到本次 PR diff 的问题会发到具体 SQL 行；不在 diff 内的问题会进入汇总评论 fallback。
           node tools/dataspec-cli.mjs review-pr . \
             --project 1 \
             --repo "${{ github.repository }}" \

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
-import { runCli } from './dataspec-cli.mjs'
+import { buildInlineReviewPlan, buildPullRequestLineMap, runCli } from './dataspec-cli.mjs'
 
 test('lint reads sql file, posts to server, prints json, and returns 1 for errors', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
@@ -344,6 +344,25 @@ test('review-pr posts markdown comment and returns 1 when lint has errors', asyn
       if (url === 'https://api.github.com/repos/acme/app/issues/42/comments?per_page=100') {
         return { ok: true, status: 200, json: async () => [] }
       }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/42') {
+        return { ok: true, status: 200, json: async () => ({ head: { sha: 'abc123' } }) }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/42/files?per_page=100') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{
+            filename: 'bad.sql',
+            patch: '@@ -0,0 +1,1 @@\n+CREATE TABLE UserOrder (id bigint);'
+          }]
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/42/comments?per_page=100') {
+        return { ok: true, status: 200, json: async () => [] }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/42/comments' && options.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({ id: 199 }) }
+      }
       if (url === 'https://api.github.com/repos/acme/app/issues/42/comments' && options.method === 'POST') {
         return { ok: true, status: 201, json: async () => ({ id: 99 }) }
       }
@@ -367,16 +386,110 @@ test('review-pr posts markdown comment and returns 1 when lint has errors', asyn
     ], io, fetchFn)
 
     const postCall = calls.find((call) => call.url.endsWith('/issues/42/comments') && call.options.method === 'POST')
+    const inlineCall = calls.find((call) => call.url.endsWith('/pulls/42/comments') && call.options.method === 'POST')
     const commentBody = JSON.parse(postCall.options.body).body
+    const inlineBody = JSON.parse(inlineCall.options.body)
     assert.equal(code, 1)
     assert.equal(postCall.options.headers.Authorization, 'Bearer ghs_test')
+    assert.equal(inlineBody.commit_id, 'abc123')
+    assert.equal(inlineBody.path, 'bad.sql')
+    assert.equal(inlineBody.line, 1)
+    assert.match(inlineBody.body, /dataspec-inline-review/)
+    assert.match(inlineBody.body, /table_naming_snake_case/)
     assert.match(commentBody, /<!-- dataspec-sql-review -->/)
     assert.match(commentBody, /bad\.sql/)
     assert.match(commentBody, /table_naming_snake_case/)
     assert.match(commentBody, /行 1:14-1:23/)
     assert.doesNotMatch(commentBody, /行 0:0-0:0/)
     assert.match(commentBody, /user_order/)
-    assert.match(io.stdout, /已创建 DataSpec Review 评论/)
+    assert.match(commentBody, /Fallback 问题 \| 1/)
+    assert.match(io.stdout, /已创建 DataSpec Review 评论；inline 创建 1，跳过 0，fallback 1/)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('review-pr prints json summary when requested', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    await writeFile(path.join(dir, 'bad.sql'), 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    const fetchFn = async (url, options = {}) => {
+      if (url === 'http://dataspec.local/api/lint') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: {
+              errorCount: 1,
+              warningCount: 0,
+              suggestionCount: 0,
+              issues: [{
+                severity: 'ERROR',
+                ruleCode: 'table_naming_snake_case',
+                message: '表名必须使用 snake_case',
+                line: 1,
+                column: 14
+              }]
+            }
+          })
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/42') {
+        return { ok: true, status: 200, json: async () => ({ head: { sha: 'abc123' } }) }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/42/files?per_page=100') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{
+            filename: 'bad.sql',
+            patch: '@@ -0,0 +1,1 @@\n+CREATE TABLE UserOrder (id bigint);'
+          }]
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/42/comments?per_page=100') {
+        return { ok: true, status: 200, json: async () => [] }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/42/comments' && options.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({ id: 199 }) }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/issues/42/comments?per_page=100') {
+        return { ok: true, status: 200, json: async () => [] }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/issues/42/comments' && options.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({ id: 99 }) }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'review-pr',
+      dir,
+      '--project',
+      '7',
+      '--repo',
+      'acme/app',
+      '--pr',
+      '42',
+      '--token',
+      'ghs_test',
+      '--server',
+      'http://dataspec.local',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    const output = JSON.parse(io.stdout)
+    assert.equal(code, 1)
+    assert.equal(output.reviewCommentAction, 'created')
+    assert.equal(output.summary.failedFiles, 1)
+    assert.equal(output.inline.inlineCommentsCreated, 1)
+    assert.equal(output.inline.inlineCommentsSkipped, 0)
+    assert.equal(output.inline.fallbackIssues, 0)
+    assert.equal(output.files[0].path.endsWith('bad.sql'), true)
     assert.equal(io.stderr, '')
   } finally {
     await rm(dir, { recursive: true, force: true })
@@ -435,6 +548,134 @@ test('review-pr updates existing markdown comment and returns 0 when lint passes
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+test('review-pr reports token and permission diagnosis when GitHub rejects inline setup', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    await writeFile(path.join(dir, 'bad.sql'), 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    const fetchFn = async (url) => {
+      if (url === 'http://dataspec.local/api/lint') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: {
+              errorCount: 1,
+              warningCount: 0,
+              suggestionCount: 0,
+              issues: [{ severity: 'ERROR', ruleCode: 'table_naming_snake_case', line: 1 }]
+            }
+          })
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/42') {
+        return { ok: false, status: 403, json: async () => ({ message: 'forbidden' }) }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'review-pr',
+      dir,
+      '--project',
+      '7',
+      '--repo',
+      'acme/app',
+      '--pr',
+      '42',
+      '--token',
+      'ghs_test',
+      '--server',
+      'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /GitHub 请求失败，HTTP 403/)
+    assert.match(io.stderr, /token、repo、pr 或权限/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('buildPullRequestLineMap parses new diff lines and normalizes paths', () => {
+  const mapping = buildPullRequestLineMap([
+    {
+      filename: 'db\\migrations\\bad.sql',
+      patch: [
+        '@@ -1,2 +10,4 @@',
+        ' context',
+        '+CREATE TABLE UserOrder (id bigint);',
+        '-old line',
+        '+COMMENT ON TABLE UserOrder IS \'订单\';'
+      ].join('\n')
+    },
+    {
+      filename: 'db/large.sql',
+      patch: undefined
+    }
+  ])
+
+  assert.deepEqual(mapping, [
+    { path: 'db/migrations/bad.sql', line: 11 },
+    { path: 'db/migrations/bad.sql', line: 12 }
+  ])
+})
+
+test('buildInlineReviewPlan creates, skips, and falls back by diff mapping', () => {
+  const lintOutput = {
+    files: [
+      {
+        path: 'C:\\repo\\db\\migrations\\bad.sql',
+        result: {
+          issues: [
+            {
+              severity: 'ERROR',
+              ruleCode: 'table_naming_snake_case',
+              message: '表名必须使用 snake_case',
+              line: 11,
+              column: 1
+            },
+            {
+              severity: 'WARNING',
+              ruleCode: 'comment_missing',
+              message: '缺少注释',
+              line: 99
+            },
+            {
+              severity: 'SUGGESTION',
+              ruleCode: 'recommended_field_name',
+              message: '推荐字段名',
+              line: null
+            }
+          ]
+        }
+      }
+    ]
+  }
+  const prFiles = [{
+    filename: 'db/migrations/bad.sql',
+    patch: '@@ -1,1 +11,1 @@\n+CREATE TABLE UserOrder (id bigint);'
+  }]
+
+  const createdPlan = buildInlineReviewPlan(lintOutput, prFiles, [])
+  assert.equal(createdPlan.comments.length, 1)
+  assert.equal(createdPlan.comments[0].path, 'db/migrations/bad.sql')
+  assert.equal(createdPlan.comments[0].line, 11)
+  assert.equal(createdPlan.fallbackIssues.length, 2)
+  assert.deepEqual(createdPlan.summary.fallbackReasons.map((item) => item.reason).sort(), [
+    'issue_missing_line',
+    'line_not_in_pr_diff'
+  ])
+
+  const skippedPlan = buildInlineReviewPlan(lintOutput, prFiles, [
+    { body: '<!-- dataspec-inline-review:db%2Fmigrations%2Fbad.sql:11:table_naming_snake_case -->' }
+  ])
+  assert.equal(skippedPlan.comments.length, 0)
+  assert.equal(skippedPlan.skipped.length, 1)
+  assert.equal(skippedPlan.summary.inlineCommentsSkipped, 1)
 })
 
 test('export-context downloads zip bytes to output path', async () => {

@@ -15,6 +15,7 @@ import {
 const DEFAULT_SERVER = 'http://localhost:8090'
 const DEFAULT_GITHUB_API = 'https://api.github.com'
 const DATASPEC_REVIEW_MARKER = '<!-- dataspec-sql-review -->'
+const DATASPEC_INLINE_REVIEW_PREFIX = 'dataspec-inline-review'
 const TOOLS_DIR = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.dirname(TOOLS_DIR)
 const DATASPEC_WEB_DIR = path.join(REPO_ROOT, 'dataspec-web')
@@ -175,10 +176,14 @@ async function runLintFiles(args, io, fetchFn) {
 }
 
 async function runReviewPr(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'repo', 'pr', 'token', 'server', 'github-api', 'dataspec-token'])
+  const { positional, options } = parseArgs(args, ['project', 'repo', 'pr', 'token', 'server', 'github-api', 'dataspec-token', 'format'])
   const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length === 0) {
     throw new Error('review-pr 需要提供至少一个 SQL 文件或目录路径')
+  }
+  const format = options.format ?? 'text'
+  if (!['text', 'json'].includes(format)) {
+    throw new Error('review-pr 仅支持 --format text|json')
   }
   const projectId = parseProjectId(options.project ?? config.projectId)
   const repo = parseRepository(options.repo)
@@ -191,7 +196,10 @@ async function runReviewPr(args, io, fetchFn) {
   const apiToken = resolveDataSpecToken(options, config)
   const githubApi = normalizeServer(options['github-api'] ?? DEFAULT_GITHUB_API)
   const lintOutput = await lintSqlFiles(positional, projectId, server, fetchFn, apiToken)
-  const body = buildReviewMarkdown(lintOutput)
+  const inlineResult = hasReviewIssues(lintOutput)
+    ? await publishInlineReviewComments({ repo, prNumber, token, githubApi, lintOutput, fetchFn })
+    : emptyInlineResult()
+  const body = buildReviewMarkdown(lintOutput, inlineResult.summary)
   const action = await upsertPullRequestComment({
     repo,
     prNumber,
@@ -200,7 +208,18 @@ async function runReviewPr(args, io, fetchFn) {
     body,
     fetchFn
   })
-  io.writeOut(`已${action === 'updated' ? '更新' : '创建'} DataSpec Review 评论\n`)
+  if (format === 'json') {
+    io.writeOut(`${JSON.stringify({
+      reviewCommentAction: action,
+      summary: lintOutput.summary,
+      inline: inlineResult.summary,
+      files: lintOutput.files
+    }, null, 2)}\n`)
+  } else {
+    io.writeOut(
+      `已${action === 'updated' ? '更新' : '创建'} DataSpec Review 评论；inline 创建 ${inlineResult.summary.inlineCommentsCreated}，跳过 ${inlineResult.summary.inlineCommentsSkipped}，fallback ${inlineResult.summary.fallbackIssues}\n`
+    )
+  }
   return lintOutput.summary.failedFiles > 0 ? 1 : 0
 }
 
@@ -917,6 +936,64 @@ async function upsertPullRequestComment({ repo, prNumber, token, githubApi, body
   return 'created'
 }
 
+async function publishInlineReviewComments({ repo, prNumber, token, githubApi, lintOutput, fetchFn }) {
+  const repoPath = repo.split('/').map(encodeURIComponent).join('/')
+  const pull = await fetchGithubJson(
+    `${githubApi}/repos/${repoPath}/pulls/${encodeURIComponent(prNumber)}`,
+    token,
+    fetchFn
+  )
+  const commitId = pull?.head?.sha
+  if (!commitId) {
+    throw new Error('GitHub PR 响应缺少 head.sha；请检查 repo/pr 是否有效')
+  }
+  const prFiles = await fetchGithubJson(
+    `${githubApi}/repos/${repoPath}/pulls/${encodeURIComponent(prNumber)}/files?per_page=100`,
+    token,
+    fetchFn
+  )
+  const existingComments = await fetchGithubJson(
+    `${githubApi}/repos/${repoPath}/pulls/${encodeURIComponent(prNumber)}/comments?per_page=100`,
+    token,
+    fetchFn
+  )
+  const plan = buildInlineReviewPlan(lintOutput, Array.isArray(prFiles) ? prFiles : [], Array.isArray(existingComments) ? existingComments : [])
+  const created = []
+  for (const comment of plan.comments) {
+    const response = await fetchFn(`${githubApi}/repos/${repoPath}/pulls/${encodeURIComponent(prNumber)}/comments`, {
+      method: 'POST',
+      headers: githubHeaders(token),
+      body: JSON.stringify({
+        body: comment.body,
+        commit_id: commitId,
+        path: comment.path,
+        line: comment.line,
+        side: 'RIGHT'
+      })
+    })
+    await readGithubJsonResponse(response)
+    created.push(comment)
+  }
+  return {
+    ...plan,
+    created,
+    summary: {
+      inlineCommentsCreated: created.length,
+      inlineCommentsSkipped: plan.skipped.length,
+      fallbackIssues: plan.fallbackIssues.length,
+      fallbackReasons: summarizeFallbackReasons(plan.fallbackIssues)
+    }
+  }
+}
+
+async function fetchGithubJson(url, token, fetchFn) {
+  const response = await fetchFn(url, {
+    method: 'GET',
+    headers: githubHeaders(token)
+  })
+  return await readGithubJsonResponse(response)
+}
+
 function githubHeaders(token) {
   return {
     Authorization: `Bearer ${token}`,
@@ -928,12 +1005,12 @@ function githubHeaders(token) {
 
 async function readGithubJsonResponse(response) {
   if (!response.ok) {
-    throw new Error(`GitHub 请求失败，HTTP ${response.status}`)
+    throw new Error(`GitHub 请求失败，HTTP ${response.status}；请检查 GitHub token、repo、pr 或权限`)
   }
   return await response.json()
 }
 
-function buildReviewMarkdown(lintOutput) {
+function buildReviewMarkdown(lintOutput, inlineSummary = emptyInlineResult().summary) {
   const { summary, files } = lintOutput
   const status = summary.failedFiles > 0
     ? `发现 ${summary.failedFiles} 个 SQL 文件存在 ERROR`
@@ -951,8 +1028,19 @@ function buildReviewMarkdown(lintOutput) {
     `| ERROR | ${summary.errorCount} |`,
     `| WARNING | ${summary.warningCount} |`,
     `| SUGGESTION | ${summary.suggestionCount} |`,
+    `| Inline 评论 | ${inlineSummary.inlineCommentsCreated} |`,
+    `| Inline 跳过 | ${inlineSummary.inlineCommentsSkipped} |`,
+    `| Fallback 问题 | ${inlineSummary.fallbackIssues} |`,
     ''
   ]
+
+  if (inlineSummary.fallbackReasons.length > 0) {
+    lines.push('### Inline fallback', '')
+    for (const reason of inlineSummary.fallbackReasons) {
+      lines.push(`- ${reason.reason}: ${reason.count}`)
+    }
+    lines.push('')
+  }
 
   if (files.length > 0) {
     lines.push('### 文件概览', '')
@@ -996,6 +1084,161 @@ function buildIssueMarkdownLines(files) {
     lines.push('')
   }
   return lines
+}
+
+function hasReviewIssues(lintOutput) {
+  return lintOutput.files.some((file) => (file.result?.issues ?? []).length > 0)
+}
+
+function emptyInlineResult() {
+  return {
+    comments: [],
+    skipped: [],
+    fallbackIssues: [],
+    created: [],
+    summary: {
+      inlineCommentsCreated: 0,
+      inlineCommentsSkipped: 0,
+      fallbackIssues: 0,
+      fallbackReasons: []
+    }
+  }
+}
+
+export function buildInlineReviewPlan(lintOutput, prFiles, existingComments = []) {
+  const lineMap = buildPullRequestLineMap(prFiles)
+  const existingMarkers = new Set((existingComments ?? [])
+    .map((comment) => extractInlineMarker(comment.body))
+    .filter(Boolean))
+  const comments = []
+  const skipped = []
+  const fallbackIssues = []
+  for (const file of lintOutput.files ?? []) {
+    for (const issue of file.result?.issues ?? []) {
+      const line = parseOptionalNumber(issue.line)
+      if (line === null) {
+        fallbackIssues.push(fallbackIssue(file.path, issue, 'issue_missing_line'))
+        continue
+      }
+      const mapped = findMappedReviewLine(lineMap, file.path, line)
+      if (!mapped) {
+        fallbackIssues.push(fallbackIssue(file.path, issue, 'line_not_in_pr_diff'))
+        continue
+      }
+      const marker = inlineMarker(mapped.path, mapped.line, issue.ruleCode)
+      if (existingMarkers.has(marker)) {
+        skipped.push({ path: mapped.path, line: mapped.line, ruleCode: issue.ruleCode, reason: 'duplicate_marker' })
+        continue
+      }
+      comments.push({
+        path: mapped.path,
+        line: mapped.line,
+        marker,
+        issue,
+        body: buildInlineCommentBody(marker, issue)
+      })
+    }
+  }
+  return {
+    comments,
+    skipped,
+    fallbackIssues,
+    summary: {
+      inlineCommentsCreated: comments.length,
+      inlineCommentsSkipped: skipped.length,
+      fallbackIssues: fallbackIssues.length,
+      fallbackReasons: summarizeFallbackReasons(fallbackIssues)
+    }
+  }
+}
+
+export function buildPullRequestLineMap(prFiles) {
+  const mappings = []
+  for (const file of prFiles ?? []) {
+    const normalizedPath = normalizeReviewPath(file.filename)
+    const patch = file.patch
+    if (!normalizedPath || typeof patch !== 'string' || patch.trim() === '') {
+      continue
+    }
+    for (const line of parsePatchNewLines(patch)) {
+      mappings.push({ path: normalizedPath, line })
+    }
+  }
+  return mappings
+}
+
+function parsePatchNewLines(patch) {
+  const lines = []
+  let newLine = null
+  for (const rawLine of patch.split(/\r?\n/)) {
+    const header = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(rawLine)
+    if (header) {
+      newLine = Number(header[1])
+      continue
+    }
+    if (newLine === null) {
+      continue
+    }
+    if (rawLine.startsWith('+') && !rawLine.startsWith('+++')) {
+      lines.push(newLine)
+      newLine += 1
+      continue
+    }
+    if (rawLine.startsWith('-') && !rawLine.startsWith('---')) {
+      continue
+    }
+    if (rawLine.startsWith('\\')) {
+      continue
+    }
+    newLine += 1
+  }
+  return lines
+}
+
+function findMappedReviewLine(lineMap, filePath, line) {
+  const normalizedFile = normalizeReviewPath(filePath)
+  return lineMap.find((item) => item.line === line && pathsMatch(normalizedFile, item.path)) ?? null
+}
+
+function pathsMatch(left, right) {
+  return left === right || left.endsWith(`/${right}`) || right.endsWith(`/${left}`)
+}
+
+function fallbackIssue(filePath, issue, reason) {
+  return {
+    path: normalizeReviewPath(filePath),
+    line: issue.line ?? null,
+    ruleCode: issue.ruleCode ?? 'unknown_rule',
+    reason
+  }
+}
+
+function summarizeFallbackReasons(fallbackIssues) {
+  const counts = new Map()
+  for (const issue of fallbackIssues) {
+    counts.set(issue.reason, (counts.get(issue.reason) ?? 0) + 1)
+  }
+  return [...counts.entries()].map(([reason, count]) => ({ reason, count }))
+}
+
+function inlineMarker(pathValue, line, ruleCode) {
+  return `${DATASPEC_INLINE_REVIEW_PREFIX}:${encodeURIComponent(pathValue)}:${line}:${encodeURIComponent(ruleCode ?? 'unknown_rule')}`
+}
+
+function extractInlineMarker(body) {
+  const match = /<!--\s*(dataspec-inline-review:[^>]+)\s*-->/.exec(body ?? '')
+  return match?.[1]?.trim() ?? null
+}
+
+function buildInlineCommentBody(marker, issue) {
+  return [
+    `<!-- ${marker} -->`,
+    formatIssueMarkdown(issue)
+  ].join('\n')
+}
+
+function normalizeReviewPath(value) {
+  return String(value ?? '').replaceAll('\\', '/').replace(/^\.?\//, '')
 }
 
 function formatIssueMarkdown(issue) {
@@ -1094,7 +1337,7 @@ function helpText() {
 Usage:
   node tools/dataspec-cli.mjs lint <path|-> [--project <id>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] --format json [--server <url>] [--dataspec-token <token>]
-  node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]

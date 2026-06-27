@@ -53,9 +53,9 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 字段推荐 API/CLI/MCP。
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
-- CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、workflow recipes、单文件 lint、批量 `lint-files`、PR 评论式 `review-pr`、AI Context 导出、字段推荐和 DDL 生成。
+- CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、workflow recipes、单文件 lint、批量 `lint-files`、PR inline/汇总评论式 `review-pr`、AI Context 导出、字段推荐和 DDL 生成。
 - MCP Server 暴露 DataSpec resources、workflow recipes、prompts 和核心 tools。
-- GitHub Actions 示例支持 SQL 批量校验和 PR Review 评论。
+- GitHub Actions 示例支持 SQL 批量校验、PR diff inline 评论和 fallback 汇总评论。
 
 ## 快速启动
 
@@ -333,8 +333,11 @@ node tools/dataspec-cli.mjs lint-files examples --project 1 --format json
 # 未传路径时，lint-files 会使用 config.json 的 defaultPaths
 node tools/dataspec-cli.mjs lint-files --format json
 
-# GitHub Actions 中发布或更新 PR Review 评论；有 ERROR 时评论后退出码为 1
+# GitHub Actions 中发布 PR diff inline 评论，并更新 fallback 汇总评论；有 ERROR 时评论后退出码为 1
 node tools/dataspec-cli.mjs review-pr . --project 1 --repo owner/repo --pr 123 --token "$GITHUB_TOKEN" --server http://localhost:8090
+
+# 输出 CI/AI 可解析的 inline、fallback 和 lint 统计
+node tools/dataspec-cli.mjs review-pr . --project 1 --repo owner/repo --pr 123 --token "$GITHUB_TOKEN" --format json --server http://localhost:8090
 
 # 导出 AI Context zip 包
 node tools/dataspec-cli.mjs export-context --project 1 --output dataspec-ai-context.zip
@@ -367,7 +370,7 @@ node tools/dataspec-cli.mjs workflow show create-table --format json
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --server http://localhost:8090
 ```
 
-`doctor` 会检查配置文件、DataSpec 服务、API token 身份、项目可访问性、`defaultPaths` 和 OpenAPI 状态；默认只做轻量 OpenAPI 检查，传 `--check-openapi` 时会复用前端契约校验逻辑做完整 schema 漂移检查。`workflow` 只输出任务计划和命令建议，第一版包含 `create-table`、`review-pr-sql`、`reverse-import-standards` 和 `export-min-context`，不会自动执行步骤或调用外部 LLM。`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取。`review-pr` 会在批量 lint 后创建或更新包含 `<!-- dataspec-sql-review -->` marker 的 PR 评论，避免重复刷屏；问题明细会展示文件内行列范围，作为后续 GitHub inline comment 的基础数据，但当前仍只发布单条汇总评论；评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
+`doctor` 会检查配置文件、DataSpec 服务、API token 身份、项目可访问性、`defaultPaths` 和 OpenAPI 状态；默认只做轻量 OpenAPI 检查，传 `--check-openapi` 时会复用前端契约校验逻辑做完整 schema 漂移检查。`workflow` 只输出任务计划和命令建议，第一版包含 `create-table`、`review-pr-sql`、`reverse-import-standards` 和 `export-min-context`，不会自动执行步骤或调用外部 LLM。`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取。`review-pr` 会在批量 lint 后读取 PR diff，把能映射到新增/修改行的 SQL 问题发布为 GitHub inline review comment；无法映射的问题会保留在包含 `<!-- dataspec-sql-review -->` marker 的汇总评论中，并统计 fallback reason。重复运行会通过 `dataspec-inline-review` marker 跳过已发布的相同行规则评论；`--format json` 会输出 `summary`、`inline` 和 `files[]`，评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
 
 ## MCP Server
 
@@ -526,9 +529,9 @@ data-spec/
 - [x] 数据库直连导入来源与批次追踪，字段库可查看来源摘要
 - [x] 前端反向导入高频流程记忆，按项目恢复非敏感连接信息、表选择、筛选状态和字段库关键词跳转
 - [x] 数据库直连非敏感连接预设，支持项目级保存、选择复用和表选择恢复，不持久化用户名、密码、token 或 JDBC URL
-- [x] DataSpec CLI：`doctor`、`workflow list/show`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置和按需 Context 导出
+- [x] DataSpec CLI：`doctor`、`workflow list/show`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置、按需 Context 导出和 PR diff inline/fallback SQL Review
 - [x] DataSpec MCP Server：resources、`workflow-recipes`、prompts、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`generate_table_ddl`，支持 `.dataspec/config.json` 默认项目配置
-- [x] GitHub Actions 示例和 PR 评论式 SQL Review
+- [x] GitHub Actions 示例和 PR inline/fallback 评论式 SQL Review
 
 ## 暂缓探索
 
