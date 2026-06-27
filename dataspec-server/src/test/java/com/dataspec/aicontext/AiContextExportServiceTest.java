@@ -16,6 +16,9 @@ import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.rules.TableNameSnakeCaseRule;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.rule.service.RuleConfigService;
+import com.dataspec.rulebaseline.model.RuleBaselineInfo;
+import com.dataspec.rulebaseline.service.BuiltInRuleBaselines;
+import com.dataspec.rulebaseline.service.RuleBaselineService;
 import com.dataspec.ruleexemption.entity.RuleExemption;
 import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
@@ -65,6 +68,8 @@ class AiContextExportServiceTest {
         assertTrue(entries.get(".dataspec/DATABASE_RULES.md").contains("table_naming_snake_case"));
         assertTrue(entries.get(".dataspec/field-catalog.json").contains("mobile_no"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("naming:"));
+        assertTrue(entries.get(".dataspec/rules.yaml").contains("baseline:"));
+        assertTrue(entries.get(".dataspec/rules.yaml").contains("key: personal_default"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("spec_version: v2026.06.24"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("spec_hash: hash123"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("required_columns:"));
@@ -151,6 +156,7 @@ class AiContextExportServiceTest {
 
         String rulesYaml = entries.get(".dataspec/rules.yaml");
         assertTrue(rulesYaml.contains("standard:"));
+        assertTrue(rulesYaml.contains("baseline:"));
         assertTrue(rulesYaml.contains("naming:"));
         assertTrue(rulesYaml.contains("rules:"));
 
@@ -474,6 +480,7 @@ class AiContextExportServiceTest {
                                                  List<Field> fields,
                                                  RuleExemptionService ruleExemptionService) {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
+        RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
         FieldService fieldService = mock(FieldService.class);
         EnumDictService enumDictService = mock(EnumDictService.class);
         SqlCheckRecordService sqlCheckRecordService = mock(SqlCheckRecordService.class);
@@ -481,6 +488,14 @@ class AiContextExportServiceTest {
 
         when(ruleConfigService.listByProject(PROJECT_ID)).thenReturn(List.of());
         when(ruleConfigService.listEnabledByProject(PROJECT_ID)).thenReturn(List.of());
+        when(ruleBaselineService.currentBaseline(PROJECT_ID)).thenReturn(new RuleBaselineInfo(
+                PROJECT_ID,
+                BuiltInRuleBaselines.PERSONAL_DEFAULT,
+                "个人默认规则基线",
+                "1.0.0",
+                "built_in",
+                null,
+                0));
         when(fieldService.listByProject(PROJECT_ID)).thenReturn(fields);
         when(enumDictService.listByProject(PROJECT_ID)).thenReturn(List.of());
 
@@ -502,7 +517,8 @@ class AiContextExportServiceTest {
                 sqlLintService,
                 objectMapper,
                 aiJobRecordService,
-                ruleExemptionService
+                ruleExemptionService,
+                ruleBaselineService
         );
     }
 

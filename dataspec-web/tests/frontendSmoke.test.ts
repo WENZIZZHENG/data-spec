@@ -203,6 +203,30 @@ test('keeps DDL generation and AI Context export flows project-scoped', () => {
   ], 'AI Context api')
 })
 
+test('keeps rule baseline suite workflow wired on rule config page', () => {
+  const ruleConfig = readSource('src/views/RuleConfig.vue')
+  const ruleBaselineApi = readSource('src/api/ruleBaseline.ts')
+
+  assertContains(ruleConfig, [
+    'getCurrentRuleBaseline(projectId)',
+    'listRuleBaselineTemplates()',
+    'applyRuleBaseline({',
+    'exportRuleBaseline(projectId)',
+    'importRuleBaseline({',
+    'overwriteBaseline',
+    'baselineResultSummary',
+    '请先选择项目'
+  ], 'RuleConfig.vue')
+
+  assertContains(ruleBaselineApi, [
+    "request.get<unknown, RuleBaselineTemplate[]>('/rule-baselines/templates')",
+    "request.get<unknown, RuleBaselineInfo>('/rule-baselines/current'",
+    "request.post<unknown, RuleBaselineApplyResult>('/rule-baselines/apply'",
+    "request.get<unknown, RuleBaselinePackage>('/rule-baselines/export'",
+    "request.post<unknown, RuleBaselineApplyResult>('/rule-baselines/import'"
+  ], 'rule baseline api')
+})
+
 test('keeps coverage and AI replay supporting flows wired', () => {
   const coverage = readSource('src/views/FieldCoverage.vue')
   const coverageApi = readSource('src/api/coverage.ts')

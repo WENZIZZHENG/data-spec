@@ -22,6 +22,8 @@ import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
 import com.dataspec.rule.service.RuleConfigService;
+import com.dataspec.rulebaseline.model.RuleBaselineInfo;
+import com.dataspec.rulebaseline.service.RuleBaselineService;
 import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.service.StandardSnapshotService;
@@ -119,6 +121,7 @@ class PerformanceBaselineTest {
         SqlCheckRecordService sqlCheckRecordService = mock(SqlCheckRecordService.class);
         AiJobRecordService aiJobRecordService = mock(AiJobRecordService.class);
         RuleExemptionService ruleExemptionService = mock(RuleExemptionService.class);
+        RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
         ObjectMapper objectMapper = new ObjectMapper();
 
         when(ruleConfigService.listByProject(PROJECT_ID)).thenReturn(List.of());
@@ -127,6 +130,8 @@ class PerformanceBaselineTest {
         when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID))
                 .thenReturn(StandardSnapshotInfo.unversioned(PROJECT_ID));
         when(ruleExemptionService.listActiveByProject(PROJECT_ID)).thenReturn(List.of());
+        when(ruleBaselineService.currentBaseline(PROJECT_ID))
+                .thenReturn(new RuleBaselineInfo(PROJECT_ID, "custom", "自定义规则", "unversioned", "inferred", null, 0));
 
         SqlLintService sqlLintService = new SqlLintService(
                 new SqlParserService(),
@@ -146,7 +151,8 @@ class PerformanceBaselineTest {
                 sqlLintService,
                 objectMapper,
                 aiJobRecordService,
-                ruleExemptionService
+                ruleExemptionService,
+                ruleBaselineService
         );
     }
 

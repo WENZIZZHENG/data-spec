@@ -4,6 +4,8 @@ import com.dataspec.common.exception.BizException;
 import com.dataspec.project.entity.Project;
 import com.dataspec.project.repository.ProjectRepository;
 import com.dataspec.project.service.ProjectService;
+import com.dataspec.rulebaseline.service.BuiltInRuleBaselines;
+import com.dataspec.rulebaseline.service.RuleBaselineService;
 import com.dataspec.security.context.ProjectAccessGuard;
 import com.dataspec.standards.BuiltInStandardsImportService;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,7 @@ public class ProjectServiceImpl implements ProjectService {
 
     private final ProjectRepository projectRepository;
     private final BuiltInStandardsImportService standardsImportService;
+    private final RuleBaselineService ruleBaselineService;
 
     @Override
     public List<Project> list() {
@@ -53,6 +56,7 @@ public class ProjectServiceImpl implements ProjectService {
         projectRepository.insert(project);
         if (importBuiltInStandards) {
             standardsImportService.importBuiltInStandards(project.getId());
+            ruleBaselineService.applyBuiltInBaseline(project.getId(), BuiltInRuleBaselines.PERSONAL_DEFAULT, false);
         }
         return project;
     }

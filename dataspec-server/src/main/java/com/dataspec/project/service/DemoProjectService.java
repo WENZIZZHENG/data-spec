@@ -5,8 +5,8 @@ import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.project.entity.Project;
 import com.dataspec.project.model.DemoProjectResult;
 import com.dataspec.project.repository.ProjectRepository;
-import com.dataspec.rule.entity.RuleConfig;
-import com.dataspec.rule.repository.RuleConfigRepository;
+import com.dataspec.rulebaseline.service.BuiltInRuleBaselines;
+import com.dataspec.rulebaseline.service.RuleBaselineService;
 import com.dataspec.security.context.ProjectAccessGuard;
 import com.dataspec.standards.BuiltInStandardsImportService;
 import com.dataspec.template.entity.Template;
@@ -72,8 +72,8 @@ public class DemoProjectService {
     private final ProjectService projectService;
     private final BuiltInStandardsImportService standardsImportService;
     private final FieldRepository fieldRepository;
-    private final RuleConfigRepository ruleConfigRepository;
     private final TemplateRepository templateRepository;
+    private final RuleBaselineService ruleBaselineService;
 
     @Transactional
     public DemoProjectResult createOrReuseDemoProject() {
@@ -84,8 +84,8 @@ public class DemoProjectService {
 
         if (!created) {
             standardsImportService.importBuiltInStandards(project.getId());
+            ruleBaselineService.applyBuiltInBaseline(project.getId(), BuiltInRuleBaselines.PERSONAL_DEFAULT, false);
         }
-        seedRules(project.getId());
         Template template = seedTemplate(project.getId());
         return new DemoProjectResult(
                 project,
@@ -102,22 +102,6 @@ public class DemoProjectService {
         project.setDescription("用于体验字段标准、DDL 生成、SQL 校验和 AI Context 导出的演示项目");
         project.setDbType("postgresql");
         return projectService.create(project, true);
-    }
-
-    private void seedRules(Long projectId) {
-        for (DemoRuleSeed seed : demoRules()) {
-            if (ruleConfigRepository.findByCodeAndProjectId(seed.ruleCode(), projectId).isPresent()) {
-                continue;
-            }
-            RuleConfig rule = new RuleConfig();
-            rule.setProjectId(projectId);
-            rule.setRuleCode(seed.ruleCode());
-            rule.setRuleName(seed.ruleName());
-            rule.setSeverity(seed.severity());
-            rule.setEnabled(true);
-            rule.setParamsJson(seed.paramsJson());
-            ruleConfigRepository.insert(rule);
-        }
     }
 
     private Template seedTemplate(Long projectId) {
@@ -181,23 +165,4 @@ public class DemoProjectService {
         }
     }
 
-    private List<DemoRuleSeed> demoRules() {
-        return List.of(
-                new DemoRuleSeed("table_naming_snake_case", "表名 snake_case", "error", "{}"),
-                new DemoRuleSeed("field_naming_snake_case", "字段 snake_case", "error", "{}"),
-                new DemoRuleSeed("comment_missing", "表字段注释完整性", "error", "{}"),
-                new DemoRuleSeed("required_columns", "必含审计字段", "error",
-                        "{\"requiredColumns\":[\"id\",\"created_at\",\"updated_at\",\"is_deleted\"]}"),
-                new DemoRuleSeed("forbidden_field_name", "禁用字段名", "error",
-                        "{\"forbiddenNames\":[\"uid\",\"create_time\",\"update_time\",\"del_flag\",\"is_del\",\"tmp\",\"test\",\"flag1\",\"type1\"]}"),
-                new DemoRuleSeed("recommended_field_name", "推荐字段名", "suggestion",
-                        "{\"recommendations\":{\"uid\":\"user_id\",\"phone\":\"mobile_no\",\"phone_number\":\"mobile_no\",\"amount\":\"amount_cent\",\"create_time\":\"created_at\",\"update_time\":\"updated_at\",\"del_flag\":\"is_deleted\"}}"),
-                new DemoRuleSeed("field_suffix_type", "字段后缀/前缀类型", "warning",
-                        "{\"suffixTypes\":{\"_id\":[\"bigint\",\"integer\",\"bigserial\"],\"_at\":[\"timestamp\",\"timestamp with time zone\",\"datetime\"],\"_no\":[\"varchar\",\"char\",\"text\"],\"_count\":[\"integer\",\"bigint\"]},\"prefixTypes\":{\"is_\":[\"boolean\"]}}"),
-                new DemoRuleSeed("amount_field_type", "金额字段规范", "warning", "{}")
-        );
-    }
-
-    private record DemoRuleSeed(String ruleCode, String ruleName, String severity, String paramsJson) {
-    }
 }

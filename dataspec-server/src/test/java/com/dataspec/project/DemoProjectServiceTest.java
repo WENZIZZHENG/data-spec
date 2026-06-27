@@ -7,8 +7,8 @@ import com.dataspec.project.model.DemoProjectResult;
 import com.dataspec.project.repository.ProjectRepository;
 import com.dataspec.project.service.DemoProjectService;
 import com.dataspec.project.service.ProjectService;
-import com.dataspec.rule.entity.RuleConfig;
-import com.dataspec.rule.repository.RuleConfigRepository;
+import com.dataspec.rulebaseline.service.BuiltInRuleBaselines;
+import com.dataspec.rulebaseline.service.RuleBaselineService;
 import com.dataspec.standards.BuiltInStandardsImportService;
 import com.dataspec.template.entity.Template;
 import com.dataspec.template.entity.TemplateField;
@@ -31,15 +31,14 @@ class DemoProjectServiceTest {
         ProjectService projectService = mock(ProjectService.class);
         BuiltInStandardsImportService standardsImportService = mock(BuiltInStandardsImportService.class);
         FieldRepository fieldRepository = mock(FieldRepository.class);
-        RuleConfigRepository ruleConfigRepository = mock(RuleConfigRepository.class);
         TemplateRepository templateRepository = mock(TemplateRepository.class);
+        RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
         when(projectRepository.findByName(DemoProjectService.DEMO_PROJECT_NAME)).thenReturn(Optional.empty());
         when(projectService.create(any(Project.class), eq(true))).thenAnswer(invocation -> {
             Project project = invocation.getArgument(0);
             project.setId(11L);
             return project;
         });
-        when(ruleConfigRepository.findByCodeAndProjectId(anyString(), eq(11L))).thenReturn(Optional.empty());
         when(templateRepository.findByProjectId(11L)).thenReturn(List.of());
         when(templateRepository.findFieldsByTemplateId(22L)).thenReturn(List.of());
         doAnswer(invocation -> {
@@ -53,8 +52,8 @@ class DemoProjectServiceTest {
                 projectService,
                 standardsImportService,
                 fieldRepository,
-                ruleConfigRepository,
-                templateRepository);
+                templateRepository,
+                ruleBaselineService);
 
         DemoProjectResult result = service.createOrReuseDemoProject();
 
@@ -68,13 +67,7 @@ class DemoProjectServiceTest {
                 DemoProjectService.DEMO_PROJECT_NAME.equals(project.getName())
                         && "postgresql".equals(project.getDbType())), eq(true));
         verify(standardsImportService, never()).importBuiltInStandards(11L);
-        ArgumentCaptor<RuleConfig> ruleCaptor = ArgumentCaptor.forClass(RuleConfig.class);
-        verify(ruleConfigRepository, times(8)).insert(ruleCaptor.capture());
-        RuleConfig recommendedRule = ruleCaptor.getAllValues().stream()
-                .filter(rule -> "recommended_field_name".equals(rule.getRuleCode()))
-                .findFirst()
-                .orElseThrow();
-        assertTrue(recommendedRule.getParamsJson().contains("\"amount\":\"amount_cent\""));
+        verify(ruleBaselineService, never()).applyBuiltInBaseline(anyLong(), anyString(), anyBoolean());
         verify(templateRepository, times(10)).insertField(any(TemplateField.class));
     }
 
@@ -84,8 +77,8 @@ class DemoProjectServiceTest {
         ProjectService projectService = mock(ProjectService.class);
         BuiltInStandardsImportService standardsImportService = mock(BuiltInStandardsImportService.class);
         FieldRepository fieldRepository = mock(FieldRepository.class);
-        RuleConfigRepository ruleConfigRepository = mock(RuleConfigRepository.class);
         TemplateRepository templateRepository = mock(TemplateRepository.class);
+        RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
         Project existingProject = new Project();
         existingProject.setId(11L);
         existingProject.setName(DemoProjectService.DEMO_PROJECT_NAME);
@@ -93,8 +86,6 @@ class DemoProjectServiceTest {
         existingTemplate.setId(22L);
         existingTemplate.setName("订单表模板");
         when(projectRepository.findByName(DemoProjectService.DEMO_PROJECT_NAME)).thenReturn(Optional.of(existingProject));
-        when(ruleConfigRepository.findByCodeAndProjectId(anyString(), eq(11L)))
-                .thenReturn(Optional.of(new RuleConfig()));
         when(templateRepository.findByProjectId(11L)).thenReturn(List.of(existingTemplate));
         when(templateRepository.findFieldsByTemplateId(22L)).thenReturn(List.of(existingTemplateField("id")));
         when(fieldRepository.findAllByProjectId(11L)).thenReturn(demoFields());
@@ -103,8 +94,8 @@ class DemoProjectServiceTest {
                 projectService,
                 standardsImportService,
                 fieldRepository,
-                ruleConfigRepository,
-                templateRepository);
+                templateRepository,
+                ruleBaselineService);
 
         DemoProjectResult result = service.createOrReuseDemoProject();
 
@@ -113,7 +104,7 @@ class DemoProjectServiceTest {
         assertEquals(22L, result.templateId());
         verify(projectService, never()).create(any(Project.class), anyBoolean());
         verify(standardsImportService).importBuiltInStandards(11L);
-        verify(ruleConfigRepository, never()).insert(any(RuleConfig.class));
+        verify(ruleBaselineService).applyBuiltInBaseline(11L, BuiltInRuleBaselines.PERSONAL_DEFAULT, false);
         ArgumentCaptor<TemplateField> fieldCaptor = ArgumentCaptor.forClass(TemplateField.class);
         verify(templateRepository, times(9)).insertField(fieldCaptor.capture());
         assertTrue(fieldCaptor.getAllValues().stream().noneMatch(field -> "id".equals(field.getName())));

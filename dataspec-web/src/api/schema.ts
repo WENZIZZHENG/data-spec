@@ -212,6 +212,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rule-baselines/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRuleBaselineTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rule-baselines/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["currentRuleBaseline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rule-baselines/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["applyRuleBaseline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rule-baselines/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportRuleBaseline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rule-baselines/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["importRuleBaseline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rule-exemptions": {
         parameters: {
             query?: never;
@@ -2231,6 +2311,96 @@ export interface components {
             error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["RuleConfig"][];
         };
+        RuleBaselineRule: {
+            ruleCode?: string;
+            ruleName?: string;
+            severity?: string;
+            enabled?: boolean;
+            paramsJson?: string;
+        };
+        RuleBaselineTemplate: {
+            key?: string;
+            name?: string;
+            version?: string;
+            description?: string;
+            /** Format: int32 */
+            ruleCount?: number;
+            rules?: components["schemas"]["RuleBaselineRule"][];
+        };
+        RuleBaselineInfo: {
+            /** Format: int64 */
+            projectId?: number;
+            key?: string;
+            name?: string;
+            version?: string;
+            source?: string;
+            /** Format: date-time */
+            appliedAt?: string;
+            /** Format: int32 */
+            ruleCount?: number;
+        };
+        RuleBaselinePackage: {
+            /** Format: int32 */
+            schemaVersion?: number;
+            baseline?: components["schemas"]["RuleBaselineInfo"];
+            /** Format: date-time */
+            exportedAt?: string;
+            rules?: components["schemas"]["RuleBaselineRule"][];
+        };
+        RuleBaselineApplyReq: {
+            /** Format: int64 */
+            projectId: number;
+            baselineKey: string;
+            overwrite?: boolean;
+        };
+        RuleBaselineImportReq: {
+            /** Format: int64 */
+            projectId: number;
+            overwrite?: boolean;
+            baselinePackage: components["schemas"]["RuleBaselinePackage"];
+        };
+        RuleBaselineApplyResult: {
+            /** Format: int64 */
+            projectId?: number;
+            baseline?: components["schemas"]["RuleBaselineInfo"];
+            /** Format: int32 */
+            created?: number;
+            /** Format: int32 */
+            updated?: number;
+            /** Format: int32 */
+            skipped?: number;
+            createdRuleCodes?: string[];
+            updatedRuleCodes?: string[];
+            skippedRuleCodes?: string[];
+        };
+        RListRuleBaselineTemplate: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["RuleBaselineTemplate"][];
+        };
+        RRuleBaselineInfo: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["RuleBaselineInfo"];
+        };
+        RRuleBaselinePackage: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["RuleBaselinePackage"];
+        };
+        RRuleBaselineApplyResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["RuleBaselineApplyResult"];
+        };
         RListRuleExemption: {
             /** Format: int32 */
             code?: number;
@@ -3657,6 +3827,118 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RRuleConfig"];
+                };
+            };
+        };
+    };
+    listRuleBaselineTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListRuleBaselineTemplate"];
+                };
+            };
+        };
+    };
+    currentRuleBaseline: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRuleBaselineInfo"];
+                };
+            };
+        };
+    };
+    applyRuleBaseline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleBaselineApplyReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRuleBaselineApplyResult"];
+                };
+            };
+        };
+    };
+    exportRuleBaseline: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRuleBaselinePackage"];
+                };
+            };
+        };
+    };
+    importRuleBaseline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleBaselineImportReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRuleBaselineApplyResult"];
                 };
             };
         };

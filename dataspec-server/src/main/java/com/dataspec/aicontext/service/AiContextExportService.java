@@ -13,6 +13,8 @@ import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
+import com.dataspec.rulebaseline.model.RuleBaselineInfo;
+import com.dataspec.rulebaseline.service.RuleBaselineService;
 import com.dataspec.ruleexemption.entity.RuleExemption;
 import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
@@ -94,6 +96,7 @@ public class AiContextExportService {
     private final ObjectMapper objectMapper;
     private final AiJobRecordService aiJobRecordService;
     private final RuleExemptionService ruleExemptionService;
+    private final RuleBaselineService ruleBaselineService;
 
     /**
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
@@ -336,6 +339,7 @@ public class AiContextExportService {
         appendStandardYaml(yaml, snapshot);
 
         List<RuleConfig> configs = ruleConfigService.listByProject(projectId);
+        appendBaselineYaml(yaml, ruleBaselineService.currentBaseline(projectId), configs.size());
         appendStructuredNamingRules(yaml, configs);
 
         yaml.append("rules:\n");
@@ -600,6 +604,27 @@ public class AiContextExportService {
         yaml.append("\n");
     }
 
+    private void appendBaselineYaml(StringBuilder yaml, RuleBaselineInfo baseline, int fallbackRuleCount) {
+        yaml.append("baseline:\n");
+        if (baseline == null) {
+            yaml.append("  key: custom\n");
+            yaml.append("  name: 自定义规则\n");
+            yaml.append("  version: unversioned\n");
+            yaml.append("  source: inferred\n");
+            yaml.append(String.format("  rule_count: %d\n\n", fallbackRuleCount));
+            return;
+        }
+        yaml.append(String.format("  key: %s\n", yamlScalar(baseline.key())));
+        yaml.append(String.format("  name: %s\n", yamlScalar(baseline.name())));
+        yaml.append(String.format("  version: %s\n", yamlScalar(baseline.version())));
+        yaml.append(String.format("  source: %s\n", yamlScalar(baseline.source())));
+        if (baseline.appliedAt() != null) {
+            yaml.append(String.format("  applied_at: %s\n", baseline.appliedAt()));
+        }
+        yaml.append(String.format("  rule_count: %d\n\n",
+                baseline.ruleCount() == null ? fallbackRuleCount : baseline.ruleCount()));
+    }
+
     private Map<String, Object> readRuleParams(RuleConfig config) {
         if (config == null || config.getParamsJson() == null || config.getParamsJson().isBlank()) {
             return Map.of();
@@ -680,6 +705,13 @@ public class AiContextExportService {
                 yaml.append("      - ").append(value).append("\n");
             }
         }
+    }
+
+    private String yamlScalar(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        return value.replace("\r", " ").replace("\n", " ").trim();
     }
 
     private void appendRuleExemptionsMarkdown(StringBuilder md, Long projectId) {

@@ -8,7 +8,7 @@
         </p>
       </div>
       <div class="header-actions">
-        <el-button :loading="loading" @click="loadRuleConfigs">
+        <el-button :loading="loading || baselineLoading" @click="refreshRulePage">
           <el-icon><Refresh /></el-icon>
           刷新
         </el-button>
@@ -23,8 +23,57 @@
       <el-button type="primary" @click="$router.push('/projects')">去项目列表</el-button>
     </el-empty>
 
+    <section v-if="hasProject" v-loading="baselineLoading" class="baseline-panel">
+      <div class="baseline-summary">
+        <div>
+          <div class="baseline-title">当前规则基线</div>
+          <div class="baseline-name">
+            {{ currentBaseline?.name || '自定义规则' }}
+            <el-tag size="small" effect="plain">{{ currentBaseline?.version || 'unversioned' }}</el-tag>
+            <el-tag size="small" :type="baselineSourceTagType(currentBaseline?.source)">
+              {{ baselineSourceLabel(currentBaseline?.source) }}
+            </el-tag>
+          </div>
+          <div class="baseline-meta">
+            规则 {{ currentBaseline?.ruleCount ?? rules.length }} 条
+            <span v-if="currentBaseline?.appliedAt"> · {{ formatBaselineTime(currentBaseline.appliedAt) }}</span>
+          </div>
+        </div>
+        <div class="baseline-actions">
+          <el-select v-model="selectedBaselineKey" class="baseline-select" placeholder="选择内置基线">
+            <el-option
+              v-for="item in baselineTemplates"
+              :key="item.key"
+              :label="`${item.name}｜${item.version}`"
+              :value="item.key"
+            >
+              <div class="baseline-option">
+                <span>{{ item.name }}</span>
+                <small>{{ item.ruleCount ?? item.rules?.length ?? 0 }} 条</small>
+              </div>
+            </el-option>
+          </el-select>
+          <el-checkbox v-model="overwriteBaseline">覆盖已有规则</el-checkbox>
+          <el-button type="primary" :loading="baselineApplying" @click="handleApplyBaseline">
+            应用基线
+          </el-button>
+          <el-button :loading="baselineExporting" @click="handleExportBaseline">
+            <el-icon><Download /></el-icon>
+            导出
+          </el-button>
+          <el-button @click="openImportBaseline">
+            <el-icon><Upload /></el-icon>
+            导入
+          </el-button>
+        </div>
+      </div>
+      <p v-if="selectedBaselineTemplate?.description" class="baseline-description">
+        {{ selectedBaselineTemplate.description }}
+      </p>
+    </section>
+
     <el-table
-      v-else
+      v-if="hasProject"
       v-loading="loading"
       :data="rules"
       stripe
@@ -69,6 +118,22 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <el-dialog v-model="importDialogVisible" title="导入规则基线" width="720px">
+      <el-input
+        v-model="importText"
+        type="textarea"
+        :rows="14"
+        placeholder="{&quot;schemaVersion&quot;:1,&quot;baseline&quot;:{...},&quot;rules&quot;:[...]}"
+      />
+      <template #footer>
+        <el-checkbox v-model="overwriteBaseline">覆盖已有规则</el-checkbox>
+        <el-button @click="importDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="baselineImporting" @click="handleImportBaseline">
+          导入
+        </el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="dialogVisible" :title="editingRule ? '编辑规则' : '新建规则'" width="860px">
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="104px">
@@ -200,7 +265,7 @@ import {
   type FormItemRule,
   type FormRules
 } from 'element-plus'
-import { Plus, Refresh } from '@element-plus/icons-vue'
+import { Download, Plus, Refresh, Upload } from '@element-plus/icons-vue'
 import { listAvailableLintRules } from '@/api/lint'
 import {
   createRuleConfig,
@@ -209,6 +274,13 @@ import {
   toggleRuleConfig,
   updateRuleConfig
 } from '@/api/rule'
+import {
+  applyRuleBaseline,
+  exportRuleBaseline,
+  getCurrentRuleBaseline,
+  importRuleBaseline,
+  listRuleBaselineTemplates
+} from '@/api/ruleBaseline'
 import { useProjectStore } from '@/stores/project'
 import {
   buildRuleParamsJson,
@@ -218,7 +290,13 @@ import {
   summarizeRuleParams,
   type RuleParamsForm
 } from '@/utils/ruleParams'
-import type { RuleConfig, RuleConfigReq } from '@/types'
+import type {
+  RuleBaselineInfo,
+  RuleBaselinePackage,
+  RuleBaselineTemplate,
+  RuleConfig,
+  RuleConfigReq
+} from '@/types'
 
 interface AvailableRule {
   code?: string
@@ -228,7 +306,17 @@ interface AvailableRule {
 const projectStore = useProjectStore()
 const rules = ref<RuleConfig[]>([])
 const availableRules = ref<AvailableRule[]>([])
+const baselineTemplates = ref<RuleBaselineTemplate[]>([])
+const currentBaseline = ref<RuleBaselineInfo | null>(null)
+const selectedBaselineKey = ref('')
+const overwriteBaseline = ref(false)
 const loading = ref(false)
+const baselineLoading = ref(false)
+const baselineApplying = ref(false)
+const baselineExporting = ref(false)
+const baselineImporting = ref(false)
+const importDialogVisible = ref(false)
+const importText = ref('')
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const editingRule = ref<RuleConfig | null>(null)
@@ -265,6 +353,9 @@ const formRules: FormRules<RuleConfigReq> = {
 }
 
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
+const selectedBaselineTemplate = computed(() =>
+  baselineTemplates.value.find((item) => item.key === selectedBaselineKey.value)
+)
 const isStructuredRuleCode = computed(() => isStructuredRule(form.ruleCode))
 const paramsJsonPreview = computed(() =>
   isStructuredRuleCode.value ? buildRuleParamsJson(form.ruleCode, paramsForm) : form.paramsJson || '{}'
@@ -275,18 +366,30 @@ onMounted(() => {
     void projectStore.loadProjects()
   }
   void loadAvailableRules()
+  void loadRuleBaselineTemplates()
 })
 
 watch(
   () => projectStore.currentProjectId,
   () => {
-    void loadRuleConfigs()
+    void refreshRulePage()
   },
   { immediate: true }
 )
 
 async function loadAvailableRules() {
   availableRules.value = await listAvailableLintRules()
+}
+
+async function loadRuleBaselineTemplates() {
+  baselineTemplates.value = await listRuleBaselineTemplates()
+  if (!selectedBaselineKey.value && baselineTemplates.value.length > 0) {
+    selectedBaselineKey.value = baselineTemplates.value[0]?.key ?? ''
+  }
+}
+
+async function refreshRulePage() {
+  await Promise.all([loadRuleConfigs(), loadCurrentBaseline()])
 }
 
 async function loadRuleConfigs() {
@@ -300,6 +403,106 @@ async function loadRuleConfigs() {
     rules.value = await listRuleConfigs(projectId)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadCurrentBaseline() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    currentBaseline.value = null
+    return
+  }
+  baselineLoading.value = true
+  try {
+    currentBaseline.value = await getCurrentRuleBaseline(projectId)
+  } finally {
+    baselineLoading.value = false
+  }
+}
+
+async function handleApplyBaseline() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  if (!selectedBaselineKey.value) {
+    ElMessage.warning('请选择规则基线')
+    return
+  }
+  if (overwriteBaseline.value) {
+    try {
+      await ElMessageBox.confirm('覆盖会更新同编码规则的级别和参数，确定继续吗？', '应用规则基线', {
+        type: 'warning',
+        confirmButtonText: '覆盖并应用',
+        cancelButtonText: '取消'
+      })
+    } catch {
+      return
+    }
+  }
+  baselineApplying.value = true
+  try {
+    const result = await applyRuleBaseline({
+      projectId,
+      baselineKey: selectedBaselineKey.value,
+      overwrite: overwriteBaseline.value
+    })
+    ElMessage.success(baselineResultSummary(result))
+    await refreshRulePage()
+  } finally {
+    baselineApplying.value = false
+  }
+}
+
+async function handleExportBaseline() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  baselineExporting.value = true
+  try {
+    const data = await exportRuleBaseline(projectId)
+    saveBlob(
+      new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' }),
+      `dataspec-rule-baseline-${projectId}.json`
+    )
+  } finally {
+    baselineExporting.value = false
+  }
+}
+
+function openImportBaseline() {
+  importText.value = ''
+  importDialogVisible.value = true
+}
+
+async function handleImportBaseline() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  let baselinePackage: RuleBaselinePackage
+  try {
+    baselinePackage = JSON.parse(importText.value) as RuleBaselinePackage
+  } catch {
+    ElMessage.warning('请输入合法的规则基线 JSON')
+    return
+  }
+  baselineImporting.value = true
+  try {
+    const result = await importRuleBaseline({
+      projectId,
+      overwrite: overwriteBaseline.value,
+      baselinePackage
+    })
+    ElMessage.success(baselineResultSummary(result))
+    importDialogVisible.value = false
+    await refreshRulePage()
+  } finally {
+    baselineImporting.value = false
   }
 }
 
@@ -423,6 +626,46 @@ function severityTagType(severity?: string) {
   return 'danger'
 }
 
+function baselineSourceLabel(source?: string) {
+  if (source === 'built_in') {
+    return '内置'
+  }
+  if (source === 'imported') {
+    return '导入'
+  }
+  if (source === 'inferred') {
+    return '推断'
+  }
+  return '自定义'
+}
+
+function baselineSourceTagType(source?: string) {
+  if (source === 'built_in') {
+    return 'success'
+  }
+  if (source === 'imported') {
+    return 'warning'
+  }
+  return 'info'
+}
+
+function formatBaselineTime(value: string) {
+  return value.replace('T', ' ').slice(0, 19)
+}
+
+function baselineResultSummary(result: { created?: number; updated?: number; skipped?: number }) {
+  return `基线已应用：新增 ${result.created ?? 0}，更新 ${result.updated ?? 0}，跳过 ${result.skipped ?? 0}`
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 function resetParamsForm() {
   Object.assign(paramsForm, parseRuleParamsForm(form.ruleCode, form.paramsJson))
 }
@@ -489,6 +732,72 @@ function removeTypeRule(key: 'suffixTypes' | 'prefixTypes', index: number) {
 
 .rule-table {
   width: 100%;
+}
+
+.baseline-panel {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.baseline-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.baseline-title {
+  margin-bottom: 6px;
+  color: #606266;
+  font-size: 13px;
+}
+
+.baseline-name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.baseline-meta,
+.baseline-description {
+  color: #606266;
+  font-size: 13px;
+}
+
+.baseline-meta {
+  margin-top: 6px;
+}
+
+.baseline-description {
+  margin: 10px 0 0;
+}
+
+.baseline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  max-width: 760px;
+}
+
+.baseline-select {
+  width: 260px;
+}
+
+.baseline-option {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.baseline-option small {
+  color: #909399;
 }
 
 .full-width {
@@ -562,6 +871,16 @@ function removeTypeRule(key: 'suffixTypes' | 'prefixTypes', index: number) {
 }
 
 @media (max-width: 760px) {
+  .baseline-summary,
+  .baseline-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .baseline-select {
+    width: 100%;
+  }
+
   .type-rule-columns,
   .inline-row,
   .mapping-row,

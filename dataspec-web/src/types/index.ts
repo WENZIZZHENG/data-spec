@@ -206,6 +206,13 @@ export interface FieldImpactReport {
 
 export type RuleConfig = Schemas['RuleConfig']
 export type RuleConfigReq = Schemas['RuleConfigReq']
+export type RuleBaselineRule = Schemas['RuleBaselineRule']
+export type RuleBaselineTemplate = Schemas['RuleBaselineTemplate']
+export type RuleBaselineInfo = Schemas['RuleBaselineInfo']
+export type RuleBaselinePackage = Schemas['RuleBaselinePackage']
+export type RuleBaselineApplyReq = Schemas['RuleBaselineApplyReq']
+export type RuleBaselineImportReq = Schemas['RuleBaselineImportReq']
+export type RuleBaselineApplyResult = Schemas['RuleBaselineApplyResult']
 
 export interface RuleExemption {
   id?: number
