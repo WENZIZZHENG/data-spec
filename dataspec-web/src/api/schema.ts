@@ -452,6 +452,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fields/{id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["undoFieldChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fields/groups/batch-update": {
         parameters: {
             query?: never;
@@ -462,6 +478,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["batchUpdateGrouping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/bulk-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["bulkUpdateFields"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/bulk-update/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewBulkUpdate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1901,6 +1949,20 @@ export interface components {
             message?: string;
             data?: components["schemas"]["ExcelImportResult"];
         };
+        FieldChangeUndoResult: {
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int64 */
+            fieldId?: number;
+            /** Format: int64 */
+            logId?: number;
+        };
+        RFieldChangeUndoResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldChangeUndoResult"];
+        };
         FieldGroupingBatchUpdateReq: {
             /** Format: int64 */
             projectId: number;
@@ -1922,6 +1984,59 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["FieldGroupingBatchUpdateResult"];
+        };
+        FieldBulkUpdateReq: {
+            /** Format: int64 */
+            projectId: number;
+            fieldIds: number[];
+            updates: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        FieldBulkUpdateResult: {
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int32 */
+            requestedCount?: number;
+            /** Format: int32 */
+            updatedCount?: number;
+            /** Format: int32 */
+            unchangedCount?: number;
+        };
+        RFieldBulkUpdateResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldBulkUpdateResult"];
+        };
+        FieldBulkUpdateChange: {
+            attribute?: string;
+            beforeValue?: Record<string, never>;
+            afterValue?: Record<string, never>;
+        };
+        FieldBulkUpdateItem: {
+            /** Format: int64 */
+            fieldId?: number;
+            fieldName?: string;
+            changed?: boolean;
+            changes?: components["schemas"]["FieldBulkUpdateChange"][];
+        };
+        FieldBulkUpdatePreview: {
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int32 */
+            requestedCount?: number;
+            /** Format: int32 */
+            changedCount?: number;
+            /** Format: int32 */
+            unchangedCount?: number;
+            items?: components["schemas"]["FieldBulkUpdateItem"][];
+        };
+        RFieldBulkUpdatePreview: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldBulkUpdatePreview"];
         };
         SqlCoverageReq: {
             /** Format: int64 */
@@ -3845,6 +3960,30 @@ export interface operations {
             };
         };
     };
+    undoFieldChange: {
+        parameters: {
+            query: {
+                logId: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldChangeUndoResult"];
+                };
+            };
+        };
+    };
     batchUpdateGrouping: {
         parameters: {
             query?: never;
@@ -3865,6 +4004,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RFieldGroupingBatchUpdateResult"];
+                };
+            };
+        };
+    };
+    bulkUpdateFields: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldBulkUpdateReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldBulkUpdateResult"];
+                };
+            };
+        };
+    };
+    previewBulkUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldBulkUpdateReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldBulkUpdatePreview"];
                 };
             };
         };

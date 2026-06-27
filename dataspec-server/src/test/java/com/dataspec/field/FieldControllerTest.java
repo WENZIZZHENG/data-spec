@@ -2,6 +2,10 @@ package com.dataspec.field;
 
 import com.dataspec.field.controller.FieldController;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldBulkUpdatePreview;
+import com.dataspec.field.model.FieldBulkUpdateReq;
+import com.dataspec.field.model.FieldBulkUpdateResult;
+import com.dataspec.field.model.FieldChangeUndoResult;
 import com.dataspec.field.model.FieldGroupItem;
 import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
@@ -93,5 +97,52 @@ class FieldControllerTest {
 
         assertEquals(2, response.getData().updatedCount());
         verify(service).batchUpdateGrouping(req);
+    }
+
+    @Test
+    void previewBulkUpdate_forwardsRequestToService() {
+        FieldService service = mock(FieldService.class);
+        FieldBulkUpdateReq req = new FieldBulkUpdateReq(
+                1L,
+                List.of(1L, 2L),
+                Map.of("status", "deprecated"));
+        when(service.previewBulkUpdate(req))
+                .thenReturn(new FieldBulkUpdatePreview(1L, 2, 1, 1, List.of()));
+        FieldController controller = new FieldController(service, mock(ReverseImportSourceService.class));
+
+        var response = controller.previewBulkUpdate(req);
+
+        assertEquals(1, response.getData().changedCount());
+        verify(service).previewBulkUpdate(req);
+    }
+
+    @Test
+    void bulkUpdateFields_forwardsRequestToService() {
+        FieldService service = mock(FieldService.class);
+        FieldBulkUpdateReq req = new FieldBulkUpdateReq(
+                1L,
+                List.of(1L, 2L),
+                Map.of("category", "contact"));
+        when(service.bulkUpdateFields(req))
+                .thenReturn(new FieldBulkUpdateResult(1L, 2, 1, 1));
+        FieldController controller = new FieldController(service, mock(ReverseImportSourceService.class));
+
+        var response = controller.bulkUpdateFields(req);
+
+        assertEquals(1, response.getData().updatedCount());
+        verify(service).bulkUpdateFields(req);
+    }
+
+    @Test
+    void undoFieldChange_forwardsRequestToService() {
+        FieldService service = mock(FieldService.class);
+        when(service.undoFieldChange(9L, 50L))
+                .thenReturn(new FieldChangeUndoResult(1L, 9L, 50L));
+        FieldController controller = new FieldController(service, mock(ReverseImportSourceService.class));
+
+        var response = controller.undoFieldChange(9L, 50L);
+
+        assertEquals(50L, response.getData().logId());
+        verify(service).undoFieldChange(9L, 50L);
     }
 }

@@ -54,6 +54,15 @@ public class StandardChangeLogServiceImpl implements StandardChangeLogService {
     }
 
     @Override
+    public StandardChangeLog getById(Long id) {
+        if (id == null) {
+            throw new BizException("变更日志ID不能为空");
+        }
+        return standardChangeLogRepository.findById(id)
+                .orElseThrow(() -> new BizException("变更日志不存在: " + id));
+    }
+
+    @Override
     public IPage<StandardChangeLog> page(Long projectId, String targetType, Long targetId, int current, int size) {
         if (projectId == null) {
             throw new BizException("项目ID不能为空");

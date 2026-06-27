@@ -1,6 +1,10 @@
 import request from '@/api/request'
 import type {
   Field,
+  FieldBulkUpdatePreview,
+  FieldBulkUpdateReq,
+  FieldBulkUpdateResult,
+  FieldChangeUndoResult,
   FieldConflictReport,
   FieldGroupSummary,
   FieldGroupingBatchUpdateReq,
@@ -33,6 +37,14 @@ export function getFieldGroupSummary(projectId: number) {
 
 export function batchUpdateFieldGrouping(data: FieldGroupingBatchUpdateReq) {
   return request.post<unknown, FieldGroupingBatchUpdateResult>('/fields/groups/batch-update', data)
+}
+
+export function previewFieldBulkUpdate(data: FieldBulkUpdateReq) {
+  return request.post<unknown, FieldBulkUpdatePreview>('/fields/bulk-update/preview', data)
+}
+
+export function bulkUpdateFields(data: FieldBulkUpdateReq) {
+  return request.post<unknown, FieldBulkUpdateResult>('/fields/bulk-update', data)
 }
 
 export function suggestFields(projectId: number, query: string, limit = 5) {
@@ -73,6 +85,12 @@ export function createField(data: FieldReq) {
 
 export function updateField(id: number, data: FieldReq) {
   return request.put<unknown, Field>(`/fields/${id}`, data)
+}
+
+export function undoFieldChange(id: number, logId: number) {
+  return request.post<unknown, FieldChangeUndoResult>(`/fields/${id}/undo`, null, {
+    params: { logId }
+  })
 }
 
 export function deleteField(id: number) {

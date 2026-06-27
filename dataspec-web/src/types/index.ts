@@ -20,6 +20,56 @@ export type FieldGroupingBatchUpdateReq = Omit<Schemas['FieldGroupingBatchUpdate
 }
 export type FieldGroupingBatchUpdateResult = Schemas['FieldGroupingBatchUpdateResult']
 
+export type FieldBulkUpdateKey =
+  | 'status'
+  | 'category'
+  | 'tags'
+  | 'sensitive'
+  | 'codeSetId'
+  | 'aliases'
+
+export interface FieldBulkUpdateChange {
+  attribute?: FieldBulkUpdateKey | string
+  beforeValue?: unknown
+  afterValue?: unknown
+}
+
+export interface FieldBulkUpdateItem {
+  fieldId?: number
+  fieldName?: string
+  changed?: boolean
+  changes?: FieldBulkUpdateChange[]
+}
+
+export interface FieldBulkUpdatePreview {
+  projectId?: number
+  requestedCount?: number
+  changedCount?: number
+  unchangedCount?: number
+  items?: FieldBulkUpdateItem[]
+}
+
+export interface FieldBulkUpdateReq {
+  projectId?: number
+  fieldIds?: number[]
+  updates?: Partial<Record<FieldBulkUpdateKey, string | number | boolean | null>>
+}
+
+export interface FieldBulkUpdateResult {
+  projectId?: number
+  requestedCount?: number
+  updatedCount?: number
+  unchangedCount?: number
+}
+
+export interface FieldChangeUndoResult {
+  projectId?: number
+  fieldId?: number
+  logId?: number
+}
+
+export type StandardChangeLog = Schemas['StandardChangeLog']
+
 export type FieldQualitySeverity = 'ERROR' | 'WARNING' | 'SUGGESTION'
 export type FieldQualityLevel = 'GOOD' | 'WARNING' | 'POOR'
 

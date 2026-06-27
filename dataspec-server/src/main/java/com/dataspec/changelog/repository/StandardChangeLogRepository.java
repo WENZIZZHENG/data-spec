@@ -8,6 +8,8 @@ import com.dataspec.changelog.mapper.StandardChangeLogMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 /**
  * 标准变更记录 Repository。
  */
@@ -32,5 +34,9 @@ public class StandardChangeLogRepository {
 
     public int insert(StandardChangeLog log) {
         return standardChangeLogMapper.insert(log);
+    }
+
+    public Optional<StandardChangeLog> findById(Long id) {
+        return Optional.ofNullable(standardChangeLogMapper.selectById(id));
     }
 }

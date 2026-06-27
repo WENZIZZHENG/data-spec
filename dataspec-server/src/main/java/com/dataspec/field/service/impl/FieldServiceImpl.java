@@ -1,9 +1,16 @@
 package com.dataspec.field.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldBulkUpdateChange;
+import com.dataspec.field.model.FieldBulkUpdateItem;
+import com.dataspec.field.model.FieldBulkUpdatePreview;
+import com.dataspec.field.model.FieldBulkUpdateReq;
+import com.dataspec.field.model.FieldBulkUpdateResult;
+import com.dataspec.field.model.FieldChangeUndoResult;
 import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
@@ -12,8 +19,10 @@ import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.security.context.ProjectAccessGuard;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -22,6 +31,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -37,6 +47,7 @@ public class FieldServiceImpl implements FieldService {
     private static final int DEFAULT_SUGGEST_LIMIT = 5;
     private static final int MAX_SUGGEST_LIMIT = 20;
     private static final Set<String> GROUPING_UPDATE_KEYS = Set.of("domainId", "category", "tags");
+    private static final Set<String> BULK_UPDATE_KEYS = Set.of("status", "category", "tags", "sensitive", "codeSetId", "aliases");
     private static final Map<String, String> FALLBACK_TERMS = fallbackTerms();
     private static final Map<String, SemanticGroup> SEMANTIC_GROUPS = semanticGroups();
     private static final int SPECIFIC_SEMANTIC_SCORE = 88;
@@ -44,6 +55,7 @@ public class FieldServiceImpl implements FieldService {
 
     private final FieldRepository fieldRepository;
     private final StandardChangeLogService changeLogService;
+    private final ObjectMapper objectMapper;
 
     @Override
     public IPage<Field> page(Long projectId, int current, int size) {
@@ -185,6 +197,64 @@ public class FieldServiceImpl implements FieldService {
     }
 
     @Override
+    public FieldBulkUpdatePreview previewBulkUpdate(FieldBulkUpdateReq req) {
+        return buildBulkUpdatePreview(req, loadBulkUpdateFields(req));
+    }
+
+    @Override
+    @Transactional
+    public FieldBulkUpdateResult bulkUpdateFields(FieldBulkUpdateReq req) {
+        List<Field> fields = loadBulkUpdateFields(req);
+        FieldBulkUpdatePreview preview = buildBulkUpdatePreview(req, fields);
+        int updated = 0;
+        for (Field field : fields) {
+            List<FieldBulkUpdateChange> changes = bulkChanges(field, req.updates());
+            if (changes.isEmpty()) {
+                continue;
+            }
+            String beforeJson = changeLogService.snapshot(field);
+            applyBulkUpdates(field, changes);
+            fieldRepository.update(field);
+            changeLogService.recordChange(
+                    field.getProjectId(),
+                    StandardChangeLogService.TARGET_FIELD,
+                    field.getId(),
+                    StandardChangeLogService.ACTION_UPDATE,
+                    beforeJson,
+                    changeLogService.snapshot(field));
+            updated += 1;
+        }
+        return new FieldBulkUpdateResult(req.projectId(), preview.requestedCount(), updated, preview.unchangedCount());
+    }
+
+    @Override
+    @Transactional
+    public FieldChangeUndoResult undoFieldChange(Long fieldId, Long logId) {
+        if (logId == null) {
+            throw new BizException("变更日志ID不能为空");
+        }
+        Field existing = getById(fieldId);
+        StandardChangeLog log = changeLogService.getById(logId);
+        validateUndoLog(existing, log);
+        Field before = readFieldSnapshot(log.getBeforeJson());
+        validateUndoSnapshot(existing, before);
+        if (fieldRepository.existsByNameInProjectExcludeId(before.getName(), existing.getProjectId(), existing.getId())) {
+            throw new BizException("回退后的字段名已存在: " + before.getName());
+        }
+        String beforeUndoJson = changeLogService.snapshot(existing);
+        restoreEditableField(existing, before);
+        fieldRepository.update(existing);
+        changeLogService.recordChange(
+                existing.getProjectId(),
+                StandardChangeLogService.TARGET_FIELD,
+                existing.getId(),
+                StandardChangeLogService.ACTION_UNDO,
+                beforeUndoJson,
+                changeLogService.snapshot(existing));
+        return new FieldChangeUndoResult(existing.getProjectId(), existing.getId(), log.getId());
+    }
+
+    @Override
     public List<FieldSuggestion> suggest(Long projectId, String query, int limit) {
         if (projectId == null) {
             throw new BizException("项目ID不能为空");
@@ -264,6 +334,179 @@ public class FieldServiceImpl implements FieldService {
         }
     }
 
+    private List<Field> loadBulkUpdateFields(FieldBulkUpdateReq req) {
+        validateBulkUpdateRequest(req);
+        ProjectAccessGuard.requireProjectAccess(req.projectId());
+        List<Long> fieldIds = uniqueValidFieldIds(req.fieldIds());
+        List<Field> fields = new ArrayList<>();
+        for (Long fieldId : fieldIds) {
+            Field field = fieldRepository.findById(fieldId)
+                    .orElseThrow(() -> new BizException("字段不存在: " + fieldId));
+            if (!req.projectId().equals(field.getProjectId())) {
+                throw new BizException("字段不属于当前项目: " + fieldId);
+            }
+            fields.add(field);
+        }
+        return fields;
+    }
+
+    private void validateBulkUpdateRequest(FieldBulkUpdateReq req) {
+        if (req == null || req.projectId() == null) {
+            throw new BizException("项目ID不能为空");
+        }
+        if (req.fieldIds() == null || req.fieldIds().isEmpty()) {
+            throw new BizException("字段ID不能为空");
+        }
+        if (req.updates() == null || req.updates().isEmpty()) {
+            throw new BizException("批量维护内容不能为空");
+        }
+        for (String key : req.updates().keySet()) {
+            if (!BULK_UPDATE_KEYS.contains(key)) {
+                throw new BizException("不支持的批量维护字段: " + key);
+            }
+        }
+    }
+
+    private List<Long> uniqueValidFieldIds(List<Long> fieldIds) {
+        List<Long> uniqueIds = new ArrayList<>(new LinkedHashSet<>(fieldIds));
+        for (Long fieldId : uniqueIds) {
+            if (fieldId == null || fieldId <= 0) {
+                throw new BizException("无效字段ID: " + fieldId);
+            }
+        }
+        return uniqueIds;
+    }
+
+    private FieldBulkUpdatePreview buildBulkUpdatePreview(FieldBulkUpdateReq req, List<Field> fields) {
+        List<FieldBulkUpdateItem> items = new ArrayList<>();
+        int changedCount = 0;
+        for (Field field : fields) {
+            List<FieldBulkUpdateChange> changes = bulkChanges(field, req.updates());
+            if (!changes.isEmpty()) {
+                changedCount += 1;
+            }
+            items.add(new FieldBulkUpdateItem(field.getId(), field.getName(), !changes.isEmpty(), changes));
+        }
+        return new FieldBulkUpdatePreview(
+                req.projectId(),
+                fields.size(),
+                changedCount,
+                items.size() - changedCount,
+                List.copyOf(items));
+    }
+
+    private List<FieldBulkUpdateChange> bulkChanges(Field field, Map<String, Object> updates) {
+        List<FieldBulkUpdateChange> changes = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : updates.entrySet()) {
+            Object beforeValue = currentBulkValue(field, entry.getKey());
+            Object afterValue = normalizedBulkValue(entry.getKey(), entry.getValue());
+            if (!Objects.equals(beforeValue, afterValue)) {
+                changes.add(new FieldBulkUpdateChange(entry.getKey(), beforeValue, afterValue));
+            }
+        }
+        return changes;
+    }
+
+    private Object currentBulkValue(Field field, String key) {
+        return switch (key) {
+            case "status" -> normalizeStatus(field.getStatus());
+            case "category" -> FieldGroupingSummaries.normalizeText(field.getCategory());
+            case "tags" -> FieldGroupingSummaries.normalizeTags(field.getTags());
+            case "sensitive" -> Boolean.TRUE.equals(field.getSensitive());
+            case "codeSetId" -> field.getCodeSetId();
+            case "aliases" -> normalizeCsv(field.getAliases());
+            default -> throw new BizException("不支持的批量维护字段: " + key);
+        };
+    }
+
+    private Object normalizedBulkValue(String key, Object value) {
+        return switch (key) {
+            case "status" -> normalizeStatus(asString(value));
+            case "category" -> FieldGroupingSummaries.normalizeText(asString(value));
+            case "tags" -> FieldGroupingSummaries.normalizeTags(asString(value));
+            case "sensitive" -> parseBoolean(value);
+            case "codeSetId" -> parseOptionalLong(value, "codeSetId");
+            case "aliases" -> normalizeCsv(asString(value));
+            default -> throw new BizException("不支持的批量维护字段: " + key);
+        };
+    }
+
+    private void applyBulkUpdates(Field field, List<FieldBulkUpdateChange> changes) {
+        for (FieldBulkUpdateChange change : changes) {
+            switch (change.attribute()) {
+                case "status" -> field.setStatus((String) change.afterValue());
+                case "category" -> field.setCategory((String) change.afterValue());
+                case "tags" -> field.setTags((String) change.afterValue());
+                case "sensitive" -> field.setSensitive((Boolean) change.afterValue());
+                case "codeSetId" -> field.setCodeSetId((Long) change.afterValue());
+                case "aliases" -> field.setAliases((String) change.afterValue());
+                default -> throw new BizException("不支持的批量维护字段: " + change.attribute());
+            }
+        }
+    }
+
+    /**
+     * 回退只信任当前字段自己的变更日志，避免拿其他项目或其他字段的 before 快照覆盖目标字段。
+     */
+    private void validateUndoLog(Field field, StandardChangeLog log) {
+        if (!Objects.equals(field.getProjectId(), log.getProjectId())) {
+            throw new BizException("变更日志不属于当前项目");
+        }
+        if (!StandardChangeLogService.TARGET_FIELD.equals(log.getTargetType())
+                || !Objects.equals(field.getId(), log.getTargetId())) {
+            throw new BizException("变更日志不属于当前字段");
+        }
+        if (!Set.of(StandardChangeLogService.ACTION_UPDATE, StandardChangeLogService.ACTION_UNDO).contains(log.getAction())) {
+            throw new BizException("仅支持回退字段更新日志");
+        }
+        if (log.getBeforeJson() == null || log.getBeforeJson().isBlank()) {
+            throw new BizException("变更日志缺少回退快照");
+        }
+    }
+
+    private Field readFieldSnapshot(String json) {
+        try {
+            Field field = objectMapper.readValue(json, Field.class);
+            if (field.getName() == null || field.getName().isBlank()) {
+                throw new BizException("变更日志快照缺少字段名");
+            }
+            return field;
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException("字段回退快照解析失败: " + e.getMessage());
+        }
+    }
+
+    private void validateUndoSnapshot(Field target, Field snapshot) {
+        if (snapshot.getProjectId() != null && !Objects.equals(target.getProjectId(), snapshot.getProjectId())) {
+            throw new BizException("变更日志快照不属于当前项目");
+        }
+        if (snapshot.getId() != null && !Objects.equals(target.getId(), snapshot.getId())) {
+            throw new BizException("变更日志快照不属于当前字段");
+        }
+    }
+
+    private void restoreEditableField(Field target, Field snapshot) {
+        target.setName(snapshot.getName());
+        target.setDisplayName(snapshot.getDisplayName());
+        target.setDataType(snapshot.getDataType());
+        target.setLength(snapshot.getLength());
+        target.setPrecisionVal(snapshot.getPrecisionVal());
+        target.setScaleVal(snapshot.getScaleVal());
+        target.setNullable(snapshot.getNullable());
+        target.setDefaultValue(snapshot.getDefaultValue());
+        target.setComment(snapshot.getComment());
+        target.setDomainId(snapshot.getDomainId());
+        target.setTags(FieldGroupingSummaries.normalizeTags(snapshot.getTags()));
+        target.setAliases(normalizeCsv(snapshot.getAliases()));
+        target.setCategory(FieldGroupingSummaries.normalizeText(snapshot.getCategory()));
+        target.setCodeSetId(snapshot.getCodeSetId());
+        target.setSensitive(snapshot.getSensitive() != null ? snapshot.getSensitive() : false);
+        target.setStatus(normalizeStatus(snapshot.getStatus()));
+        target.setExampleValue(snapshot.getExampleValue());
+    }
+
     private Long parseOptionalLong(Object value, String label) {
         String text = FieldGroupingSummaries.normalizeText(asString(value));
         if (text == null) {
@@ -282,6 +525,38 @@ public class FieldServiceImpl implements FieldService {
 
     private String asString(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    private Boolean parseBoolean(Object value) {
+        String text = FieldGroupingSummaries.normalizeText(asString(value));
+        if (text == null) {
+            return false;
+        }
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if ("true".equalsIgnoreCase(text) || "1".equals(text)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(text) || "0".equals(text)) {
+            return false;
+        }
+        throw new BizException("无效sensitive: " + value);
+    }
+
+    private String normalizeCsv(String value) {
+        String normalized = FieldGroupingSummaries.normalizeText(value);
+        if (normalized == null) {
+            return null;
+        }
+        Set<String> values = new LinkedHashSet<>();
+        for (String part : normalized.split("[,，]")) {
+            String item = FieldGroupingSummaries.normalizeText(part);
+            if (item != null) {
+                values.add(item);
+            }
+        }
+        return values.isEmpty() ? null : String.join(",", values);
     }
 
     private String normalizeStatus(String status) {

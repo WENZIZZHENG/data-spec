@@ -36,6 +36,9 @@
           <el-button :disabled="selectedFields.length === 0" @click="openBatchDialog">
             批量归组
           </el-button>
+          <el-button type="primary" plain :disabled="selectedFields.length === 0" @click="openBulkDialog">
+            批量维护
+          </el-button>
         </div>
       </div>
 
@@ -99,10 +102,11 @@
             </template>
           </el-table-column>
           <el-table-column prop="comment" label="注释" min-width="220" show-overflow-tooltip />
-          <el-table-column label="操作" width="250" fixed="right">
+          <el-table-column label="操作" width="300" fixed="right">
             <template #default="{ row }">
               <el-button text type="primary" @click="openImpactDialog(row)">影响</el-button>
               <el-button text type="primary" @click="openSourceDialog(row)">来源</el-button>
+              <el-button text type="primary" @click="openChangeLogDialog(row)">变更</el-button>
               <el-button text type="primary" @click="openEditDialog(row)">编辑</el-button>
               <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
@@ -290,6 +294,103 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="bulkDialogVisible" title="批量维护字段" width="880px">
+      <div class="bulk-dialog">
+        <el-form label-width="96px">
+          <el-form-item label="已选字段">
+            <span>{{ selectedFields.length }} 个</span>
+          </el-form-item>
+          <el-row :gutter="12">
+            <el-col :span="12">
+              <el-form-item>
+                <el-checkbox v-model="bulkForm.applyStatus">状态</el-checkbox>
+                <el-select v-model="bulkForm.status" class="bulk-input">
+                  <el-option label="启用" value="enabled" />
+                  <el-option label="停用" value="disabled" />
+                  <el-option label="废弃" value="deprecated" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item>
+                <el-checkbox v-model="bulkForm.applySensitive">敏感字段</el-checkbox>
+                <el-switch v-model="bulkForm.sensitive" class="bulk-switch" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="12">
+            <el-col :span="12">
+              <el-form-item>
+                <el-checkbox v-model="bulkForm.applyCategory">分类</el-checkbox>
+                <el-input v-model="bulkForm.category" class="bulk-input" placeholder="contact；留空可清空" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item>
+                <el-checkbox v-model="bulkForm.applyCodeSetId">代码集 ID</el-checkbox>
+                <el-input-number
+                  v-model="bulkForm.codeSetId"
+                  :min="1"
+                  :controls="false"
+                  class="bulk-input"
+                  placeholder="留空可清空"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-form-item>
+            <el-checkbox v-model="bulkForm.applyTags">标签</el-checkbox>
+            <el-input v-model="bulkForm.tags" class="bulk-wide-input" placeholder="pii,customer；留空可清空" />
+          </el-form-item>
+          <el-form-item>
+            <el-checkbox v-model="bulkForm.applyAliases">别名</el-checkbox>
+            <el-input v-model="bulkForm.aliases" class="bulk-wide-input" placeholder="phone,mobile；留空可清空" />
+          </el-form-item>
+        </el-form>
+
+        <div v-if="bulkPreview" class="bulk-preview">
+          <div class="bulk-preview-summary">
+            将变更 {{ bulkPreview.changedCount ?? 0 }} 个字段，跳过 {{ bulkPreview.unchangedCount ?? 0 }} 个无变化字段。
+          </div>
+          <el-table
+            :data="bulkChangedItems"
+            max-height="260"
+            stripe
+            empty-text="所选字段没有变化"
+          >
+            <el-table-column prop="fieldName" label="字段" width="180" show-overflow-tooltip />
+            <el-table-column label="变更内容" min-width="420">
+              <template #default="{ row }">
+                <div class="change-chip-list">
+                  <span
+                    v-for="change in row.changes ?? []"
+                    :key="`${row.fieldId}-${change.attribute}`"
+                    class="change-chip"
+                  >
+                    {{ bulkAttributeText(change.attribute) }}:
+                    {{ formatChangeValue(change.beforeValue) }} → {{ formatChangeValue(change.afterValue) }}
+                  </span>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="bulkDialogVisible = false">取消</el-button>
+        <el-button :loading="bulkPreviewLoading" @click="handleBulkPreview">生成预览</el-button>
+        <el-button
+          type="primary"
+          :disabled="!bulkPreview || (bulkPreview.changedCount ?? 0) === 0"
+          :loading="bulkSubmitting"
+          @click="handleBulkSubmit"
+        >
+          提交维护
+        </el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="sourceDialogVisible" :title="sourceDialogTitle" width="820px">
       <el-table
         v-loading="sourceLoading"
@@ -377,6 +478,53 @@
         </el-table>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="changeLogDialogVisible" :title="changeLogDialogTitle" width="920px">
+      <el-table
+        v-loading="changeLogLoading"
+        :data="changeLogs"
+        stripe
+        empty-text="暂无字段变更"
+      >
+        <el-table-column label="时间" width="180">
+          <template #default="{ row }">{{ formatDate(row.changedAt) }}</template>
+        </el-table-column>
+        <el-table-column label="动作" width="100">
+          <template #default="{ row }">
+            <el-tag :type="changeLogActionTagType(row.action)" size="small">
+              {{ changeLogActionText(row.action) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="operatorName" label="操作者" width="120" show-overflow-tooltip />
+        <el-table-column label="关键属性变化" min-width="320" show-overflow-tooltip>
+          <template #default="{ row }">{{ changeLogSummary(row) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="110" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              text
+              type="primary"
+              :disabled="!canUndoLog(row)"
+              :loading="undoSubmitting === row.id"
+              @click="handleUndoChange(row)"
+            >
+              回退
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pagination-row compact-pagination">
+        <el-pagination
+          v-model:current-page="changeLogCurrent"
+          :page-size="changeLogSize"
+          :total="changeLogTotal"
+          layout="total, prev, pager, next"
+          @current-change="handleChangeLogPageChange"
+        />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -385,9 +533,11 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { listChangeLogs } from '@/api/changeLog'
 import { listDomains } from '@/api/domain'
 import {
   batchUpdateFieldGrouping,
+  bulkUpdateFields,
   createField,
   deleteField,
   getField,
@@ -395,6 +545,8 @@ import {
   getFieldImpactReport,
   listFields,
   listFieldSources,
+  previewFieldBulkUpdate,
+  undoFieldChange,
   updateField
 } from '@/api/field'
 import { useProjectStore } from '@/stores/project'
@@ -408,12 +560,15 @@ import {
 import type {
   Domain,
   Field,
+  FieldBulkUpdatePreview,
+  FieldBulkUpdateReq,
   FieldGroupItem,
   FieldGroupingBatchUpdateReq,
   FieldGroupSummary,
   FieldImpactReport,
   FieldReq,
-  FieldSourceDetail
+  FieldSourceDetail,
+  StandardChangeLog
 } from '@/types'
 
 const projectStore = useProjectStore()
@@ -425,17 +580,26 @@ const fieldKeyword = ref('')
 const loading = ref(false)
 const submitting = ref(false)
 const batchSubmitting = ref(false)
+const bulkPreviewLoading = ref(false)
+const bulkSubmitting = ref(false)
 const dialogVisible = ref(false)
 const batchDialogVisible = ref(false)
+const bulkDialogVisible = ref(false)
 const sourceDialogVisible = ref(false)
 const impactDialogVisible = ref(false)
+const changeLogDialogVisible = ref(false)
 const editingField = ref<Field | null>(null)
 const sourceField = ref<Field | null>(null)
 const impactField = ref<Field | null>(null)
+const changeLogField = ref<Field | null>(null)
 const fieldSources = ref<FieldSourceDetail[]>([])
 const sourceLoading = ref(false)
 const impactLoading = ref(false)
+const changeLogLoading = ref(false)
 const impactReport = ref<FieldImpactReport | null>(null)
+const bulkPreview = ref<FieldBulkUpdatePreview | null>(null)
+const changeLogs = ref<StandardChangeLog[]>([])
+const undoSubmitting = ref<number | null>(null)
 const formRef = ref<FormInstance>()
 const openedRouteFieldId = ref<number | null>(null)
 const selectedFields = ref<Field[]>([])
@@ -454,6 +618,25 @@ const batchForm = reactive({
   category: '',
   tags: ''
 })
+
+const bulkForm = reactive({
+  applyStatus: false,
+  status: 'enabled',
+  applyCategory: false,
+  category: '',
+  applyTags: false,
+  tags: '',
+  applySensitive: false,
+  sensitive: false,
+  applyCodeSetId: false,
+  codeSetId: undefined as number | undefined,
+  applyAliases: false,
+  aliases: ''
+})
+
+const changeLogCurrent = ref(1)
+const changeLogSize = 10
+const changeLogTotal = ref(0)
 
 const dataTypeOptions = [
   'bigint',
@@ -501,6 +684,9 @@ const sourceDialogTitle = computed(() =>
 const impactDialogTitle = computed(() =>
   impactField.value?.name ? `字段影响：${impactField.value.name}` : '字段影响'
 )
+const changeLogDialogTitle = computed(() =>
+  changeLogField.value?.name ? `字段变更：${changeLogField.value.name}` : '字段变更'
+)
 const groupOptions = computed(() => [
   {
     optionKey: 'all',
@@ -534,6 +720,7 @@ const pagedFields = computed(() => {
   const start = (pagination.current - 1) * pagination.size
   return filteredFields.value.slice(start, start + pagination.size)
 })
+const bulkChangedItems = computed(() => bulkPreview.value?.items?.filter((item) => item.changed) ?? [])
 
 onMounted(() => {
   if (projectStore.projects.length === 0) {
@@ -565,6 +752,10 @@ watch([fieldKeyword, activeGroupKey], () => {
   pagination.current = 1
   selectedFields.value = []
 })
+
+watch(bulkForm, () => {
+  bulkPreview.value = null
+}, { deep: true })
 
 watch(
   () => route.query.fieldId,
@@ -688,6 +879,114 @@ async function handleBatchSubmit() {
   }
 }
 
+function openBulkDialog() {
+  if (selectedFields.value.length === 0) {
+    ElMessage.warning('请先选择字段')
+    return
+  }
+  bulkForm.applyStatus = false
+  bulkForm.status = 'enabled'
+  bulkForm.applyCategory = false
+  bulkForm.category = ''
+  bulkForm.applyTags = false
+  bulkForm.tags = ''
+  bulkForm.applySensitive = false
+  bulkForm.sensitive = false
+  bulkForm.applyCodeSetId = false
+  bulkForm.codeSetId = undefined
+  bulkForm.applyAliases = false
+  bulkForm.aliases = ''
+  bulkPreview.value = null
+  bulkDialogVisible.value = true
+}
+
+function buildBulkUpdateRequest(): FieldBulkUpdateReq | null {
+  const projectId = projectStore.currentProjectId
+  if (!projectId || selectedFields.value.length === 0) {
+    return null
+  }
+  const fieldIds = selectedFields.value
+    .map((field) => Number(field.id))
+    .filter((id) => Number.isFinite(id) && id > 0)
+  if (fieldIds.length === 0) {
+    ElMessage.warning('所选字段缺少有效 ID，请刷新后重试')
+    return null
+  }
+  const updates: NonNullable<FieldBulkUpdateReq['updates']> = {}
+  if (bulkForm.applyStatus) {
+    updates.status = bulkForm.status
+  }
+  if (bulkForm.applyCategory) {
+    updates.category = bulkForm.category
+  }
+  if (bulkForm.applyTags) {
+    updates.tags = bulkForm.tags
+  }
+  if (bulkForm.applySensitive) {
+    updates.sensitive = bulkForm.sensitive
+  }
+  if (bulkForm.applyCodeSetId) {
+    updates.codeSetId = bulkForm.codeSetId ?? null
+  }
+  if (bulkForm.applyAliases) {
+    updates.aliases = bulkForm.aliases
+  }
+  if (Object.keys(updates).length === 0) {
+    ElMessage.warning('请选择要维护的字段属性')
+    return null
+  }
+  return {
+    projectId,
+    fieldIds,
+    updates
+  }
+}
+
+async function handleBulkPreview() {
+  const payload = buildBulkUpdateRequest()
+  if (!payload) {
+    return
+  }
+  bulkPreviewLoading.value = true
+  try {
+    bulkPreview.value = await previewFieldBulkUpdate(payload)
+  } finally {
+    bulkPreviewLoading.value = false
+  }
+}
+
+async function handleBulkSubmit() {
+  const payload = buildBulkUpdateRequest()
+  if (!payload || !bulkPreview.value) {
+    ElMessage.warning('请先生成预览')
+    return
+  }
+  const changedCount = bulkPreview.value.changedCount ?? 0
+  if (changedCount === 0) {
+    ElMessage.info('所选字段没有变化')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`确定维护 ${changedCount} 个字段吗？`, '批量维护', {
+      type: 'warning',
+      confirmButtonText: '提交',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+  bulkSubmitting.value = true
+  try {
+    const result = await bulkUpdateFields(payload)
+    ElMessage.success(`已维护 ${result.updatedCount ?? changedCount} 个字段`)
+    bulkDialogVisible.value = false
+    selectedFields.value = []
+    await loadFields()
+  } finally {
+    bulkSubmitting.value = false
+  }
+}
+
 function resetForm(field?: Field) {
   form.projectId = projectStore.currentProjectId ?? field?.projectId ?? 0
   form.name = field?.name ?? ''
@@ -769,6 +1068,76 @@ async function openImpactDialog(field: Field) {
     impactReport.value = await getFieldImpactReport(field.id, projectStore.currentProjectId)
   } finally {
     impactLoading.value = false
+  }
+}
+
+async function openChangeLogDialog(field: Field) {
+  if (!field.id) {
+    return
+  }
+  changeLogField.value = field
+  changeLogCurrent.value = 1
+  changeLogDialogVisible.value = true
+  await loadChangeLogs()
+}
+
+async function loadChangeLogs() {
+  const projectId = projectStore.currentProjectId
+  const fieldId = changeLogField.value?.id
+  if (!projectId || !fieldId) {
+    changeLogs.value = []
+    changeLogTotal.value = 0
+    return
+  }
+  changeLogLoading.value = true
+  try {
+    const page = await listChangeLogs(projectId, 'field', fieldId, changeLogCurrent.value, changeLogSize)
+    changeLogs.value = page.records ?? []
+    changeLogTotal.value = Number(page.total ?? 0)
+  } finally {
+    changeLogLoading.value = false
+  }
+}
+
+function handleChangeLogPageChange(page: number) {
+  changeLogCurrent.value = page
+  void loadChangeLogs()
+}
+
+function canUndoLog(log: StandardChangeLog) {
+  return Boolean(
+    log.id &&
+      log.beforeJson &&
+      (log.action === 'update' || log.action === 'undo')
+  )
+}
+
+async function handleUndoChange(log: StandardChangeLog) {
+  const fieldId = changeLogField.value?.id
+  if (!fieldId || !log.id || !canUndoLog(log)) {
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      '确定将字段恢复到该日志变更前的版本吗？',
+      '回退字段变更',
+      {
+        type: 'warning',
+        confirmButtonText: '回退',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
+  undoSubmitting.value = log.id
+  try {
+    await undoFieldChange(fieldId, log.id)
+    ElMessage.success('字段已回退')
+    await loadFields()
+    await loadChangeLogs()
+  } finally {
+    undoSubmitting.value = null
   }
 }
 
@@ -967,6 +1336,119 @@ function statusTagType(status?: string) {
   return 'success'
 }
 
+function bulkAttributeText(attribute?: string) {
+  const labels: Record<string, string> = {
+    status: '状态',
+    category: '分类',
+    tags: '标签',
+    sensitive: '敏感',
+    codeSetId: '代码集',
+    aliases: '别名',
+    name: '字段名',
+    displayName: '显示名',
+    dataType: '类型',
+    nullable: '空值',
+    comment: '注释',
+    domainId: '数据域',
+    exampleValue: '示例'
+  }
+  return attribute ? labels[attribute] ?? attribute : '-'
+}
+
+function formatChangeValue(value: unknown): string {
+  if (value === undefined || value === null || value === '') {
+    return '空'
+  }
+  if (typeof value === 'boolean') {
+    return value ? '是' : '否'
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.join(', ') : '空'
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+  return String(value)
+}
+
+function changeLogActionText(action?: string) {
+  if (action === 'update') {
+    return '更新'
+  }
+  if (action === 'undo') {
+    return '回退'
+  }
+  if (action === 'create') {
+    return '创建'
+  }
+  if (action === 'delete') {
+    return '删除'
+  }
+  return action || '-'
+}
+
+function changeLogActionTagType(action?: string) {
+  if (action === 'undo') {
+    return 'warning'
+  }
+  if (action === 'update') {
+    return 'primary'
+  }
+  if (action === 'create') {
+    return 'success'
+  }
+  if (action === 'delete') {
+    return 'danger'
+  }
+  return 'info'
+}
+
+function changeLogSummary(log: StandardChangeLog) {
+  const before = parseJsonRecord(log.beforeJson)
+  const after = parseJsonRecord(log.afterJson)
+  if (!before || !after) {
+    return '-'
+  }
+  const keys = [
+    'name',
+    'displayName',
+    'dataType',
+    'status',
+    'category',
+    'tags',
+    'sensitive',
+    'codeSetId',
+    'aliases',
+    'domainId'
+  ]
+  const changedLabels = keys
+    .filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+    .map((key) => bulkAttributeText(key))
+  if (changedLabels.length === 0) {
+    return '无关键属性变化'
+  }
+  const visible = changedLabels.slice(0, 5).join('、')
+  return changedLabels.length > 5 ? `${visible} 等 ${changedLabels.length} 项` : visible
+}
+
+function parseJsonRecord(value?: string): Record<string, unknown> | null {
+  if (!value) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null
+  } catch {
+    return null
+  }
+}
+
 function sourceDatabaseLabel(row: FieldSourceDetail) {
   const parts = [row.batch?.databaseName, row.batch?.schemaName].filter(Boolean)
   return parts.length > 0 ? parts.join(' / ') : '-'
@@ -1127,6 +1609,58 @@ function routeFieldId(value: unknown) {
   margin-left: 12px;
 }
 
+.bulk-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bulk-input {
+  width: 220px;
+  margin-left: 12px;
+}
+
+.bulk-wide-input {
+  width: 520px;
+  margin-left: 12px;
+}
+
+.bulk-switch {
+  margin-left: 12px;
+}
+
+.bulk-preview {
+  border-top: 1px solid #ebeef5;
+  padding-top: 12px;
+}
+
+.bulk-preview-summary {
+  margin-bottom: 10px;
+  color: #303133;
+  font-size: 13px;
+}
+
+.change-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.change-chip {
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f4f6f8;
+  color: #303133;
+  font-size: 12px;
+  line-height: 22px;
+  word-break: break-all;
+}
+
+.compact-pagination {
+  margin-top: 12px;
+}
+
 .muted-text {
   margin-top: 2px;
   color: #6b7280;
@@ -1155,6 +1689,13 @@ function routeFieldId(value: unknown) {
   }
 
   .batch-input {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 8px;
+  }
+
+  .bulk-input,
+  .bulk-wide-input {
     width: 100%;
     margin-left: 0;
     margin-top: 8px;

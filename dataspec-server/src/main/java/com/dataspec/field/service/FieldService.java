@@ -2,6 +2,10 @@ package com.dataspec.field.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldBulkUpdatePreview;
+import com.dataspec.field.model.FieldBulkUpdateReq;
+import com.dataspec.field.model.FieldBulkUpdateResult;
+import com.dataspec.field.model.FieldChangeUndoResult;
 import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
@@ -22,4 +26,7 @@ public interface FieldService {
     List<FieldSuggestion> suggest(Long projectId, String query, int limit);
     FieldGroupSummary groupSummary(Long projectId);
     FieldGroupingBatchUpdateResult batchUpdateGrouping(FieldGroupingBatchUpdateReq req);
+    FieldBulkUpdatePreview previewBulkUpdate(FieldBulkUpdateReq req);
+    FieldBulkUpdateResult bulkUpdateFields(FieldBulkUpdateReq req);
+    FieldChangeUndoResult undoFieldChange(Long fieldId, Long logId);
 }

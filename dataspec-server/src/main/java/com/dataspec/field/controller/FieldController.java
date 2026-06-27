@@ -4,6 +4,10 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.common.result.PageResult;
 import com.dataspec.common.result.R;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldBulkUpdatePreview;
+import com.dataspec.field.model.FieldBulkUpdateReq;
+import com.dataspec.field.model.FieldBulkUpdateResult;
+import com.dataspec.field.model.FieldChangeUndoResult;
 import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
@@ -60,6 +64,26 @@ public class FieldController {
     public R<FieldGroupingBatchUpdateResult> batchUpdateGrouping(
             @Valid @RequestBody FieldGroupingBatchUpdateReq req) {
         return R.ok(fieldService.batchUpdateGrouping(req));
+    }
+
+    /** 预览字段批量维护变更，不写入数据 */
+    @PostMapping("/bulk-update/preview")
+    public R<FieldBulkUpdatePreview> previewBulkUpdate(@Valid @RequestBody FieldBulkUpdateReq req) {
+        return R.ok(fieldService.previewBulkUpdate(req));
+    }
+
+    /** 提交字段批量维护变更 */
+    @PostMapping("/bulk-update")
+    public R<FieldBulkUpdateResult> bulkUpdateFields(@Valid @RequestBody FieldBulkUpdateReq req) {
+        return R.ok(fieldService.bulkUpdateFields(req));
+    }
+
+    /** 基于字段变更日志回退字段 */
+    @PostMapping("/{id}/undo")
+    public R<FieldChangeUndoResult> undoFieldChange(
+            @PathVariable Long id,
+            @RequestParam Long logId) {
+        return R.ok(fieldService.undoFieldChange(id, logId));
     }
 
     /** 根据业务描述推荐标准字段 */

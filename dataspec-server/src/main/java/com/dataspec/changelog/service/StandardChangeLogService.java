@@ -17,6 +17,7 @@ public interface StandardChangeLogService {
     String ACTION_UPDATE = "update";
     String ACTION_DELETE = "delete";
     String ACTION_TOGGLE = "toggle";
+    String ACTION_UNDO = "undo";
 
     /** 将实体当前状态序列化为 JSON 快照。 */
     String snapshot(Object value);
@@ -28,6 +29,8 @@ public interface StandardChangeLogService {
                       String action,
                       String beforeJson,
                       String afterJson);
+
+    StandardChangeLog getById(Long id);
 
     IPage<StandardChangeLog> page(Long projectId, String targetType, Long targetId, int current, int size);
 }

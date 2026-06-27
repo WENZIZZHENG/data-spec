@@ -1,8 +1,13 @@
 package com.dataspec.field;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.model.FieldBulkUpdatePreview;
+import com.dataspec.field.model.FieldBulkUpdateReq;
+import com.dataspec.field.model.FieldBulkUpdateResult;
+import com.dataspec.field.model.FieldChangeUndoResult;
 import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
@@ -29,6 +34,8 @@ import static org.mockito.Mockito.*;
  */
 class FieldServiceImplTest {
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @AfterEach
     void tearDown() {
         DataSpecSecurityContext.clear();
@@ -38,7 +45,7 @@ class FieldServiceImplTest {
     void create_defaultsPersonalMetadata() {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.existsByNameInProject("mobile_no", 1L)).thenReturn(false);
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         Field field = new Field();
         field.setProjectId(1L);
@@ -56,7 +63,7 @@ class FieldServiceImplTest {
     @Test
     void create_rejectsInvalidStatus() {
         FieldRepository repository = mock(FieldRepository.class);
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         Field field = new Field();
         field.setProjectId(1L);
@@ -77,7 +84,7 @@ class FieldServiceImplTest {
         existing.setName("mobile_no");
         when(repository.findById(9L)).thenReturn(Optional.of(existing));
         when(repository.existsByNameInProjectExcludeId("mobile_no", 1L, 9L)).thenReturn(false);
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         Field incoming = new Field();
         incoming.setName("mobile_no");
@@ -118,7 +125,7 @@ class FieldServiceImplTest {
             Field field = invocation.getArgument(0);
             return field.getDataType() + "|" + field.getAliases();
         });
-        FieldServiceImpl service = new FieldServiceImpl(repository, changeLogService);
+        FieldServiceImpl service = service(repository, changeLogService);
 
         Field incoming = new Field();
         incoming.setName("mobile_no");
@@ -152,7 +159,7 @@ class FieldServiceImplTest {
         orderNo.setCategory("order");
         Field raw = field("raw_payload", "原始报文", "jsonb", "原始报文", "", "enabled");
         when(repository.findAllByProjectId(1L)).thenReturn(List.of(mobile, email, orderNo, raw));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         FieldGroupSummary summary = service.groupSummary(1L);
 
@@ -195,7 +202,7 @@ class FieldServiceImplTest {
             Field field = invocation.getArgument(0);
             return field.getName() + "|" + field.getDomainId() + "|" + field.getCategory() + "|" + field.getTags();
         });
-        FieldServiceImpl service = new FieldServiceImpl(repository, changeLogService);
+        FieldServiceImpl service = service(repository, changeLogService);
 
         FieldGroupingBatchUpdateResult result = service.batchUpdateGrouping(new FieldGroupingBatchUpdateReq(
                 1L,
@@ -230,7 +237,7 @@ class FieldServiceImplTest {
         foreign.setProjectId(2L);
         when(repository.findById(1L)).thenReturn(Optional.of(own));
         when(repository.findById(2L)).thenReturn(Optional.of(foreign));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         assertThrows(BizException.class, () -> service.batchUpdateGrouping(new FieldGroupingBatchUpdateReq(
                 1L,
@@ -249,7 +256,7 @@ class FieldServiceImplTest {
         mobile.setCategory("contact");
         mobile.setTags("pii");
         when(repository.findById(1L)).thenReturn(Optional.of(mobile));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         service.batchUpdateGrouping(new FieldGroupingBatchUpdateReq(
                 1L,
@@ -272,7 +279,7 @@ class FieldServiceImplTest {
         mobile.setId(1L);
         mobile.setProjectId(1L);
         when(repository.findById(1L)).thenReturn(Optional.of(mobile));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         FieldGroupingBatchUpdateResult result = service.batchUpdateGrouping(new FieldGroupingBatchUpdateReq(
                 1L,
@@ -288,7 +295,7 @@ class FieldServiceImplTest {
     @Test
     void batchUpdateGrouping_rejectsInvalidFieldIdsBeforeRepositoryLookup() {
         FieldRepository repository = mock(FieldRepository.class);
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         assertThrows(BizException.class, () -> service.batchUpdateGrouping(new FieldGroupingBatchUpdateReq(
                 1L,
@@ -300,13 +307,265 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void bulkUpdatePreview_reportsNormalizedChangesWithoutWriting() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field mobile = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        mobile.setId(1L);
+        mobile.setProjectId(1L);
+        mobile.setCategory("old");
+        mobile.setTags("legacy");
+        mobile.setSensitive(false);
+        when(repository.findById(1L)).thenReturn(Optional.of(mobile));
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        FieldServiceImpl service = service(repository, changeLogService);
+
+        FieldBulkUpdatePreview preview = service.previewBulkUpdate(new FieldBulkUpdateReq(
+                1L,
+                List.of(1L),
+                Map.of(
+                        "status", "deprecated",
+                        "category", "contact",
+                        "tags", "pii, customer",
+                        "sensitive", true
+                )));
+
+        assertEquals(1, preview.requestedCount());
+        assertEquals(1, preview.changedCount());
+        assertEquals(0, preview.unchangedCount());
+        assertEquals(4, preview.items().getFirst().changes().size());
+        assertTrue(preview.items().getFirst().changes().stream()
+                .anyMatch(change -> "tags".equals(change.attribute())
+                        && "legacy".equals(change.beforeValue())
+                        && "customer,pii".equals(change.afterValue())));
+        verify(repository, never()).update(any());
+        verify(changeLogService, never()).recordChange(anyLong(), anyString(), anyLong(), anyString(), any(), any());
+    }
+
+    @Test
+    void bulkUpdatePreview_deduplicatesFieldIdsInCounts() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field mobile = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        mobile.setId(1L);
+        mobile.setProjectId(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(mobile));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldBulkUpdatePreview preview = service.previewBulkUpdate(new FieldBulkUpdateReq(
+                1L,
+                List.of(1L, 1L),
+                Map.of("status", "deprecated")));
+
+        assertEquals(1, preview.requestedCount());
+        assertEquals(1, preview.items().size());
+        verify(repository, times(1)).findById(1L);
+    }
+
+    @Test
+    void bulkUpdateFields_updatesChangedFieldsAndSkipsNoopLogs() {
+        FieldRepository repository = mock(FieldRepository.class);
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        Field mobile = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        mobile.setId(1L);
+        mobile.setProjectId(1L);
+        mobile.setCategory("old");
+        Field email = field("email", "邮箱", "varchar(128)", "邮箱", "mail", "enabled");
+        email.setId(2L);
+        email.setProjectId(1L);
+        email.setCategory("contact");
+        when(repository.findById(1L)).thenReturn(Optional.of(mobile));
+        when(repository.findById(2L)).thenReturn(Optional.of(email));
+        when(changeLogService.snapshot(any(Field.class))).thenAnswer(invocation -> {
+            Field field = invocation.getArgument(0);
+            return field.getName() + "|" + field.getCategory();
+        });
+        FieldServiceImpl service = service(repository, changeLogService);
+
+        FieldBulkUpdateResult result = service.bulkUpdateFields(new FieldBulkUpdateReq(
+                1L,
+                List.of(1L, 2L),
+                Map.of("category", "contact")));
+
+        assertEquals(2, result.requestedCount());
+        assertEquals(1, result.updatedCount());
+        assertEquals(1, result.unchangedCount());
+        assertEquals("contact", mobile.getCategory());
+        verify(repository).update(mobile);
+        verify(repository, never()).update(email);
+        verify(changeLogService).recordChange(eq(1L), eq("field"), eq(1L), eq("update"),
+                eq("mobile_no|old"), eq("mobile_no|contact"));
+    }
+
+    @Test
+    void bulkUpdatePreview_rejectsUnsupportedKeysBeforeRepositoryLookup() {
+        FieldRepository repository = mock(FieldRepository.class);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        assertThrows(BizException.class, () -> service.previewBulkUpdate(new FieldBulkUpdateReq(
+                1L,
+                List.of(1L),
+                Map.of("name", "bad_name"))));
+
+        verify(repository, never()).findById(any());
+        verify(repository, never()).update(any());
+    }
+
+    @Test
+    void bulkUpdateFields_rejectsCrossProjectWithoutPartialUpdate() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field own = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        own.setId(1L);
+        own.setProjectId(1L);
+        Field foreign = field("email", "邮箱", "varchar(128)", "邮箱", "mail", "enabled");
+        foreign.setId(2L);
+        foreign.setProjectId(2L);
+        when(repository.findById(1L)).thenReturn(Optional.of(own));
+        when(repository.findById(2L)).thenReturn(Optional.of(foreign));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        assertThrows(BizException.class, () -> service.bulkUpdateFields(new FieldBulkUpdateReq(
+                1L,
+                List.of(1L, 2L),
+                Map.of("status", "deprecated"))));
+
+        verify(repository, never()).update(any());
+    }
+
+    @Test
+    void undoFieldChange_restoresBeforeSnapshotAndRecordsUndoLog() throws Exception {
+        FieldRepository repository = mock(FieldRepository.class);
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        Field existing = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "deprecated");
+        existing.setId(1L);
+        existing.setProjectId(1L);
+        existing.setCategory("new");
+        Field before = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        before.setId(1L);
+        before.setProjectId(1L);
+        before.setCategory("old");
+        StandardChangeLog log = fieldLog(50L, 1L, 1L, "update", objectMapper.writeValueAsString(before));
+        when(repository.findById(1L)).thenReturn(Optional.of(existing));
+        when(repository.existsByNameInProjectExcludeId("mobile_no", 1L, 1L)).thenReturn(false);
+        when(changeLogService.getById(50L)).thenReturn(log);
+        when(changeLogService.snapshot(any(Field.class))).thenAnswer(invocation ->
+                objectMapper.writeValueAsString(invocation.getArgument(0)));
+        FieldServiceImpl service = service(repository, changeLogService);
+
+        FieldChangeUndoResult result = service.undoFieldChange(1L, 50L);
+
+        assertEquals(1L, result.fieldId());
+        assertEquals(50L, result.logId());
+        assertEquals("enabled", existing.getStatus());
+        assertEquals("old", existing.getCategory());
+        verify(repository).update(existing);
+        verify(changeLogService).recordChange(eq(1L), eq("field"), eq(1L), eq("undo"), anyString(), anyString());
+    }
+
+    @Test
+    void undoFieldChange_rejectsNameConflictWithoutUpdating() throws Exception {
+        FieldRepository repository = mock(FieldRepository.class);
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        Field existing = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        existing.setId(1L);
+        existing.setProjectId(1L);
+        Field before = field("email", "邮箱", "varchar(128)", "邮箱", "mail", "enabled");
+        before.setId(1L);
+        before.setProjectId(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(existing));
+        when(repository.existsByNameInProjectExcludeId("email", 1L, 1L)).thenReturn(true);
+        when(changeLogService.getById(50L))
+                .thenReturn(fieldLog(50L, 1L, 1L, "update", objectMapper.writeValueAsString(before)));
+        FieldServiceImpl service = service(repository, changeLogService);
+
+        assertThrows(BizException.class, () -> service.undoFieldChange(1L, 50L));
+
+        verify(repository, never()).update(any());
+        verify(changeLogService, never()).recordChange(anyLong(), anyString(), anyLong(), anyString(), any(), any());
+    }
+
+    @Test
+    void undoFieldChange_rejectsMismatchedLogTarget() throws Exception {
+        FieldRepository repository = mock(FieldRepository.class);
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        Field existing = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        existing.setId(1L);
+        existing.setProjectId(1L);
+        Field before = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        before.setId(2L);
+        before.setProjectId(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(existing));
+        when(changeLogService.getById(50L))
+                .thenReturn(fieldLog(50L, 1L, 2L, "update", objectMapper.writeValueAsString(before)));
+        FieldServiceImpl service = service(repository, changeLogService);
+
+        assertThrows(BizException.class, () -> service.undoFieldChange(1L, 50L));
+
+        verify(repository, never()).update(any());
+    }
+
+    @Test
+    void undoFieldChange_rejectsCrossProjectLogWithoutUpdating() throws Exception {
+        FieldRepository repository = mock(FieldRepository.class);
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        Field existing = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        existing.setId(1L);
+        existing.setProjectId(1L);
+        Field before = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        before.setId(1L);
+        before.setProjectId(2L);
+        when(repository.findById(1L)).thenReturn(Optional.of(existing));
+        when(changeLogService.getById(50L))
+                .thenReturn(fieldLog(50L, 2L, 1L, "update", objectMapper.writeValueAsString(before)));
+        FieldServiceImpl service = service(repository, changeLogService);
+
+        assertThrows(BizException.class, () -> service.undoFieldChange(1L, 50L));
+
+        verify(repository, never()).update(any());
+    }
+
+    @Test
+    void undoFieldChange_rejectsMissingBeforeJsonWithoutUpdating() {
+        FieldRepository repository = mock(FieldRepository.class);
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        Field existing = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        existing.setId(1L);
+        existing.setProjectId(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(existing));
+        when(changeLogService.getById(50L)).thenReturn(fieldLog(50L, 1L, 1L, "update", null));
+        FieldServiceImpl service = service(repository, changeLogService);
+
+        assertThrows(BizException.class, () -> service.undoFieldChange(1L, 50L));
+
+        verify(repository, never()).update(any());
+    }
+
+    @Test
+    void undoFieldChange_rejectsMismatchedSnapshotWithoutUpdating() throws Exception {
+        FieldRepository repository = mock(FieldRepository.class);
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        Field existing = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        existing.setId(1L);
+        existing.setProjectId(1L);
+        Field before = field("email", "邮箱", "varchar(128)", "邮箱", "mail", "enabled");
+        before.setId(2L);
+        before.setProjectId(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(existing));
+        when(changeLogService.getById(50L))
+                .thenReturn(fieldLog(50L, 1L, 1L, "update", objectMapper.writeValueAsString(before)));
+        FieldServiceImpl service = service(repository, changeLogService);
+
+        assertThrows(BizException.class, () -> service.undoFieldChange(1L, 50L));
+
+        verify(repository, never()).update(any());
+    }
+
+    @Test
     void suggest_matchesAliasAndChineseDisplayName() {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.findAllByProjectId(1L)).thenReturn(List.of(
                 field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone,mobile,tel", "enabled"),
                 field("amount_cent", "金额（分）", "bigint", "支付金额，以分存储", "amount,pay_amount", "enabled")
         ));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         List<FieldSuggestion> suggestions = service.suggest(1L, "用户手机号", 5);
 
@@ -330,7 +589,7 @@ class FieldServiceImplTest {
         mobile.setCodeSetId(10L);
         mobile.setExampleValue("13800138000");
         when(repository.findAllByProjectId(1L)).thenReturn(List.of(mobile));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         FieldSuggestion suggestion = service.suggest(1L, "用户手机号", 5).getFirst();
 
@@ -358,7 +617,7 @@ class FieldServiceImplTest {
                 field("mobile_no", "联系电话", "varchar(20)", "用户联系号码", "", "enabled"),
                 field("user_name", "用户姓名", "varchar(64)", "用户姓名", "", "enabled")
         ));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         List<FieldSuggestion> suggestions = service.suggest(1L, "用户sjh", 5);
 
@@ -373,7 +632,7 @@ class FieldServiceImplTest {
                 field("user_profile", "用户资料", "jsonb", "用户扩展信息", "", "enabled"),
                 field("mobile_no", "联系电话", "varchar(20)", "联系号码", "", "enabled")
         ));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         List<FieldSuggestion> suggestions = service.suggest(1L, "用户手机号", 5);
 
@@ -387,7 +646,7 @@ class FieldServiceImplTest {
         Field idCard = field("id_card_no", "身份证号", "varchar(32)", "证件号码", "", "enabled");
         idCard.setSensitive(true);
         when(repository.findAllByProjectId(1L)).thenReturn(List.of(idCard));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         List<FieldSuggestion> suggestions = service.suggest(1L, "sfzh", 5);
 
@@ -399,7 +658,7 @@ class FieldServiceImplTest {
     void suggest_generatesCanonicalFallbackNamesForKnownSemanticGroups() {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.findAllByProjectId(1L)).thenReturn(List.of());
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         assertEquals("user_id", service.suggest(1L, "用户编号 uid", 5).getFirst().recommendedName());
         assertEquals("mobile_no", service.suggest(1L, "客户手机", 5).getFirst().recommendedName());
@@ -412,7 +671,7 @@ class FieldServiceImplTest {
         when(repository.findAllByProjectId(1L)).thenReturn(List.of(
                 field("updated_at", "更新时间", "timestamp", "更新时间", "", "enabled")
         ));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         FieldSuggestion suggestion = service.suggest(1L, "status", 5).getFirst();
 
@@ -426,7 +685,7 @@ class FieldServiceImplTest {
         when(repository.findAllByProjectId(1L)).thenReturn(List.of(
                 field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone,mobile,tel", "disabled")
         ));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         List<FieldSuggestion> suggestions = service.suggest(1L, "手机号", 5);
 
@@ -439,7 +698,7 @@ class FieldServiceImplTest {
     void suggest_returnsFallbackSnakeCaseNameWhenNoExistingFieldMatches() {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.findAllByProjectId(1L)).thenReturn(List.of());
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         List<FieldSuggestion> suggestions = service.suggest(1L, "客户生日", 5);
 
@@ -454,7 +713,7 @@ class FieldServiceImplTest {
     @Test
     void suggest_rejectsDescriptionWithoutSearchableContent() {
         FieldRepository repository = mock(FieldRepository.class);
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         assertThrows(BizException.class, () -> service.suggest(1L, "!!!", 5));
         verify(repository, never()).findAllByProjectId(anyLong());
@@ -469,7 +728,7 @@ class FieldServiceImplTest {
         field.setName("mobile_no");
         when(repository.findById(9L)).thenReturn(Optional.of(field));
         DataSpecSecurityContext.set(new ApiTokenPrincipal("limited", "bob", false, Set.of(2L)));
-        FieldServiceImpl service = new FieldServiceImpl(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
         BizException ex = assertThrows(BizException.class, () -> service.getById(9L));
 
@@ -487,5 +746,20 @@ class FieldServiceImplTest {
         field.setAliases(aliases);
         field.setStatus(status);
         return field;
+    }
+
+    private StandardChangeLog fieldLog(Long id, Long projectId, Long fieldId, String action, String beforeJson) {
+        StandardChangeLog log = new StandardChangeLog();
+        log.setId(id);
+        log.setProjectId(projectId);
+        log.setTargetType(StandardChangeLogService.TARGET_FIELD);
+        log.setTargetId(fieldId);
+        log.setAction(action);
+        log.setBeforeJson(beforeJson);
+        return log;
+    }
+
+    private FieldServiceImpl service(FieldRepository repository, StandardChangeLogService changeLogService) {
+        return new FieldServiceImpl(repository, changeLogService, objectMapper);
     }
 }
