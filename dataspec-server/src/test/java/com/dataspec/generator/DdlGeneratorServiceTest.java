@@ -58,6 +58,10 @@ class DdlGeneratorServiceTest {
         assertTrue(ddl.indexOf("order_no") < ddl.indexOf("user_id"), "字段应按 sortOrder 排序");
         assertTrue(ddl.contains("COMMENT ON TABLE user_order IS '用户''订单表';"));
         assertTrue(ddl.contains("COMMENT ON COLUMN user_order.order_no IS '订单''编号';"));
+        assertTrue(result.dialectDiagnostics().stream()
+                .anyMatch(item -> "POSTGRESQL_DDL_TARGET".equals(item.code())));
+        assertTrue(result.dialectDiagnostics().stream()
+                .anyMatch(item -> "MYSQL_DDL_CONVERSION_REQUIRED".equals(item.code())));
         verify(sqlLintService).lint(ddl, 1L);
         assertEquals(1, aiJobRecordService.created.size());
         AiJobRecordCreateReq req = aiJobRecordService.created.get(0);
@@ -66,6 +70,7 @@ class DdlGeneratorServiceTest {
         assertEquals(6L, req.standardSnapshotId());
         assertTrue(req.inputPayload().toString().contains("templateId=10"));
         assertTrue(req.outputPayload().toString().contains("ddl="));
+        assertTrue(req.outputPayload().toString().contains("POSTGRESQL_DDL_TARGET"));
     }
 
     @Test
@@ -89,6 +94,7 @@ class DdlGeneratorServiceTest {
         assertTrue(root.path("lintResult").path("issues").isArray());
         assertEquals("v2026.06.24", root.path("standardSnapshot").path("specVersion").asText());
         assertEquals("hash123", root.path("standardSnapshot").path("specHash").asText());
+        assertEquals("POSTGRESQL_DDL_TARGET", root.path("dialectDiagnostics").get(0).path("code").asText());
     }
 
     @Test

@@ -27,6 +27,30 @@
               <el-tag type="info">建议 {{ lintResult.suggestionCount ?? 0 }}</el-tag>
             </div>
 
+            <div v-if="lintDialectDiagnostics.length" class="dialect-panel">
+              <div class="dialect-header">
+                <span>方言诊断</span>
+                <el-tag size="small" :type="diagnosticSummaryTagType(lintDialectDiagnostics)">
+                  {{ dialectSummary(lintDialectDiagnostics) }}
+                </el-tag>
+              </div>
+              <div class="diagnostic-list">
+                <div
+                  v-for="diagnostic in lintDialectDiagnostics"
+                  :key="diagnostic.code || `${diagnostic.dialect}-${diagnostic.capability}`"
+                  class="diagnostic-item"
+                >
+                  <el-tag size="small" :type="diagnosticTagType(diagnostic.level)">
+                    {{ diagnosticLevelLabel(diagnostic.level) }}
+                  </el-tag>
+                  <div class="diagnostic-copy">
+                    <span>{{ diagnostic.message }}</span>
+                    <small v-if="diagnostic.nextAction">{{ diagnostic.nextAction }}</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div v-if="lintResult.fixedSql" class="fixed-sql-panel">
               <div class="fixed-sql-header">
                 <span>修正 SQL</span>
@@ -248,6 +272,12 @@ import { ElMessage } from 'element-plus'
 import * as monaco from 'monaco-editor'
 import { getLintRecord, lintSql, listLintRecords } from '@/api/lint'
 import { useProjectStore } from '@/stores/project'
+import {
+  diagnosticLevelLabel,
+  diagnosticSummaryTagType,
+  diagnosticTagType,
+  dialectSummary
+} from '@/utils/dialectDiagnostics'
 import type { LintIssue, LintResult, RecordDetail, SqlCheckRecord, StandardSnapshotInfo } from '@/types'
 
 const editorContainer = ref<HTMLElement>()
@@ -295,6 +325,7 @@ const issueTotal = computed(() => {
   )
 })
 const fixedSqlDiffLines = computed(() => parseDiff(lintResult.value?.fixedSqlDiff))
+const lintDialectDiagnostics = computed(() => lintResult.value?.dialectDiagnostics ?? [])
 const recordDiffLines = computed(() => {
   const record = activeRecord.value?.record
   return parseDiff(buildSqlDiff(record?.originalSql, record?.fixedSql))
@@ -798,6 +829,50 @@ function buildDiffLines(originalLines: string[], fixedLines: string[]) {
   font-size: 13px;
   font-weight: 600;
   color: #303133;
+}
+
+.dialect-panel {
+  padding: 10px 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.dialect-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: #303133;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.diagnostic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diagnostic-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.diagnostic-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diagnostic-copy small {
+  color: #909399;
 }
 
 .replay-section {

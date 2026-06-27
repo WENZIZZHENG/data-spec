@@ -1,5 +1,6 @@
 package com.dataspec.lint.model;
 
+import com.dataspec.dialect.model.DialectDiagnostic;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -33,6 +34,9 @@ public class LintResult {
 
     /** 原 SQL 与修正 SQL 的 unified diff,无差异时为 null */
     private String fixedSqlDiff;
+
+    /** 方言识别、支持矩阵和降级提示，供 AI/CLI/前端判断结果边界 */
+    private List<DialectDiagnostic> dialectDiagnostics;
 
     public static LintResult of(List<TableDef> tables, List<LintIssue> issues) {
         long errors = issues.stream().filter(LintResult::isActive).filter(i -> i.getSeverity() == Severity.ERROR).count();

@@ -168,6 +168,8 @@ class SqlLintServiceTest {
         assertEquals(0, root.path("suppressedCount").asInt());
         assertTrue(root.path("fixedSql").asText().contains("CREATE TABLE user_order"));
         assertTrue(root.path("fixedSqlDiff").asText().contains("-CREATE TABLE UserOrder"));
+        assertTrue(root.path("dialectDiagnostics").isArray());
+        assertEquals("POSTGRESQL_DIALECT_INFERRED", root.path("dialectDiagnostics").get(0).path("code").asText());
 
         JsonNode issue = root.path("issues").get(0);
         assertEquals("ERROR", issue.path("severity").asText());
@@ -268,6 +270,7 @@ class SqlLintServiceTest {
         assertEquals(7L, req.sqlCheckRecordId());
         assertTrue(req.inputPayload().toString().contains("UserOrder"));
         assertTrue(req.outputPayload().toString().contains("fixedSql"));
+        assertTrue(req.outputPayload().toString().contains("dialectDiagnostics"));
     }
 
     @Test

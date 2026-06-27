@@ -1679,6 +1679,16 @@ export interface components {
             recommendedName?: string;
             reason?: string;
         };
+        DialectCapability: "DIALECT_DETECTION" | "COMMENTS" | "AUTO_INCREMENT" | "INDEXES_CONSTRAINTS" | "TYPE_MAPPING" | "SCHEMA_CATALOG" | "QUOTED_IDENTIFIER" | "FIXED_SQL" | "DDL_GENERATION" | "DATABASE_METADATA";
+        DialectSupportLevel: "SUPPORTED" | "PARTIAL" | "UNSUPPORTED" | "INFO" | "WARNING";
+        DialectDiagnostic: {
+            dialect?: string;
+            capability?: components["schemas"]["DialectCapability"];
+            level?: components["schemas"]["DialectSupportLevel"];
+            code?: string;
+            message?: string;
+            nextAction?: string;
+        };
         RReverseImportPreview: {
             /** Format: int32 */
             code?: number;
@@ -1692,6 +1702,7 @@ export interface components {
             fieldCandidates?: components["schemas"]["FieldCandidate"][];
             missingComments?: components["schemas"]["MissingCommentIssue"][];
             nonStandardFields?: components["schemas"]["NonStandardField"][];
+            dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
         };
         ReverseImportSummary: {
             /** Format: int32 */
@@ -1915,6 +1926,7 @@ export interface components {
             suppressedCount?: number;
             fixedSql?: string;
             fixedSqlDiff?: string;
+            dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
         };
         RLintResult: {
             /** Format: int32 */
@@ -2324,6 +2336,7 @@ export interface components {
             ddl?: string;
             lintResult?: components["schemas"]["LintResult"];
             standardSnapshot?: components["schemas"]["StandardSnapshotInfo"];
+            dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
         };
         RDdlGenerateResult: {
             /** Format: int32 */

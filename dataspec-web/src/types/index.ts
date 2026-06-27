@@ -237,6 +237,7 @@ export type RecordDetail = Schemas['RecordDetail']
 export type SqlCheckReplay = Schemas['SqlCheckReplay']
 export type AuthMe = Schemas['AuthMe']
 export type DdlGenerateResult = Schemas['DdlGenerateResult']
+export type DialectDiagnostic = Schemas['DialectDiagnostic']
 export type Template = Schemas['Template']
 export type TemplateField = Schemas['TemplateField']
 export type TableDef = Schemas['TableDef']
@@ -441,6 +442,7 @@ export interface ReverseImportPreview {
   fieldCandidates?: FieldCandidate[]
   missingComments?: MissingCommentIssue[]
   nonStandardFields?: NonStandardField[]
+  dialectDiagnostics?: DialectDiagnostic[]
 }
 
 export type ReverseImportFieldStatus =

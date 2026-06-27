@@ -2,6 +2,7 @@ package com.dataspec.reverseimport.service.impl;
 
 import com.dataspec.common.exception.BizException;
 import com.dataspec.common.perf.PerformanceProbe;
+import com.dataspec.dialect.service.SqlDialectCompatibilityService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlParserService;
@@ -44,6 +45,7 @@ public class ReverseImportServiceImpl implements ReverseImportService {
     private final SqlParserService sqlParserService;
     private final FieldService fieldService;
     private final ReverseImportSourceService reverseImportSourceService;
+    private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
 
     @Override
     public ReverseImportPreview preview(Long projectId, String sql) {
@@ -55,7 +57,9 @@ public class ReverseImportServiceImpl implements ReverseImportService {
         }
 
         List<TableDef> tables = sqlParserService.parse(sql);
-        return previewTables(projectId, tables);
+        ReverseImportPreview preview = previewTables(projectId, tables);
+        preview.setDialectDiagnostics(dialectCompatibilityService.diagnoseSql(sql));
+        return preview;
     }
 
     @Override

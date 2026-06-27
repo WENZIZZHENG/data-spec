@@ -74,6 +74,8 @@ test('keeps SQL lint fixed SQL and record history flow wired', () => {
     'copyToClipboard(fixedSql',
     'handleCopyReplayCommand',
     'activeRecord.replay',
+    'lintDialectDiagnostics',
+    'dialectSummary(lintDialectDiagnostics)',
     'async function loadRecords()',
     'await listLintRecords(projectId, recordCurrent.value, recordSize.value)',
     'async function handleViewRecord(id?: number)',
@@ -105,6 +107,8 @@ test('keeps database reverse import and comparison flow wired', () => {
     'async function handleLoadTables()',
     'async function handleGenerateCompare()',
     'async function handleImportCandidates()',
+    'previewDialectDiagnostics',
+    'dialectSummary(previewDialectDiagnostics)',
     'goToFieldLibrary'
   ], 'ReverseImport.vue')
 
@@ -163,6 +167,8 @@ test('keeps DDL generation and AI Context export flows project-scoped', () => {
     'listTemplates(projectId)',
     'listTemplateFields(templateId)',
     'previewDdl(projectId, templateId, normalizedTableName)',
+    'ddlDialectDiagnostics',
+    'dialectSummary(ddlDialectDiagnostics)',
     'handleCopyDdl',
     'previewDataDictionaryHtml(projectId)',
     'downloadDataDictionaryHtml(projectId)',
@@ -234,11 +240,11 @@ test('keeps critical action labels and empty states visible', () => {
   const pageExpectations = [
     {
       path: 'src/views/SqlLint.vue',
-      snippets: ['执行校验', '最近检查记录', '请输入 SQL 并点击执行校验', '暂无检查记录', '已复制修正 SQL']
+      snippets: ['执行校验', '最近检查记录', '方言诊断', '请输入 SQL 并点击执行校验', '暂无检查记录', '已复制修正 SQL']
     },
     {
       path: 'src/views/ReverseImport.vue',
-      snippets: ['生成预览', '生成差异', '确认导入', '请先创建并选择项目', '暂无表，请先加载', '当前筛选下暂无差异']
+      snippets: ['生成预览', '生成差异', '确认导入', '方言诊断', '请先创建并选择项目', '暂无表，请先加载', '当前筛选下暂无差异']
     },
     {
       path: 'src/views/FieldLibrary.vue',
@@ -246,7 +252,7 @@ test('keeps critical action labels and empty states visible', () => {
     },
     {
       path: 'src/views/Generator.vue',
-      snippets: ['生成 DDL', '暂无模板字段', '当前项目暂无表模板', '预览 HTML', '下载 SQL', 'DDL 已生成']
+      snippets: ['生成 DDL', '方言诊断', '暂无模板字段', '当前项目暂无表模板', '预览 HTML', '下载 SQL', 'DDL 已生成']
     },
     {
       path: 'src/views/AiExport.vue',

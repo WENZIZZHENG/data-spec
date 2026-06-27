@@ -99,8 +99,8 @@ async function runLint(args, io, fetchFn) {
   }
   const projectId = parseProjectId(options.project ?? config.projectId)
   const format = options.format ?? 'json'
-  if (format !== 'json') {
-    throw new Error('当前仅支持 --format json')
+  if (format !== 'json' && format !== 'text') {
+    throw new Error('lint 当前仅支持 --format json 或 text')
   }
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
@@ -113,7 +113,11 @@ async function runLint(args, io, fetchFn) {
   })
   const payload = await readJsonResponse(response)
   const result = unwrapResponse(payload)
-  io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  if (format === 'json') {
+    io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  } else {
+    io.writeOut(formatLintText(result))
+  }
   return Number(result.errorCount ?? 0) > 0 ? 1 : 0
 }
 
@@ -992,6 +996,52 @@ function summarizeLintResults(results) {
   })
 }
 
+function formatLintText(result) {
+  const lines = [
+    'DataSpec Lint',
+    `ERROR ${Number(result.errorCount ?? 0)} / WARNING ${Number(result.warningCount ?? 0)} / SUGGESTION ${Number(result.suggestionCount ?? 0)}`
+  ]
+  const diagnostics = Array.isArray(result.dialectDiagnostics) ? result.dialectDiagnostics : []
+  if (diagnostics.length > 0) {
+    lines.push('', `Dialect: ${formatDialectSummary(diagnostics)}`)
+    for (const diagnostic of diagnostics) {
+      if (!['WARNING', 'PARTIAL', 'UNSUPPORTED'].includes(diagnostic.level ?? '')) {
+        continue
+      }
+      lines.push(`- [${diagnostic.level}] ${diagnostic.code}: ${diagnostic.message}`)
+      if (diagnostic.nextAction) {
+        lines.push(`  next: ${diagnostic.nextAction}`)
+      }
+    }
+  }
+  const issues = Array.isArray(result.issues) ? result.issues : []
+  if (issues.length > 0) {
+    lines.push('', 'Issues:')
+    for (const issue of issues.slice(0, 20)) {
+      lines.push(formatIssueMarkdown(issue))
+    }
+    if (issues.length > 20) {
+      lines.push(`- 其余 ${issues.length - 20} 个问题已省略，请使用 --format json 查看完整结果。`)
+    }
+  }
+  if (result.fixedSql) {
+    lines.push('', 'fixedSql: available')
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+function formatDialectSummary(diagnostics) {
+  const first = diagnostics.find((item) => item.dialect)
+  const dialect = first?.dialect === 'mysql'
+    ? 'MySQL'
+    : first?.dialect === 'postgresql'
+      ? 'PostgreSQL'
+      : 'unknown'
+  const riskCount = diagnostics.filter((item) => ['WARNING', 'PARTIAL', 'UNSUPPORTED'].includes(item.level ?? '')).length
+  return riskCount > 0 ? `${dialect} (${riskCount} compatibility notes)` : `${dialect}`
+}
+
 function formatOutputPath(filePath) {
   const relativePath = path.relative(process.cwd(), filePath)
   const outputPath = relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
@@ -1495,7 +1545,7 @@ function helpText() {
   return `DataSpec CLI
 
 Usage:
-  node tools/dataspec-cli.mjs lint <path|-> [--project <id>] --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs lint <path|-> [--project <id>] --format text|json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]

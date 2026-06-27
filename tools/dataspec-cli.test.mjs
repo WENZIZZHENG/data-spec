@@ -70,6 +70,49 @@ test('lint returns 0 when server reports no errors', async () => {
   assert.equal(JSON.parse(io.stdout).warningCount, 1)
 })
 
+test('lint text output prints dialect diagnostics summary', async () => {
+  const io = createIo('CREATE TABLE `user_order` (id bigint);')
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 200,
+      data: {
+        errorCount: 1,
+        warningCount: 0,
+        suggestionCount: 0,
+        fixedSql: 'CREATE TABLE user_order (id bigint);',
+        dialectDiagnostics: [
+          {
+            dialect: 'mysql',
+            capability: 'DIALECT_DETECTION',
+            level: 'INFO',
+            code: 'MYSQL_DIALECT_INFERRED',
+            message: '检测到 MySQL DDL 特征',
+            nextAction: '继续检查'
+          },
+          {
+            dialect: 'mysql',
+            capability: 'FIXED_SQL',
+            level: 'WARNING',
+            code: 'MYSQL_FIXED_SQL_REVIEW_REQUIRED',
+            message: 'fixedSql 需要人工复核',
+            nextAction: '不要直接覆盖 MySQL 迁移文件'
+          }
+        ],
+        issues: [{ severity: 'ERROR', ruleCode: 'table_naming_snake_case', message: '表名需使用 snake_case' }]
+      }
+    })
+  })
+
+  const code = await runCli(['lint', '-', '--project', '1', '--format', 'text'], io, fetchFn)
+
+  assert.equal(code, 1)
+  assert.match(io.stdout, /Dialect: MySQL \(1 compatibility notes\)/)
+  assert.match(io.stdout, /MYSQL_FIXED_SQL_REVIEW_REQUIRED/)
+  assert.match(io.stdout, /fixedSql: available/)
+})
+
 test('lint prints machine-readable DataSpecError when api returns diagnostic', async () => {
   const io = createIo('CREATE TABLE users (id bigserial);')
   const fetchFn = async () => ({

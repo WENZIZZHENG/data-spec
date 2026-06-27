@@ -346,6 +346,30 @@
           </div>
         </div>
 
+        <div v-if="previewDialectDiagnostics.length" class="dialect-panel">
+          <div class="dialect-header">
+            <span>方言诊断</span>
+            <el-tag size="small" :type="diagnosticSummaryTagType(previewDialectDiagnostics)">
+              {{ dialectSummary(previewDialectDiagnostics) }}
+            </el-tag>
+          </div>
+          <div class="diagnostic-list">
+            <div
+              v-for="diagnostic in previewDialectDiagnostics"
+              :key="diagnostic.code || `${diagnostic.dialect}-${diagnostic.capability}`"
+              class="diagnostic-item"
+            >
+              <el-tag size="small" :type="diagnosticTagType(diagnostic.level)">
+                {{ diagnosticLevelLabel(diagnostic.level) }}
+              </el-tag>
+              <div class="diagnostic-copy">
+                <span>{{ diagnostic.message }}</span>
+                <small v-if="diagnostic.nextAction">{{ diagnostic.nextAction }}</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <el-tabs class="result-tabs">
           <el-tab-pane label="字段候选">
             <template v-if="activeMode === 'database'">
@@ -467,6 +491,12 @@ import {
   presetConnectionSummary,
   presetOptionLabel
 } from '@/utils/databaseConnectionPreset'
+import {
+  diagnosticLevelLabel,
+  diagnosticSummaryTagType,
+  diagnosticTagType,
+  dialectSummary
+} from '@/utils/dialectDiagnostics'
 import type {
   DatabaseConnectionReq,
   DatabaseConnectionPreset,
@@ -615,6 +645,7 @@ const summaryItems = computed(() => [
   { key: 'comments', label: '缺注释', value: preview.value?.summary?.missingCommentCount ?? 0 },
   { key: 'nonStandard', label: '非标准字段', value: preview.value?.summary?.nonStandardFieldCount ?? 0 }
 ])
+const previewDialectDiagnostics = computed(() => preview.value?.dialectDiagnostics ?? [])
 const compareSummaryItems = computed(() => [
   { key: 'tables', label: '表', value: compareResult.value?.summary?.tableCount ?? 0 },
   { key: 'columns', label: '字段', value: compareResult.value?.summary?.columnCount ?? 0 },
@@ -1295,6 +1326,52 @@ function browserStorage() {
 .result-section {
   border-top: 1px solid #ebeef5;
   margin-top: 16px;
+}
+
+.dialect-panel {
+  padding: 10px 12px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.dialect-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: #303133;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.diagnostic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diagnostic-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.diagnostic-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diagnostic-copy small {
+  color: #909399;
 }
 
 .input-toolbar {

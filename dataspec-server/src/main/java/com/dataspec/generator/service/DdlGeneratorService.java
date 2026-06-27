@@ -3,6 +3,8 @@ package com.dataspec.generator.service;
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.common.exception.BizException;
+import com.dataspec.dialect.model.DialectDiagnostic;
+import com.dataspec.dialect.service.SqlDialectCompatibilityService;
 import com.dataspec.generator.model.DdlGenerateResult;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintResult;
@@ -42,6 +44,7 @@ public class DdlGeneratorService {
     private final SqlLintService sqlLintService;
     private final StandardSnapshotService standardSnapshotService;
     private final AiJobRecordService aiJobRecordService;
+    private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
 
     /**
      * 基于表模板生成 PostgreSQL CREATE TABLE DDL，并使用现有 lint 入口做自检。
@@ -73,8 +76,9 @@ public class DdlGeneratorService {
         String ddl = buildDdl(template, fields, normalizedTableName);
         LintResult lintResult = sqlLintService.lint(ddl, projectId);
         StandardSnapshotInfo snapshot = standardSnapshotService.getCurrentSnapshot(projectId);
-        recordDdlPreview(projectId, templateId, normalizedTableName, ddl, lintResult, snapshot);
-        return new DdlGenerateResult(ddl, lintResult, snapshot);
+        List<DialectDiagnostic> dialectDiagnostics = dialectCompatibilityService.diagnoseGeneratedPostgresqlDdl();
+        recordDdlPreview(projectId, templateId, normalizedTableName, ddl, lintResult, snapshot, dialectDiagnostics);
+        return new DdlGenerateResult(ddl, lintResult, snapshot, dialectDiagnostics);
     }
 
     private void recordDdlPreview(
@@ -83,7 +87,8 @@ public class DdlGeneratorService {
             String tableName,
             String ddl,
             LintResult lintResult,
-            StandardSnapshotInfo snapshot
+            StandardSnapshotInfo snapshot,
+            List<DialectDiagnostic> dialectDiagnostics
     ) {
         try {
             aiJobRecordService.create(new AiJobRecordCreateReq(
@@ -103,7 +108,8 @@ public class DdlGeneratorService {
                                     "errorCount", lintResult.getErrorCount(),
                                     "warningCount", lintResult.getWarningCount(),
                                     "suggestionCount", lintResult.getSuggestionCount()
-                            )
+                            ),
+                            "dialectDiagnostics", dialectDiagnostics
                     ),
                     snapshot == null ? null : snapshot.snapshotId(),
                     snapshot == null ? null : snapshot.specVersion(),

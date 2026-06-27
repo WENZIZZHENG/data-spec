@@ -161,6 +161,30 @@
           </div>
         </div>
 
+        <div v-if="ddlDialectDiagnostics.length" class="dialect-panel">
+          <div class="dialect-header">
+            <span>方言诊断</span>
+            <el-tag size="small" :type="diagnosticSummaryTagType(ddlDialectDiagnostics)">
+              {{ dialectSummary(ddlDialectDiagnostics) }}
+            </el-tag>
+          </div>
+          <div class="diagnostic-list">
+            <div
+              v-for="diagnostic in ddlDialectDiagnostics"
+              :key="diagnostic.code || `${diagnostic.dialect}-${diagnostic.capability}`"
+              class="diagnostic-item"
+            >
+              <el-tag size="small" :type="diagnosticTagType(diagnostic.level)">
+                {{ diagnosticLevelLabel(diagnostic.level) }}
+              </el-tag>
+              <div class="diagnostic-copy">
+                <span>{{ diagnostic.message }}</span>
+                <small v-if="diagnostic.nextAction">{{ diagnostic.nextAction }}</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <pre class="ddl-code">{{ result.ddl }}</pre>
 
         <el-table
@@ -201,6 +225,12 @@ import {
 } from '@/api/generator'
 import { listTemplateFields, listTemplates } from '@/api/template'
 import { useProjectStore } from '@/stores/project'
+import {
+  diagnosticLevelLabel,
+  diagnosticSummaryTagType,
+  diagnosticTagType,
+  dialectSummary
+} from '@/utils/dialectDiagnostics'
 import type { DdlGenerateResult, LintIssue, Template, TemplateField } from '@/types'
 
 const projectStore = useProjectStore()
@@ -224,6 +254,10 @@ const canGenerate = computed(() =>
   Boolean(projectStore.currentProjectId && selectedTemplateId.value && tableName.value.trim())
 )
 const lintIssues = computed<LintIssue[]>(() => result.value?.lintResult?.issues ?? [])
+const ddlDialectDiagnostics = computed(() => [
+  ...(result.value?.dialectDiagnostics ?? []),
+  ...(result.value?.lintResult?.dialectDiagnostics ?? [])
+])
 const hasDictionaryPreview = computed(() => Boolean(dictionaryHtml.value || dictionaryErd.value))
 const dictionaryBusy = computed(() => Boolean(dictionaryLoading.value))
 const dictionaryDownloadBusy = computed(() => Boolean(dictionaryDownloading.value))
@@ -510,6 +544,51 @@ function applyTableNameFromQuery() {
 
 .lint-summary {
   margin-top: 10px;
+}
+
+.dialect-panel {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.dialect-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: #303133;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.diagnostic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diagnostic-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.diagnostic-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diagnostic-copy small {
+  color: #909399;
 }
 
 .ddl-code {

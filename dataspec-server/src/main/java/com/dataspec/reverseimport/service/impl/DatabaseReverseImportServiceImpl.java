@@ -3,6 +3,7 @@ package com.dataspec.reverseimport.service.impl;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.coverage.model.FieldCoverageReport;
 import com.dataspec.coverage.service.FieldCoverageService;
+import com.dataspec.dialect.service.SqlDialectCompatibilityService;
 import com.dataspec.lint.model.ColumnDef;
 import com.dataspec.lint.model.TableDef;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
@@ -39,6 +40,7 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     private final ReverseImportService reverseImportService;
     private final FieldCoverageService fieldCoverageService;
     private final ConnectionProvider connectionProvider;
+    private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
 
     @Autowired
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
@@ -86,7 +88,9 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         }
         try (Connection connection = connectionProvider.open(req)) {
             List<TableDef> tables = readSelectedTables(connection, req);
-            return reverseImportService.previewTables(req.getProjectId(), tables);
+            ReverseImportPreview preview = reverseImportService.previewTables(req.getProjectId(), tables);
+            preview.setDialectDiagnostics(dialectCompatibilityService.diagnoseDatabase(req.getDatabaseType(), req.getSchemaName()));
+            return preview;
         } catch (SQLException e) {
             throw new BizException("读取数据库表结构失败: " + e.getMessage());
         }

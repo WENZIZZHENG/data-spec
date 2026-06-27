@@ -32,6 +32,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 
 - SQL 粘贴校验，返回 error/warning/suggestion 和结构化修复建议。
 - 支持 PostgreSQL `COMMENT ON TABLE/COLUMN`，以及常见 MySQL `CREATE TABLE`、列内注释、表选项、索引定义、`UNSIGNED` 数值类型和 `tinyint(1)` 布尔习惯解析。
+- SQL lint、fixedSql、DDL 生成和反向导入会返回 `dialectDiagnostics`，标明当前方言、能力维度、支持级别、稳定 code、说明和下一步建议。
 - 表名/字段名 snake_case、禁用字段名、推荐字段名、必备列、金额类型、字段后缀/前缀类型和注释缺失等规则。
 - 项目级规则例外，支持按规则编码、表名和字段名声明历史兼容原因；被豁免问题保留在结果中但不计入 active error/warning/suggestion。
 - 修正 SQL 输出、复制、检查记录、分页历史和详情查看。
@@ -191,13 +192,21 @@ curl "http://localhost:8090/api/fields/search?projectId=1&category=user&status=e
 curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&tableName=user_order"
 ```
 
-返回结果包含 `ddl` 和 `lintResult`。第一版只生成 `CREATE TABLE` 与 `COMMENT ON` 文本，不执行数据库变更，也不生成迁移计划。
+返回结果包含 `ddl`、`lintResult`、`standardSnapshot` 和 `dialectDiagnostics`。第一版只生成 PostgreSQL 风格 `CREATE TABLE` 与 `COMMENT ON` 文本，不执行数据库变更，也不生成迁移计划；如果目标库是 MySQL，诊断会提示需要先做类型、注释、自增和索引语法转换。
 
 ## SQL 校验记录与反向导入
 
-`/api/lint` 会返回 lint 结果、结构化修复建议和 `fixedSql`，并保存 SQL 检查记录。前端 SQL 校验页支持查看修正 SQL、复制、最近检查记录分页和详情；记录详情会展示当时标准、当前标准、回放状态、历史 Context 导出命令和下一步建议。无快照的旧记录显示为 `unversioned`，仍保留原始 SQL 与问题列表。
+`/api/lint` 会返回 lint 结果、结构化修复建议、`fixedSql` 和 `dialectDiagnostics`，并保存 SQL 检查记录。方言诊断第一版支持 PostgreSQL/MySQL：SQL 文本会根据 `COMMENT ON`、反引号、`AUTO_INCREMENT`、`ENGINE`、`DEFAULT CHARSET`、inline `COMMENT` 等特征做保守识别；混合或未知方言会返回稳定 code 与 nextAction，不会被静默标成已验证。前端 SQL 校验页支持查看修正 SQL、复制、当前方言/降级提示、最近检查记录分页和详情；记录详情会展示当时标准、当前标准、回放状态、历史 Context 导出命令和下一步建议。无快照的旧记录显示为 `unversioned`，仍保留原始 SQL 与问题列表。
 
-反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。直连模式还可以生成只读二次比对，按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。页面会按项目在浏览器本地记住数据库类型、host、port、database、schema、username、表选择、搜索词和差异筛选，不保存数据库密码、token 或完整连接串。当前项目可保存多个数据库连接预设，服务端只持久化预设名、databaseType、host、port、databaseName、schemaName 和 tableNames；反向导入页可选择预设回填连接元数据和表选择，用户名和密码仍由用户当次输入。确认导入创建的新字段会记录导入批次、来源 schema/table/column 和原始 metadata 快照，字段库可查看来源摘要；从导入结果跳转字段库时会自动携带字段关键词并筛选当前页结果。直连模式不会修改源数据库，也不会做定时同步。
+反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。SQL 文本和数据库直连预览都会展示方言诊断；PostgreSQL 直连会提示 schema 过滤，MySQL 直连会提示 databaseName 作为 catalog、schemaName 不参与过滤等边界。直连模式还可以生成只读二次比对，按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。页面会按项目在浏览器本地记住数据库类型、host、port、database、schema、username、表选择、搜索词和差异筛选，不保存数据库密码、token 或完整连接串。当前项目可保存多个数据库连接预设，服务端只持久化预设名、databaseType、host、port、databaseName、schemaName 和 tableNames；反向导入页可选择预设回填连接元数据和表选择，用户名和密码仍由用户当次输入。确认导入创建的新字段会记录导入批次、来源 schema/table/column 和原始 metadata 快照，字段库可查看来源摘要；从导入结果跳转字段库时会自动携带字段关键词并筛选当前页结果。直连模式不会修改源数据库，也不会做定时同步。
+
+方言能力第一版边界：
+
+| 方言 | 已验证能力 | 诊断边界 |
+|---|---|---|
+| PostgreSQL | `COMMENT ON TABLE/COLUMN`、`serial/bigserial`、schema 过滤、DDL 生成和 fixedSql 默认输出 | 未显式传方言时，非 MySQL 特征 SQL 会按 PostgreSQL/DataSpec 默认路径处理，并提示混合方言应显式确认 |
+| MySQL | 常见 `CREATE TABLE`、反引号、inline `COMMENT`、表 `COMMENT`、`UNSIGNED`、`tinyint(1)`、`KEY`/`ENGINE`/`CHARSET` 解析兼容 | 索引模型、charset/collation、自增迁移和 fixedSql MySQL 原样输出仍标为 partial/warning |
+| 其他 | 未验证 | 返回 unknown/unsupported 诊断，不标成已支持 |
 
 数据库连接预设 API：
 
@@ -557,6 +566,7 @@ data-spec/
 - [x] SQL 粘贴校验、结构化 issue、修复建议和 `fixedSql`
 - [x] SQL 检查记录、最近记录分页、详情和标准快照回放提示
 - [x] SQL issue source range，支持表/字段/COMMENT 定位、前端跳转和 PR 汇总评论行列范围展示
+- [x] PostgreSQL/MySQL 方言诊断，覆盖 lint/fixedSql、DDL 生成、SQL/数据库反向导入和 CLI 文本摘要
 - [x] PostgreSQL `COMMENT ON` 解析和常见 MySQL `CREATE TABLE` / `UNSIGNED` / 表选项解析
 - [x] 字段覆盖率报告，支持 SQL/DDL 和数据库直连 metadata 生成覆盖率与未纳管字段排行
 - [x] 字段质量评分，支持低质量字段筛选、问题编码和跳转字段库编辑
@@ -588,5 +598,5 @@ data-spec/
 
 ## 暂缓探索
 
-- 多方言完整规则体系：当前已覆盖 PostgreSQL 和常见 MySQL DDL 解析，SQL Server 等其他方言后续按实际场景补充。
+- 多方言完整规则体系：当前已覆盖 PostgreSQL/MySQL 能力矩阵和诊断，Oracle/SQL Server 等其他方言后续按实际场景补充。
 - 审批流、发布流和复杂 RBAC：当前定位个人/小团队优先，只保留轻量 API Token 与项目边界。

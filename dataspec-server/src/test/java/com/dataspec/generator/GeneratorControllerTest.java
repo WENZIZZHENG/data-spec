@@ -32,7 +32,8 @@ class GeneratorControllerTest {
         DdlGenerateResult result = new DdlGenerateResult(
                 "CREATE TABLE user_order (id bigserial);",
                 LintResult.of(List.of(), List.of()),
-                StandardSnapshotInfo.unversioned(1L)
+                StandardSnapshotInfo.unversioned(1L),
+                List.of()
         );
         when(ddlGeneratorService.generateFromTemplate(1L, 10L, "user_order")).thenReturn(result);
 

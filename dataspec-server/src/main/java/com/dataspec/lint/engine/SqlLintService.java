@@ -2,6 +2,7 @@ package com.dataspec.lint.engine;
 
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.service.AiJobRecordService;
+import com.dataspec.dialect.service.SqlDialectCompatibilityService;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.*;
 import com.dataspec.lint.service.SqlCheckRecordService;
@@ -34,6 +35,7 @@ public class SqlLintService {
     private final RuleExemptionService ruleExemptionService;
     private final SqlIssueSourceSpanResolver sourceSpanResolver = new SqlIssueSourceSpanResolver();
     private final SqlDiffGenerator sqlDiffGenerator = new SqlDiffGenerator();
+    private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
 
     /**
      * 校验 SQL（不指定项目，使用所有内置规则）
@@ -50,6 +52,7 @@ public class SqlLintService {
         List<TableDef> tables = sqlParserService.parse(sql);
         if (tables.isEmpty()) {
             LintResult emptyResult = LintResult.of(tables, List.of());
+            emptyResult.setDialectDiagnostics(dialectCompatibilityService.diagnoseSql(sql));
             // 无可解析表时仍落库一条记录,用于命中率统计与审计
             try {
                 sqlCheckRecordService.save(projectId, sql, emptyResult);
@@ -134,6 +137,7 @@ public class SqlLintService {
         String fixedSql = fixedSqlGenerator.generate(result);
         result.setFixedSql(fixedSql);
         result.setFixedSqlDiff(sqlDiffGenerator.generate(sql, fixedSql));
+        result.setDialectDiagnostics(dialectCompatibilityService.diagnoseSql(sql, fixedSql != null));
 
         // 落库检查记录(失败不阻断主流程,仅记录日志)
         SqlCheckRecord record = null;
@@ -168,6 +172,7 @@ public class SqlLintService {
                             "errorCount", result.getErrorCount(),
                             "warningCount", result.getWarningCount(),
                             "suggestionCount", result.getSuggestionCount(),
+                            "dialectDiagnostics", result.getDialectDiagnostics(),
                             "issues", result.getIssues()
                     ),
                     record == null ? null : record.getStandardSnapshotId(),

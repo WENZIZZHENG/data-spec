@@ -1,5 +1,6 @@
 package com.dataspec.reverseimport.model;
 
+import com.dataspec.dialect.model.DialectDiagnostic;
 import com.dataspec.lint.model.TableDef;
 import lombok.Data;
 
@@ -17,4 +18,5 @@ public class ReverseImportPreview {
     private List<FieldCandidate> fieldCandidates = new ArrayList<>();
     private List<MissingCommentIssue> missingComments = new ArrayList<>();
     private List<NonStandardField> nonStandardFields = new ArrayList<>();
+    private List<DialectDiagnostic> dialectDiagnostics = new ArrayList<>();
 }

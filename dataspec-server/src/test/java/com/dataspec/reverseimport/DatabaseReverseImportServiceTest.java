@@ -69,6 +69,9 @@ class DatabaseReverseImportServiceTest {
                 .contains("ID", "USER_NAME");
         assertThat(preview.getNonStandardFields()).extracting("columnName")
                 .containsExactly("USER_NAME");
+        assertThat(preview.getDialectDiagnostics())
+                .extracting("code")
+                .contains("POSTGRESQL_DATABASE_METADATA", "POSTGRESQL_SCHEMA_PATTERN");
     }
 
     @Test

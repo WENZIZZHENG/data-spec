@@ -51,5 +51,5 @@ P6-22 采用 `standard` 级别，因为它改变 API/CLI/前端可见结果，�
 ## Migration Plan
 
 - API 新增可选字段，不删除旧字段，保持向后兼容。
-- SQL 检查记录已有 `issues_json`，不新增列；记录详情可通过保存时的 result JSON 保留诊断。
+- SQL 检查记录已有 `issues_json` 且本轮不新增列；新诊断通过实时 lint 响应和 AI 回放输出 JSON 保留。
 - README 和 TODO 同步第一版能力与边界。

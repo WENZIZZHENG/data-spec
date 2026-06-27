@@ -59,6 +59,9 @@ class CoreGoldenFixturesTest {
 
         assertThat(result.getTables()).hasSize(1);
         assertThat(result.getTables().getFirst().getName()).isEqualTo("user_order");
+        assertThat(result.getDialectDiagnostics())
+                .extracting("code")
+                .contains("POSTGRESQL_DIALECT_INFERRED", "POSTGRESQL_COMMENT_ON_SUPPORTED");
         assertThat(result.getIssues())
                 .extracting(LintIssue::getRuleCode)
                 .doesNotContain(
@@ -75,6 +78,14 @@ class CoreGoldenFixturesTest {
         LintResult result = lintService(commonRules()).lint(readResource("fixtures/sql/mysql-bad.sql"), null);
 
         assertThat(result.getTables()).hasSize(1);
+        assertThat(result.getDialectDiagnostics())
+                .extracting("code")
+                .contains(
+                        "MYSQL_DIALECT_INFERRED",
+                        "MYSQL_UNSIGNED_TYPE_PARTIAL",
+                        "MYSQL_INDEX_TABLE_OPTION_PARTIAL",
+                        "MYSQL_INLINE_COMMENT_PARTIAL",
+                        "MYSQL_FIXED_SQL_REVIEW_REQUIRED");
         assertThat(result.getIssues())
                 .extracting(LintIssue::getRuleCode)
                 .contains(

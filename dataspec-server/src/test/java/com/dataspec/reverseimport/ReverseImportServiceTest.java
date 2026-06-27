@@ -61,6 +61,37 @@ class ReverseImportServiceTest {
         assertThat(preview.getFieldCandidates()).extracting("columnName").containsExactly("user_name");
         assertThat(preview.getMissingComments()).extracting("columnName").containsExactlyInAnyOrder("id", "user_name");
         assertThat(preview.getNonStandardFields()).extracting("columnName").containsExactly("user_name");
+        assertThat(preview.getDialectDiagnostics())
+                .extracting("code")
+                .contains("POSTGRESQL_DIALECT_INFERRED", "POSTGRESQL_COMMENT_ON_SUPPORTED");
+    }
+
+    @Test
+    void preview_returnsMysqlDialectDiagnosticsForMysqlDdl() {
+        FieldService fieldService = mock(FieldService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                mock(ReverseImportSourceService.class));
+
+        ReverseImportPreview preview = service.preview(1L, """
+                CREATE TABLE `user_order` (
+                    `id` bigint AUTO_INCREMENT COMMENT '主键',
+                    `phone` varchar(20) COMMENT '手机号',
+                    PRIMARY KEY (`id`),
+                    KEY `idx_phone` (`phone`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户订单';
+                """);
+
+        assertThat(preview.getDialectDiagnostics())
+                .extracting("code")
+                .contains(
+                        "MYSQL_DIALECT_INFERRED",
+                        "MYSQL_AUTO_INCREMENT_PARTIAL",
+                        "MYSQL_INDEX_TABLE_OPTION_PARTIAL",
+                        "MYSQL_BACKTICK_IDENTIFIER_PARTIAL",
+                        "MYSQL_INLINE_COMMENT_PARTIAL");
     }
 
     @Test
