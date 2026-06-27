@@ -4,8 +4,8 @@
 
 ## 下一步顺序
 
-1. P6-3 AI 生成与修复决策回放已完成第一版，下一步推进 P6-4 业务仓库 `dataspec init` 初始化向导。
-2. P6 后续继续补业务仓库初始化向导、标准质量评分、轻量影响分析、AI contract fixtures、按需 AI Context、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议和 TODO 到 OpenSpec 交接。
+1. P6-4 业务仓库 `dataspec init` 初始化向导已完成第一版，下一步推进 P6-5 标准字段质量评分与修复建议。
+2. P6 后续继续补标准质量评分、轻量影响分析、AI contract fixtures、按需 AI Context、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议和 TODO 到 OpenSpec 交接。
 3. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
@@ -17,7 +17,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，后续再提升初始化向导、质量评分、影响分析、AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索、OpenSpec 收口、AI 使用画像、标准契约版本和执行证据包。
+- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，后续再提升质量评分、影响分析、AI 契约稳定性、GitHub inline 实接、性能基线、前端回归、AI 可读诊断、字段检索、OpenSpec 收口、AI 使用画像、标准契约版本和执行证据包。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -124,12 +124,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：第一版不内置外部 LLM 调用，不保存第三方 API key，不做长文本会话管理；CLI/MCP 查询命令留给 P6-11 工作流模板继续增强。
 
 ### P6-4：业务仓库 `dataspec init` 初始化向导
-- 状态：待办。
+- 状态：已完成第一版，CLI 已新增 `init`，支持生成 `.dataspec/config.json`、`.dataspec/README.md`、可选 `AGENTS.md` marker 片段，并在完成后运行轻量 `doctor`。
 - 为什么做：让 AI 在真实业务仓库使用 DataSpec 时，第一步应该是把 `.dataspec/config.json`、默认扫描路径和 AGENTS 片段配置好；现在这些需要人工拼接。
 - 已有基础：已有 `.dataspec/config.json` 读取、`dataspec doctor`、AI Context 导出、AGENTS fragment 和 CLI/MCP。
-- 缺口：缺少一条可交互或可参数化的初始化命令，把项目 ID、服务地址、默认路径、token 使用方式和推荐脚本一次性落到业务仓库。
-- 落地产物：新增 `dataspec init` CLI 命令；生成或更新 `.dataspec/config.json`、`.dataspec/README.md`、可选 `AGENTS.md` 片段和常用命令示例；完成后自动运行 `dataspec doctor`。
-- 验收标准：在任意业务仓库执行初始化后，AI agent 能直接通过 CLI/MCP 读取项目标准；重复执行不会覆盖用户手写配置，除非显式确认或使用 `--force`。
+- 已完成能力：新增参数化 `dataspec init` CLI 命令；支持 `--project`、`--server`、多次 `--default-path`、`--with-agents`、`--force` 和 `--format text|json`；重复执行默认跳过已有文件，`--force` 仅覆盖 DataSpec 管理内容。
+- 验收标准：在任意业务仓库执行初始化后，AI agent 能直接通过 CLI/MCP 读取项目标准；重复执行不会覆盖用户手写配置，除非显式使用 `--force`；初始化输出包含写入/跳过文件和 doctor 检查结果。
 - 边界：不修改业务代码，不自动提交业务仓库，不把明文 token 写入可提交文件。
 
 ### P6-5：标准字段质量评分与修复建议

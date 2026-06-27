@@ -49,7 +49,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 字段推荐 API/CLI/MCP。
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
-- CLI 支持环境自检 `doctor`、单文件 lint、批量 `lint-files`、PR 评论式 `review-pr`、AI Context 导出、字段推荐和 DDL 生成。
+- CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、单文件 lint、批量 `lint-files`、PR 评论式 `review-pr`、AI Context 导出、字段推荐和 DDL 生成。
 - MCP Server 暴露 DataSpec resources、prompts 和核心 tools。
 - GitHub Actions 示例支持 SQL 批量校验和 PR Review 评论。
 
@@ -234,7 +234,22 @@ VALUES ('default-cli', '<hash>', 'alice', '1,2');
 
 ## CLI
 
-第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`。在业务仓库中可放置 `.dataspec/config.json`，CLI 会从当前目录向上查找该文件；显式命令行参数优先于配置文件：
+第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`。在业务仓库中可运行 `init` 生成 `.dataspec/config.json`、`.dataspec/README.md`，并可选写入带 marker 的 `AGENTS.md` 片段：
+
+```bash
+# 初始化业务仓库接入配置，完成后会自动运行一次轻量 doctor
+node tools/dataspec-cli.mjs init --project 1 --server http://localhost:8090 --default-path db/migrations --default-path sql --with-agents
+
+# 输出 AI/CI 可解析的初始化结果；已有文件默认跳过
+node tools/dataspec-cli.mjs init --project 1 --format json
+
+# 明确需要覆盖 DataSpec 管理文件时使用 --force
+node tools/dataspec-cli.mjs init --project 1 --force --with-agents
+```
+
+`init` 默认不覆盖已有 `.dataspec/config.json`、`.dataspec/README.md` 或 `AGENTS.md` 中的 DataSpec marker 片段，传 `--force` 才会覆盖 DataSpec 管理内容。初始化不会把明文 API token 写入可提交文件；安全模式下继续使用 `DATASPEC_TOKEN`、`--dataspec-token` 或本地忽略配置传递 token。
+
+也可以手写 `.dataspec/config.json`，CLI 会从当前目录向上查找该文件；显式命令行参数优先于配置文件：
 
 ```json
 {
@@ -423,6 +438,7 @@ data-spec/
 - [x] 字段推荐 API/CLI/MCP
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
 - [x] AI Context zip 导出和业务项目 `.dataspec/` 约定
+- [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
 - [x] AI 回放记录，支持查看 Prompt、lint/fixedSql、DDL 预览的输入输出和标准快照
 - [x] Markdown/HTML 数据字典增强和 Mermaid ERD 输出

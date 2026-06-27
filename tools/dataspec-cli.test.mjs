@@ -693,6 +693,278 @@ test('doctor invalid format prints stderr and returns 2', async () => {
   assert.equal(io.stdout, '')
 })
 
+test('init creates dataspec files and prints json doctor result', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-init-'))
+  try {
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    await mkdir(path.join(dir, 'db', 'migrations'), { recursive: true })
+    const fetchFn = createReadyDoctorFetch('http://dataspec.local', 7)
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'init',
+      '--project',
+      '7',
+      '--server',
+      'http://dataspec.local/',
+      '--default-path',
+      'sql',
+      '--default-path',
+      'db/migrations',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    const config = JSON.parse(await readFile(path.join(dir, '.dataspec', 'config.json'), 'utf8'))
+    const readme = await readFile(path.join(dir, '.dataspec', 'README.md'), 'utf8')
+    const output = JSON.parse(io.stdout)
+    assert.equal(code, 0)
+    assert.deepEqual(config, {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      defaultPaths: ['sql', 'db/migrations']
+    })
+    assert.equal('apiToken' in config, false)
+    assert.match(readme, /DATASPEC_TOKEN/)
+    assert.equal(output.ok, true)
+    assert.equal(output.configPath, path.join(dir, '.dataspec', 'config.json'))
+    assert.deepEqual(output.writtenFiles.sort(), [
+      path.join(dir, '.dataspec', 'README.md'),
+      path.join(dir, '.dataspec', 'config.json')
+    ].sort())
+    assert.deepEqual(output.skippedFiles, [])
+    assert.equal(output.doctor.projectId, 7)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('init skips existing files by default and force overwrites managed files', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-init-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    const configPath = path.join(dir, '.dataspec', 'config.json')
+    const readmePath = path.join(dir, '.dataspec', 'README.md')
+    await writeFile(configPath, JSON.stringify({ projectId: 7, server: 'http://old.local', defaultPaths: ['sql'] }), 'utf8')
+    await writeFile(readmePath, 'custom readme', 'utf8')
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'init',
+      '--project',
+      '8',
+      '--server',
+      'http://new.local',
+      '--format',
+      'json'
+    ], io, createReadyDoctorFetch('http://new.local', 8))
+
+    const output = JSON.parse(io.stdout)
+    assert.equal(code, 0)
+    assert.deepEqual(JSON.parse(await readFile(configPath, 'utf8')), {
+      projectId: 7,
+      server: 'http://old.local',
+      defaultPaths: ['sql']
+    })
+    assert.equal(await readFile(readmePath, 'utf8'), 'custom readme')
+    assert.deepEqual(output.writtenFiles, [])
+    assert.deepEqual(output.skippedFiles.sort(), [configPath, readmePath].sort())
+
+    const forceIo = createIo('', dir)
+    const forceCode = await runCli([
+      'init',
+      '--project',
+      '8',
+      '--server',
+      'http://new.local',
+      '--default-path',
+      'sql',
+      '--force',
+      '--format',
+      'json'
+    ], forceIo, createReadyDoctorFetch('http://new.local', 8))
+
+    assert.equal(forceCode, 0)
+    assert.deepEqual(JSON.parse(await readFile(configPath, 'utf8')), {
+      projectId: 8,
+      server: 'http://new.local',
+      defaultPaths: ['sql']
+    })
+    assert.match(await readFile(readmePath, 'utf8'), /DataSpec 初始化/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('init with agents writes marker and replaces only with force', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-init-'))
+  try {
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    const agentsPath = path.join(dir, 'AGENTS.md')
+    const firstIo = createIo('', dir)
+
+    const firstCode = await runCli([
+      'init',
+      '--project',
+      '7',
+      '--server',
+      'http://dataspec.local',
+      '--default-path',
+      'sql',
+      '--with-agents',
+      '--format',
+      'json'
+    ], firstIo, createReadyDoctorFetch('http://dataspec.local', 7))
+
+    const firstAgents = await readFile(agentsPath, 'utf8')
+    assert.equal(firstCode, 0)
+    assert.match(firstAgents, /dataspec-agents:start/)
+    assert.match(firstAgents, /project 7/)
+
+    const secondIo = createIo('', dir)
+    await runCli([
+      'init',
+      '--project',
+      '8',
+      '--server',
+      'http://dataspec.local',
+      '--with-agents',
+      '--format',
+      'json'
+    ], secondIo, createReadyDoctorFetch('http://dataspec.local', 8))
+    const secondAgents = await readFile(agentsPath, 'utf8')
+    assert.match(secondAgents, /project 7/)
+    assert.doesNotMatch(secondAgents, /project 8/)
+
+    const forceIo = createIo('', dir)
+    await runCli([
+      'init',
+      '--project',
+      '8',
+      '--server',
+      'http://dataspec.local',
+      '--default-path',
+      'sql',
+      '--with-agents',
+      '--force',
+      '--format',
+      'json'
+    ], forceIo, createReadyDoctorFetch('http://dataspec.local', 8))
+    const forcedAgents = await readFile(agentsPath, 'utf8')
+    assert.match(forcedAgents, /project 8/)
+    assert.equal((forcedAgents.match(/dataspec-agents:start/g) ?? []).length, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('init never writes dataspec token to generated files or output', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-init-'))
+  try {
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    const secretToken = 'ds_secret_token_should_not_be_written'
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'init',
+      '--project',
+      '7',
+      '--server',
+      'http://dataspec.local',
+      '--default-path',
+      'sql',
+      '--with-agents',
+      '--dataspec-token',
+      secretToken,
+      '--format',
+      'json'
+    ], io, createReadyDoctorFetch('http://dataspec.local', 7))
+
+    const generatedText = [
+      await readFile(path.join(dir, '.dataspec', 'config.json'), 'utf8'),
+      await readFile(path.join(dir, '.dataspec', 'README.md'), 'utf8'),
+      await readFile(path.join(dir, 'AGENTS.md'), 'utf8'),
+      io.stdout,
+      io.stderr
+    ].join('\n')
+    assert.equal(code, 0)
+    assert.doesNotMatch(generatedText, new RegExp(secretToken))
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('init rejects incomplete agents marker', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-init-'))
+  try {
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    await writeFile(path.join(dir, 'AGENTS.md'), '<!-- dataspec-agents:start -->\n旧片段', 'utf8')
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'init',
+      '--project',
+      '7',
+      '--server',
+      'http://dataspec.local',
+      '--default-path',
+      'sql',
+      '--with-agents',
+      '--format',
+      'json'
+    ], io, createReadyDoctorFetch('http://dataspec.local', 7))
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /marker 不完整/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('init rejects repeated single-value options with readable error', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-init-'))
+  try {
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'init',
+      '--project',
+      '7',
+      '--project',
+      '8'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /参数不可重复: --project/)
+    assert.equal(io.stdout, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('init requires project id when config is absent', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-init-'))
+  try {
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli(['init'], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /需要提供 --project <id>/)
+    assert.equal(io.stdout, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('invalid arguments print stderr and return 2', async () => {
   const io = createIo()
   const fetchFn = async () => {
@@ -705,6 +977,35 @@ test('invalid arguments print stderr and return 2', async () => {
   assert.match(io.stderr, /未知参数: --formta/)
   assert.equal(io.stdout, '')
 })
+
+function createReadyDoctorFetch(server, projectId) {
+  return async (url) => {
+    if (url === `${server}/api-docs`) {
+      return { ok: true, status: 200, json: async () => ({ openapi: '3.0.1' }) }
+    }
+    if (url === `${server}/api/auth/me`) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: { operatorName: 'cli-test' }
+        })
+      }
+    }
+    if (url === `${server}/api/projects/${projectId}`) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: { id: projectId, name: `project ${projectId}` }
+        })
+      }
+    }
+    throw new Error(`unexpected fetch: ${url}`)
+  }
+}
 
 function createIo(stdin = '', cwd = process.cwd()) {
   return {

@@ -12,6 +12,9 @@ const TOOLS_DIR = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.dirname(TOOLS_DIR)
 const DATASPEC_WEB_DIR = path.join(REPO_ROOT, 'dataspec-web')
 const OPENAPI_SCHEMA_PATH = path.join(DATASPEC_WEB_DIR, 'src', 'api', 'schema.ts')
+const DEFAULT_INIT_PATHS = ['sql', 'db/migrations']
+const DATASPEC_AGENTS_START = '<!-- dataspec-agents:start -->'
+const DATASPEC_AGENTS_END = '<!-- dataspec-agents:end -->'
 const SKIPPED_SCAN_DIRECTORIES = new Set([
   '.git',
   '.idea',
@@ -49,6 +52,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'generate-ddl') {
       return await runGenerateDdl(rest, io, fetchFn)
+    }
+    if (command === 'init') {
+      return await runInit(rest, io, fetchFn)
     }
     if (command === 'doctor') {
       return await runDoctor(rest, io, fetchFn)
@@ -230,31 +236,7 @@ async function runDoctor(args, io, fetchFn) {
   if (format !== 'text' && format !== 'json') {
     throw new Error('doctor 当前仅支持 --format text 或 json')
   }
-  const server = normalizeServer(options.server ?? config.server)
-  const projectId = options.project || config.projectId ? parseProjectId(options.project ?? config.projectId) : undefined
-  const apiToken = resolveDataSpecToken(options, config)
-  const checks = []
-
-  checks.push(buildConfigCheck(config))
-  const apiDocsResult = await checkApiDocs(server, fetchFn, apiToken)
-  checks.push(apiDocsResult.check)
-  checks.push(await checkAuth(server, fetchFn, apiToken))
-  checks.push(await checkProject(server, fetchFn, projectId, apiToken))
-  checks.push(await checkDefaultPaths(config))
-  checks.push(await checkOpenapiStatus({
-    server,
-    apiDocsReachable: apiDocsResult.check.status === 'pass',
-    checkDrift: Boolean(options['check-openapi']),
-    runDriftCheck: io.checkOpenapiDrift
-  }))
-
-  const result = {
-    ok: checks.every((check) => check.status !== 'fail'),
-    server,
-    projectId: projectId ?? null,
-    configPath: config.configPath,
-    checks
-  }
+  const result = await buildDoctorResult({ config, options, io, fetchFn })
   if (format === 'json') {
     io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
   } else {
@@ -263,11 +245,72 @@ async function runDoctor(args, io, fetchFn) {
   return result.ok ? 0 : 1
 }
 
-function parseArgs(args, allowedOptions, flagOptions = []) {
+async function runInit(args, io, fetchFn) {
+  const { positional, options } = parseArgs(
+    args,
+    ['project', 'server', 'default-path', 'format', 'dataspec-token'],
+    ['force', 'with-agents'],
+    ['default-path']
+  )
+  if (positional.length > 0) {
+    throw new Error(`init 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const format = options.format ?? 'text'
+  if (format !== 'text' && format !== 'json') {
+    throw new Error('init 当前仅支持 --format text 或 json')
+  }
+
+  const existingConfig = loadDataSpecConfig(cliCwd(io))
+  const rootDir = existingConfig.rootDir
+  const projectId = parseProjectId(options.project ?? existingConfig.projectId)
+  const server = normalizeServer(options.server ?? existingConfig.server ?? DEFAULT_SERVER)
+  const defaultPaths = resolveInitDefaultPaths(options['default-path'], existingConfig.defaultPaths)
+  const force = Boolean(options.force)
+  const configPath = path.join(rootDir, '.dataspec', 'config.json')
+  const readmePath = path.join(rootDir, '.dataspec', 'README.md')
+
+  const fileResults = []
+  fileResults.push(await writeInitFile(configPath, renderInitConfig(projectId, server, defaultPaths), force))
+  fileResults.push(await writeInitFile(readmePath, renderInitReadme({ projectId, server, defaultPaths }), force))
+  if (options['with-agents']) {
+    fileResults.push(await writeAgentsFragment(rootDir, renderAgentsFragment({ projectId, server, defaultPaths }), force))
+  }
+
+  const initializedConfig = loadDataSpecConfig(rootDir)
+  const doctor = await buildDoctorResult({
+    config: initializedConfig,
+    options: {
+      project: String(projectId),
+      server,
+      'dataspec-token': options['dataspec-token']
+    },
+    io,
+    fetchFn
+  })
+  const result = {
+    ok: doctor.ok,
+    rootDir,
+    configPath,
+    writtenFiles: fileResults.filter((item) => item.action === 'written').map((item) => item.path),
+    skippedFiles: fileResults.filter((item) => item.action === 'skipped').map((item) => item.path),
+    defaultPaths,
+    doctor
+  }
+
+  if (format === 'json') {
+    io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  } else {
+    io.writeOut(formatInitText(result))
+  }
+  return doctor.ok ? 0 : 1
+}
+
+function parseArgs(args, allowedOptions, flagOptions = [], repeatableOptions = []) {
   const positional = []
   const options = {}
   const allowedOptionSet = new Set(allowedOptions)
   const flagOptionSet = new Set(flagOptions)
+  const repeatableOptionSet = new Set(repeatableOptions)
   for (let i = 0; i < args.length; i += 1) {
     const token = args[i]
     if (!token.startsWith('--')) {
@@ -286,10 +329,45 @@ function parseArgs(args, allowedOptions, flagOptions = []) {
     if (!value || value.startsWith('--')) {
       throw new Error(`缺少参数值: ${token}`)
     }
-    options[name] = value
+    if (options[name] !== undefined && !repeatableOptionSet.has(name)) {
+      throw new Error(`参数不可重复: --${name}`)
+    }
+    if (repeatableOptionSet.has(name)) {
+      options[name] = [...(options[name] ?? []), value]
+    } else {
+      options[name] = value
+    }
     i += 1
   }
   return { positional, options }
+}
+
+async function buildDoctorResult({ config, options, io, fetchFn }) {
+  const server = normalizeServer(options.server ?? config.server)
+  const projectId = options.project || config.projectId ? parseProjectId(options.project ?? config.projectId) : undefined
+  const apiToken = resolveDataSpecToken(options, config)
+  const checks = []
+
+  checks.push(buildConfigCheck(config))
+  const apiDocsResult = await checkApiDocs(server, fetchFn, apiToken)
+  checks.push(apiDocsResult.check)
+  checks.push(await checkAuth(server, fetchFn, apiToken))
+  checks.push(await checkProject(server, fetchFn, projectId, apiToken))
+  checks.push(await checkDefaultPaths(config))
+  checks.push(await checkOpenapiStatus({
+    server,
+    apiDocsReachable: apiDocsResult.check.status === 'pass',
+    checkDrift: Boolean(options['check-openapi']),
+    runDriftCheck: io.checkOpenapiDrift
+  }))
+
+  return {
+    ok: checks.every((check) => check.status !== 'fail'),
+    server,
+    projectId: projectId ?? null,
+    configPath: config.configPath,
+    checks
+  }
 }
 
 function buildConfigCheck(config) {
@@ -432,6 +510,178 @@ function formatDoctorText(result) {
     lines.push(`[${check.status.toUpperCase()}] ${check.name}: ${check.message}`)
   }
   lines.push('', result.ok ? '结果: 可用' : '结果: 存在需要处理的问题', '')
+  return lines.join('\n')
+}
+
+function resolveInitDefaultPaths(rawValue, existingPaths = []) {
+  const requested = rawValue === undefined
+    ? []
+    : Array.isArray(rawValue) ? rawValue : [rawValue]
+  const source = requested.length > 0
+    ? requested
+    : existingPaths.length > 0 ? existingPaths : DEFAULT_INIT_PATHS
+  const paths = source
+    .map((item) => String(item).trim())
+    .filter(Boolean)
+  if (paths.length === 0) {
+    throw new Error('init 至少需要一个 defaultPath')
+  }
+  return [...new Set(paths)]
+}
+
+async function writeInitFile(filePath, content, force) {
+  if (await pathExists(filePath) && !force) {
+    return { path: filePath, action: 'skipped' }
+  }
+  await mkdir(path.dirname(filePath), { recursive: true })
+  await writeFile(filePath, content, 'utf8')
+  return { path: filePath, action: 'written' }
+}
+
+async function writeAgentsFragment(rootDir, fragment, force) {
+  const agentsPath = path.join(rootDir, 'AGENTS.md')
+  const block = `${DATASPEC_AGENTS_START}\n${fragment.trimEnd()}\n${DATASPEC_AGENTS_END}\n`
+  const current = await readTextIfExists(agentsPath)
+  if (current === null) {
+    await writeFile(agentsPath, block, 'utf8')
+    return { path: agentsPath, action: 'written' }
+  }
+
+  const startIndex = current.indexOf(DATASPEC_AGENTS_START)
+  const endIndex = current.indexOf(DATASPEC_AGENTS_END)
+  const hasStart = startIndex >= 0
+  const hasEnd = endIndex >= 0
+  if (hasStart !== hasEnd || (hasStart && endIndex < startIndex)) {
+    throw new Error('AGENTS.md 中 DataSpec marker 不完整，请手动修复后重试')
+  }
+  if (hasStart && !force) {
+    return { path: agentsPath, action: 'skipped' }
+  }
+  const nextContent = hasStart
+    ? replaceMarkedBlock(current, startIndex, endIndex, block)
+    : appendBlock(current, block)
+  await writeFile(agentsPath, nextContent, 'utf8')
+  return { path: agentsPath, action: 'written' }
+}
+
+function replaceMarkedBlock(content, startIndex, endIndex, block) {
+  const before = content.slice(0, startIndex).trimEnd()
+  const after = content.slice(endIndex + DATASPEC_AGENTS_END.length).trimStart()
+  return joinMarkdownBlocks(before, block.trimEnd(), after)
+}
+
+function appendBlock(content, block) {
+  return joinMarkdownBlocks(content.trimEnd(), block.trimEnd())
+}
+
+function joinMarkdownBlocks(...blocks) {
+  return `${blocks.filter(Boolean).join('\n\n')}\n`
+}
+
+async function readTextIfExists(filePath) {
+  try {
+    return await readFile(filePath, 'utf8')
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return null
+    }
+    throw error
+  }
+}
+
+async function pathExists(filePath) {
+  try {
+    await stat(filePath)
+    return true
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return false
+    }
+    throw error
+  }
+}
+
+function renderInitConfig(projectId, server, defaultPaths) {
+  return `${JSON.stringify({ projectId, server, defaultPaths }, null, 2)}\n`
+}
+
+function renderInitReadme({ projectId, server, defaultPaths }) {
+  return `# DataSpec 初始化
+
+本目录由 \`dataspec init\` 生成，供 DataSpec CLI、MCP 和 AI agent 在当前业务仓库读取数据库标准。
+
+## 当前配置
+
+- projectId: ${projectId}
+- server: ${server}
+- defaultPaths: ${defaultPaths.map((item) => `\`${item}\``).join(', ')}
+
+## 常用命令
+
+如果业务仓库没有 \`tools/dataspec-cli.mjs\`，请把下面示例替换为团队实际使用的 DataSpec CLI 路径或封装脚本。
+
+\`\`\`bash
+node tools/dataspec-cli.mjs doctor --format json
+node tools/dataspec-cli.mjs lint-files --format json
+node tools/dataspec-cli.mjs export-context --output dataspec-ai-context.zip
+\`\`\`
+
+## Token
+
+不要把明文 API token 写入可提交文件。需要安全模式访问时，优先在本机或 CI 中设置：
+
+\`\`\`bash
+export DATASPEC_TOKEN=ds_xxx
+\`\`\`
+
+也可以在单次命令中使用 \`--dataspec-token <token>\`。
+
+## 给 AI agent 的约定
+
+- 修改 SQL、migration 或 ORM entity 前，先运行 \`doctor\` 确认 DataSpec 可用。
+- 未显式传路径时，\`lint-files\` 会读取 \`.dataspec/config.json\` 的 \`defaultPaths\`。
+- 需要完整上下文时，运行 \`export-context\` 并让 AI 读取导出的 \`.dataspec/\` 内容。
+`
+}
+
+function renderAgentsFragment({ projectId, server, defaultPaths }) {
+  return `# DataSpec 数据库规范
+
+当前仓库已接入 DataSpec project ${projectId}（${server}）。
+
+在创建或修改数据库 schema、SQL migration、ORM entity 或数据字典前：
+
+- 先运行 \`node tools/dataspec-cli.mjs doctor --format json\`。
+- 对默认路径运行 \`node tools/dataspec-cli.mjs lint-files --format json\`。
+- 如果仓库没有 \`tools/dataspec-cli.mjs\`，先替换为团队实际使用的 DataSpec CLI 路径或封装脚本。
+- 默认扫描路径：${defaultPaths.map((item) => `\`${item}\``).join(', ')}。
+- 安全模式下使用 \`DATASPEC_TOKEN\` 或 \`--dataspec-token\`，不要把明文 token 写入仓库。
+- 不确定字段命名时，先用 \`suggest-field\` 或导出的 AI Context 查找标准字段。`
+}
+
+function formatInitText(result) {
+  const lines = [
+    'DataSpec Init',
+    `root: ${result.rootDir}`,
+    `config: ${result.configPath}`,
+    ''
+  ]
+  if (result.writtenFiles.length > 0) {
+    lines.push('已写入:')
+    for (const filePath of result.writtenFiles) {
+      lines.push(`  - ${filePath}`)
+    }
+    lines.push('')
+  }
+  if (result.skippedFiles.length > 0) {
+    lines.push('已跳过:')
+    for (const filePath of result.skippedFiles) {
+      lines.push(`  - ${filePath}`)
+    }
+    lines.push('')
+  }
+  lines.push(formatDoctorText(result.doctor).trimEnd())
+  lines.push('', '下一步:', '  - 设置 DATASPEC_TOKEN（如果后端开启安全模式）', '  - node tools/dataspec-cli.mjs lint-files --format json', '')
   return lines.join('\n')
 }
 
@@ -770,6 +1020,7 @@ Usage:
   node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
   node tools/dataspec-cli.mjs doctor [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
 
 Options:
@@ -777,6 +1028,7 @@ Options:
   --server  可由 .dataspec/config.json 的 server 提供
   --dataspec-token 可由 .dataspec/config.json 的 apiToken 或 DATASPEC_TOKEN 环境变量提供
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
+  init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   doctor 默认做轻量 OpenAPI 状态检查；传 --check-openapi 时执行完整 schema 漂移检查
 `
 }
