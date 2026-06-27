@@ -51,6 +51,46 @@ export interface FieldQualityReport {
   fields?: FieldQualityItem[]
 }
 
+export type FieldImpactSeverity = 'HIGH' | 'WARNING' | 'INFO'
+export type FieldImpactType = 'TEMPLATE' | 'IMPORT_SOURCE' | 'SQL_CHECK' | 'STANDARD_SNAPSHOT' | 'CODE_SET'
+
+export interface FieldEditWarning {
+  attribute?: string
+  severity?: FieldImpactSeverity
+  message?: string
+}
+
+export interface FieldImpactItem {
+  impactType?: FieldImpactType
+  severity?: FieldImpactSeverity
+  sourceId?: number
+  sourceName?: string
+  count?: number
+  possibleReference?: boolean
+  description?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface FieldImpactSummary {
+  totalImpactCount?: number
+  templateImpactCount?: number
+  importSourceImpactCount?: number
+  sqlCheckImpactCount?: number
+  snapshotImpactCount?: number
+  codeSetImpactCount?: number
+  warningCount?: number
+}
+
+export interface FieldImpactReport {
+  projectId?: number
+  fieldId?: number
+  fieldName?: string
+  displayName?: string
+  summary?: FieldImpactSummary
+  impacts?: FieldImpactItem[]
+  editWarnings?: FieldEditWarning[]
+}
+
 export type RuleConfig = Schemas['RuleConfig']
 export type RuleConfigReq = Schemas['RuleConfigReq']
 export type LintRequest = Schemas['LintRequest']

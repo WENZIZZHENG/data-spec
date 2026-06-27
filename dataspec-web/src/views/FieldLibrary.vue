@@ -71,8 +71,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="comment" label="注释" min-width="220" show-overflow-tooltip />
-        <el-table-column label="操作" width="210" fixed="right">
+        <el-table-column label="操作" width="250" fixed="right">
           <template #default="{ row }">
+            <el-button text type="primary" @click="openImpactDialog(row)">影响</el-button>
             <el-button text type="primary" @click="openSourceDialog(row)">来源</el-button>
             <el-button text type="primary" @click="openEditDialog(row)">编辑</el-button>
             <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
@@ -243,6 +244,63 @@
         <el-table-column prop="source.comment" label="原注释" min-width="180" show-overflow-tooltip />
       </el-table>
     </el-dialog>
+
+    <el-dialog v-model="impactDialogVisible" :title="impactDialogTitle" width="860px">
+      <el-skeleton v-if="impactLoading" :rows="5" animated />
+      <template v-else-if="impactReport">
+        <el-alert
+          v-if="impactReport.editWarnings?.length"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="impact-alert"
+          :title="`关注关键属性：${warningSummaryText(impactReport.editWarnings)}`"
+        />
+        <div class="impact-summary">
+          <div class="impact-metric">
+            <span>总影响</span>
+            <strong>{{ impactReport.summary?.totalImpactCount ?? 0 }}</strong>
+          </div>
+          <div class="impact-metric">
+            <span>模板</span>
+            <strong>{{ impactReport.summary?.templateImpactCount ?? 0 }}</strong>
+          </div>
+          <div class="impact-metric">
+            <span>导入来源</span>
+            <strong>{{ impactReport.summary?.importSourceImpactCount ?? 0 }}</strong>
+          </div>
+          <div class="impact-metric">
+            <span>SQL</span>
+            <strong>{{ impactReport.summary?.sqlCheckImpactCount ?? 0 }}</strong>
+          </div>
+          <div class="impact-metric">
+            <span>快照</span>
+            <strong>{{ impactReport.summary?.snapshotImpactCount ?? 0 }}</strong>
+          </div>
+        </div>
+        <el-table :data="impactReport.impacts ?? []" stripe empty-text="暂无已知影响">
+          <el-table-column label="类型" width="120">
+            <template #default="{ row }">
+              <el-tag size="small" :type="impactSeverityTagType(row.severity)">
+                {{ impactTypeLabel(row.impactType) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="来源" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.sourceName || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="数量" width="82">
+            <template #default="{ row }">{{ row.count ?? 0 }}</template>
+          </el-table-column>
+          <el-table-column label="说明" min-width="320" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span>{{ row.description || '-' }}</span>
+              <el-tag v-if="row.possibleReference" class="possible-tag" size="small" type="info">疑似</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -251,9 +309,24 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
-import { createField, deleteField, getField, listFieldSources, pageFields, updateField } from '@/api/field'
+import {
+  createField,
+  deleteField,
+  getField,
+  getFieldImpactReport,
+  listFieldSources,
+  pageFields,
+  updateField
+} from '@/api/field'
 import { useProjectStore } from '@/stores/project'
-import type { Field, FieldReq, FieldSourceDetail, PageResult } from '@/types'
+import {
+  criticalFieldChanged,
+  fieldImpactSummaryText,
+  impactSeverityTagType,
+  impactTypeLabel,
+  warningSummaryText
+} from '@/utils/fieldImpactDisplay'
+import type { Field, FieldImpactReport, FieldReq, FieldSourceDetail, PageResult } from '@/types'
 
 const projectStore = useProjectStore()
 const route = useRoute()
@@ -263,10 +336,14 @@ const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const sourceDialogVisible = ref(false)
+const impactDialogVisible = ref(false)
 const editingField = ref<Field | null>(null)
 const sourceField = ref<Field | null>(null)
+const impactField = ref<Field | null>(null)
 const fieldSources = ref<FieldSourceDetail[]>([])
 const sourceLoading = ref(false)
+const impactLoading = ref(false)
+const impactReport = ref<FieldImpactReport | null>(null)
 const formRef = ref<FormInstance>()
 const openedRouteFieldId = ref<number | null>(null)
 
@@ -318,6 +395,9 @@ const rules: FormRules<FieldReq> = {
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
 const sourceDialogTitle = computed(() =>
   sourceField.value?.name ? `字段来源：${sourceField.value.name}` : '字段来源'
+)
+const impactDialogTitle = computed(() =>
+  impactField.value?.name ? `字段影响：${impactField.value.name}` : '字段影响'
 )
 const filteredFields = computed(() => {
   const keyword = fieldKeyword.value.trim().toLowerCase()
@@ -464,12 +544,30 @@ async function openSourceDialog(field: Field) {
   }
 }
 
+async function openImpactDialog(field: Field) {
+  if (!field.id || !projectStore.currentProjectId) {
+    return
+  }
+  impactField.value = field
+  impactReport.value = null
+  impactDialogVisible.value = true
+  impactLoading.value = true
+  try {
+    impactReport.value = await getFieldImpactReport(field.id, projectStore.currentProjectId)
+  } finally {
+    impactLoading.value = false
+  }
+}
+
 async function handleSubmit() {
   if (!projectStore.currentProjectId) {
     ElMessage.warning('请先选择项目')
     return
   }
   await formRef.value?.validate()
+  if (!(await confirmImpactBeforeSave())) {
+    return
+  }
   submitting.value = true
   try {
     const payload: FieldReq = {
@@ -487,6 +585,50 @@ async function handleSubmit() {
     await loadFields()
   } finally {
     submitting.value = false
+  }
+}
+
+async function confirmImpactBeforeSave() {
+  const projectId = projectStore.currentProjectId
+  const field = editingField.value
+  if (!projectId || !field?.id || !criticalFieldChanged(fieldCriticalValue(field), fieldCriticalValue(form))) {
+    return true
+  }
+  let report: FieldImpactReport
+  try {
+    report = await getFieldImpactReport(field.id, projectId)
+  } catch {
+    ElMessage.warning('影响分析暂不可用，已继续保存')
+    return true
+  }
+  if (!report.editWarnings?.length) {
+    return true
+  }
+  const warningText = warningSummaryText(report.editWarnings)
+  const summaryText = fieldImpactSummaryText(report.summary)
+  try {
+    await ElMessageBox.confirm(
+      `${summaryText}。将修改：${warningText}。`,
+      '影响提示',
+      {
+        type: 'warning',
+        confirmButtonText: '继续保存',
+        cancelButtonText: '返回编辑'
+      }
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+function fieldCriticalValue(field: Field | FieldReq) {
+  return {
+    name: field.name,
+    dataType: field.dataType,
+    status: field.status,
+    codeSetId: field.codeSetId,
+    sensitive: field.sensitive
   }
 }
 

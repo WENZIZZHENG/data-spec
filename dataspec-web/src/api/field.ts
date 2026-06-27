@@ -1,6 +1,7 @@
 import request from '@/api/request'
 import type {
   Field,
+  FieldImpactReport,
   FieldQualityReport,
   FieldReq,
   FieldSourceDetail,
@@ -28,6 +29,12 @@ export function suggestFields(projectId: number, query: string, limit = 5) {
 
 export function getFieldQualityReport(projectId: number) {
   return request.get<unknown, FieldQualityReport>('/fields/quality', {
+    params: { projectId }
+  })
+}
+
+export function getFieldImpactReport(id: number, projectId: number) {
+  return request.get<unknown, FieldImpactReport>(`/fields/${id}/impact`, {
     params: { projectId }
   })
 }
