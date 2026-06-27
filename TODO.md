@@ -5,7 +5,7 @@
 ## 下一步顺序
 
 1. P6-16 大字段库性能与可观测性基线已完成第一版，下一步推进 P6-17 前端关键流程 E2E 冒烟与回归门禁。
-2. P6 后续继续补前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板、多项目标准复用包、AI 写入安全策略、规则调试器、元数据增量缓存、CLI/MCP 兼容握手、前端类型化 API Client 和标准演练沙箱。
+2. P6 后续继续补前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板、多项目标准复用包、AI 写入安全策略、规则调试器、元数据增量缓存、CLI/MCP 兼容握手、前端类型化 API Client、标准演练沙箱、MCP/CLI 工具契约验收、业务对象关系图、派生字段规则、fixedSql 文件补丁、标准问答入口和规则模板 diff 包。
 3. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
@@ -756,6 +756,60 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：用户在保存规则或字段变更前能看到对 good/bad SQL、模板 DDL 和 AI Context 的影响；AI 可读取演练报告决定是否继续修改；演练不写入正式标准。
 - 边界：不做多人审批发布，不替代完整 CI；第一版只覆盖项目内 fixture、历史检查记录和用户手动粘贴样例。
 
+### P6-75：MCP/CLI 工具契约验收与示例调用库
+- 状态：待办。
+- 为什么做：DataSpec 优先给 AI 使用时，MCP tools 和 CLI 命令本身就是 AI 的“产品界面”；仅有 OpenAPI 类型还不够，工具入参、输出 schema、错误码、示例和安全边界都需要可回归验证。
+- 已有基础：已有 CLI、MCP、OpenAPI 防漂移、AI 输出契约稳定性、AI 能力清单、doctor 和 workflow recipes。
+- 缺口：MCP/CLI 的工具描述、示例调用、失败样例和安全 metadata 没有形成独立 fixture；工具变更后难以及时发现 AI prompt、AGENTS 片段或业务仓库脚本已不兼容。
+- 落地产物：新增 MCP/CLI contract fixtures；覆盖核心 tools/commands 的 name、description、inputSchema、outputShape、example、errorExamples、safetyMetadata 和 recommendedNextActions；提供一条本地验收命令。
+- 验收标准：修改 CLI/MCP 工具参数或输出字段时，契约测试能失败并提示更新示例；AI 可读取示例库选择正确工具；失败样例不包含 token/password/连接串。
+- 边界：不实现完整 MCP 兼容性测试平台，不要求所有历史命令一次性补齐；优先覆盖 lint、Context、reverse import、DDL、doctor 和字段检索高频入口。
+
+### P6-76：业务对象关系图与表模板依赖
+- 状态：待办。
+- 为什么做：AI 建表不仅需要字段标准，还需要知道用户、订单、支付、审计等业务对象之间的关系，否则容易生成孤立表、重复字段或错误外键。
+- 已有基础：已有表模板、DDL 生成、领域 Starter Kit、字段分组、字段影响分析、AI Context 和多项目标准复用包待办。
+- 缺口：字段标准和表模板之间缺少轻量关系模型；AI 无法稳定理解“订单表依赖用户表”“支付金额来自订单金额”“审计字段应应用到所有业务表”等模式。
+- 落地产物：新增业务对象/表模板关系描述；支持 entityName、tablePattern、requiredFields、optionalFields、relations、foreignKeyHints、auditFields、commonPitfalls 和 contextExport；前端可展示简易关系图。
+- 验收标准：生成订单、支付、用户等常见 DDL 时能引用对象关系和外键建议；AI Context 能按业务对象裁剪导出；关系图不要求依赖真实数据库外键。
+- 边界：不做完整 ER 建模工具，不强制所有项目维护业务对象，不自动改写已有表结构。
+
+### P6-77：派生字段、单位换算与口径规则
+- 状态：待办。
+- 为什么做：很多标准字段不是孤立存在的，例如 `amount_cent` 与 `amount_yuan`、`paid_at` 与 `paid_date`、`status_code` 与状态枚举；AI 如果不知道派生关系和单位口径，容易生成混用字段。
+- 已有基础：已有字段值格式与校验样例库待办、枚举/码表、字段质量评分、AI Context、DDL 生成和字段推荐。
+- 缺口：字段之间缺少 derivedFrom、unitConversion、aggregationRule、timeGranularity 和 sourceOfTruth 等结构化关系；质量检查也无法提示口径混用。
+- 落地产物：新增派生字段规则模型或字段扩展；支持源字段、转换表达式说明、单位、精度、时间粒度、枚举映射、推荐使用场景和反例；导出到 AI Context 并纳入质量评分。
+- 验收标准：AI 能区分金额分/元、日期/时间戳、编码/展示名、原始值/派生值；DDL/Prompt 生成会提示首选字段和转换口径；测试覆盖典型金额和时间字段。
+- 边界：不执行真实数据计算，不替代数据血缘平台，不强制所有字段配置派生规则。
+
+### P6-78：fixedSql 文件级补丁应用与人工确认
+- 状态：待办。
+- 为什么做：SQL 校验已经能输出 fixedSql，但真实业务仓库里 AI 还需要把修复从页面或 CLI 结果安全落到文件；直接覆盖文件风险高，需要 diff、dry-run、人工确认和回退提示。
+- 已有基础：已有 fixedSql、fixedSql diff、SQL 定位范围、CLI lint-files/review-pr、AI 写入安全策略、任务卡和执行证据包待办。
+- 缺口：fixedSql 主要停留在展示和复制，缺少按文件生成 patch、预览冲突、确认应用、记录证据和失败恢复的标准流程。
+- 落地产物：新增 CLI 或前端文件补丁流程；输入 lint 结果和目标文件，输出 unified diff、conflictWarnings、applyCommand、dryRunResult、rollbackHint 和 evidenceRef；默认只 dry-run。
+- 验收标准：AI 可以先生成补丁并展示 diff，再由用户或显式命令确认应用；行号漂移或文件变更时拒绝静默覆盖；应用结果进入检查记录或执行证据包。
+- 边界：不自动提交业务仓库，不绕过用户确认，不处理所有复杂 SQL 重排；第一版只覆盖单文件或小批量文件。
+
+### P6-79：标准问答只读入口与证据引用
+- 状态：待办。
+- 为什么做：用户和 AI 经常只想问“手机号标准字段叫什么”“订单金额应该用哪个单位”“这个字段是否已废弃”，不一定要进入候选草案或 DDL 生成流程。
+- 已有基础：已有字段检索、业务术语表、AI 输出引用证据、生命周期状态、字段格式约束、AI Context 和 Prompt 生成。
+- 缺口：缺少一个只读、短回答、带证据的标准问答入口；AI 需要自己拼接搜索和解释，容易把候选字段说成确定标准。
+- 落地产物：新增标准问答 API/CLI/MCP 或前端搜索模式；输入自然语言问题，输出 answer、confidence、matchedFields、evidence、relatedRules、suggestedNextActions 和 unresolvedQuestions。
+- 验收标准：常见字段命名、单位、状态、废弃替代、敏感字段标记问题能返回可读答案和证据；低置信度时明确提示需要人工确认或进入候选 Inbox。
+- 边界：第一版不调用外部 LLM，不回答业务数据内容，不把问答结果直接写入标准库。
+
+### P6-80：规则与模板变更 diff 包
+- 状态：待办。
+- 为什么做：规则、表模板和 Prompt 模板会持续调整；如果只看保存后的结果，AI 和用户很难判断这次变更会影响哪些 SQL 检查、DDL 生成和 Context 输出。
+- 已有基础：已有规则配置、规则模板库、Prompt 模板版本化、标准变更演练沙箱、标准快照、执行证据包和 OpenSpec 归档待办。
+- 缺口：字段快照相对清晰，但规则/模板/Prompt 的变更 diff、兼容性说明、影响样例和回滚信息还没有统一结构。
+- 落地产物：新增规则/模板变更 diff 包；记录 before/after、changedParams、affectedRules、affectedTemplates、sampleResultDiff、compatibilityNotes、rollbackPlan 和 reviewChecklist。
+- 验收标准：调整一条规则参数或模板后，能看到命中样例和生成结果差异；AI 可读取 diff 包决定是否需要补测试或更新 Context；回滚说明不依赖人工记忆。
+- 边界：不做审批流，不替代 OpenSpec proposal，不要求所有历史模板补齐 diff；优先覆盖新变更。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -780,6 +834,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`pre-commit/pre-commit`](https://github.com/pre-commit/pre-commit)：本地变更钩子、按文件质量门禁和轻量开发工作流参考。
 - [`hashicorp/terraform`](https://github.com/hashicorp/terraform)：plan/apply、状态记录和 dry-run 风格的写入前演练参考。
 - [`Redocly/redocly-cli`](https://github.com/Redocly/redocly-cli)：OpenAPI lint、bundle 和契约治理参考。
+- [`Schemathesis/schemathesis`](https://github.com/schemathesis/schemathesis)：基于 OpenAPI 的契约测试和接口行为回归参考。
+- [`sqlmesh/sqlmesh`](https://github.com/TobikoData/sqlmesh)：数据模型依赖、plan/apply 和变更影响分析参考。
 - [`TanStack/query`](https://github.com/TanStack/query)：前端 server state、请求缓存、重试和错误状态收口参考。
 - [`gitleaks/gitleaks`](https://github.com/gitleaks/gitleaks)：敏感信息检测、日志脱敏和 secret 防泄漏参考。
 - [Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)：AI 应用接入 resources、prompts、tools 的协议基础。
