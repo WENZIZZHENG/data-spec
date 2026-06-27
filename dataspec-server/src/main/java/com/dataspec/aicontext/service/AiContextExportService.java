@@ -1,5 +1,7 @@
 package com.dataspec.aicontext.service;
 
+import com.dataspec.aireplay.model.AiJobRecordCreateReq;
+import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlLintService;
@@ -17,6 +19,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -37,8 +40,11 @@ import java.util.zip.ZipOutputStream;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AiContextExportService {
 
+    private static final String CREATE_TABLE_PROMPT_VERSION = "create-table-prompt@1";
+    private static final String FIX_SQL_PROMPT_VERSION = "fix-sql-prompt@1";
     private static final String PACKAGE_FILE_NAME = "dataspec-ai-context.zip";
     private static final int DATASPEC_CONTEXT_SCHEMA_VERSION = 1;
     private static final List<String> DEFAULT_REQUIRED_COLUMNS = List.of("id", "created_at", "updated_at", "is_deleted");
@@ -71,6 +77,7 @@ public class AiContextExportService {
     private final StandardSnapshotService standardSnapshotService;
     private final SqlLintService sqlLintService;
     private final ObjectMapper objectMapper;
+    private final AiJobRecordService aiJobRecordService;
 
     /**
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
@@ -220,7 +227,10 @@ public class AiContextExportService {
                 ? "请根据后续业务描述设计数据表。"
                 : businessDescription.trim();
         StandardSnapshotInfo snapshot = currentSnapshot(projectId);
-        return """
+        String fieldCatalogJson = generateFieldCatalogJson(projectId, snapshot);
+        String rulesYaml = generateRulesYaml(projectId, snapshot);
+        String databaseRules = generateDatabaseRules(projectId);
+        String prompt = """
                 # DataSpec 建表 Prompt
 
                 你是数据库设计助手。请严格依据 DataSpec 字段目录和命名规则生成 PostgreSQL DDL。
@@ -255,10 +265,21 @@ public class AiContextExportService {
                 - 必须包含必含列；新增非标准字段时说明命名理由和建议是否加入标准字段库。
                 """.formatted(
                 description,
-                generateFieldCatalogJson(projectId, snapshot),
-                generateRulesYaml(projectId, snapshot),
-                generateDatabaseRules(projectId)
+                fieldCatalogJson,
+                rulesYaml,
+                databaseRules
         );
+        recordPromptJob(
+                projectId,
+                "CREATE_TABLE_PROMPT",
+                "建表 Prompt",
+                description,
+                CREATE_TABLE_PROMPT_VERSION,
+                orderedMap("businessDescription", description),
+                orderedMap("prompt", prompt),
+                snapshot
+        );
+        return prompt;
     }
 
     /**
@@ -267,7 +288,10 @@ public class AiContextExportService {
     public String generateFixSqlPrompt(Long projectId, String sql) {
         LintResult lintResult = sqlLintService.lint(sql, projectId);
         StandardSnapshotInfo snapshot = currentSnapshot(projectId);
-        return """
+        String issuesJson = writePrettyJson(lintResult.getIssues());
+        String fieldCatalogJson = generateFieldCatalogJson(projectId, snapshot);
+        String rulesYaml = generateRulesYaml(projectId, snapshot);
+        String prompt = """
                 # DataSpec SQL 修正 Prompt
 
                 你是 DataSpec SQL Review 助手。请根据 lint 问题、字段目录和命名规则修正 SQL。
@@ -312,10 +336,82 @@ public class AiContextExportService {
                 lintResult.getErrorCount(),
                 lintResult.getWarningCount(),
                 lintResult.getSuggestionCount(),
-                writePrettyJson(lintResult.getIssues()),
-                generateFieldCatalogJson(projectId, snapshot),
-                generateRulesYaml(projectId, snapshot)
+                issuesJson,
+                fieldCatalogJson,
+                rulesYaml
         );
+        recordPromptJob(
+                projectId,
+                "FIX_SQL_PROMPT",
+                "SQL 修正 Prompt",
+                summary(sql),
+                FIX_SQL_PROMPT_VERSION,
+                orderedMap(
+                        "sql", sql,
+                        "lintSummary", lintSummary(lintResult)
+                ),
+                orderedMap("prompt", prompt),
+                snapshot
+        );
+        return prompt;
+    }
+
+    private void recordPromptJob(
+            Long projectId,
+            String jobType,
+            String title,
+            String inputSummary,
+            String promptVersion,
+            Map<String, Object> inputPayload,
+            Map<String, Object> outputPayload,
+            StandardSnapshotInfo snapshot
+    ) {
+        if (projectId == null) {
+            return;
+        }
+        try {
+            aiJobRecordService.create(new AiJobRecordCreateReq(
+                    projectId,
+                    jobType,
+                    title,
+                    inputSummary,
+                    promptVersion,
+                    "SUCCESS",
+                    inputPayload,
+                    outputPayload,
+                    snapshot == null ? null : snapshot.snapshotId(),
+                    snapshot == null ? null : snapshot.specVersion(),
+                    snapshot == null ? null : snapshot.specHash(),
+                    null
+            ));
+        } catch (Exception e) {
+            log.warn("保存 AI Prompt 回放记录失败: {}", e.getMessage());
+        }
+    }
+
+    private Map<String, Object> lintSummary(LintResult lintResult) {
+        return orderedMap(
+                "errorCount", lintResult.getErrorCount(),
+                "warningCount", lintResult.getWarningCount(),
+                "suggestionCount", lintResult.getSuggestionCount(),
+                "issues", lintResult.getIssues()
+        );
+    }
+
+    private Map<String, Object> orderedMap(Object... keyValues) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i < keyValues.length; i += 2) {
+            map.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return map;
+    }
+
+    private String summary(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String normalized = text.trim().replaceAll("\\s+", " ");
+        return normalized.length() <= 120 ? normalized : normalized.substring(0, 120);
     }
 
     private String writePrettyJson(Object value) {

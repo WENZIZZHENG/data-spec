@@ -45,6 +45,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、prompt、示例 SQL 和 `AGENTS.md.fragment`。
 - AI Context manifest、字段目录和规则文件携带标准快照版本与 hash；未创建快照时标记为 `unversioned`。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
+- AI 回放记录，支持查看 Prompt、SQL 检查修正和 DDL 预览的输入输出、promptVersion 与标准快照。
 - 字段推荐 API/CLI/MCP。
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
@@ -139,6 +140,19 @@ curl -X POST "http://localhost:8090/api/projects/1/standard-snapshots" \
 
 - `POST /api/ai-context/prompts/create-table`：传入 `projectId` 和 `businessDescription`，生成建表 Prompt。
 - `POST /api/ai-context/prompts/fix-sql`：传入 `projectId` 和 `sql`，先运行 DataSpec lint，再生成 SQL 修正 Prompt。
+
+## AI 回放
+
+前端“校验与生成 / AI 回放”展示当前项目最近的 AI 相关作业，包括建表 Prompt、SQL 修正 Prompt、SQL 检查修正和 DDL 预览。详情中可查看输入 payload、输出 payload、标准快照、prompt 模板版本、关联 SQL 检查记录，并复制回放 JSON 或查询命令。
+
+后端 API：
+
+```bash
+curl "http://localhost:8090/api/ai-jobs?projectId=1&current=1&size=10"
+curl "http://localhost:8090/api/ai-jobs/1"
+```
+
+第一版只记录 DataSpec 本地生成和检查链路，不内置外部 LLM 调用，不保存第三方 API key，不做长文本会话管理。
 
 ## 字段推荐
 
@@ -326,6 +340,7 @@ data-spec/
 ├── dataspec-server/          # Spring Boot 后端
 │   └── src/main/java/com/dataspec/
 │       ├── common/           # 通用：响应封装、异常处理、配置
+│       ├── aireplay/         # AI 作业回放记录
 │       ├── coverage/         # 字段覆盖率报告
 │       ├── project/          # 项目空间
 │       ├── field/            # 标准字段库
@@ -357,6 +372,7 @@ data-spec/
 | 模块 | 路径 | 说明 |
 |------|------|------|
 | project | /api/projects | 项目空间管理 |
+| aireplay | /api/ai-jobs | AI 生成与修复回放 |
 | coverage | /api/coverage | 字段覆盖率报告 |
 | field | /api/fields | 标准字段库 CRUD |
 | domain | /api/domains | 数据域管理 |
@@ -408,6 +424,7 @@ data-spec/
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
 - [x] AI Context zip 导出和业务项目 `.dataspec/` 约定
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
+- [x] AI 回放记录，支持查看 Prompt、lint/fixedSql、DDL 预览的输入输出和标准快照
 - [x] Markdown/HTML 数据字典增强和 Mermaid ERD 输出
 - [x] Excel `.xlsx` 字段/代码集导入导出与 dry-run 明细预览
 - [x] 标准变更日志和操作者记录

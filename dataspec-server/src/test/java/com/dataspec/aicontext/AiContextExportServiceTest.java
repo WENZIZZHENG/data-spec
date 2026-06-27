@@ -1,6 +1,11 @@
 package com.dataspec.aicontext;
 
 import com.dataspec.aicontext.service.AiContextExportService;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.dataspec.aireplay.entity.AiJobRecord;
+import com.dataspec.aireplay.model.AiJobRecordCreateReq;
+import com.dataspec.aireplay.model.AiJobRecordDetail;
+import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.enumdict.service.EnumDictService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
@@ -18,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipInputStream;
@@ -134,6 +140,25 @@ class AiContextExportServiceTest {
     }
 
     @Test
+    void generateCreateTablePrompt_recordsAiReplayJob() {
+        RecordingAiJobRecordService aiJobRecordService = new RecordingAiJobRecordService();
+        AiContextExportService service = createService(aiJobRecordService);
+
+        service.generateCreateTablePrompt(PROJECT_ID, "订单模块");
+
+        assertEquals(1, aiJobRecordService.created.size());
+        AiJobRecordCreateReq req = aiJobRecordService.created.get(0);
+        assertEquals(PROJECT_ID, req.projectId());
+        assertEquals("CREATE_TABLE_PROMPT", req.jobType());
+        assertEquals("create-table-prompt@1", req.promptVersion());
+        assertEquals(6L, req.standardSnapshotId());
+        assertEquals("v2026.06.24", req.standardSnapshotVersion());
+        assertEquals("hash123", req.standardSnapshotHash());
+        assertTrue(req.inputPayload().toString().contains("订单模块"));
+        assertTrue(req.outputPayload().toString().contains("DataSpec 建表 Prompt"));
+    }
+
+    @Test
     void generateFixSqlPrompt_containsLintIssuesAndOriginalSql() {
         AiContextExportService service = createService();
         String sql = "CREATE TABLE UserOrder (user_id bigint);";
@@ -146,13 +171,43 @@ class AiContextExportServiceTest {
         assertTrue(prompt.contains("修正后的 SQL"));
     }
 
+    @Test
+    void generateFixSqlPrompt_recordsAiReplayJob() {
+        RecordingAiJobRecordService aiJobRecordService = new RecordingAiJobRecordService();
+        AiContextExportService service = createService(aiJobRecordService);
+        String sql = "CREATE TABLE UserOrder (user_id bigint);";
+
+        service.generateFixSqlPrompt(PROJECT_ID, sql);
+
+        assertTrue(aiJobRecordService.created.size() >= 2);
+        AiJobRecordCreateReq req = aiJobRecordService.created.stream()
+                .filter(item -> "FIX_SQL_PROMPT".equals(item.jobType()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("FIX_SQL_PROMPT", req.jobType());
+        assertEquals("fix-sql-prompt@1", req.promptVersion());
+        assertTrue(req.inputPayload().toString().contains("UserOrder"));
+        assertTrue(req.outputPayload().toString().contains("DataSpec SQL 修正 Prompt"));
+    }
+
     private AiContextExportService createService() {
         StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
         when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
-        return createService(standardSnapshotService);
+        return createService(standardSnapshotService, new NoopAiJobRecordService());
+    }
+
+    private AiContextExportService createService(AiJobRecordService aiJobRecordService) {
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
+        return createService(standardSnapshotService, aiJobRecordService);
     }
 
     private AiContextExportService createService(StandardSnapshotService standardSnapshotService) {
+        return createService(standardSnapshotService, new NoopAiJobRecordService());
+    }
+
+    private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
+                                                 AiJobRecordService aiJobRecordService) {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         FieldService fieldService = mock(FieldService.class);
         EnumDictService enumDictService = mock(EnumDictService.class);
@@ -170,7 +225,8 @@ class AiContextExportServiceTest {
                 List.of(new TableNameSnakeCaseRule()),
                 objectMapper,
                 new FixedSqlGenerator(),
-                sqlCheckRecordService
+                sqlCheckRecordService,
+                aiJobRecordService
         );
         return new AiContextExportService(
                 ruleConfigService,
@@ -178,7 +234,8 @@ class AiContextExportServiceTest {
                 enumDictService,
                 standardSnapshotService,
                 sqlLintService,
-                objectMapper
+                objectMapper,
+                aiJobRecordService
         );
     }
 
@@ -224,5 +281,34 @@ class AiContextExportServiceTest {
             }
         }
         return entries;
+    }
+
+    private static class NoopAiJobRecordService implements AiJobRecordService {
+        @Override
+        public AiJobRecord create(AiJobRecordCreateReq req) {
+            return new AiJobRecord();
+        }
+
+        @Override
+        public IPage<AiJobRecord> listByProject(Long projectId, String jobType, int current, int size) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AiJobRecordDetail getDetail(Long id) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private static class RecordingAiJobRecordService extends NoopAiJobRecordService {
+        final List<AiJobRecordCreateReq> created = new ArrayList<>();
+
+        @Override
+        public AiJobRecord create(AiJobRecordCreateReq req) {
+            created.add(req);
+            AiJobRecord record = new AiJobRecord();
+            record.setId((long) created.size());
+            return record;
+        }
     }
 }

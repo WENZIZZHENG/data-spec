@@ -1,18 +1,24 @@
 package com.dataspec.generator.service;
 
+import com.dataspec.aireplay.model.AiJobRecordCreateReq;
+import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.generator.model.DdlGenerateResult;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintResult;
+import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.template.entity.Template;
 import com.dataspec.template.entity.TemplateField;
 import com.dataspec.template.service.TemplateService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -21,6 +27,7 @@ import java.util.regex.Pattern;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DdlGeneratorService {
 
     private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("[a-z][a-z0-9_]*");
@@ -34,6 +41,7 @@ public class DdlGeneratorService {
     private final TemplateService templateService;
     private final SqlLintService sqlLintService;
     private final StandardSnapshotService standardSnapshotService;
+    private final AiJobRecordService aiJobRecordService;
 
     /**
      * 基于表模板生成 PostgreSQL CREATE TABLE DDL，并使用现有 lint 入口做自检。
@@ -64,7 +72,55 @@ public class DdlGeneratorService {
 
         String ddl = buildDdl(template, fields, normalizedTableName);
         LintResult lintResult = sqlLintService.lint(ddl, projectId);
-        return new DdlGenerateResult(ddl, lintResult, standardSnapshotService.getCurrentSnapshot(projectId));
+        StandardSnapshotInfo snapshot = standardSnapshotService.getCurrentSnapshot(projectId);
+        recordDdlPreview(projectId, templateId, normalizedTableName, ddl, lintResult, snapshot);
+        return new DdlGenerateResult(ddl, lintResult, snapshot);
+    }
+
+    private void recordDdlPreview(
+            Long projectId,
+            Long templateId,
+            String tableName,
+            String ddl,
+            LintResult lintResult,
+            StandardSnapshotInfo snapshot
+    ) {
+        try {
+            aiJobRecordService.create(new AiJobRecordCreateReq(
+                    projectId,
+                    "DDL_PREVIEW",
+                    "DDL 预览",
+                    tableName,
+                    "ddl-preview@1",
+                    "SUCCESS",
+                    orderedMap(
+                            "templateId", templateId,
+                            "tableName", tableName
+                    ),
+                    orderedMap(
+                            "ddl", ddl,
+                            "lintSummary", orderedMap(
+                                    "errorCount", lintResult.getErrorCount(),
+                                    "warningCount", lintResult.getWarningCount(),
+                                    "suggestionCount", lintResult.getSuggestionCount()
+                            )
+                    ),
+                    snapshot == null ? null : snapshot.snapshotId(),
+                    snapshot == null ? null : snapshot.specVersion(),
+                    snapshot == null ? null : snapshot.specHash(),
+                    null
+            ));
+        } catch (Exception e) {
+            log.warn("保存 AI DDL 回放记录失败: {}", e.getMessage());
+        }
+    }
+
+    private Map<String, Object> orderedMap(Object... keyValues) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i < keyValues.length; i += 2) {
+            map.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return map;
     }
 
     private String buildDdl(Template template, List<TemplateField> fields, String tableName) {

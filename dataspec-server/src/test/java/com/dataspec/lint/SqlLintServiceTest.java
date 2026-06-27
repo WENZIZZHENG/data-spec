@@ -1,6 +1,10 @@
 package com.dataspec.lint;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.dataspec.aireplay.entity.AiJobRecord;
+import com.dataspec.aireplay.model.AiJobRecordCreateReq;
+import com.dataspec.aireplay.model.AiJobRecordDetail;
+import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.lint.engine.FixedSqlGenerator;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.engine.SqlParserService;
@@ -66,7 +70,8 @@ class SqlLintServiceTest {
                 ),
                 new ObjectMapper(),
                 new FixedSqlGenerator(),
-                recordService
+                recordService,
+                new NoopAiJobRecordService()
         );
 
         // 验收示例:含 create_time 且缺 created_at 等必备列
@@ -102,7 +107,8 @@ class SqlLintServiceTest {
                 ),
                 new ObjectMapper(),
                 new FixedSqlGenerator(),
-                recordService
+                recordService,
+                new NoopAiJobRecordService()
         );
 
         LintResult result = service.lint("""
@@ -167,7 +173,8 @@ class SqlLintServiceTest {
                 }),
                 new ObjectMapper(),
                 new FixedSqlGenerator(),
-                recordService
+                recordService,
+                new NoopAiJobRecordService()
         );
 
         LintResult result = service.lint("CREATE TABLE users (id bigint);", null);
@@ -180,14 +187,41 @@ class SqlLintServiceTest {
     }
 
     private SqlLintService newService(SqlCheckRecordService recordService) {
+        return newService(recordService, new NoopAiJobRecordService());
+    }
+
+    private SqlLintService newService(SqlCheckRecordService recordService, AiJobRecordService aiJobRecordService) {
         return new SqlLintService(
                 new SqlParserService(),
                 new EmptyRuleConfigService(),
                 List.of(new TableNameSnakeCaseRule()),
                 new ObjectMapper(),
                 new FixedSqlGenerator(),
-                recordService
+                recordService,
+                aiJobRecordService
         );
+    }
+
+    @Test
+    void lintRecordsAiReplayJobForProject() {
+        RecordingCheckRecordService recordService = new RecordingCheckRecordService();
+        RecordingAiJobRecordService aiJobRecordService = new RecordingAiJobRecordService();
+        SqlLintService service = newService(recordService, aiJobRecordService);
+
+        LintResult result = service.lint("""
+                CREATE TABLE UserOrder (
+                    id bigserial PRIMARY KEY
+                );
+                """, 1L);
+
+        assertNotNull(result.getFixedSql());
+        assertEquals(1, aiJobRecordService.created.size());
+        AiJobRecordCreateReq req = aiJobRecordService.created.get(0);
+        assertEquals("SQL_LINT_FIX", req.jobType());
+        assertEquals("sql-lint-fix@1", req.promptVersion());
+        assertEquals(7L, req.sqlCheckRecordId());
+        assertTrue(req.inputPayload().toString().contains("UserOrder"));
+        assertTrue(req.outputPayload().toString().contains("fixedSql"));
     }
 
     private static class EmptyRuleConfigService implements RuleConfigService {
@@ -233,6 +267,7 @@ class SqlLintServiceTest {
         public SqlCheckRecord save(Long projectId, String originalSql, LintResult result) {
             SqlCheckRecord record = new SqlCheckRecord();
             record.setProjectId(projectId);
+            record.setId(7L);
             record.setOriginalSql(originalSql);
             record.setFixedSql(result.getFixedSql());
             record.setErrorCount(result.getErrorCount());
@@ -261,6 +296,33 @@ class SqlLintServiceTest {
         @Override
         public List<LintIssue> parseIssues(SqlCheckRecord record) {
             return List.of();
+        }
+    }
+
+    private static class NoopAiJobRecordService implements AiJobRecordService {
+        @Override
+        public AiJobRecord create(AiJobRecordCreateReq req) {
+            return new AiJobRecord();
+        }
+
+        @Override
+        public IPage<AiJobRecord> listByProject(Long projectId, String jobType, int current, int size) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AiJobRecordDetail getDetail(Long id) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private static class RecordingAiJobRecordService extends NoopAiJobRecordService {
+        final List<AiJobRecordCreateReq> created = new ArrayList<>();
+
+        @Override
+        public AiJobRecord create(AiJobRecordCreateReq req) {
+            created.add(req);
+            return new AiJobRecord();
         }
     }
 }

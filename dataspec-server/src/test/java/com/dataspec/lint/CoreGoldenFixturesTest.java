@@ -1,6 +1,10 @@
 package com.dataspec.lint;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.dataspec.aireplay.entity.AiJobRecord;
+import com.dataspec.aireplay.model.AiJobRecordCreateReq;
+import com.dataspec.aireplay.model.AiJobRecordDetail;
+import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.FixedSqlGenerator;
@@ -136,7 +140,8 @@ class CoreGoldenFixturesTest {
                 rules,
                 objectMapper,
                 new FixedSqlGenerator(),
-                new NoopCheckRecordService());
+                new NoopCheckRecordService(),
+                new NoopAiJobRecordService());
     }
 
     private List<LintRule> commonRules() {
@@ -237,6 +242,23 @@ class CoreGoldenFixturesTest {
         @Override
         public List<LintIssue> parseIssues(SqlCheckRecord record) {
             return List.of();
+        }
+    }
+
+    private static class NoopAiJobRecordService implements AiJobRecordService {
+        @Override
+        public AiJobRecord create(AiJobRecordCreateReq req) {
+            return new AiJobRecord();
+        }
+
+        @Override
+        public IPage<AiJobRecord> listByProject(Long projectId, String jobType, int current, int size) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AiJobRecordDetail getDetail(Long id) {
+            throw new UnsupportedOperationException();
         }
     }
 }

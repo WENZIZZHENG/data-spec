@@ -1,6 +1,11 @@
 package com.dataspec.generator;
 
 import com.dataspec.common.exception.BizException;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.dataspec.aireplay.entity.AiJobRecord;
+import com.dataspec.aireplay.model.AiJobRecordCreateReq;
+import com.dataspec.aireplay.model.AiJobRecordDetail;
+import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.generator.model.DdlGenerateResult;
 import com.dataspec.generator.service.DdlGeneratorService;
 import com.dataspec.lint.engine.SqlLintService;
@@ -28,7 +33,8 @@ class DdlGeneratorServiceTest {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
         StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, standardSnapshotService);
+        RecordingAiJobRecordService aiJobRecordService = new RecordingAiJobRecordService();
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, standardSnapshotService, aiJobRecordService);
         LintResult lintResult = LintResult.of(List.of(), List.of());
         when(standardSnapshotService.getCurrentSnapshot(1L)).thenReturn(snapshotInfo());
         when(templateService.getById(10L)).thenReturn(template(10L, 1L, "订单模板", "用户'订单表"));
@@ -51,13 +57,20 @@ class DdlGeneratorServiceTest {
         assertTrue(ddl.contains("COMMENT ON TABLE user_order IS '用户''订单表';"));
         assertTrue(ddl.contains("COMMENT ON COLUMN user_order.order_no IS '订单''编号';"));
         verify(sqlLintService).lint(ddl, 1L);
+        assertEquals(1, aiJobRecordService.created.size());
+        AiJobRecordCreateReq req = aiJobRecordService.created.get(0);
+        assertEquals("DDL_PREVIEW", req.jobType());
+        assertEquals("ddl-preview@1", req.promptVersion());
+        assertEquals(6L, req.standardSnapshotId());
+        assertTrue(req.inputPayload().toString().contains("templateId=10"));
+        assertTrue(req.outputPayload().toString().contains("ddl="));
     }
 
     @Test
     void generateFromTemplate_rejectsTemplateFromAnotherProject() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class));
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class), new NoopAiJobRecordService());
         when(templateService.getById(10L)).thenReturn(template(10L, 2L, "订单模板", "用户订单表"));
 
         assertThrows(BizException.class, () -> service.generateFromTemplate(1L, 10L, "user_order"));
@@ -70,7 +83,7 @@ class DdlGeneratorServiceTest {
     void generateFromTemplate_rejectsUnsafeIdentifierBeforeLoadingTemplate() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class));
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class), new NoopAiJobRecordService());
 
         assertThrows(BizException.class, () -> service.generateFromTemplate(1L, 10L, "UserOrder"));
 
@@ -82,7 +95,7 @@ class DdlGeneratorServiceTest {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
         StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, standardSnapshotService);
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, standardSnapshotService, new NoopAiJobRecordService());
         when(standardSnapshotService.getCurrentSnapshot(1L)).thenReturn(snapshotInfo());
         when(templateService.getById(10L)).thenReturn(template(10L, 1L, "订单模板", "用户订单表"));
         when(templateService.listFields(10L)).thenReturn(List.of(
@@ -102,7 +115,7 @@ class DdlGeneratorServiceTest {
     void generateFromTemplate_rejectsTemplateWithoutFields() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class));
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class), new NoopAiJobRecordService());
         when(templateService.getById(10L)).thenReturn(template(10L, 1L, "订单模板", "用户订单表"));
         when(templateService.listFields(10L)).thenReturn(List.of());
 
@@ -115,7 +128,7 @@ class DdlGeneratorServiceTest {
     void generateFromTemplate_rejectsDataTypeThatCouldRenderExtraColumns() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class));
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class), new NoopAiJobRecordService());
         when(templateService.getById(10L)).thenReturn(template(10L, 1L, "订单模板", "用户订单表"));
         when(templateService.listFields(10L)).thenReturn(List.of(
                 field(1L, "order_no", "bigint, hacked text", false, null, "订单编号", 10)
@@ -130,7 +143,7 @@ class DdlGeneratorServiceTest {
     void generateFromTemplate_rejectsDefaultValueThatCouldRenderExtraColumns() {
         TemplateService templateService = mock(TemplateService.class);
         SqlLintService sqlLintService = mock(SqlLintService.class);
-        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class));
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, mock(StandardSnapshotService.class), new NoopAiJobRecordService());
         when(templateService.getById(10L)).thenReturn(template(10L, 1L, "订单模板", "用户订单表"));
         when(templateService.listFields(10L)).thenReturn(List.of(
                 field(1L, "order_no", "varchar(32)", false, "'PENDING', hacked text", "订单编号", 10)
@@ -165,5 +178,32 @@ class DdlGeneratorServiceTest {
         field.setComment(comment);
         field.setSortOrder(sortOrder);
         return field;
+    }
+
+    private static class NoopAiJobRecordService implements AiJobRecordService {
+        @Override
+        public AiJobRecord create(AiJobRecordCreateReq req) {
+            return new AiJobRecord();
+        }
+
+        @Override
+        public IPage<AiJobRecord> listByProject(Long projectId, String jobType, int current, int size) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AiJobRecordDetail getDetail(Long id) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private static class RecordingAiJobRecordService extends NoopAiJobRecordService {
+        final List<AiJobRecordCreateReq> created = new java.util.ArrayList<>();
+
+        @Override
+        public AiJobRecord create(AiJobRecordCreateReq req) {
+            created.add(req);
+            return new AiJobRecord();
+        }
     }
 }

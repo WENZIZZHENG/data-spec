@@ -67,6 +67,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'AI 规则导出' }
   },
   {
+    path: '/ai-replay',
+    name: 'AiReplay',
+    component: () => import('@/views/AiReplay.vue'),
+    meta: { title: 'AI 回放' }
+  },
+  {
     path: '/import-export',
     name: 'ImportExport',
     component: () => import('@/views/ImportExport.vue'),

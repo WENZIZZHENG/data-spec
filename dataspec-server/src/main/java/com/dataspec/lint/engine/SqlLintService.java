@@ -1,5 +1,8 @@
 package com.dataspec.lint.engine;
 
+import com.dataspec.aireplay.model.AiJobRecordCreateReq;
+import com.dataspec.aireplay.service.AiJobRecordService;
+import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.*;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.rule.entity.RuleConfig;
@@ -26,6 +29,7 @@ public class SqlLintService {
     private final ObjectMapper objectMapper;
     private final FixedSqlGenerator fixedSqlGenerator;
     private final SqlCheckRecordService sqlCheckRecordService;
+    private final AiJobRecordService aiJobRecordService;
     private final SqlIssueSourceSpanResolver sourceSpanResolver = new SqlIssueSourceSpanResolver();
     private final SqlDiffGenerator sqlDiffGenerator = new SqlDiffGenerator();
 
@@ -129,13 +133,64 @@ public class SqlLintService {
         result.setFixedSqlDiff(sqlDiffGenerator.generate(sql, fixedSql));
 
         // 落库检查记录(失败不阻断主流程,仅记录日志)
+        SqlCheckRecord record = null;
         try {
-            sqlCheckRecordService.save(projectId, sql, result);
+            record = sqlCheckRecordService.save(projectId, sql, result);
         } catch (Exception e) {
             log.warn("保存 SQL 检查记录失败: {}", e.getMessage());
         }
+        recordAiReplayJob(projectId, sql, result, record);
 
         return result;
+    }
+
+    private void recordAiReplayJob(Long projectId, String sql, LintResult result, SqlCheckRecord record) {
+        if (projectId == null) {
+            return;
+        }
+        try {
+            aiJobRecordService.create(new AiJobRecordCreateReq(
+                    projectId,
+                    "SQL_LINT_FIX",
+                    "SQL 检查与修正",
+                    summary(sql),
+                    "sql-lint-fix@1",
+                    "SUCCESS",
+                    orderedMap(
+                            "sql", sql
+                    ),
+                    orderedMap(
+                            "fixedSql", result.getFixedSql(),
+                            "fixedSqlDiff", result.getFixedSqlDiff(),
+                            "errorCount", result.getErrorCount(),
+                            "warningCount", result.getWarningCount(),
+                            "suggestionCount", result.getSuggestionCount(),
+                            "issues", result.getIssues()
+                    ),
+                    record == null ? null : record.getStandardSnapshotId(),
+                    record == null ? null : record.getStandardSnapshotVersion(),
+                    record == null ? null : record.getStandardSnapshotHash(),
+                    record == null ? null : record.getId()
+            ));
+        } catch (Exception e) {
+            log.warn("保存 AI SQL 回放记录失败: {}", e.getMessage());
+        }
+    }
+
+    private String summary(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String normalized = text.trim().replaceAll("\\s+", " ");
+        return normalized.length() <= 120 ? normalized : normalized.substring(0, 120);
+    }
+
+    private Map<String, Object> orderedMap(Object... keyValues) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i < keyValues.length; i += 2) {
+            map.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return map;
     }
 
     /**

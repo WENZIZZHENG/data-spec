@@ -72,6 +72,34 @@ export interface PageResult<T> {
   pages?: number
 }
 
+export interface AiJobRecord {
+  id?: number
+  projectId?: number
+  jobType?: string
+  title?: string
+  inputSummary?: string
+  promptVersion?: string
+  status?: string
+  inputPayloadJson?: string
+  outputPayloadJson?: string
+  sqlCheckRecordId?: number
+  standardSnapshotId?: number
+  standardSnapshotVersion?: string
+  standardSnapshotHash?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type AiJobRecordListItem = Omit<AiJobRecord, 'inputPayloadJson' | 'outputPayloadJson'>
+
+export interface AiJobRecordDetail {
+  record?: AiJobRecord
+  inputPayload?: unknown
+  outputPayload?: unknown
+  replayPayload?: unknown
+  replayCommand?: string
+}
+
 export interface R<T> {
   code?: number
   message?: string
