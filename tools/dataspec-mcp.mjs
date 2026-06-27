@@ -522,14 +522,74 @@ function normalizeOptionalText(value) {
 }
 
 async function readDataSpecJson(response) {
+  const payload = await readResponseJson(response)
   if (!response.ok) {
-    throw new JsonRpcError(-32000, `DataSpec 请求失败，HTTP ${response.status}`)
+    throw toDataSpecRpcError(payload, response.status)
   }
-  const payload = await response.json()
   if (payload?.code && payload.code !== 200) {
-    throw new JsonRpcError(-32000, payload.message || `DataSpec 返回错误 code=${payload.code}`)
+    throw toDataSpecRpcError(payload, response.status)
   }
   return payload?.data ?? payload
+}
+
+async function readResponseJson(response) {
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+function toDataSpecRpcError(payload, httpStatus) {
+  const message = payload?.message || `DataSpec 请求失败，HTTP ${httpStatus}`
+  return new JsonRpcError(-32000, message, {
+    dataspecError: normalizeDataSpecDiagnostic(payload?.error, httpStatus, message)
+  })
+}
+
+function normalizeDataSpecDiagnostic(error, httpStatus, message) {
+  if (error && typeof error === 'object') {
+    return {
+      code: String(error.code ?? 'DATASPEC_ERROR'),
+      category: String(error.category ?? 'DATASPEC'),
+      retryable: Boolean(error.retryable),
+      suggestedAction: String(error.suggestedAction ?? '查看 DataSpec 响应 message 并按提示修正请求。'),
+      docsRef: String(error.docsRef ?? 'README.md#验证'),
+      httpStatus
+    }
+  }
+  return fallbackDataSpecDiagnostic(httpStatus, message)
+}
+
+function fallbackDataSpecDiagnostic(httpStatus, message) {
+  if (httpStatus === 401) {
+    return {
+      code: 'AUTH_TOKEN_MISSING_OR_INVALID',
+      category: 'AUTH',
+      retryable: true,
+      suggestedAction: '提供有效的 API Token；CLI/MCP 可设置 DATASPEC_TOKEN 或 --dataspec-token。',
+      docsRef: 'README.md#安全基线',
+      httpStatus
+    }
+  }
+  if (httpStatus === 403) {
+    return {
+      code: 'PROJECT_ACCESS_DENIED',
+      category: 'AUTH',
+      retryable: false,
+      suggestedAction: '切换到 token 授权的项目，或使用具备该项目权限的 API Token 后重试。',
+      docsRef: 'README.md#安全基线',
+      httpStatus
+    }
+  }
+  return {
+    code: httpStatus >= 500 ? 'INTERNAL_ERROR' : 'DATASPEC_REQUEST_FAILED',
+    category: httpStatus >= 500 ? 'SERVER' : 'DATASPEC',
+    retryable: httpStatus >= 500,
+    suggestedAction: message || '查看 DataSpec 响应 message 并按提示修正请求。',
+    docsRef: 'README.md#验证',
+    httpStatus
+  }
 }
 
 function toolJsonResult(structuredContent) {

@@ -1,5 +1,6 @@
 package com.dataspec.common.result;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 
 /**
@@ -10,6 +11,8 @@ public class R<T> {
     private int code;
     private String message;
     private T data;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private ErrorDetail error;
 
     public static <T> R<T> ok(T data) {
         R<T> r = new R<>();
@@ -27,6 +30,7 @@ public class R<T> {
         R<T> r = new R<>();
         r.setCode(code);
         r.setMessage(message);
+        r.setError(ErrorCatalog.from(code, message));
         return r;
     }
 

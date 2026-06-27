@@ -2,6 +2,7 @@ import type { components } from '@/api/schema'
 
 type Schemas = components['schemas']
 
+export type ErrorDetail = Schemas['ErrorDetail']
 export type Project = Schemas['Project']
 export type CreateProjectReq = Schemas['CreateProjectReq']
 export type DemoProjectResult = Schemas['DemoProjectResult']
@@ -317,6 +318,7 @@ export interface AiJobRecordDetail {
 export interface R<T> {
   code?: number
   message?: string
+  error?: ErrorDetail
   data?: T
 }
 

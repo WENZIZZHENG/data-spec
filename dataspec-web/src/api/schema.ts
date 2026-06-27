@@ -1240,6 +1240,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ErrorDetail: {
+            code?: string;
+            category?: string;
+            retryable?: boolean;
+            suggestedAction?: string;
+            docsRef?: string;
+        };
         TemplateReq: {
             /** Format: int64 */
             projectId: number;
@@ -1251,6 +1258,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Template"];
         };
         Template: {
@@ -1283,6 +1291,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["TemplateField"];
         };
         TemplateField: {
@@ -1319,6 +1328,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["RuleConfig"];
         };
         RuleConfig: {
@@ -1359,6 +1369,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Project"];
         };
         FieldReq: {
@@ -1424,6 +1435,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Field"];
         };
         EnumDictReq: {
@@ -1453,6 +1465,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["EnumDict"];
         };
         EnumValueReq: {
@@ -1480,6 +1493,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["EnumValue"];
         };
         DomainReq: {
@@ -1507,6 +1521,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Domain"];
         };
         PresetReq: {
@@ -1544,6 +1559,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DatabaseConnectionPreset"];
         };
         ApiTokenCreateReq: {
@@ -1577,6 +1593,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ApiTokenCreateResp"];
         };
         RuleExemptionReq: {
@@ -1593,6 +1610,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["RuleExemption"];
         };
         RuleExemption: {
@@ -1649,6 +1667,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ReverseImportPreview"];
         };
         ReverseImportPreview: {
@@ -1696,6 +1715,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DatabaseConnectionResult"];
         };
         DatabaseTableInfo: {
@@ -1708,6 +1728,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DatabaseTableInfo"][];
         };
         DatabaseImportReq: {
@@ -1731,12 +1752,14 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DatabaseImportResult"];
         };
         RReverseImportCompareResult: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ReverseImportCompareResult"];
         };
         ReverseImportCompareResult: {
@@ -1793,6 +1816,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["StandardSnapshotInfo"];
         };
         StandardSnapshotInfo: {
@@ -1821,6 +1845,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DemoProjectResult"];
         };
         LintRequest: {
@@ -1878,12 +1903,14 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["LintResult"];
         };
         RInteger: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             /** Format: int32 */
             data?: number;
         };
@@ -1931,6 +1958,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ExcelImportPreview"];
         };
         ExcelImportResult: {
@@ -1947,6 +1975,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ExcelImportResult"];
         };
         FieldChangeUndoResult: {
@@ -1961,6 +1990,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldChangeUndoResult"];
         };
         FieldGroupingBatchUpdateReq: {
@@ -1983,6 +2013,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldGroupingBatchUpdateResult"];
         };
         FieldBulkUpdateReq: {
@@ -2007,6 +2038,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldBulkUpdateResult"];
         };
         FieldBulkUpdateChange: {
@@ -2036,6 +2068,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldBulkUpdatePreview"];
         };
         SqlCoverageReq: {
@@ -2099,6 +2132,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldCoverageReport"];
         };
         UnmanagedFieldRanking: {
@@ -2118,6 +2152,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: string;
         };
         CreateTablePromptReq: {
@@ -2129,60 +2164,70 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ApiTokenInfo"];
         };
         RVoid: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: Record<string, never>;
         };
         RListApiTokenInfo: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ApiTokenInfo"][];
         };
         RListTemplate: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Template"][];
         };
         RListTemplateField: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["TemplateField"][];
         };
         RListRuleConfig: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["RuleConfig"][];
         };
         RListRuleExemption: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["RuleExemption"][];
         };
         RListProject: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Project"][];
         };
         RListStandardSnapshotInfo: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["StandardSnapshotInfo"][];
         };
         RListMapStringString: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: {
                 [key: string]: string;
             }[];
@@ -2202,6 +2247,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["PageResultSqlCheckRecord"];
         };
         SqlCheckRecord: {
@@ -2232,6 +2278,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["RecordDetail"];
         };
         RecordDetail: {
@@ -2247,6 +2294,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DdlGenerateResult"];
         };
         PageResultField: {
@@ -2264,6 +2312,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["PageResultField"];
         };
         FieldSource: {
@@ -2295,6 +2344,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldSourceDetail"][];
         };
         ReverseImportBatch: {
@@ -2368,6 +2418,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldImpactReport"];
         };
         FieldSuggestion: {
@@ -2382,6 +2433,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldSuggestion"][];
         };
         FieldQualityIssue: {
@@ -2438,6 +2490,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldQualityReport"];
         };
         FieldGroupItem: {
@@ -2462,6 +2515,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldGroupSummary"];
         };
         FieldConflictField: {
@@ -2518,36 +2572,42 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldConflictReport"];
         };
         RListField: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Field"][];
         };
         RListEnumDict: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["EnumDict"][];
         };
         RListEnumValue: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["EnumValue"][];
         };
         RListDomain: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Domain"][];
         };
         RListDatabaseConnectionPreset: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DatabaseConnectionPreset"][];
         };
         DashboardSummary: {
@@ -2584,6 +2644,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DashboardSummary"];
         };
         RecentSqlCheck: {
@@ -2615,6 +2676,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["PageResultStandardChangeLog"];
         };
         StandardChangeLog: {
@@ -2641,6 +2703,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["AuthMe"];
         };
         AiJobRecordListItem: {
@@ -2679,6 +2742,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["PageResultAiJobRecordListItem"];
         };
         AiJobRecord: {
@@ -2718,6 +2782,7 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
+            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["AiJobRecordDetail"];
         };
     };

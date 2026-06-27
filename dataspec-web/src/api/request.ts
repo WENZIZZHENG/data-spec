@@ -1,6 +1,11 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { AUTH_CLEARED_EVENT, clearAuthStorage, readAuthToken } from '@/api/authStorage'
+import type { ErrorDetail } from '@/types'
+
+type DataSpecRequestError = Error & {
+  dataspecError?: ErrorDetail
+}
 
 // 创建 Axios 实例
 const request = axios.create({
@@ -35,17 +40,28 @@ request.interceptors.response.use(
     }
     // 业务错误
     ElMessage.error(res.message || '请求失败')
-    return Promise.reject(new Error(res.message || '请求失败'))
+    return Promise.reject(withDataSpecError(res.message || '请求失败', res.error))
   },
   (error) => {
     const msg = error.response?.data?.message || error.message || '网络错误'
+    const detail = error.response?.data?.error as ErrorDetail | undefined
     if (error.response?.status === 401 || error.response?.status === 403) {
       clearAuthStorage()
       window.dispatchEvent(new Event(AUTH_CLEARED_EVENT))
     }
     ElMessage.error(msg)
+    if (detail && error instanceof Error) {
+      const dataSpecError = error as DataSpecRequestError
+      dataSpecError.dataspecError = detail
+    }
     return Promise.reject(error)
   }
 )
+
+function withDataSpecError(message: string, detail?: ErrorDetail): DataSpecRequestError {
+  const error = new Error(message) as DataSpecRequestError
+  error.dataspecError = detail
+  return error
+}
 
 export default request

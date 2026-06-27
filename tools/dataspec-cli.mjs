@@ -33,6 +33,13 @@ const SKIPPED_SCAN_DIRECTORIES = new Set([
   'target'
 ])
 
+class DataSpecCliError extends Error {
+  constructor(message, diagnostic) {
+    super(message)
+    this.diagnostic = diagnostic
+  }
+}
+
 export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch) {
   try {
     if (!fetchFn) {
@@ -72,7 +79,7 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     throw new Error(`未知命令: ${command}\n\n${helpText()}`)
   } catch (error) {
-    io.writeErr(`错误: ${error.message}\n`)
+    io.writeErr(formatCliError(error))
     return 2
   }
 }
@@ -1317,18 +1324,84 @@ function cliCwd(io) {
 }
 
 async function readJsonResponse(response) {
+  const payload = await readResponseJson(response)
   if (!response.ok) {
-    throw new Error(`DataSpec 请求失败，HTTP ${response.status}`)
+    throw toDataSpecCliError(payload, response.status)
   }
-  const payload = await response.json()
   if (payload?.code && payload.code !== 200) {
-    throw new Error(payload.message || `DataSpec 返回错误 code=${payload.code}`)
+    throw toDataSpecCliError(payload, response.status)
   }
   return payload
 }
 
 function unwrapResponse(payload) {
   return payload?.data ?? payload
+}
+
+async function readResponseJson(response) {
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+function toDataSpecCliError(payload, httpStatus) {
+  const message = payload?.message || `DataSpec 请求失败，HTTP ${httpStatus}`
+  return new DataSpecCliError(message, normalizeDataSpecDiagnostic(payload?.error, httpStatus, message))
+}
+
+function normalizeDataSpecDiagnostic(error, httpStatus, message) {
+  if (error && typeof error === 'object') {
+    return {
+      code: String(error.code ?? 'DATASPEC_ERROR'),
+      category: String(error.category ?? 'DATASPEC'),
+      retryable: Boolean(error.retryable),
+      suggestedAction: String(error.suggestedAction ?? '查看 DataSpec 响应 message 并按提示修正请求。'),
+      docsRef: String(error.docsRef ?? 'README.md#验证'),
+      httpStatus
+    }
+  }
+  return fallbackDataSpecDiagnostic(httpStatus, message)
+}
+
+function fallbackDataSpecDiagnostic(httpStatus, message) {
+  if (httpStatus === 401) {
+    return {
+      code: 'AUTH_TOKEN_MISSING_OR_INVALID',
+      category: 'AUTH',
+      retryable: true,
+      suggestedAction: '提供有效的 API Token；CLI/MCP 可设置 DATASPEC_TOKEN 或 --dataspec-token。',
+      docsRef: 'README.md#安全基线',
+      httpStatus
+    }
+  }
+  if (httpStatus === 403) {
+    return {
+      code: 'PROJECT_ACCESS_DENIED',
+      category: 'AUTH',
+      retryable: false,
+      suggestedAction: '切换到 token 授权的项目，或使用具备该项目权限的 API Token 后重试。',
+      docsRef: 'README.md#安全基线',
+      httpStatus
+    }
+  }
+  return {
+    code: httpStatus >= 500 ? 'INTERNAL_ERROR' : 'DATASPEC_REQUEST_FAILED',
+    category: httpStatus >= 500 ? 'SERVER' : 'DATASPEC',
+    retryable: httpStatus >= 500,
+    suggestedAction: message || '查看 DataSpec 响应 message 并按提示修正请求。',
+    docsRef: 'README.md#验证',
+    httpStatus
+  }
+}
+
+function formatCliError(error) {
+  const lines = [`错误: ${error.message}`]
+  if (error instanceof DataSpecCliError && error.diagnostic) {
+    lines.push(`DataSpecError: ${JSON.stringify(error.diagnostic)}`)
+  }
+  return `${lines.join('\n')}\n`
 }
 
 function helpText() {

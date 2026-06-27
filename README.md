@@ -393,6 +393,26 @@ node tools/dataspec-mcp.mjs
 
 [docs/ai-contracts.md](docs/ai-contracts.md) 记录第一版 AI 可依赖的稳定字段，覆盖 AI Context、SQL lint/fixedSql、字段推荐、DDL 预览、CLI JSON 和 MCP resources/tools。兼容策略是：新增可选字段默认兼容；删除、改名、类型变化或语义变化需要同步更新契约测试和文档。
 
+## AI 可读错误诊断
+
+失败的 JSON API 响应会保留既有 `code/message/data`，并额外返回可选 `error` 诊断对象，方便 AI、CLI 和 MCP 判断下一步动作：
+
+```json
+{
+  "code": 400,
+  "message": "projectId 参数无效: abc",
+  "error": {
+    "code": "PROJECT_ID_INVALID",
+    "category": "VALIDATION",
+    "retryable": true,
+    "suggestedAction": "提供有效 projectId；不确定时先运行 dataspec doctor --format json 查看当前项目状态。",
+    "docsRef": "README.md#验证"
+  }
+}
+```
+
+第一版覆盖 token、项目权限、projectId、资源不存在、SQL 输入、数据库连接、参数校验和内部错误等高频场景。CLI 在保留 `错误: ...` 人类可读行的同时，会额外输出 `DataSpecError: {...}`；MCP 会把同类诊断放到 JSON-RPC `error.data.dataspecError`。该对象用于诊断和恢复建议，不暴露内部异常堆栈，也不改变原有 HTTP 状态语义。
+
 ## 验证
 
 ```bash
@@ -416,7 +436,7 @@ cd ..
 node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures 和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库筛选与批量维护、DDL 生成、AI Context、覆盖率报告和 AI 回放的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent` 和可解析文本内容。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库筛选与批量维护、DDL 生成、AI Context、覆盖率报告和 AI 回放的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。
 
 ## 性能基线
 
@@ -530,6 +550,7 @@ data-spec/
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
 - [x] AI Context zip 导出、按需裁剪、分组摘要、workflow recipes 和业务项目 `.dataspec/` 约定
 - [x] AI 输出契约文档与 contract fixtures，覆盖 AI Context、lint/fixedSql、字段推荐、DDL 预览、CLI/MCP JSON 稳定字段
+- [x] AI 可读错误诊断，API 失败响应、CLI stderr 和 MCP JSON-RPC error 可输出 code/category/retryable/suggestedAction/docsRef
 - [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
 - [x] AI 回放记录，支持查看 Prompt、lint/fixedSql、DDL 预览的输入输出和标准快照

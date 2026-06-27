@@ -70,6 +70,37 @@ test('lint returns 0 when server reports no errors', async () => {
   assert.equal(JSON.parse(io.stdout).warningCount, 1)
 })
 
+test('lint prints machine-readable DataSpecError when api returns diagnostic', async () => {
+  const io = createIo('CREATE TABLE users (id bigserial);')
+  const fetchFn = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({
+      code: 400,
+      message: 'projectId 参数无效: abc',
+      error: {
+        code: 'PROJECT_ID_INVALID',
+        category: 'VALIDATION',
+        retryable: true,
+        suggestedAction: '提供有效 projectId；不确定时先运行 dataspec doctor --format json 查看当前项目状态。',
+        docsRef: 'README.md#验证'
+      }
+    })
+  })
+
+  const code = await runCli(['lint', '-', '--project', '1', '--format', 'json'], io, fetchFn)
+  const diagnosticLine = io.stderr.split(/\r?\n/).find((line) => line.startsWith('DataSpecError: '))
+  const diagnostic = JSON.parse(diagnosticLine.replace('DataSpecError: ', ''))
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /错误: projectId 参数无效: abc/)
+  assert.equal(diagnostic.code, 'PROJECT_ID_INVALID')
+  assert.equal(diagnostic.category, 'VALIDATION')
+  assert.equal(diagnostic.retryable, true)
+  assert.equal(diagnostic.httpStatus, 400)
+  assert.equal(io.stdout, '')
+})
+
 test('lint uses local config defaults when project and server are omitted', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {

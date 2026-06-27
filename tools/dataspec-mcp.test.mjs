@@ -279,6 +279,68 @@ test('generate_table_ddl tool returns structured ddl result', async () => {
   assert.equal(JSON.parse(response.result.content[0].text).lintResult.errorCount, 0)
 })
 
+test('tool call returns DataSpec diagnostic in json-rpc error data', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async () => ({
+    ok: false,
+    status: 403,
+    json: async () => ({
+      code: 403,
+      message: '无权访问项目: 9',
+      error: {
+        code: 'PROJECT_ACCESS_DENIED',
+        category: 'AUTH',
+        retryable: false,
+        suggestedAction: '切换到 token 授权的项目，或使用具备该项目权限的 API Token 后重试。',
+        docsRef: 'README.md#安全基线'
+      }
+    })
+  }))
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 12,
+    method: 'tools/call',
+    params: {
+      name: 'lint_sql',
+      arguments: { sql: 'CREATE TABLE users (id bigint);', projectId: 9 }
+    }
+  })
+
+  assert.equal(response.error.code, -32000)
+  assert.match(response.error.message, /无权访问项目/)
+  assert.equal(response.error.data.dataspecError.code, 'PROJECT_ACCESS_DENIED')
+  assert.equal(response.error.data.dataspecError.category, 'AUTH')
+  assert.equal(response.error.data.dataspecError.retryable, false)
+  assert.equal(response.error.data.dataspecError.httpStatus, 403)
+})
+
+test('tool call classifies legacy authorization failure without backend diagnostic', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async () => ({
+    ok: false,
+    status: 401,
+    json: async () => ({
+      code: 401,
+      message: '缺少 Authorization Bearer token'
+    })
+  }))
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 13,
+    method: 'tools/call',
+    params: {
+      name: 'lint_sql',
+      arguments: { sql: 'CREATE TABLE users (id bigint);', projectId: 7 }
+    }
+  })
+
+  assert.equal(response.error.code, -32000)
+  assert.equal(response.error.data.dataspecError.code, 'AUTH_TOKEN_MISSING_OR_INVALID')
+  assert.equal(response.error.data.dataspecError.category, 'AUTH')
+  assert.equal(response.error.data.dataspecError.retryable, true)
+  assert.equal(response.error.data.dataspecError.httpStatus, 401)
+})
+
 test('unknown method returns json rpc method not found error', async () => {
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
 
