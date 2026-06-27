@@ -5,7 +5,7 @@
 ## 下一步顺序
 
 1. P6-8 标准字段重复与冲突检测已完成第一版，下一步推进 P6-9 规则误报豁免与项目例外说明。
-2. P6 后续继续补 AI contract fixtures、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描和健康趋势。
+2. P6 后续继续补 AI contract fixtures、规则例外治理、GitHub inline 实接、性能基线、前端回归门禁、AI 可读诊断、字段检索、OpenSpec 收口、历史快照回放、多方言兼容矩阵、规则模板库、备份迁移包、数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁和示例反例库。
 3. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
@@ -573,6 +573,69 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 落地产物：新增标准健康快照和趋势视图；按项目记录质量均分、低质量字段数、覆盖率、未纳管 Top、规则误报、AI 推荐未命中和候选采纳率；生成可复制的改进计划摘要。
 - 验收标准：用户能看到本周/本月标准质量和覆盖率变化；AI 可读取 Top actions 并按优先级补字段、修别名或调整规则；趋势数据不包含业务数据行。
 - 边界：不做组织 KPI，不接外部 BI，不采集用户行为监控。
+
+### P6-54：数据库连接健康探测与方言能力画像
+- 状态：待办。
+- 为什么做：数据库直连反向导入和二次比对已经成为核心入口，AI 在调用前需要知道连接是否可用、权限是否只读、当前库支持哪些 schema/comment/index 元数据能力，而不是只收到一个泛化失败。
+- 已有基础：已有 PostgreSQL/MySQL 直连、表列表、metadata 预览、compare、只读安全诊断待办和数据库元数据适配层待办。
+- 缺口：连接失败、权限不足、schema 不存在、方言不兼容等错误缺少结构化诊断；也没有把 dialect capability 以机器可读方式返回给前端、CLI 或 AI。
+- 落地产物：新增连接诊断接口或扩展现有 metadata preview；输出 connectionStatus、latencyMs、databaseProduct、version、schemaSupport、commentSupport、readonlyCheck、requiredPrivileges、warnings 和 nextActions；前端连接页展示诊断结果。
+- 验收标准：有效连接、错误密码、权限不足、schema 不存在、网络不可达等场景都有明确诊断；不持久化 password/token；AI 能据此判断是否可以继续反向导入或二次比对。
+- 边界：不做长期监控，不保存敏感连接凭据，不替代数据库安全审计。
+
+### P6-55：字段值格式与校验样例库
+- 状态：待办。
+- 为什么做：字段名和数据类型不足以让 AI 稳定生成正确 SQL，像金额单位、手机号格式、日期时区、JSON 结构、状态码取值都需要结构化表达。
+- 已有基础：字段已有 dataType、exampleValue、sensitive、codeSetId、质量评分和 AI Context 导出。
+- 缺口：缺少 field format/pattern 层；示例值只是自由文本，无法区分单位、正例、反例、正则、精度、时区和空值策略。
+- 落地产物：新增轻量字段格式约束模型或字段扩展；支持 formatType、pattern、unit、precision、timezone、validExamples、invalidExamples 和 notes；AI Context、DDL 生成、字段质量评分和 lint 建议可读取。
+- 验收标准：金额、手机号、邮箱、时间戳、JSON、状态码等字段能导出稳定格式说明；AI 生成 SQL/DDL 时能看到单位和格式约束；质量评分能提示关键字段缺少格式样例。
+- 边界：不扫描真实业务数据行，不强制所有字段配置正则，不引入完整数据质量执行引擎。
+
+### P6-56：标准字段别名冲突与命名保留字检测
+- 状态：待办。
+- 为什么做：字段冲突检测已能发现标准库内部重复，但 AI 真实建表还会遇到 SQL 方言保留字、跨字段别名歧义和大小写/引用规则差异，这些会导致生成结果不可执行或含义不清。
+- 已有基础：已有字段冲突检测、字段推荐、SQL lint、多方言兼容矩阵待办和字段命名规则。
+- 缺口：缺少按 PostgreSQL/MySQL 等方言维护的保留字/危险词清单；字段 alias 与 canonical name 的歧义也没有进入冲突报告。
+- 落地产物：扩展冲突检测或新增命名风险报告；检测 reserved keyword、ambiguous alias、dialect unsafe name、case sensitive collision，并输出替代命名建议。
+- 验收标准：`order`、`user`、`type` 等高风险命名能按方言给出提醒；同一个别名指向多个标准字段会提示 AI 不应直接采用；报告可在前端和 AI Context 中读取。
+- 边界：不自动重命名已有字段，不追求覆盖所有数据库方言，不阻止用户保留历史兼容字段。
+
+### P6-57：反向导入字段映射策略与确认理由
+- 状态：待办。
+- 为什么做：数据库直连反向导入不仅要把新字段写进标准库，还应解释每个真实字段为什么匹配到某个标准字段、为什么成为候选、为什么被忽略，方便 AI 和用户复盘。
+- 已有基础：已有反向导入预览、候选确认导入、字段来源与批次追踪、覆盖率报告和字段推荐原因。
+- 缺口：当前导入确认偏结果写入，缺少结构化 mapping decision；被忽略字段、别名匹配字段和新候选字段的理由不能稳定回放。
+- 落地产物：新增导入映射决策结构；为每个表字段记录 decisionType、matchedFieldId、matchReason、confidence、ignoreReason、confirmReason 和 batchId；前端预览页支持编辑确认理由。
+- 验收标准：导入批次详情能解释 `mobile_no` 为什么映射到某个标准手机号字段；忽略字段不会反复出现在同一批次的待处理列表；AI 可读取映射历史避免重复建议。
+- 边界：不做审批流，不强制每个字段都人工填写长说明，不自动覆盖已有标准字段定义。
+
+### P6-58：AI 任务失败重试与断点续跑
+- 状态：待办。
+- 为什么做：AI 批量 lint、Context 导出、覆盖率扫描、反向导入比对和证据包生成都可能耗时或失败；缺少重试和断点续跑会让 agent 只能从头再跑，容易重复写入或浪费上下文。
+- 已有基础：已有 AI 作业回放、批量任务待办、并发幂等待办、项目活动时间线待办和执行证据包待办。
+- 缺口：任务状态、失败原因、可重试性、输入 hash、已完成步骤和恢复命令尚未形成统一模型。
+- 落地产物：新增轻量 task run 模型或扩展 AI job；记录 stepStatus、inputHash、retryable、failedStep、resumeCommand、partialArtifacts 和 expiresAt；CLI/MCP/前端可查询最近失败任务并选择重试。
+- 验收标准：一次批量操作中途失败后能看到失败步骤和可恢复命令；重复重试不会产生重复记录；AI 能根据 retryable 字段判断继续还是提示用户。
+- 边界：不引入外部队列，不做分布式调度，不把所有同步 CRUD 都改造成异步任务。
+
+### P6-59：标准质量门禁与阈值策略
+- 状态：待办。
+- 为什么做：字段质量、覆盖率和 lint 结果已经能被查看，但 CI/AI 自动化还缺少“低于什么阈值就阻断”的项目级策略，否则质量退化只能事后人工发现。
+- 已有基础：已有字段质量评分、覆盖率报告、SQL lint、CI/GitHub Review、规则配置和验证建议待办。
+- 缺口：缺少 project quality gate 配置；覆盖率下降、低质量字段新增、ERROR 级规则、敏感字段未标注等信号还不能组合成统一门禁结果。
+- 落地产物：新增质量门禁配置和评估接口/CLI；支持 minCoverage、minAverageFieldScore、maxErrorIssues、maxNewUnmanagedFields、requiredSensitiveMarking 等阈值，并输出 pass/fail、failedChecks、nextActions。
+- 验收标准：业务仓库 CI 可基于项目阈值失败或通过；前端能显示当前门禁状态；AI 能读取失败项并按优先级修复标准或 SQL。
+- 边界：不做企业审批流，不默认阻断个人本地保存，不把门禁阈值硬编码到规则实现里。
+
+### P6-60：标准字段使用示例与反例库
+- 状态：待办。
+- 为什么做：AI 更擅长从具体例子学习，只有字段说明和规则文本时仍可能误用字段；需要为关键字段、规则和表模板提供可裁剪的 good/bad examples。
+- 已有基础：字段 exampleValue、SQL good/bad fixture、规则说明、Prompt 模板、AI Context 和 golden fixtures。
+- 缺口：示例分散在测试或自由文本中，没有按字段/规则/模板结构化维护；也缺少明确反例告诉 AI 哪些历史写法不要模仿。
+- 落地产物：新增示例/反例维护入口或配置文件；支持 exampleType、scope、input、expectedOutput、antiPattern、reason、tags 和 priority；AI Context 按 scope 裁剪导出最小示例集。
+- 验收标准：AI Context 中能携带少量高价值字段使用例子和反例；DDL/Prompt 生成可以引用示例；新增示例有 fixture 或快照测试防止格式漂移。
+- 边界：不采样真实业务数据，不导出敏感值，不把示例库扩成完整教程或大文档。
 
 ## 参考项目索引
 
