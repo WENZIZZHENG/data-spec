@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.perf.PerformanceProbe;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldBulkUpdateChange;
 import com.dataspec.field.model.FieldBulkUpdateItem;
@@ -46,6 +47,8 @@ public class FieldServiceImpl implements FieldService {
     private static final Set<String> ALLOWED_STATUSES = Set.of("enabled", "disabled", "deprecated");
     private static final int DEFAULT_SUGGEST_LIMIT = 5;
     private static final int MAX_SUGGEST_LIMIT = 20;
+    private static final long FIELD_READ_WARN_MS = 500;
+    private static final long FIELD_SUGGEST_WARN_MS = 500;
     private static final Set<String> GROUPING_UPDATE_KEYS = Set.of("domainId", "category", "tags");
     private static final Set<String> BULK_UPDATE_KEYS = Set.of("status", "category", "tags", "sensitive", "codeSetId", "aliases");
     private static final Map<String, String> FALLBACK_TERMS = fallbackTerms();
@@ -59,14 +62,22 @@ public class FieldServiceImpl implements FieldService {
 
     @Override
     public IPage<Field> page(Long projectId, int current, int size) {
-        ProjectAccessGuard.requireProjectAccess(projectId);
-        return fieldRepository.findByProjectId(projectId, current, size);
+        return PerformanceProbe.measure("field.page", FIELD_READ_WARN_MS,
+                "字段分页变慢时优先检查字段数量、分页大小和 ds_field(project_id) 索引",
+                () -> {
+                    ProjectAccessGuard.requireProjectAccess(projectId);
+                    return fieldRepository.findByProjectId(projectId, current, size);
+                });
     }
 
     @Override
     public List<Field> listByProject(Long projectId) {
-        ProjectAccessGuard.requireProjectAccess(projectId);
-        return fieldRepository.findAllByProjectId(projectId);
+        return PerformanceProbe.measure("field.listByProject", FIELD_READ_WARN_MS,
+                "字段全量读取变慢时优先改用分页或按需 AI Context 裁剪",
+                () -> {
+                    ProjectAccessGuard.requireProjectAccess(projectId);
+                    return fieldRepository.findAllByProjectId(projectId);
+                });
     }
 
     @Override
@@ -147,8 +158,12 @@ public class FieldServiceImpl implements FieldService {
 
     @Override
     public FieldGroupSummary groupSummary(Long projectId) {
-        ProjectAccessGuard.requireProjectAccess(projectId);
-        return FieldGroupingSummaries.fromFields(projectId, fieldRepository.findAllByProjectId(projectId));
+        return PerformanceProbe.measure("field.groupSummary", FIELD_READ_WARN_MS,
+                "字段分组摘要变慢时优先检查未分页字段量和分组标签基数",
+                () -> {
+                    ProjectAccessGuard.requireProjectAccess(projectId);
+                    return FieldGroupingSummaries.fromFields(projectId, fieldRepository.findAllByProjectId(projectId));
+                });
     }
 
     @Override
@@ -256,6 +271,12 @@ public class FieldServiceImpl implements FieldService {
 
     @Override
     public List<FieldSuggestion> suggest(Long projectId, String query, int limit) {
+        return PerformanceProbe.measure("field.suggest", FIELD_SUGGEST_WARN_MS,
+                "字段推荐变慢时优先使用更具体 query 或后续字段检索 API",
+                () -> suggestMeasured(projectId, query, limit));
+    }
+
+    private List<FieldSuggestion> suggestMeasured(Long projectId, String query, int limit) {
         if (projectId == null) {
             throw new BizException("项目ID不能为空");
         }

@@ -3,6 +3,7 @@ package com.dataspec.aicontext.service;
 import com.dataspec.aicontext.model.AiContextScopeOptions;
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.service.AiJobRecordService;
+import com.dataspec.common.perf.PerformanceProbe;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldGroupItem;
 import com.dataspec.field.model.FieldGroupSummary;
@@ -57,6 +58,8 @@ public class AiContextExportService {
     private static final String FIX_SQL_PROMPT_VERSION = "fix-sql-prompt@1";
     private static final String PACKAGE_FILE_NAME = "dataspec-ai-context.zip";
     private static final int DATASPEC_CONTEXT_SCHEMA_VERSION = 1;
+    private static final long FIELD_CATALOG_WARN_MS = 1_000;
+    private static final long CONTEXT_PACKAGE_WARN_MS = 1_500;
     private static final List<String> DEFAULT_REQUIRED_COLUMNS = List.of("id", "created_at", "updated_at", "is_deleted");
     private static final List<String> DEFAULT_FORBIDDEN_NAMES = List.of(
             "uid", "create_time", "update_time", "del_flag", "ctime", "mtime", "is_del", "tmp", "test", "flag1", "type1"
@@ -156,7 +159,9 @@ public class AiContextExportService {
     }
 
     public String generateFieldCatalogJson(Long projectId, AiContextScopeOptions options) {
-        return generateFieldCatalogJson(projectId, currentSnapshot(projectId), buildScopedFields(projectId, options));
+        return PerformanceProbe.measure("ai-context.fieldCatalog", FIELD_CATALOG_WARN_MS,
+                "AI Context 字段目录变慢时优先使用 scope/query/status/limit 按需裁剪",
+                () -> generateFieldCatalogJson(projectId, currentSnapshot(projectId), buildScopedFields(projectId, options)));
     }
 
     private String generateFieldCatalogJson(Long projectId, StandardSnapshotInfo snapshot) {
@@ -636,34 +641,38 @@ public class AiContextExportService {
     }
 
     public byte[] generateAiContextPackage(Long projectId, AiContextScopeOptions options) {
-        try (ByteArrayOutputStream output = new ByteArrayOutputStream();
-             ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
-            StandardSnapshotInfo snapshot = currentSnapshot(projectId);
-            ScopedFields scopedFields = buildScopedFields(projectId, options);
-            addTextEntry(zip, ".dataspec/DATABASE_RULES.md", generateDatabaseRules(projectId, scopedFields));
-            addTextEntry(zip, ".dataspec/field-catalog.json", generateFieldCatalogJson(projectId, snapshot, scopedFields));
-            addTextEntry(zip, ".dataspec/field-catalog.schema.json", generateFieldCatalogSchemaJson());
-            addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId, snapshot, scopedFields.summary()));
-            addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId, scopedFields.summary()));
-            addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(projectId, snapshot));
-            addTextEntry(zip, ".dataspec/prompts.md", generatePromptsMarkdown());
-            addTextEntry(zip, ".dataspec/workflows.md", generateWorkflowsMarkdown(projectId));
-            addTextEntry(zip, ".dataspec/examples/good.sql", loadExampleSql(
-                    "../examples/good-example.sql",
-                    "examples/good-example.sql",
-                    defaultGoodExampleSql()
-            ));
-            addTextEntry(zip, ".dataspec/examples/bad.sql", loadExampleSql(
-                    "../examples/bad-example.sql",
-                    "examples/bad-example.sql",
-                    defaultBadExampleSql()
-            ));
-            addTextEntry(zip, "AGENTS.md.fragment", generateAgentsFragment(projectId));
-            zip.finish();
-            return output.toByteArray();
-        } catch (IOException e) {
-            throw new RuntimeException("生成 " + PACKAGE_FILE_NAME + " 失败", e);
-        }
+        return PerformanceProbe.measure("ai-context.package", CONTEXT_PACKAGE_WARN_MS,
+                "AI Context zip 变慢时优先导出按需包，或检查字段/规则/例外数量",
+                () -> {
+                    try (ByteArrayOutputStream output = new ByteArrayOutputStream();
+                         ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
+                        StandardSnapshotInfo snapshot = currentSnapshot(projectId);
+                        ScopedFields scopedFields = buildScopedFields(projectId, options);
+                        addTextEntry(zip, ".dataspec/DATABASE_RULES.md", generateDatabaseRules(projectId, scopedFields));
+                        addTextEntry(zip, ".dataspec/field-catalog.json", generateFieldCatalogJson(projectId, snapshot, scopedFields));
+                        addTextEntry(zip, ".dataspec/field-catalog.schema.json", generateFieldCatalogSchemaJson());
+                        addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId, snapshot, scopedFields.summary()));
+                        addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId, scopedFields.summary()));
+                        addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(projectId, snapshot));
+                        addTextEntry(zip, ".dataspec/prompts.md", generatePromptsMarkdown());
+                        addTextEntry(zip, ".dataspec/workflows.md", generateWorkflowsMarkdown(projectId));
+                        addTextEntry(zip, ".dataspec/examples/good.sql", loadExampleSql(
+                                "../examples/good-example.sql",
+                                "examples/good-example.sql",
+                                defaultGoodExampleSql()
+                        ));
+                        addTextEntry(zip, ".dataspec/examples/bad.sql", loadExampleSql(
+                                "../examples/bad-example.sql",
+                                "examples/bad-example.sql",
+                                defaultBadExampleSql()
+                        ));
+                        addTextEntry(zip, "AGENTS.md.fragment", generateAgentsFragment(projectId));
+                        zip.finish();
+                        return output.toByteArray();
+                    } catch (IOException e) {
+                        throw new RuntimeException("生成 " + PACKAGE_FILE_NAME + " 失败", e);
+                    }
+                });
     }
 
     private String generateManifestJson(Long projectId, StandardSnapshotInfo snapshot) {

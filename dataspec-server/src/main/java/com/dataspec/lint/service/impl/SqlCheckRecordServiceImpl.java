@@ -2,6 +2,7 @@ package com.dataspec.lint.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.perf.PerformanceProbe;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.LintResult;
@@ -25,6 +26,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SqlCheckRecordServiceImpl implements SqlCheckRecordService {
 
+    private static final long LINT_RECORD_PAGE_WARN_MS = 500;
+
     private final SqlCheckRecordRepository sqlCheckRecordRepository;
     private final ObjectMapper objectMapper;
     private final StandardSnapshotService standardSnapshotService;
@@ -46,7 +49,9 @@ public class SqlCheckRecordServiceImpl implements SqlCheckRecordService {
 
     @Override
     public IPage<SqlCheckRecord> listByProject(Long projectId, int current, int size) {
-        return sqlCheckRecordRepository.findByProjectId(projectId, current, size);
+        return PerformanceProbe.measure("lint-record.page", LINT_RECORD_PAGE_WARN_MS,
+                "SQL 检查记录分页变慢时优先检查 project_id/created_at 索引和分页大小",
+                () -> sqlCheckRecordRepository.findByProjectId(projectId, current, size));
     }
 
     @Override

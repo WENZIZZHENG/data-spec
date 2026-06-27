@@ -1,6 +1,7 @@
 package com.dataspec.reverseimport.service.impl;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.perf.PerformanceProbe;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlParserService;
@@ -37,6 +38,8 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class ReverseImportServiceImpl implements ReverseImportService {
+
+    private static final long REVERSE_COMPARE_WARN_MS = 1_000;
 
     private final SqlParserService sqlParserService;
     private final FieldService fieldService;
@@ -108,6 +111,12 @@ public class ReverseImportServiceImpl implements ReverseImportService {
 
     @Override
     public ReverseImportCompareResult compareTables(Long projectId, List<TableDef> tables) {
+        return PerformanceProbe.measure("reverse-import.compareTables", REVERSE_COMPARE_WARN_MS,
+                "反向导入 compare 变慢时优先减少本次表选择或检查字段库规模",
+                () -> compareTablesMeasured(projectId, tables));
+    }
+
+    private ReverseImportCompareResult compareTablesMeasured(Long projectId, List<TableDef> tables) {
         if (projectId == null) {
             throw new BizException("项目ID不能为空");
         }

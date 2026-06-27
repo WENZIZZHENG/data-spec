@@ -416,7 +416,18 @@ cd ..
 node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试和 AI contract fixtures，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐和 DDL 预览稳定字段。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent` 和可解析文本内容。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures 和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent` 和可解析文本内容。
+
+## 性能基线
+
+本地可单独运行合成大字段库性能基线：
+
+```bash
+cd dataspec-server
+mvn -Dtest=PerformanceBaselineTest test
+```
+
+该测试会构造 5000 个标准字段和 2000 个 compare 列，输出 `[dataspec-perf-baseline]` metric 行，便于修改字段推荐、AI Context 或反向导入逻辑后做本地对比。它不是生产容量承诺，只用宽松阈值拦截明显退化。后端核心入口还会在字段分页/全量读取/分组/推荐、AI Context 字段目录/zip、SQL 检查记录分页和反向导入 compare 超过保守阈值时输出 `DataSpec slow operation` warning，并附带诊断 hint。
 
 ## 项目结构
 
@@ -513,6 +524,7 @@ data-spec/
 - [x] 字段质量评分，支持低质量字段筛选、问题编码和跳转字段库编辑
 - [x] 字段冲突检测，支持别名冲突、语义疑似重复、属性不一致和跳转字段库编辑
 - [x] 字段影响分析，支持模板、导入来源、SQL 检查记录、标准快照和代码集影响提示
+- [x] 大字段库性能基线和慢操作 warning，覆盖字段分组/推荐、AI Context 字段目录和反向导入 compare
 - [x] 字段推荐 API/CLI/MCP
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
 - [x] AI Context zip 导出、按需裁剪、分组摘要、workflow recipes 和业务项目 `.dataspec/` 约定
