@@ -31,6 +31,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '字段质量' }
   },
   {
+    path: '/field-conflicts',
+    name: 'FieldConflicts',
+    component: () => import('@/views/FieldConflicts.vue'),
+    meta: { title: '字段冲突' }
+  },
+  {
     path: '/domains',
     name: 'DomainManage',
     component: () => import('@/views/DomainManage.vue'),

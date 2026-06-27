@@ -37,6 +37,10 @@
             <el-icon><TrendCharts /></el-icon>
             <span>字段质量</span>
           </el-menu-item>
+          <el-menu-item index="/field-conflicts">
+            <el-icon><Warning /></el-icon>
+            <span>字段冲突</span>
+          </el-menu-item>
           <el-menu-item index="/domains">
             <el-icon><Grid /></el-icon>
             <span>数据域管理</span>

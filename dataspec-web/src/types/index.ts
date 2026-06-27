@@ -51,6 +51,53 @@ export interface FieldQualityReport {
   fields?: FieldQualityItem[]
 }
 
+export type FieldConflictSeverity = 'ERROR' | 'WARNING' | 'INFO'
+export type FieldConflictType =
+  | 'NAME_DUPLICATE'
+  | 'ALIAS_CONFLICT'
+  | 'DISPLAY_NAME_DUPLICATE'
+  | 'SEMANTIC_DUPLICATE'
+
+export interface FieldConflictField {
+  fieldId?: number
+  name?: string
+  displayName?: string
+  dataType?: string
+  codeSetId?: number
+  sensitive?: boolean
+  status?: string
+  aliases?: string[]
+}
+
+export interface FieldConflictGroup {
+  groupKey?: string
+  conflictType?: FieldConflictType
+  severity?: FieldConflictSeverity
+  title?: string
+  description?: string
+  fields?: FieldConflictField[]
+  evidence?: string[]
+  suggestedAction?: string
+}
+
+export interface FieldConflictSummary {
+  totalFieldCount?: number
+  conflictGroupCount?: number
+  affectedFieldCount?: number
+  errorCount?: number
+  warningCount?: number
+  infoCount?: number
+  aliasConflictCount?: number
+  semanticDuplicateCount?: number
+  attributeMismatchCount?: number
+}
+
+export interface FieldConflictReport {
+  projectId?: number
+  summary?: FieldConflictSummary
+  groups?: FieldConflictGroup[]
+}
+
 export type FieldImpactSeverity = 'HIGH' | 'WARNING' | 'INFO'
 export type FieldImpactType = 'TEMPLATE' | 'IMPORT_SOURCE' | 'SQL_CHECK' | 'STANDARD_SNAPSHOT' | 'CODE_SET'
 
