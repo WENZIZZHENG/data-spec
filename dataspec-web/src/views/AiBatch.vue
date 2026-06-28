@@ -47,10 +47,19 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button size="small" text type="primary" @click="openDetail(row.id)">详情</el-button>
             <el-button size="small" text type="primary" @click="handleDownload(row.id)">下载</el-button>
+            <el-button
+              size="small"
+              text
+              type="primary"
+              :loading="evidenceActionId === row.id"
+              @click="handleDownloadEvidence(row.id)"
+            >
+              证据包
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -94,6 +103,21 @@
           <div class="detail-actions">
             <el-button size="small" @click="copyText(packageJson)">复制 JSON</el-button>
             <el-button size="small" type="primary" @click="handleDownload(activeDetail.run?.id)">下载 JSON</el-button>
+            <el-button
+              size="small"
+              :loading="evidenceActionId === activeDetail.run?.id"
+              @click="handleCopyEvidence(activeDetail.run?.id)"
+            >
+              复制证据 JSON
+            </el-button>
+            <el-button
+              size="small"
+              type="primary"
+              :loading="evidenceActionId === activeDetail.run?.id"
+              @click="handleDownloadEvidence(activeDetail.run?.id)"
+            >
+              下载证据包
+            </el-button>
           </div>
 
           <el-tabs class="detail-tabs">
@@ -171,6 +195,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { downloadAiBatchPackage, getAiBatchDetail, listAiBatches } from '@/api/aiBatch'
+import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
 import { useProjectStore } from '@/stores/project'
 import {
   aiBatchStatusLabel,
@@ -189,6 +214,7 @@ const loading = ref(false)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
 const activeDetail = ref<AiBatchRunDetail | null>(null)
+const evidenceActionId = ref<number | null>(null)
 
 const hasProject = computed(() => projectStore.currentProjectId !== null)
 const activePackage = computed(() => activeDetail.value?.deliveryPackage)
@@ -262,11 +288,54 @@ async function handleDownload(id?: number) {
   if (!id) {
     return
   }
-  const blob = await downloadAiBatchPackage(id)
+  saveBlob(await downloadAiBatchPackage(id), `dataspec-ai-batch-${id}.json`)
+}
+
+async function handleCopyEvidence(id?: number) {
+  const req = evidenceRequest(id)
+  if (!req) {
+    return
+  }
+  evidenceActionId.value = id ?? null
+  try {
+    const evidence = await generateEvidencePackage(req)
+    await copyText(JSON.stringify(evidence, null, 2))
+  } finally {
+    evidenceActionId.value = null
+  }
+}
+
+async function handleDownloadEvidence(id?: number) {
+  const req = evidenceRequest(id)
+  if (!req) {
+    return
+  }
+  evidenceActionId.value = id ?? null
+  try {
+    saveBlob(await downloadEvidencePackage(req), `dataspec-ai-batch-evidence-${id}.zip`)
+    ElMessage.success('已下载证据包')
+  } finally {
+    evidenceActionId.value = null
+  }
+}
+
+function evidenceRequest(id?: number) {
+  if (!id) {
+    return null
+  }
+  return {
+    projectId: projectStore.currentProjectId ?? undefined,
+    sourceType: 'AI_BATCH_RUN',
+    sourceId: id,
+    sourceTitle: `AI 批量任务 #${id}`
+  } as const
+}
+
+function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `dataspec-ai-batch-${id}.json`
+  link.download = filename
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -277,7 +346,23 @@ function handleSizeChange() {
 }
 
 async function copyText(text: string) {
-  await navigator.clipboard.writeText(text)
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      ElMessage.success('已复制')
+      return
+    }
+  } catch {
+    // 非安全上下文或浏览器策略拒绝时，降级到临时 textarea 复制。
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
   ElMessage.success('已复制')
 }
 

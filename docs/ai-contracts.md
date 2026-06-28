@@ -1,6 +1,6 @@
 # AI 输出契约
 
-本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、AI Context、AI task profiles、SQL lint、字段推荐、字段检索和 DDL 预览的自动化使用场景。
+本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、AI Context、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索和 DDL 预览的自动化使用场景。
 
 ## 兼容策略
 
@@ -42,7 +42,7 @@ Contract summary 稳定字段：
 - `compatibility`
 - `docsRef`
 
-Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`enum-dict`、`rule-config`、`template`、`standard-snapshot`、`lint-result`、`ai-context-manifest`、`ai-context-field-catalog` 和 `ai-task-profile`。
+Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`enum-dict`、`rule-config`、`template`、`standard-snapshot`、`lint-result`、`ai-evidence-package`、`ai-context-manifest`、`ai-context-field-catalog` 和 `ai-task-profile`。
 
 `contract check` 的成功只说明 registry 结构对 AI 可用；它不会验证当前项目业务标准是否完整，也不会授权任何写入动作。
 
@@ -69,6 +69,10 @@ Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `exampl
 ### lint-result
 
 SQL 校验结果契约，覆盖问题列表、统计、fixedSql、diff、修复计划和方言诊断。
+
+### ai-evidence-package
+
+AI 执行证据包契约，覆盖 source、标准快照、输入摘要、输出摘要、验证摘要、产物、下一步动作和推荐命令。它是只读交付结构，不是审计、审批、权限或防篡改机制。
 
 ### ai-context-manifest
 
@@ -123,6 +127,28 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 `fixedSql` 仍只是候选输出，不代表已经写回业务仓库；`fixPolicy.mode=DRY_RUN` 时 AI 必须把结果视为预览，并结合 `fixedSqlDiff`、`fixChanges` 和 `dialectDiagnostics` 人工确认后再继续。`fixPolicy.includeExplanations=false` 时 `fixExplanations` 可为空，AI 仍应以 `fixChanges.status/reasonCode` 判断跳过项。请求同时包含 `profileId/taskType` 和显式 `fixPolicy` 时，显式 `fixPolicy` 是有效策略来源。
 
+## AI Evidence Package
+
+稳定入口：
+
+- API `POST /api/evidence-packages`: 返回 JSON evidence package。
+- API `POST /api/evidence-packages/download`: 返回 zip，固定包含 `evidence.json`、`summary.md` 和 `README.md`。
+- CLI `evidence export`: 支持 `--format json|zip`；zip 必须显式 `--output`。
+- MCP `export_evidence_package` tool: 返回 `structuredContent` 和可解析 JSON text。
+
+稳定字段：
+
+- `AiEvidencePackage`: `kind`、`schemaVersion`、`packageId`、`projectId`、`generatedAt`、`source`、`standardSnapshot`、`inputsSummary`、`outputsSummary`、`validationSummary`、`artifacts[]`、`nextActions[]`、`suggestedCommands[]`、`diagnostics[]`。
+- `AiEvidenceSource`: `sourceType`、`sourceId`、`sourceTitle`、`status`、`persisted`。
+- `AiEvidenceStandardSnapshot`: `snapshotId`、`specVersion`、`specHash`、`versioned`。
+- `AiEvidenceArtifact`: `artifactType`、`title`、`format`、`summary`。
+- `AiEvidenceDiagnostic`: `level`、`code`、`message`。
+- `AiEvidencePackageReq`: `projectId`、`sourceType`、`sourceId`、`sourceTitle`、`coverageReport`、`standardSnapshot`、`payloadSummary`。
+
+稳定来源类型：`AI_JOB`、`SQL_CHECK`、`COVERAGE_REPORT`、`AI_BATCH_RUN`。`COVERAGE_REPORT` 可以是 payload source，`persisted=false` 表示当前报告不是服务端长期记录。
+
+证据包不得暴露 token、password、Authorization header、完整 JDBC URL 或业务数据行。AI 可以使用 evidence package 继续修复、复盘或生成交付说明，但不得把 evidence package 视为企业审计记录、审批结果或写入授权。
+
 ## 字段推荐
 
 稳定字段：
@@ -163,8 +189,10 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - CLI `profile list/show` 输出 AI Task Profiles 稳定字段；未知 profile 或 taskType 返回参数错误退出码。
 - CLI `contract list/show/check` 输出 Schema Registry 稳定字段；`check` 失败时退出码为 `2`，并返回 `diagnostics[]`。
 - CLI `workflow list/show` 输出 `kind`、`schemaVersion`、`recipes[]`、`recipe`；recipe 保留 `id`、`title`、`goal`、`requiredInputs`、`prechecks`、`steps`、`expectedArtifacts`、`failureHandling`、`nextActions`。
+- CLI `evidence export` 输出 `AiEvidencePackage` JSON 或 zip；失败时返回参数错误退出码并输出脱敏错误。
 - MCP resources/tools 返回 `structuredContent` 和 `content[].text`；`content[].text` 应保持可解析 JSON 或明确文本 fallback。
 - MCP `ai-task-profiles` resource 输出 `AiTaskProfileCatalog` 兼容结构。
 - MCP `schema-registry` resource 输出 Schema Registry catalog。
 - MCP `workflow-recipes` resource 输出 `kind`、`schemaVersion`、`projectId`、`recipes[]`。
 - MCP `search_fields` tool 返回字段检索稳定字段，`content[].text` 保持可解析 JSON。
+- MCP `export_evidence_package` tool 返回 `AiEvidencePackage`，并保持后端脱敏结果。

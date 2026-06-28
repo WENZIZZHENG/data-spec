@@ -40,6 +40,7 @@ class SchemaRegistryServiceImplTest {
                 "template",
                 "standard-snapshot",
                 "lint-result",
+                "ai-evidence-package",
                 "ai-context-manifest",
                 "ai-context-field-catalog",
                 "ai-task-profile"
@@ -61,6 +62,10 @@ class SchemaRegistryServiceImplTest {
         assertNotNull(contract.getJsonSchema().get("properties"));
         assertFalse(contract.getExamples().isEmpty());
         assertNotNull(contract.getCompatibility());
+
+        SchemaContract evidence = service.getContract("ai-evidence-package");
+        assertTrue(evidence.getStableFields().contains("validationSummary"));
+        assertTrue(evidence.getStableFields().contains("suggestedCommands[]"));
     }
 
     @Test

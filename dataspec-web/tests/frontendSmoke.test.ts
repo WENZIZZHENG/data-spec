@@ -196,6 +196,64 @@ test('keeps schema registry contract api and types wired', () => {
   ], 'schema registry schema')
 })
 
+test('keeps AI evidence package actions wired on high frequency result pages', () => {
+  const api = readSource('src/api/evidence.ts')
+  const types = readSource('src/types/index.ts')
+  const schema = readSource('src/api/schema.ts')
+  const sqlLint = readSource('src/views/SqlLint.vue')
+  const coverage = readSource('src/views/FieldCoverage.vue')
+  const aiBatch = readSource('src/views/AiBatch.vue')
+
+  assertContains(api, [
+    "request.post<unknown, AiEvidencePackage>('/evidence-packages', data)",
+    "request.post<unknown, Blob>('/evidence-packages/download', data"
+  ], 'evidence api')
+
+  assertContains(types, [
+    "export type EvidenceSourceType = Schemas['EvidenceSourceType']",
+    "export type AiEvidencePackage = Schemas['AiEvidencePackage']",
+    "export type AiEvidencePackageReq = Schemas['AiEvidencePackageReq']"
+  ], 'evidence types')
+
+  assertContains(schema, [
+    '"/api/evidence-packages"',
+    '"/api/evidence-packages/download"',
+    'generateEvidencePackage',
+    'downloadEvidencePackage',
+    'AiEvidencePackage',
+    'AiEvidencePackageReq',
+    'RAiEvidencePackage'
+  ], 'evidence schema')
+
+  assertContains(sqlLint, [
+    "import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'",
+    'handleCopyRecordEvidence',
+    'handleDownloadRecordEvidence',
+    "sourceType: 'SQL_CHECK'",
+    '复制证据 JSON',
+    '下载证据包'
+  ], 'SqlLint evidence actions')
+
+  assertContains(coverage, [
+    "import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'",
+    'handleCopyCoverageEvidence',
+    'handleDownloadCoverageEvidence',
+    "sourceType: 'COVERAGE_REPORT'",
+    'coverageReport: report.value',
+    '复制证据 JSON',
+    '下载证据包'
+  ], 'FieldCoverage evidence actions')
+
+  assertContains(aiBatch, [
+    "import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'",
+    'handleCopyEvidence',
+    'handleDownloadEvidence',
+    "sourceType: 'AI_BATCH_RUN'",
+    '复制证据 JSON',
+    '下载证据包'
+  ], 'AiBatch evidence actions')
+})
+
 test('keeps standard candidate inbox workbench wired', () => {
   const view = readSource('src/views/StandardCandidate.vue')
   const api = readSource('src/api/standardCandidate.ts')

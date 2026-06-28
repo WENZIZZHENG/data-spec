@@ -293,6 +293,24 @@
           <span class="record-time">{{ formatDate(activeRecord.record.createdAt) }}</span>
         </div>
 
+        <div class="record-evidence-actions">
+          <el-button
+            size="small"
+            :loading="evidenceLoading"
+            @click="handleCopyRecordEvidence"
+          >
+            复制证据 JSON
+          </el-button>
+          <el-button
+            size="small"
+            type="primary"
+            :loading="evidenceLoading"
+            @click="handleDownloadRecordEvidence"
+          >
+            下载证据包
+          </el-button>
+        </div>
+
         <div v-if="activeRecord.replay" class="detail-section replay-section">
           <div class="detail-title replay-title">
             <span>标准回放</span>
@@ -399,6 +417,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as monaco from 'monaco-editor'
 import { listAiProfiles } from '@/api/aiProfile'
+import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
 import { getLintRecord, lintSql, listLintRecords } from '@/api/lint'
 import { useProjectStore } from '@/stores/project'
 import {
@@ -436,6 +455,7 @@ const recordDetailLoading = ref(false)
 const loadingRecordId = ref<number | null>(null)
 const activeRecord = ref<RecordDetail | null>(null)
 const recordDialogVisible = ref(false)
+const evidenceLoading = ref(false)
 const historyActiveNames = ref<string[]>([])
 const profileLoading = ref(false)
 const aiProfiles = ref<AiTaskProfile[]>([])
@@ -680,6 +700,65 @@ async function handleViewRecord(id?: number) {
     recordDetailLoading.value = false
     loadingRecordId.value = null
   }
+}
+
+async function handleCopyRecordEvidence() {
+  const req = recordEvidenceRequest()
+  if (!req) {
+    return
+  }
+  evidenceLoading.value = true
+  try {
+    const evidence = await generateEvidencePackage(req)
+    await copyToClipboard(
+      JSON.stringify(evidence, null, 2),
+      '已复制证据 JSON',
+      '复制失败，请手动选择证据 JSON'
+    )
+  } finally {
+    evidenceLoading.value = false
+  }
+}
+
+async function handleDownloadRecordEvidence() {
+  const req = recordEvidenceRequest()
+  const recordId = activeRecord.value?.record?.id
+  if (!req || !recordId) {
+    return
+  }
+  evidenceLoading.value = true
+  try {
+    saveBlob(
+      await downloadEvidencePackage(req),
+      `dataspec-sql-check-evidence-${recordId}.zip`
+    )
+    ElMessage.success('已下载证据包')
+  } finally {
+    evidenceLoading.value = false
+  }
+}
+
+function recordEvidenceRequest() {
+  const record = activeRecord.value?.record
+  if (!record?.id) {
+    ElMessage.warning('当前记录缺少 ID，无法导出证据包')
+    return null
+  }
+  return {
+    projectId: record.projectId ?? projectStore.currentProjectId ?? undefined,
+    sourceType: 'SQL_CHECK',
+    sourceId: record.id,
+    sourceTitle: `SQL 检查记录 #${record.id}`
+  } as const
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 function handleRecordPageChange(page: number) {
@@ -1182,6 +1261,12 @@ function buildDiffLines(originalLines: string[], fixedLines: string[]) {
   margin-left: auto;
   color: #606266;
   font-size: 13px;
+}
+
+.record-evidence-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .detail-section {

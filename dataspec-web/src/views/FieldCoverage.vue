@@ -164,6 +164,15 @@
           </div>
         </div>
 
+        <div class="evidence-actions">
+          <el-button size="small" :loading="evidenceLoading" @click="handleCopyCoverageEvidence">
+            复制证据 JSON
+          </el-button>
+          <el-button size="small" type="primary" :loading="evidenceLoading" @click="handleDownloadCoverageEvidence">
+            下载证据包
+          </el-button>
+        </div>
+
         <div class="result-layout">
           <div class="main-panel">
             <div class="section-header">
@@ -256,6 +265,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Connection, DataAnalysis, Refresh, Search } from '@element-plus/icons-vue'
 import { reportDatabaseCoverage, reportSqlCoverage } from '@/api/coverage'
+import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
 import { listDatabaseTables, testDatabaseConnection } from '@/api/reverseImport'
 import { useProjectStore } from '@/stores/project'
 import {
@@ -293,6 +303,7 @@ const activeMode = ref<CoverageMode>('database')
 const sqlText = ref('')
 const report = ref<FieldCoverageReport | null>(null)
 const reportLoading = ref(false)
+const evidenceLoading = ref(false)
 const testLoading = ref(false)
 const tableLoading = ref(false)
 const databaseTables = ref<DatabaseTableInfo[]>([])
@@ -433,6 +444,81 @@ async function handleGenerateReport() {
   } finally {
     reportLoading.value = false
   }
+}
+
+async function handleCopyCoverageEvidence() {
+  const req = coverageEvidenceRequest()
+  if (!req) {
+    return
+  }
+  evidenceLoading.value = true
+  try {
+    const evidence = await generateEvidencePackage(req)
+    await copyText(JSON.stringify(evidence, null, 2))
+    ElMessage.success('已复制证据 JSON')
+  } finally {
+    evidenceLoading.value = false
+  }
+}
+
+async function handleDownloadCoverageEvidence() {
+  const req = coverageEvidenceRequest()
+  if (!req) {
+    return
+  }
+  evidenceLoading.value = true
+  try {
+    saveBlob(await downloadEvidencePackage(req), 'dataspec-coverage-evidence.zip')
+    ElMessage.success('已下载证据包')
+  } finally {
+    evidenceLoading.value = false
+  }
+}
+
+function coverageEvidenceRequest() {
+  if (!projectStore.currentProjectId || !report.value) {
+    ElMessage.warning('请先生成覆盖率报告')
+    return null
+  }
+  return {
+    projectId: projectStore.currentProjectId,
+    sourceType: 'COVERAGE_REPORT',
+    sourceTitle: activeMode.value === 'sql' ? 'SQL 覆盖率报告' : '数据库覆盖率报告',
+    coverageReport: report.value,
+    payloadSummary: {
+      mode: activeMode.value,
+      tableFilter: tableFilter.value,
+      statusFilter: statusFilter.value
+    }
+  } as const
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+async function copyText(text: string) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return
+    }
+  } catch {
+    // 非安全上下文或浏览器策略拒绝时，降级到临时 textarea 复制。
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
 }
 
 async function handleTestConnection() {
@@ -702,6 +788,14 @@ function goToReverseImport() {
   grid-template-columns: 180px minmax(0, 1fr);
   gap: 18px;
   align-items: center;
+  margin-bottom: 16px;
+}
+
+.evidence-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 16px;
 }
 

@@ -89,6 +89,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'doctor') {
       return await runDoctor(rest, io, fetchFn)
     }
+    if (command === 'evidence') {
+      return await runEvidence(rest, io, fetchFn)
+    }
     if (command === 'profile' || command === 'profiles') {
       return await runProfile(rest, io, fetchFn)
     }
@@ -606,6 +609,65 @@ async function runContract(args, io, fetchFn) {
   }
 
   throw new Error(`未知 contract 子命令: ${subcommand}。支持: list, show, check`)
+}
+
+async function runEvidence(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'export') {
+    throw new Error('未知 evidence 子命令。支持: export')
+  }
+  const { positional, options } = parseArgs(rest, [
+    'project',
+    'source-type',
+    'sourceType',
+    'source-id',
+    'sourceId',
+    'source-title',
+    'sourceTitle',
+    'payload',
+    'format',
+    'output',
+    'server',
+    'dataspec-token'
+  ])
+  if (positional.length > 0) {
+    throw new Error(`evidence export 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const config = loadDataSpecConfig(cliCwd(io))
+  const format = options.format ?? 'json'
+  if (!['json', 'zip'].includes(format)) {
+    throw new Error('evidence export 仅支持 --format json|zip')
+  }
+  if (format === 'zip' && !options.output) {
+    throw new Error('evidence export --format zip 需要提供 --output <zip>')
+  }
+  const output = options.output ? resolveOutputInsideCwd(options.output, cliCwd(io)) : null
+  const req = await buildEvidenceRequest(options, config)
+  const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
+  if (format === 'zip') {
+    const response = await fetchFn(`${server}/api/evidence-packages/download`, {
+      method: 'POST',
+      headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify(req)
+    })
+    if (!response.ok) {
+      throw toDataSpecCliError(await readResponseJson(response), response.status)
+    }
+    await mkdir(path.dirname(output), { recursive: true })
+    await writeFile(output, Buffer.from(await response.arrayBuffer()))
+    io.writeOut(`已导出 evidence package: ${formatOutputPath(output)}\n`)
+    return 0
+  }
+  const result = await fetchEvidencePackage({ server, apiToken, fetchFn, req })
+  if (output) {
+    await mkdir(path.dirname(output), { recursive: true })
+    await writeFile(output, `${JSON.stringify(result, null, 2)}\n`, 'utf8')
+    io.writeOut(`已导出 evidence package: ${formatOutputPath(output)}\n`)
+  } else {
+    io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  }
+  return 0
 }
 
 async function runInit(args, io, fetchFn) {
@@ -1163,6 +1225,49 @@ async function fetchContractDetail({ server, apiToken, fetchFn, contractId }) {
   return unwrapResponse(await readJsonResponse(response))
 }
 
+async function fetchEvidencePackage({ server, apiToken, fetchFn, req }) {
+  const response = await fetchFn(`${server}/api/evidence-packages`, {
+    method: 'POST',
+    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(req)
+  })
+  return unwrapResponse(await readJsonResponse(response))
+}
+
+async function buildEvidenceRequest(options, config) {
+  const sourceType = normalizeEvidenceSourceType(options['source-type'] ?? options.sourceType)
+  const sourceId = options['source-id'] ?? options.sourceId
+  const payload = options.payload ? JSON.parse(await readFile(options.payload, 'utf8')) : {}
+  const req = {
+    ...payload,
+    projectId: optionalProjectId(options.project ?? config.projectId ?? payload.projectId),
+    sourceType,
+    sourceId: sourceId === undefined || sourceId === null || sourceId === '' ? payload.sourceId : parsePositiveInteger(sourceId, 'source id'),
+    sourceTitle: options['source-title'] ?? options.sourceTitle ?? payload.sourceTitle
+  }
+  if (!req.sourceType) {
+    throw new Error('evidence export 需要提供 --source-type <AI_JOB|SQL_CHECK|COVERAGE_REPORT|AI_BATCH_RUN>')
+  }
+  if (req.sourceType !== 'COVERAGE_REPORT' && !req.sourceId) {
+    throw new Error(`${req.sourceType} 需要提供 --source-id <id>`)
+  }
+  return req
+}
+
+function normalizeEvidenceSourceType(value) {
+  if (!value) {
+    return undefined
+  }
+  return String(value).trim().replaceAll('-', '_').toUpperCase()
+}
+
+function optionalProjectId(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+  return parseProjectId(value)
+}
+
 const REQUIRED_CONTRACT_IDS = [
   'field',
   'enum-dict',
@@ -1170,6 +1275,7 @@ const REQUIRED_CONTRACT_IDS = [
   'template',
   'standard-snapshot',
   'lint-result',
+  'ai-evidence-package',
   'ai-context-manifest',
   'ai-context-field-catalog',
   'ai-task-profile'
@@ -1863,6 +1969,18 @@ async function writeDeliveryPackage(outputPath, deliveryPackage) {
   await writeFile(outputPath, `${JSON.stringify(deliveryPackage, null, 2)}\n`, 'utf8')
 }
 
+function resolveOutputInsideCwd(outputPath, cwd) {
+  if (!outputPath) {
+    throw new Error('缺少输出路径')
+  }
+  const baseDir = path.resolve(cwd)
+  const target = path.resolve(baseDir, outputPath)
+  if (!isPathInside(baseDir, target)) {
+    throw new Error(`输出路径越界: ${outputPath}`)
+  }
+  return target
+}
+
 function buildLintFilesDeliveryPackage(lintOutput, projectId) {
   const items = (lintOutput.files ?? []).map((file) => toDeliveryPackageItem(file))
   const summary = buildDeliverySummary(items)
@@ -2550,6 +2668,7 @@ Usage:
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
   node tools/dataspec-cli.mjs doctor [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
+  node tools/dataspec-cli.mjs evidence export --source-type <AI_JOB|SQL_CHECK|COVERAGE_REPORT|AI_BATCH_RUN> [--source-id <id>] [--payload <json>] [--format json|zip] [--output <path>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract list [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract show <contractId> [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract check [--format text|json] [--server <url>] [--dataspec-token <token>]
@@ -2569,6 +2688,7 @@ Options:
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   doctor 默认做轻量 OpenAPI 状态和 AI Context 缓存检查；传 --check-openapi 时执行完整 schema 漂移检查
+  evidence export 生成只读 AI 执行证据包；zip 输出必须显式指定 --output，证据包不是审批、审计或写入权限
   contract 用于读取和检查 AI 可消费输出契约 registry，不代表权限或发布审批
   workflow 只输出任务计划和命令建议，不会自动执行步骤或调用外部 LLM
 `

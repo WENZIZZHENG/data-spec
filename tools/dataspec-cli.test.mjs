@@ -1353,6 +1353,110 @@ test('contract check reports missing registry invariants', async () => {
   assert.match(JSON.stringify(output.diagnostics), /lint-result/)
 })
 
+test('evidence export prints machine-readable package json', async () => {
+  const calls = []
+  const fetchFn = async (url, init) => {
+    calls.push({ url, init })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: evidencePackageFixture()
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'evidence',
+    'export',
+    '--source-type',
+    'SQL_CHECK',
+    '--source-id',
+    '11',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  const body = JSON.parse(calls[0].init.body)
+  assert.equal(code, 0)
+  assert.equal(calls[0].url, 'http://dataspec.local/api/evidence-packages')
+  assert.equal(body.sourceType, 'SQL_CHECK')
+  assert.equal(body.sourceId, 11)
+  assert.equal(output.kind, 'dataspec-ai-evidence-package')
+  assert.equal(output.source.sourceType, 'SQL_CHECK')
+  assert.equal(output.validationSummary.errorCount, 1)
+})
+
+test('evidence export writes zip inside cwd', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    const zipBytes = Buffer.from('PK evidence')
+    const fetchFn = async (url, init) => {
+      assert.equal(url, 'http://dataspec.local/api/evidence-packages/download')
+      assert.equal(JSON.parse(init.body).sourceType, 'AI_BATCH_RUN')
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => zipBytes
+      }
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'evidence',
+      'export',
+      '--source-type',
+      'AI_BATCH_RUN',
+      '--source-id',
+      '31',
+      '--server',
+      'http://dataspec.local',
+      '--format',
+      'zip',
+      '--output',
+      'out/evidence.zip'
+    ], io, fetchFn)
+
+    const written = await readFile(path.join(dir, 'out', 'evidence.zip'))
+    assert.equal(code, 0)
+    assert.deepEqual(written, zipBytes)
+    assert.match(io.stdout, /evidence package/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('evidence export rejects unsafe output path', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    const io = createIo('', dir)
+    const code = await runCli([
+      'evidence',
+      'export',
+      '--source-type',
+      'SQL_CHECK',
+      '--source-id',
+      '11',
+      '--format',
+      'json',
+      '--output',
+      '..\\evidence.json'
+    ], io, async () => {
+      throw new Error('should not call server')
+    })
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /输出路径越界/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('export-context passes snapshot options without secrets', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {
@@ -2392,6 +2496,7 @@ function contractCatalogFixture() {
     'template',
     'standard-snapshot',
     'lint-result',
+    'ai-evidence-package',
     'ai-context-manifest',
     'ai-context-field-catalog',
     'ai-task-profile'
@@ -2415,6 +2520,51 @@ function contractCatalogFixture() {
       docsRef: `docs/ai-contracts.md#${contractId}`
     })),
     requiredContractIds: ids
+  }
+}
+
+function evidencePackageFixture() {
+  return {
+    kind: 'dataspec-ai-evidence-package',
+    schemaVersion: 1,
+    packageId: 'evidence-sql-check-test',
+    projectId: 7,
+    generatedAt: '2026-06-28T00:00:00Z',
+    source: {
+      sourceType: 'SQL_CHECK',
+      sourceId: 11,
+      sourceTitle: 'SQL 检查记录 #11',
+      status: 'ERROR',
+      persisted: true
+    },
+    standardSnapshot: {
+      snapshotId: 3,
+      specVersion: 'v1',
+      specHash: 'hash1',
+      versioned: true
+    },
+    inputsSummary: {
+      sqlPreview: 'select id from users'
+    },
+    outputsSummary: {
+      fixedSqlAvailable: true
+    },
+    validationSummary: {
+      errorCount: 1,
+      warningCount: 0,
+      suggestionCount: 0
+    },
+    artifacts: [
+      {
+        artifactType: 'sql-check-record',
+        title: 'SQL 检查记录',
+        format: 'json',
+        summary: { id: 11 }
+      }
+    ],
+    nextActions: ['review fixedSql'],
+    suggestedCommands: ['dataspec lint <path|-> --project 7 --format json'],
+    diagnostics: []
   }
 }
 

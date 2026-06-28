@@ -1188,6 +1188,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/evidence-packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["generateEvidencePackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence-packages/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["downloadEvidencePackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/import-export/fields/export": {
         parameters: {
             query?: never;
@@ -2920,6 +2952,81 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["SchemaContract"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @enum {string} */
+        EvidenceSourceType: "AI_JOB" | "SQL_CHECK" | "COVERAGE_REPORT" | "AI_BATCH_RUN";
+        AiEvidenceSource: {
+            sourceType?: components["schemas"]["EvidenceSourceType"];
+            /** Format: int64 */
+            sourceId?: number;
+            sourceTitle?: string;
+            status?: string;
+            persisted?: boolean;
+        };
+        AiEvidenceStandardSnapshot: {
+            /** Format: int64 */
+            snapshotId?: number;
+            specVersion?: string;
+            specHash?: string;
+            versioned?: boolean;
+        };
+        AiEvidenceArtifact: {
+            artifactType?: string;
+            title?: string;
+            format?: string;
+            summary?: {
+                [key: string]: unknown;
+            };
+        };
+        AiEvidenceDiagnostic: {
+            level?: string;
+            code?: string;
+            message?: string;
+        };
+        AiEvidencePackage: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            packageId?: string;
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: date-time */
+            generatedAt?: string;
+            source?: components["schemas"]["AiEvidenceSource"];
+            standardSnapshot?: components["schemas"]["AiEvidenceStandardSnapshot"];
+            inputsSummary?: {
+                [key: string]: unknown;
+            };
+            outputsSummary?: {
+                [key: string]: unknown;
+            };
+            validationSummary?: {
+                [key: string]: unknown;
+            };
+            artifacts?: components["schemas"]["AiEvidenceArtifact"][];
+            nextActions?: string[];
+            suggestedCommands?: string[];
+            diagnostics?: components["schemas"]["AiEvidenceDiagnostic"][];
+        };
+        AiEvidencePackageReq: {
+            /** Format: int64 */
+            projectId?: number;
+            sourceType: components["schemas"]["EvidenceSourceType"];
+            /** Format: int64 */
+            sourceId?: number;
+            sourceTitle?: string;
+            coverageReport?: components["schemas"]["FieldCoverageReport"];
+            standardSnapshot?: components["schemas"]["AiEvidenceStandardSnapshot"];
+            payloadSummary?: {
+                [key: string]: unknown;
+            };
+        };
+        RAiEvidencePackage: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiEvidencePackage"];
             error?: components["schemas"]["ErrorDetail"];
         };
         RProjectRestoreResult: {
@@ -6722,6 +6829,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RSchemaContract"];
+                };
+            };
+        };
+    };
+    generateEvidencePackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiEvidencePackageReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiEvidencePackage"];
+                };
+            };
+        };
+    };
+    downloadEvidencePackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiEvidencePackageReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
                 };
             };
         };

@@ -169,6 +169,7 @@ test('prompts list and get return DataSpec workflow guidance', async () => {
   assert.match(prompt.result.messages[0].content.text, /DataSpec/)
   assert.match(prompt.result.messages[0].content.text, /ai-task-profiles/)
   assert.match(prompt.result.messages[0].content.text, /schema-registry/)
+  assert.match(prompt.result.messages[0].content.text, /export_evidence_package/)
 })
 
 test('lint_sql tool returns structured lint result and json text content', async () => {
@@ -448,6 +449,75 @@ test('generate_table_ddl tool returns structured ddl result', async () => {
   assert.equal(JSON.parse(response.result.content[0].text).lintResult.errorCount, 0)
 })
 
+test('export_evidence_package tool returns structured package without adding secrets', async () => {
+  const calls = []
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local',
+    apiToken: 'ds_mcp_secret_token'
+  }, async (url, options) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: evidencePackageFixture()
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 16,
+    method: 'tools/call',
+    params: {
+      name: 'export_evidence_package',
+      arguments: {
+        sourceType: 'sql-check',
+        sourceId: 42,
+        sourceTitle: 'SQL 检查 #42'
+      }
+    }
+  })
+
+  assert.equal(calls[0].url, 'http://dataspec.local/api/evidence-packages')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_mcp_secret_token')
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    projectId: 7,
+    sourceType: 'SQL_CHECK',
+    sourceId: 42,
+    sourceTitle: 'SQL 检查 #42'
+  })
+  assert.equal(response.result.structuredContent.kind, 'dataspec-ai-evidence-package')
+  assert.equal(response.result.structuredContent.source.sourceType, 'SQL_CHECK')
+  assert.equal(JSON.parse(response.result.content[0].text).nextActions[0], '复核 fixedSql 后再应用补丁。')
+  assert.doesNotMatch(response.result.content[0].text, /ds_mcp_secret_token|Authorization|password=secret|jdbc:postgresql/)
+})
+
+test('export_evidence_package tool accepts coverage payload source', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url, options) => {
+    calls.push({ url, options })
+    return jsonResponse({ code: 200, data: evidencePackageFixture({ sourceType: 'COVERAGE_REPORT', persisted: false }) })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 17,
+    method: 'tools/call',
+    params: {
+      name: 'export_evidence_package',
+      arguments: {
+        sourceType: 'COVERAGE_REPORT',
+        coverageReport: { projectId: 7, summary: { totalFields: 10, coveredFields: 8 } },
+        payloadSummary: { note: 'jdbc:mysql://localhost:3306/app?password=secret' }
+      }
+    }
+  })
+
+  const body = JSON.parse(calls[0].options.body)
+  assert.equal(body.sourceType, 'COVERAGE_REPORT')
+  assert.equal(body.coverageReport.summary.coveredFields, 8)
+  assert.equal(response.result.structuredContent.source.persisted, false)
+})
+
 test('tool call returns DataSpec diagnostic in json-rpc error data', async () => {
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async () => ({
     ok: false,
@@ -620,4 +690,42 @@ function jsonResponse(payload) {
 
 async function failingFetch() {
   throw new Error('fetch should not be called')
+}
+
+function evidencePackageFixture(overrides = {}) {
+  const sourceType = overrides.sourceType ?? 'SQL_CHECK'
+  return {
+    kind: 'dataspec-ai-evidence-package',
+    schemaVersion: 1,
+    packageId: 'ev_42',
+    projectId: 7,
+    generatedAt: '2026-06-28T10:00:00Z',
+    source: {
+      sourceType,
+      sourceId: sourceType === 'COVERAGE_REPORT' ? null : 42,
+      sourceTitle: 'SQL 检查 #42',
+      status: 'COMPLETED',
+      persisted: overrides.persisted ?? true
+    },
+    standardSnapshot: {
+      snapshotId: 3,
+      version: 'v1',
+      hash: 'abc123'
+    },
+    inputsSummary: {
+      sqlLength: 128,
+      connection: '[REDACTED_JDBC_URL]'
+    },
+    outputsSummary: {
+      errorCount: 0,
+      fixedSqlAvailable: true
+    },
+    validationSummary: {
+      status: 'PASSED',
+      diagnostics: [{ level: 'INFO', code: 'READY', message: '可交付' }]
+    },
+    artifacts: [{ name: 'fixedSql', mediaType: 'text/sql', summary: { available: true } }],
+    nextActions: ['复核 fixedSql 后再应用补丁。'],
+    suggestedCommands: ['dataspec evidence export --source-type SQL_CHECK --source-id 42 --format zip --output evidence.zip']
+  }
 }

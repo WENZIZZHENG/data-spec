@@ -236,6 +236,48 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                 List.of(orderedMap("errorCount", 1, "warningCount", 0, "suggestionCount", 0))
         ));
         add(map, contract(
+                "ai-evidence-package",
+                "AI 执行证据包",
+                "AI 任务交付、复盘和下游续跑使用的只读 evidence package 结构。",
+                List.of("kind", "schemaVersion", "packageId", "projectId", "generatedAt", "source",
+                        "standardSnapshot", "inputsSummary", "outputsSummary", "validationSummary",
+                        "artifacts[]", "nextActions[]", "suggestedCommands[]", "diagnostics[]"),
+                List.of(),
+                objectSchema("DataSpec AI Evidence Package",
+                        List.of("kind", "schemaVersion", "source", "validationSummary", "artifacts", "nextActions", "suggestedCommands"),
+                        orderedMap(
+                                "kind", stringProp(),
+                                "schemaVersion", integerProp(),
+                                "packageId", stringProp(),
+                                "projectId", integerProp(),
+                                "generatedAt", stringProp(),
+                                "source", objectSchema("Evidence Source", List.of("sourceType", "persisted"), orderedMap(
+                                        "sourceType", enumProp("AI_JOB", "SQL_CHECK", "COVERAGE_REPORT", "AI_BATCH_RUN"),
+                                        "sourceId", integerProp(),
+                                        "sourceTitle", stringProp(),
+                                        "status", stringProp(),
+                                        "persisted", booleanProp()
+                                )),
+                                "standardSnapshot", objectProp(),
+                                "inputsSummary", objectProp(),
+                                "outputsSummary", objectProp(),
+                                "validationSummary", objectProp(),
+                                "artifacts", arrayOf(objectProp()),
+                                "nextActions", arrayOf(stringProp()),
+                                "suggestedCommands", arrayOf(stringProp()),
+                                "diagnostics", arrayOf(objectProp())
+                        )),
+                List.of(orderedMap(
+                        "kind", "dataspec-ai-evidence-package",
+                        "schemaVersion", 1,
+                        "source", orderedMap("sourceType", "SQL_CHECK", "sourceId", 42, "persisted", true),
+                        "validationSummary", orderedMap("status", "COMPLETED"),
+                        "artifacts", List.of(orderedMap("artifactType", "fixed-sql", "format", "sql")),
+                        "nextActions", List.of("复核 fixedSql 后再应用补丁。"),
+                        "suggestedCommands", List.of("dataspec evidence export --source-type SQL_CHECK --source-id 42 --format zip --output evidence.zip")
+                ))
+        ));
+        add(map, contract(
                 "ai-context-manifest",
                 "AI Context Manifest",
                 "AI Context zip 的入口 manifest，用于描述标准版本、文件清单、命令和契约版本。",

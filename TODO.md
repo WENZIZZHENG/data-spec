@@ -4,8 +4,8 @@
 
 ## 下一步顺序
 
-1. P6-31 Prompt 模板版本化与效果评测、P6-32 项目活动时间线与轻量审计视图、P6-33 前端任务式导航与空状态收口、P6-34 本地部署与演示数据一键启动包、P6-35 fixedSql 修复策略配置与 dry-run 解释、P6-36 AI 使用画像与任务模式配置、P6-37 标准系统 Schema Registry 与字段契约版本已完成第一版，下一步推进 P6-38 AI 执行证据包与交付归档。
-2. P6 后续继续补本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板、多项目标准复用包、AI 写入安全策略、规则调试器、元数据增量缓存、CLI/MCP 兼容握手、前端类型化 API Client、标准演练沙箱、MCP/CLI 工具契约验收、业务对象关系图、派生字段规则、fixedSql 文件补丁、标准问答入口、规则模板 diff 包、浏览器级 E2E、真实数据库集成测试、文档状态一致性、可访问性、本地数据清理和前端性能体验。
+1. P6-31 Prompt 模板版本化与效果评测、P6-32 项目活动时间线与轻量审计视图、P6-33 前端任务式导航与空状态收口、P6-34 本地部署与演示数据一键启动包、P6-35 fixedSql 修复策略配置与 dry-run 解释、P6-36 AI 使用画像与任务模式配置、P6-37 标准系统 Schema Registry 与字段契约版本、P6-38 AI 执行证据包与交付归档已完成第一版，下一步推进 P6-39 前端统一数据状态与可恢复错误体验。
+2. P6 后续继续补本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板、多项目标准复用包、AI 写入安全策略、规则调试器、元数据增量缓存、CLI/MCP 兼容握手、前端类型化 API Client、标准演练沙箱、MCP/CLI 工具契约验收、业务对象关系图、派生字段规则、fixedSql 文件补丁、标准问答入口、规则模板 diff 包、浏览器级 E2E、真实数据库集成测试、文档状态一致性、可访问性、本地数据清理和前端性能体验。
 3. 新增优化建议已补为 P6-87 到 P6-98：数据库迁移计划、业务代码字段引用、MCP prompt/resource、AI 上下文预算、本地 pre-commit/IDE 检查、标准样例生成、多源契约导入、标准证据置信度、自定义规则 SDK、本地语义检索、标准使用热区和 AI 变更迁移说明。
 4. 追加优化建议已补为 P6-99 到 P6-104：只读标准文档站、标准资产依赖图、环境配置漂移检测、数据源连接器注册、本地运行观测诊断和标准决策理由库。
 5. 本轮新增 AI 使用优化建议已补为 P6-105 到 P6-110：AI 一页式工作台、表级约束与索引标准、枚举生命周期、业务仓库迁移交付包、AI 能力边界模拟和文档反向提取候选。
@@ -17,7 +17,8 @@
 11. 本次补充优化建议已补为 P6-141 到 P6-146：AI 输出验证沙箱、多 schema 反向导入合并、Agent 启动包、质量异常归因、前端修复 Action 和个人健康摘要。
 12. 本次继续补充优化建议已补为 P6-147 到 P6-152：Schema Registry 可视化、可复用工作流 recipe、标准包同步巡检、业务仓库合规分、字段库密集编辑体验和待办里程碑收束。
 13. 本次最新优化建议已补为 P6-153 到 P6-158：AI Context 注入防护、标准消费端 SDK、规则依赖冲突诊断、示例契约快照、单机分发预案和字段可见性策略。
-14. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+14. 本次补充优化建议已补为 P6-159 到 P6-164：AI 任务断点续跑、标准变更影响预演、字段知识卡、规则/标准 A/B 评测、连接器能力探测和个人安全红线配置。
+15. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -28,7 +29,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，P6-10 已完成数据库直连配置预设第一版，P6-11 已完成 MCP/CLI 任务化工作流模板第一版，P6-12 已完成 AI 输出契约稳定性第一版，P6-13 已完成 GitHub inline review 第一版，P6-14 已完成字段分组体验第一版，P6-15 已完成字段批量维护与回退第一版，P6-16 已完成性能基线第一版，P6-17 已完成前端冒烟门禁第一版，P6-18 已完成 AI 可读错误诊断第一版，P6-19 已完成字段标准检索第一版，P6-20 已完成 OpenSpec 归档收口第一版，P6-21 已完成历史快照导出与记录回放第一版，P6-22 已完成 SQL/DDL 多方言兼容矩阵与诊断第一版，P6-23 已完成规则模板库与项目基线套件第一版，P6-24 已完成项目备份恢复迁移包第一版，P6-25 已完成数据库直连只读安全诊断第一版，P6-26 已完成 AI 批量任务交付包第一版，P6-27 已完成 AI 使用反馈与标准改进闭环第一版，P6-28 已完成标准候选 Inbox 与采纳工作台第一版，P6-29 已完成离线 AI Context 缓存第一版，P6-30 已完成数据库 schema dump 第一版，P6-31 已完成 Prompt 模板版本化与效果评测第一版，P6-32 已完成项目活动时间线第一版，P6-33 已完成前端任务式导航第一版，P6-34 已完成本地启动包第一版，P6-35 已完成 fixedSql 策略第一版，P6-36 已完成 AI 使用画像与任务模式配置第一版，P6-37 已完成标准契约 Registry 第一版，后续再推进执行证据包和交付归档。
+- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，P6-10 已完成数据库直连配置预设第一版，P6-11 已完成 MCP/CLI 任务化工作流模板第一版，P6-12 已完成 AI 输出契约稳定性第一版，P6-13 已完成 GitHub inline review 第一版，P6-14 已完成字段分组体验第一版，P6-15 已完成字段批量维护与回退第一版，P6-16 已完成性能基线第一版，P6-17 已完成前端冒烟门禁第一版，P6-18 已完成 AI 可读错误诊断第一版，P6-19 已完成字段标准检索第一版，P6-20 已完成 OpenSpec 归档收口第一版，P6-21 已完成历史快照导出与记录回放第一版，P6-22 已完成 SQL/DDL 多方言兼容矩阵与诊断第一版，P6-23 已完成规则模板库与项目基线套件第一版，P6-24 已完成项目备份恢复迁移包第一版，P6-25 已完成数据库直连只读安全诊断第一版，P6-26 已完成 AI 批量任务交付包第一版，P6-27 已完成 AI 使用反馈与标准改进闭环第一版，P6-28 已完成标准候选 Inbox 与采纳工作台第一版，P6-29 已完成离线 AI Context 缓存第一版，P6-30 已完成数据库 schema dump 第一版，P6-31 已完成 Prompt 模板版本化与效果评测第一版，P6-32 已完成项目活动时间线第一版，P6-33 已完成前端任务式导航第一版，P6-34 已完成本地启动包第一版，P6-35 已完成 fixedSql 策略第一版，P6-36 已完成 AI 使用画像与任务模式配置第一版，P6-37 已完成标准契约 Registry 第一版，P6-38 已完成执行证据包和交付归档第一版，后续再推进前端统一状态、并发幂等和 AI 能力清单。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -428,12 +429,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不引入重型 schema registry 服务，不要求历史所有导出包完全补齐版本，只从新增入口开始收敛。
 
 ### P6-38：AI 执行证据包与交付归档
-- 状态：待办。
+- 状态：已完成第一版，已新增后端 evidence package JSON/zip API、CLI `evidence export`、MCP `export_evidence_package`、前端复制/下载入口、Schema Registry contract 和契约文档。
 - 为什么做：AI 完成一次建表、修 SQL、导入标准或覆盖率分析后，用户需要一份可交付、可复盘的证据包，而不是只看一次页面结果或聊天摘要。
-- 已有基础：已有 AI 回放待办、SQL 检查记录、fixedSql、标准快照、覆盖率报告、DDL 生成记录和项目活动时间线待办。
-- 缺口：任务输入、标准版本、命令、输出、校验结果、跳过项和后续建议没有形成统一归档，AI 无法稳定把“我做了什么、依据是什么、还剩什么”交给用户。
-- 落地产物：新增执行证据包导出；支持按 AI job、SQL check、coverage report 或 batch run 生成 JSON/zip，包含 replay payload、snapshot metadata、验证摘要、关键输出和脱敏后的错误信息。
-- 验收标准：完成一次 SQL 修复或覆盖率报告后，用户能下载或复制证据包；AI 可把证据包作为交付附件继续传给下游任务；包内不包含数据库密码、token 或业务数据行。
+- 已有基础：已有 AI 回放、SQL 检查记录、fixedSql、标准快照、覆盖率报告、DDL 生成记录和项目活动时间线。
+- 已完成能力：支持 `SQL_CHECK`、`AI_JOB`、`AI_BATCH_RUN` 和 payload 型 `COVERAGE_REPORT` 生成 `AiEvidencePackage`；zip 固定包含 `evidence.json`、`summary.md` 和 `README.md`；前端 SQL 记录详情、覆盖率报告和 AI 批量任务页可复制 JSON 或下载 zip；CLI/MCP 可机器读取同一结构；Schema Registry 增加 `ai-evidence-package`。
+- 验收标准：完成一次 SQL 修复、覆盖率报告或 AI 批量任务后，用户能下载或复制证据包；AI 可把证据包作为交付附件继续传给下游任务；包内不包含数据库密码、token、Authorization、完整 JDBC URL 或业务数据行；相关后端、前端、CLI/MCP、OpenSpec 验证随提交记录保留。
 - 边界：不做长期对象存储，不上传第三方服务，不把证据包变成企业审计系统。
 
 ### P6-39：前端统一数据状态与可恢复错误体验
@@ -1576,6 +1576,66 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：同一项目在 SQL 修复、字段推荐、文档问答等任务下导出的字段范围不同且可解释；敏感字段默认被遮蔽或仅提供安全别名；导出结果有测试覆盖。
 - 边界：不做企业权限审批，不对历史 Context 包回溯删除，不扫描真实业务数据行；第一版只服务个人/小团队的 AI 使用安全。
 
+### P6-159：AI 任务状态机与断点续跑
+- 状态：待办。
+- 为什么做：AI 执行 SQL 修复、反向导入、覆盖率分析或批量任务时，最怕中途失败后只能重跑；需要把任务状态、输入、阶段产物和恢复建议结构化，方便 AI 接着做而不是重新猜。
+- 已有基础：已有 AI 批量任务、AI 回放、项目活动时间线、执行证据包、统一任务结果协议和并发幂等保护待办。
+- 缺口：缺少统一 taskState、checkpoint、idempotencyKey、retryPolicy、resumeCommand 和 partialArtifacts，前端/CLI/MCP 无法稳定展示“可继续、需重试、需人工处理”的状态。
+- 参考项目：`temporalio/temporal` 的 workflow 状态与重试模型、`dagster-io/dagster` 的资产任务运行记录和 `OpenLineage/OpenLineage` 的运行事件结构；只借鉴任务状态表达，不引入分布式调度平台。
+- 落地产物：定义 AI 任务状态机契约；为高频 AI 任务记录 checkpoint 和可恢复动作；CLI/MCP 输出 resume 指令；前端展示失败阶段、可重试按钮和证据包关联。
+- 验收标准：一个任务中断后，AI 能读取记录并继续到下一阶段；重复提交不会产生冲突副作用；失败原因、恢复入口和已生成产物可复查。
+- 边界：不做长时企业工作流编排，不引入外部队列；第一版聚焦本地单机和当前已有 AI 任务。
+
+### P6-160：标准变更影响预演与候选修复单
+- 状态：待办。
+- 为什么做：字段名、枚举、规则或可见性变更会影响 SQL、DDL、AI Context、业务仓库和文档；保存前应该让 AI 和用户看到影响范围，并生成可审查的修复清单。
+- 已有基础：已有字段影响分析、标准变更日志、标准变更迁移 recipe、fixedSql 文件补丁、业务仓库迁移交付包和执行证据包待办。
+- 缺口：缺少变更前 dry-run，无法按标准对象输出 impactedApis、impactedSql、impactedFiles、suggestedPatches、riskLevel 和 rollbackHint。
+- 参考项目：`openrewrite/rewrite` 的迁移 recipe、`hashicorp/terraform` 的 plan/apply 思路和 `reviewdog/reviewdog` 的 diff 诊断评论；只做本地预演和修复单，不自动改真实仓库。
+- 落地产物：新增标准变更 dry-run API/CLI；保存标准前可生成影响摘要和候选修复单；前端在字段/规则保存前展示影响预演；证据包记录本次变更的影响和取舍。
+- 验收标准：变更一个字段或规则时能看到受影响对象、建议修复和风险等级；用户确认后再保存；AI 可把修复单转成后续任务。
+- 边界：不强制所有保存都阻断，不直接连接生产仓库写补丁；第一版覆盖字段、枚举和默认规则。
+
+### P6-161：AI 可读字段知识卡片
+- 状态：待办。
+- 为什么做：AI 使用字段标准时，单纯字段列表还不够；它需要每个字段的使用场景、禁止写法、示例、相关字段和常见误用，才能在建表、修 SQL 和问答时少走弯路。
+- 已有基础：已有字段标准、数据字典、标准问答入口、业务术语表、示例反例库、自然语言标准候选和字段推荐质量增强。
+- 缺口：缺少可直接嵌入 AI Context 的 FieldKnowledgeCard，无法稳定表达 aliases、antiPatterns、usageExamples、relatedFields、enumHints、riskNotes 和 lastVerifiedAt。
+- 参考项目：`backstage/backstage` 的 catalog 实体页面、`facebook/docusaurus` 的结构化文档组织和 `great-expectations/great_expectations` 的规则说明；只生成轻量知识卡，不做复杂知识图谱。
+- 落地产物：为字段标准生成 AI 可读知识卡；支持前端查看、CLI 导出和 MCP resource 读取；从示例反例、规则命中和用户反馈中补充卡片内容。
+- 验收标准：AI 针对单个字段能拿到完整、短小、可引用的标准说明；卡片能说明何时使用、何时不要用、如何命名和关联哪些字段；变更后有版本或更新时间。
+- 边界：不把知识卡当审批文档，不要求每个字段一次性补齐长文案；第一版优先覆盖高频字段和敏感字段。
+
+### P6-162：规则/标准 A/B 评测与回归数据集
+- 状态：待办。
+- 为什么做：优化规则、推荐权重或 AI prompt 后，需要知道新版本是否真的更好；否则容易靠感觉改标准，导致误报、漏报或 AI 输出变差。
+- 已有基础：已有 Prompt 模板评测、规则变异回归、核心 fixture/golden、字段推荐质量增强、AI 使用反馈和质量门禁待办。
+- 缺口：缺少把标准版本 A/B、规则集 A/B、推荐结果 A/B 放到同一评测入口的机制，也缺少 precision/recall、falsePositive、acceptedSuggestionRate 和 regressionNotes。
+- 参考项目：`promptfoo/promptfoo` 的批量评测、`stryker-mutator/stryker-js` 的回归召回和 `great-expectations/great_expectations` 的验证结果组织；只做本地可复现评测，不接外部实验平台。
+- 落地产物：新增评测数据集格式和 CLI/API；支持对比两个规则或标准版本在 SQL fixture、推荐样例和 AI 输出样例上的结果差异；前端显示回归摘要。
+- 验收标准：修改规则或标准前后能跑同一套样例并看到提升/退化；关键指标可进入证据包；失败样例能沉淀回 fixture。
+- 边界：不做在线流量 A/B，不上传业务 SQL；第一版用本地脱敏样例和项目 fixture。
+
+### P6-163：连接器能力探测与方言 Profile
+- 状态：待办。
+- 为什么做：不同数据库和驱动在 schema、注释、默认值、索引、枚举、保留字和分页语法上差异很大；AI 如果不知道当前连接器能力，就会生成不适配的 SQL 或导入计划。
+- 已有基础：已有多方言 SQL/DDL 兼容矩阵、数据库连接诊断、数据源连接器注册、数据库直连反向导入、schema dump 和数据库元数据浏览待办。
+- 缺口：缺少 per-connection capability profile，无法稳定记录 supportsComments、supportsEnums、identifierQuote、reservedWordsVersion、maxIdentifierLength、driverVersion 和 knownLimitations。
+- 参考项目：`dbeaver/dbeaver` 的连接器能力抽象、`sqlalchemy/sqlalchemy` 的 dialect 分层和 `schemacrawler/SchemaCrawler` 的 metadata 抽取；只做只读探测，不执行破坏性 SQL。
+- 落地产物：连接数据库后生成能力探测报告；AI Context、反向导入 plan 和 SQL 校验结果携带方言 profile；前端连接诊断页展示不支持项和替代建议。
+- 验收标准：同一个任务在 MySQL/PostgreSQL 等连接下能获得不同方言提示；不支持的能力会提前警告；探测过程只读且不保存密码。
+- 边界：不承诺覆盖所有数据库第一版，不自动安装驱动；优先 PostgreSQL/MySQL 和当前已支持路径。
+
+### P6-164：个人安全红线配置中心
+- 状态：待办。
+- 为什么做：DataSpec 优先个人/小团队使用，但 AI Context、证据包、样例、连接信息和业务仓库路径仍可能踩到用户自己的安全红线；需要一个简单可见的本地策略入口。
+- 已有基础：已有 API Token、安全基线、敏感信息脱敏、字段可见性等级、AI Context 注入防护、凭据复用、受控脱敏样例和本地运行诊断待办。
+- 缺口：缺少统一 securityProfile，无法声明 neverExportPatterns、allowedAiTools、localOnlyPaths、samplePolicy、credentialPolicy 和 redactionStrictness，也无法让 doctor/CLI/MCP 统一检查。
+- 参考项目：`gitleaks/gitleaks` 的 secret 检测、`getsops/sops` 的本地密文配置、`dotenvx/dotenvx` 的环境变量管理和 `microsoft/presidio` 的 PII 识别；只借鉴本地安全策略，不做企业权限平台。
+- 落地产物：新增个人安全红线配置页和 `.dataspec/security.json` schema；导出、证据包、样例生成、CLI/MCP 调用前统一读取策略；doctor 输出策略缺失或冲突提示。
+- 验收标准：用户能明确配置哪些内容永不导出、哪些 AI 工具可用、样例如何脱敏；违反红线时前端/CLI/MCP 给出可执行阻断或警告；策略本身不泄漏 secret。
+- 边界：不做组织级审批，不扫描真实业务数据全量内容，不替代专业 DLP；第一版聚焦本机使用安全。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -1599,6 +1659,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`rust-lang/cargo`](https://github.com/rust-lang/cargo)：`Cargo.lock` 与依赖固定策略参考。
 - [`promptfoo/promptfoo`](https://github.com/promptfoo/promptfoo)：prompt 输出评测、回归样例和批量评估参考。
 - [`langfuse/langfuse`](https://github.com/langfuse/langfuse)：AI trace、prompt 版本和生成任务观测参考。
+- [`temporalio/temporal`](https://github.com/temporalio/temporal)：工作流状态、重试、断点恢复和任务可观测性参考。
+- [`dagster-io/dagster`](https://github.com/dagster-io/dagster)：数据资产任务、运行记录和本地任务编排体验参考。
 - [`OpenLineage/OpenLineage`](https://github.com/OpenLineage/OpenLineage)：作业运行、输入输出和血缘事件模型参考，可借鉴执行证据包结构。
 - [`OpenAPITools/openapi-generator`](https://github.com/OpenAPITools/openapi-generator)：契约优先、代码生成和版本兼容策略参考。
 - [`bufbuild/buf`](https://github.com/bufbuild/buf)：Protobuf schema lint、breaking change 检查和契约管理参考。

@@ -8,6 +8,7 @@ import { workflowRecipesResourcePayload } from './dataspec-workflows.mjs'
 const DEFAULT_SERVER = 'http://localhost:8090'
 const SERVER_NAME = 'dataspec-mcp'
 const SERVER_VERSION = '0.1.0'
+const EVIDENCE_SOURCE_TYPES = ['AI_JOB', 'SQL_CHECK', 'COVERAGE_REPORT', 'AI_BATCH_RUN']
 
 const RESOURCE_DEFS = {
   'field-catalog': {
@@ -76,6 +77,7 @@ const PROMPTS = {
         `- dataspec://project/${projectId}/database-rules`,
         '',
         '先根据 schema registry 确认稳定字段和兼容策略，再根据 AI task profile 选择 context scope、fixedSql 策略和输出格式；再根据字段目录优先复用标准字段，生成 PostgreSQL DDL。要求表名和列名使用 snake_case，并为表和字段补充 COMMENT ON 语句。',
+        '交付前请调用 MCP tool `export_evidence_package` 导出 evidence package，作为本次建模依据、输出和下一步建议的只读交接物。',
         args.businessDescription ? `业务描述：${args.businessDescription}` : '业务描述：请根据用户后续输入补全。'
       ].join('\n')
     }
@@ -97,6 +99,7 @@ const PROMPTS = {
     buildText(args, projectId) {
       return [
         '请按 DataSpec 标准评审 SQL。先读取 schema registry 和 AI task profile，再读取字段目录和数据库规则，并在需要机器校验时调用 MCP tool `lint_sql`。',
+        '完成修复或评审交付前，请调用 MCP tool `export_evidence_package` 导出 evidence package，便于用户和下游 AI 复盘。',
         `契约 registry：dataspec://project/${projectId}/schema-registry`,
         `AI profile：dataspec://project/${projectId}/ai-task-profiles`,
         `字段目录：dataspec://project/${projectId}/field-catalog`,
@@ -122,6 +125,7 @@ const PROMPTS = {
     buildText(args, projectId) {
       return [
         '请把业务需求拆成字段设计建议。先读取 schema registry、AI task profile 和 DataSpec 字段目录，优先复用已有标准字段；缺口字段请说明建议字段名、类型、注释和是否应纳入标准字段库。',
+        '完成字段设计建议前，请调用 MCP tool `export_evidence_package` 导出 evidence package，记录使用的标准、候选依据和后续动作。',
         `契约 registry：dataspec://project/${projectId}/schema-registry`,
         `AI profile：dataspec://project/${projectId}/ai-task-profiles`,
         `字段目录：dataspec://project/${projectId}/field-catalog`,
@@ -491,6 +495,45 @@ function listTools() {
           },
           required: ['templateId', 'tableName']
         }
+      },
+      {
+        name: 'export_evidence_package',
+        description: '导出只读 AI 执行证据包，返回 evidence package 结构化 JSON。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sourceType: {
+              type: 'string',
+              enum: EVIDENCE_SOURCE_TYPES,
+              description: '证据来源类型: AI_JOB、SQL_CHECK、COVERAGE_REPORT、AI_BATCH_RUN。'
+            },
+            sourceId: {
+              type: 'integer',
+              description: '持久化来源记录 ID。COVERAGE_REPORT 可省略，使用 coverageReport payload。'
+            },
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            sourceTitle: {
+              type: 'string',
+              description: '可选来源标题，用于 payload 型证据包的人类可读说明。'
+            },
+            coverageReport: {
+              type: 'object',
+              description: 'COVERAGE_REPORT 来源需要传入当前覆盖率报告摘要。'
+            },
+            standardSnapshot: {
+              type: 'object',
+              description: '可选标准快照摘要。'
+            },
+            payloadSummary: {
+              type: 'object',
+              description: '可选脱敏 payload 摘要，后端会再次清洗。'
+            }
+          },
+          required: ['sourceType']
+        }
       }
     ]
   }
@@ -516,6 +559,9 @@ async function callTool(params, context) {
   }
   if (name === 'generate_table_ddl') {
     return await callGenerateTableDdl(args, context)
+  }
+  if (name === 'export_evidence_package') {
+    return await callExportEvidencePackage(args, context)
   }
   throw new JsonRpcError(-32602, `未知 tool: ${name}`)
 }
@@ -601,6 +647,66 @@ async function callGenerateTableDdl(args, context) {
   const response = await context.fetchFn(url, { headers: dataSpecHeaders(context.apiToken) })
   const result = await readDataSpecJson(response)
   return toolJsonResult(result)
+}
+
+async function callExportEvidencePackage(args, context) {
+  const req = buildEvidencePackageRequest(args, context.defaultProjectId)
+  const response = await context.fetchFn(`${context.server}/api/evidence-packages`, {
+    method: 'POST',
+    headers: dataSpecHeaders(context.apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(req)
+  })
+  const result = await readDataSpecJson(response)
+  return toolJsonResult(result)
+}
+
+function buildEvidencePackageRequest(args, defaultProjectId) {
+  const sourceType = normalizeEvidenceSourceType(args.sourceType ?? args['source-type'])
+  if (!sourceType) {
+    throw new JsonRpcError(-32602, `export_evidence_package 需要 sourceType，支持: ${EVIDENCE_SOURCE_TYPES.join(', ')}`)
+  }
+  if (!EVIDENCE_SOURCE_TYPES.includes(sourceType)) {
+    throw new JsonRpcError(-32602, `不支持的 evidence sourceType: ${sourceType}，支持: ${EVIDENCE_SOURCE_TYPES.join(', ')}`)
+  }
+  const sourceIdInput = args.sourceId ?? args['source-id']
+  if (sourceType !== 'COVERAGE_REPORT' && (sourceIdInput === undefined || sourceIdInput === null || sourceIdInput === '')) {
+    throw new JsonRpcError(-32602, `${sourceType} 需要 sourceId`)
+  }
+  const req = {
+    projectId: optionalProjectId(args.projectId, defaultProjectId),
+    sourceType
+  }
+  if (sourceIdInput !== undefined && sourceIdInput !== null && sourceIdInput !== '') {
+    req.sourceId = parsePositiveInteger(sourceIdInput, 'sourceId')
+  }
+  appendOptionalObject(req, 'coverageReport', args.coverageReport)
+  appendOptionalObject(req, 'standardSnapshot', args.standardSnapshot)
+  appendOptionalObject(req, 'payloadSummary', args.payloadSummary)
+  appendOptionalTextProperty(req, 'sourceTitle', args.sourceTitle ?? args['source-title'])
+  return req
+}
+
+function normalizeEvidenceSourceType(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+  return String(value).trim().replaceAll('-', '_').toUpperCase()
+}
+
+function appendOptionalObject(target, key, value) {
+  if (value !== undefined && value !== null) {
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      throw new JsonRpcError(-32602, `${key} 必须是 object`)
+    }
+    target[key] = value
+  }
+}
+
+function appendOptionalTextProperty(target, key, value) {
+  const normalized = normalizeOptionalText(value)
+  if (normalized) {
+    target[key] = normalized
+  }
 }
 
 async function fetchAiContextText(context, path, projectId, extraParams = {}) {
