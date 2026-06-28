@@ -23,7 +23,7 @@
 - [x] 4.3 更新 README、TODO 和 OpenSpec Verification Evidence。
 - [x] 4.4 运行 OpenSpec validate、后端测试、前端测试/build 和 diff 检查。
 - [x] 4.5 执行本地结构化代码评审并修复 findings。
-- [ ] 4.6 完成提交并归档 OpenSpec change。
+- [x] 4.6 完成提交并归档 OpenSpec change。
 
 ## Verification Evidence
 
