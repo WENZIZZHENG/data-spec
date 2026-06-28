@@ -6,7 +6,7 @@
 
 1. P6-24 项目备份、恢复与迁移包已完成第一版，下一步推进 P6-25 数据库直连只读安全诊断与最小权限指引。
 2. P6 后续继续补数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板、多项目标准复用包、AI 写入安全策略、规则调试器、元数据增量缓存、CLI/MCP 兼容握手、前端类型化 API Client、标准演练沙箱、MCP/CLI 工具契约验收、业务对象关系图、派生字段规则、fixedSql 文件补丁、标准问答入口、规则模板 diff 包、浏览器级 E2E、真实数据库集成测试、文档状态一致性、可访问性、本地数据清理和前端性能体验。
-3. 新增优化建议已补为 P6-87 到 P6-92：数据库迁移计划、业务代码字段引用、MCP prompt/resource、AI 上下文预算、本地 pre-commit/IDE 检查和标准样例生成。
+3. 新增优化建议已补为 P6-87 到 P6-98：数据库迁移计划、业务代码字段引用、MCP prompt/resource、AI 上下文预算、本地 pre-commit/IDE 检查、标准样例生成、多源契约导入、标准证据置信度、自定义规则 SDK、本地语义检索、标准使用热区和 AI 变更迁移说明。
 4. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
@@ -914,9 +914,64 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：新规则或字段变更后可快速生成一组覆盖样例；样例可接入现有后端 fixture、前端 smoke 或 Prompt 评测；生成内容不包含真实业务数据行。
 - 边界：不替代人工维护的高价值真实样例，不引入外部 LLM 自动造数据，不生成可直接写入生产库的数据。
 
+### P6-93：多源契约反向导入到标准候选
+- 状态：待办。
+- 为什么做：很多字段标准并不只存在于数据库，还散落在 OpenAPI、JSON Schema、Protobuf、事件 schema 和前端类型里；AI 建表或修 SQL 时如果只看数据库来源，会遗漏接口层已经稳定下来的业务命名。
+- 已有基础：已有 OpenAPI 类型生成、字段推荐、标准候选 Inbox、数据库反向导入、字段来源追踪、业务代码引用索引和 AI Context。
+- 缺口：缺少从 API/Schema 契约反向抽取字段候选的统一入口；无法记录字段来自哪个接口、消息、版本和属性路径，也无法和数据库字段候选合并比对。
+- 落地产物：新增契约导入预览 API/CLI；支持 OpenAPI、JSON Schema 和 Protobuf descriptor 或 `.proto` 文件输入，输出 candidateFields、sourceKind、sourcePath、schemaVersion、confidence、conflictReasons 和 recommendedAction；前端复用候选采纳台确认写入。
+- 验收标准：给定一份接口契约，能抽取字段名、类型、描述、必填性、枚举和示例值作为标准候选；候选可与已有字段、数据库反向导入结果去重；AI Context 能标明字段来源于 API 契约还是数据库。
+- 边界：第一版不做全语言类型系统解析，不直接写入正式标准，不替代数据库反向导入；复杂 oneOf/allOf/泛型先保守降级为人工确认。
+
+### P6-94：标准来源可信度与 AI 置信度标记
+- 状态：待办。
+- 为什么做：AI 使用数标时需要知道哪些字段是人工确认的核心标准、哪些是数据库反向导入候选、哪些是样例生成或低置信度推断；否则容易把“疑似标准”当成“强制标准”使用。
+- 已有基础：已有字段来源批次、变更日志、标准快照、标准候选 Inbox、字段质量评分、冲突检测、AI 输出证据和反向导入映射待办。
+- 缺口：字段与规则缺少统一 provenance/confidence 结构；AI Context、字段推荐和标准问答无法稳定表达“建议使用但需确认”“已废弃但仍被引用”“仅来自样例”的差异。
+- 落地产物：为字段、别名、枚举、规则和模板补充来源证据模型；输出 sourceType、sourceRef、verifiedBy、verifiedAt、confidenceLevel、evidenceCount、lastSeenAt 和 warning；前端字段详情和 AI Context 展示可信度摘要。
+- 验收标准：AI 能区分 confirmed、imported、generated、deprecated、conflicting 等来源状态；低置信度字段不会被推荐为首选；标准快照包含可信度摘要且可回放。
+- 边界：不做复杂组织认证流程，不引入人工审批；可信度只辅助决策，不自动删除或隐藏已有标准。
+
+### P6-95：可插拔规则 SDK 与项目内自定义规则
+- 状态：待办。
+- 为什么做：内置 SQL/字段规则能覆盖通用标准，但个人或小团队会有项目特有命名、枚举、审计字段、分库分表和框架约束；如果每次都改核心代码，规则迭代会变慢，也不利于 AI 针对项目补规则。
+- 已有基础：已有规则配置、规则模板库、误报豁免、规则调试器、多方言兼容矩阵、golden fixtures 和 AI 输出契约测试。
+- 缺口：缺少稳定的 custom rule SDK、规则包目录、测试夹具和加载边界；项目规则无法用声明式配置或轻量脚本扩展。
+- 落地产物：定义项目内规则包格式；支持 declarative rule、fixture、metadata、severity、paramsSchema、safeFixStrategy 和 AI readable description；CLI 提供 validate-rule/test-rule，前端规则页可加载和调试自定义规则。
+- 验收标准：用户能在业务仓库或 DataSpec 项目中新增一条自定义命名规则并跑通测试；规则错误不会拖垮核心 lint；AI 可读取规则描述、示例和失败原因后补充 SQL。
+- 边界：第一版不执行不可信远程代码，不做规则市场，不允许自定义规则访问数据库密码或业务数据行。
+
+### P6-96：本地语义检索索引与相似字段发现
+- 状态：待办。
+- 为什么做：字段数量变多后，纯关键词检索难以发现“手机号、联系电话、mobile_no”“支付金额、订单实付金额”这类语义相近字段；AI 在上下文有限时也需要一个本地、可重建、可解释的相似字段检索入口。
+- 已有基础：已有字段标准检索、字段推荐、AI Context 裁剪、业务术语表、同义词词根库、上下文预算评估和字段冲突检测。
+- 缺口：缺少离线语义索引、相似度解释、索引版本和重建命令；当前只能依赖手写同义词和确定性评分。
+- 落地产物：新增可选本地 semantic index；记录 indexVersion、sourceSnapshotHash、embeddingProvider/localTokenizer、similarFields、score、explainTerms 和 rebuildCommand；CLI/MCP/前端字段检索可选择语义模式。
+- 验收标准：无需上传标准内容即可生成本地索引；语义检索能发现命名不同但含义接近的字段并给出解释；索引过期时能提示基于当前标准快照重建。
+- 边界：不强依赖外部向量数据库或云模型，不把语义分数作为唯一排序依据，不改变现有确定性检索的默认可用性。
+
+### P6-97：标准使用热区与清理优先级报告
+- 状态：待办。
+- 为什么做：标准字段、规则和候选越来越多后，用户需要知道哪些标准被 SQL、DDL、数据库表、AI 任务和业务代码频繁使用，哪些长期无人使用或冲突高，才能优先清理真正影响 AI 输出质量的部分。
+- 已有基础：已有字段影响分析、字段覆盖率、业务代码引用索引、AI 使用画像、字段质量评分、冲突检测、检查记录和 AI 回放。
+- 缺口：缺少跨来源 usage heatmap 和 cleanup priority；字段列表只能看静态属性，无法按“高使用低质量”“高冲突高影响”“长期未命中”排序。
+- 落地产物：新增标准使用热区报告；聚合 fieldUsageCount、lastReferencedAt、sourceKinds、qualityScore、conflictCount、aiJobHits、lintHits、cleanupPriority 和 suggestedNextAction；前端提供可筛选列表和跳转。
+- 验收标准：用户能一眼看到最值得优先修的字段、规则和模板；AI 可读取报告先处理高影响标准，而不是随机优化；报告生成不读取业务数据行。
+- 边界：不做团队 KPI，不上传使用统计，不以使用次数自动删除低频字段；第一版只聚合 DataSpec 已有记录和用户指定扫描结果。
+
+### P6-98：面向 AI 的标准变更发布说明与迁移指令
+- 状态：待办。
+- 为什么做：标准字段、规则、模板和 Prompt 变化后，AI agent 需要知道“这次标准变了什么、旧写法如何迁移、哪些任务要重跑”，而不只是看到一份 diff 或快照 hash。
+- 已有基础：已有标准快照、变更日志、规则与模板 diff 包、执行证据包、AI 会话启动包、TODO 到 OpenSpec 交接、MCP/CLI 工作流模板和 OpenSpec 归档。
+- 缺口：缺少面向 AI 的 release note/migration guide；变更完成后没有统一输出 breakingChanges、deprecatedFields、replacementHints、requiredChecks 和 recommendedWorkflow。
+- 落地产物：新增标准变更发布说明生成器；按快照 diff 或变更日志生成 machine-readable changelog，包含 changeType、affectedArtifacts、migrationSteps、beforeAfterExamples、verificationCommands、rollbackHint 和 agentInstructions；CLI/MCP/AI Context 可读取。
+- 验收标准：标准升级后 AI 能解释本次变化并按迁移指令修 SQL、DDL 或字段引用；破坏性变更会明确标记并要求人工确认；发布说明可随备份包或执行证据包归档。
+- 边界：不做复杂发布审批，不自动修改业务仓库；第一版只生成说明和建议命令，实际改动仍走 dry-run 或人工确认。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
+- [`eslint/eslint`](https://github.com/eslint/eslint)：可插拔规则、fixture 测试和规则元数据设计参考。
 - [`ariga/atlas`](https://github.com/ariga/atlas)：schema-as-code、schema lint 和迁移规划。
 - [`ariga/atlas-action`](https://github.com/ariga/atlas-action)：数据库 schema 变更的 GitHub Actions lint 入口。
 - [`bytebase/bytebase`](https://github.com/bytebase/bytebase)：数据库 DevOps 工作台、SQL Review、数据库 CI/CD。
@@ -932,11 +987,15 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`langfuse/langfuse`](https://github.com/langfuse/langfuse)：AI trace、prompt 版本和生成任务观测参考。
 - [`OpenLineage/OpenLineage`](https://github.com/OpenLineage/OpenLineage)：作业运行、输入输出和血缘事件模型参考，可借鉴执行证据包结构。
 - [`OpenAPITools/openapi-generator`](https://github.com/OpenAPITools/openapi-generator)：契约优先、代码生成和版本兼容策略参考。
+- [`bufbuild/buf`](https://github.com/bufbuild/buf)：Protobuf schema lint、breaking change 检查和契约管理参考。
+- [`glideapps/quicktype`](https://github.com/glideapps/quicktype)：从 JSON/Schema 推导类型与结构的契约反向提取参考。
 - [`backstage/backstage`](https://github.com/backstage/backstage)：项目模板、开发者入口和脚手架体验参考。
 - [`dbeaver/dbeaver`](https://github.com/dbeaver/dbeaver)：数据库连接配置、metadata 浏览和多方言体验参考。
 - [`reviewdog/reviewdog`](https://github.com/reviewdog/reviewdog)：基于 diff 的代码审查评论、诊断聚合和 PR 反馈参考。
 - [`pre-commit/pre-commit`](https://github.com/pre-commit/pre-commit)：本地变更钩子、按文件质量门禁和轻量开发工作流参考。
 - [`hashicorp/terraform`](https://github.com/hashicorp/terraform)：plan/apply、状态记录和 dry-run 风格的写入前演练参考。
+- [`changesets/changesets`](https://github.com/changesets/changesets)：变更集、版本发布说明和迁移提示组织参考。
+- [`sourcegraph/sourcegraph`](https://github.com/sourcegraph/sourcegraph)：代码引用检索、搜索索引和仓库级影响分析参考。
 - [`Redocly/redocly-cli`](https://github.com/Redocly/redocly-cli)：OpenAPI lint、bundle 和契约治理参考。
 - [`Schemathesis/schemathesis`](https://github.com/schemathesis/schemathesis)：基于 OpenAPI 的契约测试和接口行为回归参考。
 - [`sqlmesh/sqlmesh`](https://github.com/TobikoData/sqlmesh)：数据模型依赖、plan/apply 和变更影响分析参考。
@@ -946,6 +1005,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`dequelabs/axe-core`](https://github.com/dequelabs/axe-core)：前端可访问性自动检查规则参考。
 - [`GoogleChrome/lighthouse`](https://github.com/GoogleChrome/lighthouse)：页面性能、可访问性和最佳实践审计参考。
 - [`gitleaks/gitleaks`](https://github.com/gitleaks/gitleaks)：敏感信息检测、日志脱敏和 secret 防泄漏参考。
+- [`pgvector/pgvector`](https://github.com/pgvector/pgvector)：本地或自托管向量检索索引的设计参考。
 - [Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)：AI 应用接入 resources、prompts、tools 的协议基础。
 - [`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)：MCP server 参考实现集合。
 - [`agents.md`](https://agents.md/)：面向 coding agent 的项目指令文件约定。
