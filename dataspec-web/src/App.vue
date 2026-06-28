@@ -152,6 +152,14 @@
     <!-- 右侧内容区 -->
     <el-container>
       <el-header class="app-header">
+        <div class="header-left">
+          <el-breadcrumb separator="/">
+            <el-breadcrumb-item :to="{ path: '/dashboard' }">工作台</el-breadcrumb-item>
+            <el-breadcrumb-item v-if="route.path !== '/dashboard'">
+              {{ routeTitle }}
+            </el-breadcrumb-item>
+          </el-breadcrumb>
+        </div>
         <div class="header-right">
           <el-tag v-if="authStore.operatorName" effect="plain" type="success">
             {{ authStore.operatorName }}
@@ -221,6 +229,7 @@ const tokenInput = ref('')
 
 // 当前激活的菜单项，与路由路径同步
 const activeMenu = computed(() => route.path)
+const routeTitle = computed(() => String(route.meta.title || ''))
 
 onMounted(() => {
   authStore.restore()
@@ -289,8 +298,13 @@ const handleLogout = () => {
   border-bottom: 1px solid #e4e7ed;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 16px;
   padding: 0 20px;
+}
+
+.header-left {
+  min-width: 0;
 }
 
 .header-right {

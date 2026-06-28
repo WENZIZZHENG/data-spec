@@ -29,25 +29,51 @@
           </div>
         </section>
 
-        <section class="quick-actions">
+        <section class="task-panel">
           <div class="section-header">
-            <h3>快速开始</h3>
+            <h3>任务入口</h3>
             <el-button text type="primary" :loading="demoLoading" @click="handleCreateDemoProject">
               演示项目
             </el-button>
           </div>
-          <div class="action-row">
+          <div class="task-grid">
+            <button
+              v-for="task in taskEntries"
+              :key="task.key"
+              type="button"
+              class="task-card"
+              @click="openTask(task)"
+            >
+              <el-icon class="task-icon">
+                <component :is="task.icon" />
+              </el-icon>
+              <span class="task-title">{{ task.title }}</span>
+              <span class="task-meta">{{ task.meta }}</span>
+            </button>
+          </div>
+          <div class="demo-task-row">
             <el-button type="primary" :loading="demoLoading" @click="openDemoDdl">
               生成演示 DDL
             </el-button>
             <el-button :loading="demoLoading" @click="openDemoSqlLint">
               校验示例 SQL
             </el-button>
-            <el-button @click="$router.push('/ai-export')">
-              导出 AI Context
-            </el-button>
-            <el-button @click="$router.push('/reverse-import')">
-              数据库反向导入
+          </div>
+        </section>
+
+        <section v-if="recentTaskItems.length" class="panel">
+          <div class="section-header">
+            <h3>最近任务</h3>
+            <el-button text type="primary" @click="clearRecentTasks">清空</el-button>
+          </div>
+          <div class="recent-task-row">
+            <el-button
+              v-for="task in recentTaskItems"
+              :key="`${task.projectId}-${task.key}`"
+              @click="openRecentTask(task)"
+            >
+              <el-icon><ArrowRight /></el-icon>
+              {{ task.title }}
             </el-button>
           </div>
         </section>
@@ -154,14 +180,42 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, type Component } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowRight, Refresh } from '@element-plus/icons-vue'
+import {
+  ArrowRight,
+  Cpu,
+  DataAnalysis,
+  Edit,
+  Key,
+  List,
+  MagicStick,
+  Refresh,
+  Search
+} from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { listProjectActivities } from '@/api/activity'
 import { getDashboardSummary } from '@/api/dashboard'
 import { useProjectStore } from '@/stores/project'
 import type { DashboardSummary, IssueTrendPoint, ProjectActivityTimeline } from '@/types'
+
+interface DashboardTask {
+  key: string
+  title: string
+  meta: string
+  route: string
+  icon: Component
+}
+
+interface RecentTask {
+  key: string
+  title: string
+  route: string
+  projectId: number
+  usedAt: string
+}
+
+const RECENT_TASKS_KEY = 'dataspec.dashboard.recentTasks.v1'
 
 const projectStore = useProjectStore()
 const router = useRouter()
@@ -171,6 +225,17 @@ const demoLoading = ref(false)
 const summary = ref<DashboardSummary | null>(null)
 const activityTimeline = ref<ProjectActivityTimeline | null>(null)
 const activityActionType = ref<string>('')
+const recentTasks = ref<RecentTask[]>([])
+
+const taskEntries: DashboardTask[] = [
+  { key: 'reverse-import', title: '导入现有库', meta: '反向导入', route: '/reverse-import', icon: Search },
+  { key: 'sql-lint', title: '检查 SQL', meta: 'fixedSql', route: '/sql-lint', icon: Edit },
+  { key: 'field-coverage', title: '生成覆盖率', meta: '未纳管字段', route: '/field-coverage', icon: DataAnalysis },
+  { key: 'fields', title: '补标准字段', meta: '字段库', route: '/fields', icon: List },
+  { key: 'generator', title: '生成 DDL', meta: '表模板', route: '/generator', icon: MagicStick },
+  { key: 'ai-export', title: '导出给 AI', meta: 'Context', route: '/ai-export', icon: Cpu },
+  { key: 'tokens', title: '管理 Token', meta: 'CLI/MCP', route: '/tokens', icon: Key }
+]
 
 const hasProject = computed(() => projectStore.currentProjectId !== null)
 const metrics = computed(() => [
@@ -194,8 +259,19 @@ const trendItems = computed(() =>
 )
 const activityActionOptions = computed(() => activityTimeline.value?.availableActionTypes ?? [])
 const activityItems = computed(() => activityTimeline.value?.activities ?? [])
+const recentTaskItems = computed(() => {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    return []
+  }
+  return recentTasks.value
+    .filter((task) => task.projectId === projectId)
+    .sort((left, right) => right.usedAt.localeCompare(left.usedAt))
+    .slice(0, 4)
+})
 
 onMounted(async () => {
+  loadRecentTasks()
   if (!projectStore.currentProjectId && projectStore.projects.length === 0) {
     await projectStore.loadProjects()
   }
@@ -256,6 +332,15 @@ async function handleCreateDemoProject() {
   await loadDashboard()
 }
 
+function openTask(task: DashboardTask) {
+  recordRecentTask(task)
+  router.push(task.route)
+}
+
+function openRecentTask(task: RecentTask) {
+  router.push(task.route)
+}
+
 async function openDemoSqlLint() {
   await ensureDemoProject()
   await router.push({ path: '/sql-lint', query: { demo: 'lint' } })
@@ -297,6 +382,70 @@ function goActivity(route?: string) {
     return
   }
   router.push(route)
+}
+
+function loadRecentTasks() {
+  try {
+    const raw = localStorage.getItem(RECENT_TASKS_KEY)
+    if (!raw) {
+      recentTasks.value = []
+      return
+    }
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      throw new Error('recent tasks must be an array')
+    }
+    const cleaned = parsed.filter(isRecentTask).slice(0, 20)
+    recentTasks.value = cleaned
+    if (cleaned.length !== parsed.length) {
+      localStorage.setItem(RECENT_TASKS_KEY, JSON.stringify(cleaned))
+    }
+  } catch {
+    localStorage.removeItem(RECENT_TASKS_KEY)
+    recentTasks.value = []
+  }
+}
+
+function recordRecentTask(task: DashboardTask) {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    return
+  }
+  const next: RecentTask = {
+    key: task.key,
+    title: task.title,
+    route: task.route,
+    projectId,
+    usedAt: new Date().toISOString()
+  }
+  const deduped = recentTasks.value.filter(
+    (item) => !(item.projectId === projectId && item.key === task.key)
+  )
+  recentTasks.value = [next, ...deduped].slice(0, 20)
+  localStorage.setItem(RECENT_TASKS_KEY, JSON.stringify(recentTasks.value))
+}
+
+function clearRecentTasks() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    return
+  }
+  recentTasks.value = recentTasks.value.filter((task) => task.projectId !== projectId)
+  localStorage.setItem(RECENT_TASKS_KEY, JSON.stringify(recentTasks.value))
+}
+
+function isRecentTask(value: unknown): value is RecentTask {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const task = value as Partial<RecentTask>
+  return (
+    typeof task.key === 'string' &&
+    typeof task.title === 'string' &&
+    typeof task.route === 'string' &&
+    typeof task.projectId === 'number' &&
+    typeof task.usedAt === 'string'
+  )
 }
 
 function severityLabel(value?: string) {
@@ -399,20 +548,67 @@ function activityTimelineType(value?: string) {
   border-top: 1px solid #ebeef5;
 }
 
-.quick-actions {
+.task-panel {
   padding-top: 16px;
   border-top: 1px solid #ebeef5;
 }
 
-.action-row,
 .empty-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-.action-row {
+.task-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
   margin-top: 14px;
+}
+
+.task-card {
+  min-height: 86px;
+  padding: 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f2937;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.task-card:hover {
+  border-color: #409eff;
+  box-shadow: 0 4px 12px rgb(64 158 255 / 12%);
+  transform: translateY(-1px);
+}
+
+.task-icon {
+  color: #409eff;
+  font-size: 20px;
+}
+
+.task-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.task-meta {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.demo-task-row,
+.recent-task-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .activity-actions {
@@ -514,6 +710,10 @@ function activityTimelineType(value?: string) {
   .metric-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .task-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -523,6 +723,7 @@ function activityTimelineType(value?: string) {
   }
 
   .metric-grid,
+  .task-grid,
   .trend-row {
     grid-template-columns: 1fr;
   }

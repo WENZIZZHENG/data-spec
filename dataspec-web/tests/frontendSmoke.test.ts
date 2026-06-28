@@ -172,6 +172,9 @@ test('keeps global project selector backed by the project store', () => {
   const projectStore = readSource('src/stores/project.ts')
 
   assertContains(app, [
+    'el-breadcrumb',
+    'routeTitle',
+    'route.meta.title',
     'useProjectStore',
     'projectStore.loadProjects()',
     'v-model="projectStore.currentProjectId"',
@@ -191,6 +194,42 @@ test('keeps global project selector backed by the project store', () => {
     'function setCurrentProjectById(projectId: number | null)',
     'function clearCurrentProject()'
   ], 'project store')
+})
+
+test('keeps dashboard task entrypoints, recent tasks, and breadcrumbs wired', () => {
+  const dashboard = readSource('src/views/Dashboard.vue')
+  const app = readSource('src/App.vue')
+
+  assertContains(dashboard, [
+    'const RECENT_TASKS_KEY',
+    'dataspec.dashboard.recentTasks.v1',
+    'const taskEntries',
+    '导入现有库',
+    '检查 SQL',
+    '生成覆盖率',
+    '补标准字段',
+    '生成 DDL',
+    '导出给 AI',
+    '管理 Token',
+    '任务入口',
+    '最近任务',
+    'function openTask',
+    'function recordRecentTask',
+    'function loadRecentTasks',
+    'function clearRecentTasks',
+    'const cleaned = parsed.filter(isRecentTask).slice(0, 20)',
+    'cleaned.length !== parsed.length',
+    'localStorage.removeItem(RECENT_TASKS_KEY)',
+    'localStorage.getItem(RECENT_TASKS_KEY)',
+    'localStorage.setItem(RECENT_TASKS_KEY'
+  ], 'Dashboard.vue task entrypoints')
+
+  assertContains(app, [
+    '<el-breadcrumb',
+    ":to=\"{ path: '/dashboard' }\"",
+    'route.path !== \'/dashboard\'',
+    'const routeTitle = computed'
+  ], 'App.vue breadcrumbs')
 })
 
 test('keeps project activity timeline wired on dashboard', () => {
