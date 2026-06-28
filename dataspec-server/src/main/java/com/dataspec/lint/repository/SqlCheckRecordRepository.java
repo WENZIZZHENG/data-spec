@@ -8,6 +8,7 @@ import com.dataspec.lint.mapper.SqlCheckRecordMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -22,6 +23,17 @@ public class SqlCheckRecordRepository {
     /** 根据 ID 查找记录 */
     public Optional<SqlCheckRecord> findById(Long id) {
         return Optional.ofNullable(sqlCheckRecordMapper.selectById(id));
+    }
+
+    /** 查询项目最近检查记录，供只读报告聚合使用。 */
+    public List<SqlCheckRecord> findRecentByProjectId(Long projectId, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 500));
+        return sqlCheckRecordMapper.selectList(
+                new LambdaQueryWrapper<SqlCheckRecord>()
+                        .eq(SqlCheckRecord::getProjectId, projectId)
+                        .orderByDesc(SqlCheckRecord::getCreatedAt)
+                        .orderByDesc(SqlCheckRecord::getId)
+                        .last("LIMIT " + safeLimit));
     }
 
     /** 分页查询项目下的检查记录(按创建时间倒序) */

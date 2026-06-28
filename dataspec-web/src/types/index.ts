@@ -438,6 +438,61 @@ export interface AiBatchRunDetail {
   deliveryPackage?: AiBatchDeliveryPackage
 }
 
+export interface AiFeedbackEvidence {
+  sourceKind?: string
+  sourceId?: number | null
+  description?: string
+}
+
+export interface AiFeedbackSignal {
+  signalType?: string
+  title?: string
+  count?: number
+  severity?: string
+  evidence?: AiFeedbackEvidence[]
+  suggestedAction?: string
+  targetRoute?: string
+}
+
+export interface AiFeedbackAction {
+  title?: string
+  description?: string
+  priority?: string
+  targetRoute?: string
+}
+
+export interface AiFeedbackSummary {
+  aiJobCount?: number
+  sqlCheckCount?: number
+  ruleExemptionCount?: number
+  fieldSourceCount?: number
+  fieldSignalCount?: number
+  ruleSignalCount?: number
+  fixedSqlAvailableCount?: number
+  insufficientSuggestionHistory?: boolean
+  recommendationHistoryNote?: string
+}
+
+export interface AiFeedbackSampleSize {
+  aiJobRecords?: number
+  sqlCheckRecords?: number
+  ruleExemptions?: number
+  fieldSources?: number
+  fields?: number
+}
+
+export interface AiFeedbackReport {
+  projectId?: number
+  summary?: AiFeedbackSummary
+  fieldSignals?: AiFeedbackSignal[]
+  ruleSignals?: AiFeedbackSignal[]
+  fixedSqlSignals?: AiFeedbackSignal[]
+  unmanagedSignals?: AiFeedbackSignal[]
+  nextActions?: AiFeedbackAction[]
+  sampleSize?: AiFeedbackSampleSize
+  generatedAt?: string
+}
+
 export interface R<T> {
   code?: number
   message?: string

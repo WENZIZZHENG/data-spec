@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 批量任务交付包、API Token 安全基线与管理页、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 回放与反馈、AI 批量任务交付包、API Token 安全基线与管理页、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -52,6 +52,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI Context manifest、字段目录和规则文件携带标准快照版本、hash 与来源 `source=current|snapshot|unversioned`；`rules.yaml` 还会标明当前规则基线 key/name/version/source/appliedAt；未创建快照时标记为 `unversioned`。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - AI 回放记录，支持查看 Prompt、SQL 检查修正和 DDL 预览的输入输出、promptVersion 与标准快照。
+- AI 反馈报告，按项目聚合已有 AI job、SQL 检查记录、fixedSql、规则例外、反向导入来源和字段元数据，输出字段/规则/fixedSql/未纳管信号和下一步维护动作。
 - AI 批量任务，支持后端保存 SQL lint batch run、前端查看最近任务/分项结果/下一步动作并下载 JSON 交付包。
 - 字段推荐与字段标准检索 API/CLI/MCP。
 - DDL 生成 API/CLI/MCP。
@@ -168,6 +169,18 @@ curl "http://localhost:8090/api/ai-jobs/1"
 ```
 
 第一版只记录 DataSpec 本地生成和检查链路，不内置外部 LLM 调用，不保存第三方 API key，不做长文本会话管理。
+
+## AI 反馈
+
+前端“校验与生成 / AI 反馈”展示当前项目的 AI 使用反馈报告，聚合最近 AI job、SQL 检查记录、规则例外、fixedSql、反向导入字段来源和字段元数据。页面展示 summary、字段信号、规则问题排行、修正 SQL 信号、未纳管/标准化信号、样本范围和下一步动作，并可跳转到字段库、字段质量、规则配置、规则例外、SQL 校验或 AI 回放。
+
+后端 API：
+
+```bash
+curl "http://localhost:8090/api/ai-feedback/report?projectId=1"
+```
+
+第一版是只读聚合视图，不采集点击或停留等用户行为，不读取业务数据行，不保存 token/password/完整 JDBC URL，也不会自动创建字段、别名、规则例外或标准变更。现有记录无法证明字段推荐命中率时，报告会显式标记推荐历史不足，而不是伪造统计。
 
 ## 字段推荐与字段标准检索
 
@@ -485,7 +498,7 @@ node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dat
 npx openspec validate --all
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、筛选与批量维护、DDL 生成、AI Context、覆盖率报告、AI 回放和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、筛选与批量维护、DDL 生成、AI Context、覆盖率报告、AI 回放、AI 反馈和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
 
 ## 性能基线
 
@@ -608,6 +621,7 @@ data-spec/
 - [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
 - [x] AI 回放记录，支持查看 Prompt、lint/fixedSql、DDL 预览的输入输出和标准快照
+- [x] AI 反馈报告，按项目聚合字段、规则、fixedSql、未纳管信号和下一步维护动作
 - [x] AI 批量任务交付包，支持后端保存 SQL lint batch run、CLI 写出同构 package、前端查看详情并下载 JSON
 - [x] Markdown/HTML 数据字典增强和 Mermaid ERD 输出
 - [x] Excel `.xlsx` 字段/代码集导入导出与 dry-run 明细预览

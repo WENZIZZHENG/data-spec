@@ -97,6 +97,10 @@
             <el-icon><DataAnalysis /></el-icon>
             <span>AI 批量任务</span>
           </el-menu-item>
+          <el-menu-item index="/ai-feedback">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>AI 反馈</span>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 数据管理 -->

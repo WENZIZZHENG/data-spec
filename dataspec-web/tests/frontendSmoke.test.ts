@@ -23,6 +23,7 @@ test('keeps critical frontend routes and navigation entries wired', () => {
     { path: '/ai-export', view: 'AiExport.vue', title: 'AI 规则导出' },
     { path: '/ai-replay', view: 'AiReplay.vue', title: 'AI 回放' },
     { path: '/ai-batches', view: 'AiBatch.vue', title: 'AI 批量任务' },
+    { path: '/ai-feedback', view: 'AiFeedback.vue', title: 'AI 反馈' },
     { path: '/project-backup', view: 'ProjectBackup.vue', title: '项目备份' },
     { path: '/reverse-import', view: 'ReverseImport.vue', title: '反向导入' },
     { path: '/field-coverage', view: 'FieldCoverage.vue', title: '覆盖率报告' }
@@ -67,6 +68,46 @@ test('keeps AI batch delivery package page wired', () => {
     'export interface AiBatchRunListItem',
     'export interface AiBatchRunDetail'
   ], 'ai batch types')
+})
+
+test('keeps AI feedback improvement loop page wired', () => {
+  const view = readSource('src/views/AiFeedback.vue')
+  const api = readSource('src/api/aiFeedback.ts')
+  const types = readSource('src/types/index.ts')
+  const schema = readSource('src/api/schema.ts')
+
+  assertContains(view, [
+    "import { getAiFeedbackReport } from '@/api/aiFeedback'",
+    'projectStore.currentProjectId',
+    'async function loadReport()',
+    'report.value = await getAiFeedbackReport(projectId)',
+    'function goTarget(route?: string | null)',
+    'buildAiFeedbackRoute(route)',
+    'AI 反馈',
+    '高频字段信号',
+    '规则问题排行',
+    'fixedSql 机会',
+    '标准化信号',
+    '请先创建并选择项目'
+  ], 'AiFeedback.vue')
+
+  assertContains(api, [
+    "request.get<unknown, AiFeedbackReport>('/ai-feedback/report'",
+    'export function getAiFeedbackReport(projectId: number)'
+  ], 'ai feedback api')
+
+  assertContains(types, [
+    'export interface AiFeedbackReport',
+    'export interface AiFeedbackSignal',
+    'export interface AiFeedbackAction'
+  ], 'ai feedback types')
+
+  assertContains(schema, [
+    '"/api/ai-feedback/report"',
+    'AiFeedbackReport',
+    'RAiFeedbackReport',
+    'getAiFeedbackReport'
+  ], 'ai feedback schema')
 })
 
 test('keeps global project selector backed by the project store', () => {
@@ -379,6 +420,10 @@ test('keeps critical action labels and empty states visible', () => {
     {
       path: 'src/views/AiReplay.vue',
       snippets: ['刷新记录', '暂无 AI 回放记录', '复制命令', '复制 JSON', '已复制']
+    },
+    {
+      path: 'src/views/AiFeedback.vue',
+      snippets: ['刷新反馈', '下一步动作', '高频字段信号', '规则问题排行', 'fixedSql 机会', '标准化信号', '请先创建并选择项目']
     },
     {
       path: 'src/views/ProjectBackup.vue',

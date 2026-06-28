@@ -8,6 +8,7 @@ import com.dataspec.aireplay.mapper.AiJobRecordMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -25,6 +26,16 @@ public class AiJobRecordRepository {
 
     public Optional<AiJobRecord> findById(Long id) {
         return Optional.ofNullable(aiJobRecordMapper.selectById(id));
+    }
+
+    public List<AiJobRecord> findRecentByProjectId(Long projectId, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 500));
+        return aiJobRecordMapper.selectList(
+                new LambdaQueryWrapper<AiJobRecord>()
+                        .eq(AiJobRecord::getProjectId, projectId)
+                        .orderByDesc(AiJobRecord::getCreatedAt)
+                        .orderByDesc(AiJobRecord::getId)
+                        .last("LIMIT " + safeLimit));
     }
 
     public IPage<AiJobRecord> findByProjectId(Long projectId, String jobType, int current, int size) {

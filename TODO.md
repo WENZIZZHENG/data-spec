@@ -4,11 +4,12 @@
 
 ## 下一步顺序
 
-1. P6-26 AI 批量任务与结果交付包已完成第一版，下一步推进 P6-27 AI 使用反馈与标准改进闭环。
+1. P6-27 AI 使用反馈与标准改进闭环已完成第一版，下一步推进 P6-28 标准候选 Inbox 与采纳工作台。
 2. P6 后续继续补数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板、多项目标准复用包、AI 写入安全策略、规则调试器、元数据增量缓存、CLI/MCP 兼容握手、前端类型化 API Client、标准演练沙箱、MCP/CLI 工具契约验收、业务对象关系图、派生字段规则、fixedSql 文件补丁、标准问答入口、规则模板 diff 包、浏览器级 E2E、真实数据库集成测试、文档状态一致性、可访问性、本地数据清理和前端性能体验。
 3. 新增优化建议已补为 P6-87 到 P6-98：数据库迁移计划、业务代码字段引用、MCP prompt/resource、AI 上下文预算、本地 pre-commit/IDE 检查、标准样例生成、多源契约导入、标准证据置信度、自定义规则 SDK、本地语义检索、标准使用热区和 AI 变更迁移说明。
 4. 追加优化建议已补为 P6-99 到 P6-104：只读标准文档站、标准资产依赖图、环境配置漂移检测、数据源连接器注册、本地运行观测诊断和标准决策理由库。
-5. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+5. 本轮新增 AI 使用优化建议已补为 P6-105 到 P6-110：AI 一页式工作台、表级约束与索引标准、枚举生命周期、业务仓库迁移交付包、AI 能力边界模拟和文档反向提取候选。
+6. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -19,7 +20,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P2 标准维护与生成能力已完成第一版：内置 standards 初始化、模板 DDL、业务项目 .dataspec/ 约定、数据字典、Excel 导入导出、变更日志和个人工作台。
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
-- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，P6-10 已完成数据库直连配置预设第一版，P6-11 已完成 MCP/CLI 任务化工作流模板第一版，P6-12 已完成 AI 输出契约稳定性第一版，P6-13 已完成 GitHub inline review 第一版，P6-14 已完成字段分组体验第一版，P6-15 已完成字段批量维护与回退第一版，P6-16 已完成性能基线第一版，P6-17 已完成前端冒烟门禁第一版，P6-18 已完成 AI 可读错误诊断第一版，P6-19 已完成字段标准检索第一版，P6-20 已完成 OpenSpec 归档收口第一版，P6-21 已完成历史快照导出与记录回放第一版，P6-22 已完成 SQL/DDL 多方言兼容矩阵与诊断第一版，P6-23 已完成规则模板库与项目基线套件第一版，P6-24 已完成项目备份恢复迁移包第一版，P6-25 已完成数据库直连只读安全诊断第一版，P6-26 已完成 AI 批量任务交付包第一版，后续再提升 AI 使用画像、标准契约版本和执行证据包。
+- 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，P6-10 已完成数据库直连配置预设第一版，P6-11 已完成 MCP/CLI 任务化工作流模板第一版，P6-12 已完成 AI 输出契约稳定性第一版，P6-13 已完成 GitHub inline review 第一版，P6-14 已完成字段分组体验第一版，P6-15 已完成字段批量维护与回退第一版，P6-16 已完成性能基线第一版，P6-17 已完成前端冒烟门禁第一版，P6-18 已完成 AI 可读错误诊断第一版，P6-19 已完成字段标准检索第一版，P6-20 已完成 OpenSpec 归档收口第一版，P6-21 已完成历史快照导出与记录回放第一版，P6-22 已完成 SQL/DDL 多方言兼容矩阵与诊断第一版，P6-23 已完成规则模板库与项目基线套件第一版，P6-24 已完成项目备份恢复迁移包第一版，P6-25 已完成数据库直连只读安全诊断第一版，P6-26 已完成 AI 批量任务交付包第一版，P6-27 已完成 AI 使用反馈与标准改进闭环第一版，后续再提升标准候选采纳、离线 Context、标准契约版本和执行证据包。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -322,12 +323,12 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不做后台长任务平台，不接外部队列，不自动提交业务仓库修改。
 
 ### P6-27：AI 使用反馈与标准改进闭环
-- 状态：待办。
+- 状态：已完成第一版，已新增只读反馈报告 API 和前端“AI 反馈”页面。
 - 为什么做：字段推荐、SQL 修复和 DDL 生成会暴露“AI 总是选错哪个字段”“哪些规则最常误报”“哪些标准字段总被补充别名”等问题；这些反馈应反哺标准维护。
 - 已有基础：已有字段推荐原因、SQL 检查记录、fixedSql、规则配置、字段来源、标准质量评分和冲突检测待办。
-- 缺口：AI 使用结果目前更多是单次输出，缺少按字段/规则/任务聚合的反馈指标，也缺少从反馈跳转到字段质量修复或规则例外的入口。
-- 落地产物：新增轻量反馈聚合视图；统计推荐命中/未命中、fixedSql 常见修复、误报豁免、未纳管字段转正率和字段被 AI 引用次数；提供“补别名、补注释、调整规则、加入例外”的下一步动作。
-- 验收标准：用户能看到标准系统被 AI 使用后的高频问题；能从反馈直接跳转到字段库、规则配置、质量检查或例外管理；统计不采集业务数据行。
+- 已完成能力：基于 AI job、SQL 检查记录、规则例外、反向导入来源和字段元数据聚合 summary、fieldSignals、ruleSignals、fixedSqlSignals、unmanagedSignals、nextActions、sampleSize 和 generatedAt；推荐历史无法可靠统计时显式标记缺口，不伪造命中率；前端支持跳转字段库、字段质量、规则配置、规则例外、SQL 校验和 AI 回放。
+- 落地产物：新增 `aifeedback` 后端模块、`/api/ai-feedback/report?projectId=` 只读 API、前端 `AiFeedback.vue` 页面/API/类型/显示工具和 smoke 测试。
+- 验收标准：用户能看到标准系统被 AI 使用后的高频问题；能从反馈直接跳转到字段库、规则配置、质量检查或例外管理；统计不采集业务数据行。已通过后端目标测试、前端 `pnpm test` 和 `pnpm build`，完整验证随本任务提交记录保留。
 - 边界：不做用户行为监控，不调用外部分析服务，不把反馈自动写成标准变更。
 
 ### P6-28：标准候选 Inbox 与采纳工作台
@@ -1028,6 +1029,66 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 落地产物：新增标准决策 note 或字段 ADR；可关联字段、别名、规则、模板、分组或业务术语，记录决策背景、采用方案、拒绝方案、证据链接、适用范围和过期条件；导出到 AI Context 和标准问答证据。
 - 验收标准：AI 能回答“为什么这里用 `user_id` 而不是 `uid`”“金额单位为什么用分”“某字段为什么废弃”；字段合并或规则调整时能引用历史决策，避免重复争论。
 - 边界：不做多人审批，不要求所有历史字段补齐 ADR，不把决策理由当成不可变法规；第一版从高冲突字段和规则开始补。
+
+### P6-105：AI 一页式标准工作台
+- 状态：待办。
+- 为什么做：当前 AI 相关能力已经覆盖 Context、回放、批量任务、反馈报告、候选采纳和证据包，但入口分散在多个页面；用户和 AI agent 都需要一个“当前项目下一步该做什么”的总控视图。
+- 已有基础：已有个人工作台、AI Context、AI 回放、AI 批量任务、AI 反馈报告、字段质量、覆盖率、候选 Inbox、项目活动时间线和命令面板待办。
+- 缺口：缺少面向 AI 使用的项目级任务面板，无法一次性看到标准健康、最新 AI 任务、待处理候选、最近失败、推荐下一步和可复制命令。
+- 参考项目：`backstage/backstage` 的开发者入口组织方式、`langfuse/langfuse` 的 AI trace 概览和 `OpenLineage/OpenLineage` 的作业证据聚合；只借鉴信息架构和证据摘要，不建设重型平台。
+- 落地产物：新增“AI 工作台”页面或个人工作台 AI 分区；聚合 projectReadiness、standardHealth、recentAiJobs、pendingCandidates、failedTasks、recommendedActions、copyableCommands 和 evidenceLinks。
+- 验收标准：选择项目后能在一个页面判断 AI 是否可开始建表、SQL Review、反向导入或导出 Context；每个建议动作都有跳转、命令或说明；无项目/无数据时空状态清晰。
+- 边界：不做聊天机器人，不替代各功能详情页，不自动执行写操作；第一版只聚合已有报告和任务入口。
+
+### P6-106：表级约束、索引与主外键标准
+- 状态：待办。
+- 为什么做：字段标准解决“列叫什么、是什么类型”，但 AI 建表还需要知道主键、唯一约束、索引、外键、审计字段和软删除约定；否则 DDL 可能字段正确但表结构不可用。
+- 已有基础：已有表模板、DDL 生成、业务对象关系图、SQL/DDL 多方言兼容、schema plan 预览、规则模板库和数据库反向导入。
+- 缺口：缺少表级 constraint/index policy，AI Context 也无法稳定表达“哪些字段必须唯一”“哪些关系需要外键或索引”“哪些约束只做建议不强制”。
+- 参考项目：`ariga/atlas` 的 schema-as-code 表达、`prisma/prisma` 的 schema introspection 和 `sqlalchemy/sqlalchemy` 的方言约束抽象；只借鉴约束建模和方言差异，不把 DataSpec 改成通用 ORM。
+- 落地产物：新增轻量表级标准模型或模板扩展；支持 primaryKey、uniqueKeys、indexes、foreignKeys、checkHints、auditPolicy、softDeletePolicy、dialectNotes 和 aiUsageNotes；DDL 生成、SQL lint 和 AI Context 可消费。
+- 验收标准：AI 生成订单、用户、支付等常见表时能输出合理主键、唯一键和索引建议；反向导入可识别现有索引/约束并与标准比对；规则失败时给出可解释证据。
+- 边界：第一版不执行数据库迁移，不覆盖所有方言高级特性，不强制把所有历史表补齐约束标准。
+
+### P6-107：代码集与枚举值生命周期
+- 状态：待办。
+- 为什么做：状态、类型、渠道、来源等枚举字段是 AI 最容易写错的地方；仅有字段名还不够，需要知道允许值、显示名、废弃值、替代值和不同系统间映射。
+- 已有基础：已有数据字典、字段格式约束、字段生命周期、DDL 生成、SQL lint、标准问答和 AI Context。
+- 缺口：代码集缺少生命周期、别名映射、版本、冲突检测和 AI 可读约束；SQL 修复也无法判断 `status = '1'` 与 `status = 'PAID'` 哪个是当前标准。
+- 参考项目：`open-metadata/OpenMetadata` 和 `datahub-project/datahub` 的 glossary/tag 组织方式，以及 `great-expectations/great_expectations` 的枚举值校验思路；只借鉴约束和证据表达，不引入数据质量平台。
+- 落地产物：增强代码集模型/API/前端；支持 enumValue、displayName、aliases、status、replacementValue、validFrom、validTo、sourceEvidence、mappingHints 和 contextExport；SQL lint 可对枚举 literal 给出建议。
+- 验收标准：AI 查询或生成状态字段时能读取允许值和废弃值；SQL 检查能发现明显非法枚举 literal；枚举变更能进入标准快照和变更说明。
+- 边界：不连接真实业务数据做分布统计，不自动替换生产 SQL；第一版优先覆盖人工维护代码集和反向导入可见约束。
+
+### P6-108：业务仓库迁移交付包
+- 状态：待办。
+- 为什么做：DataSpec 能生成建议、fixedSql、schema plan 和证据包，但真实落地常需要把 SQL、配置、README、验证命令和回滚说明组织成一个可提交到业务仓库的交付包。
+- 已有基础：已有 AI 批量任务交付包、fixedSql 文件补丁、schema 变更计划、GitHub inline review、执行证据包、备份恢复迁移包和标准变更发布说明。
+- 缺口：缺少面向业务仓库的 delivery bundle 结构，AI 无法稳定输出“要改哪些文件、如何验证、如何回滚、PR 描述怎么写、哪些风险需人工确认”。
+- 参考项目：`reviewdog/reviewdog` 的 PR 反馈聚合、`changesets/changesets` 的变更说明和 `hashicorp/terraform` 的 plan/apply 分离；只借鉴交付组织，不自动推送或执行高风险写入。
+- 落地产物：新增迁移交付包导出；包含 patchFiles、migrationSql、verificationCommands、rollbackPlan、riskSummary、evidenceRefs、prDescription、manualChecklist 和 applyMode；CLI/MCP/前端支持 dry-run 下载。
+- 验收标准：一次标准变更或 SQL 修复能生成可审阅的业务仓库交付包；用户可先看 diff 和验证命令再决定是否应用；包内不包含 token、密码或业务数据行。
+- 边界：不自动创建远程 PR，不绕过人工确认，不把业务仓库写入设为默认行为。
+
+### P6-109：AI 能力边界模拟与安全预检
+- 状态：待办。
+- 为什么做：AI 调用 CLI/MCP/API 前需要知道当前 token、项目、数据源、写入能力、dry-run 要求和可恢复性；如果边界不清晰，容易在错误项目执行或重复写入。
+- 已有基础：已有 API Token、`dataspec doctor`、AI 能力清单、AI 写入安全策略、任务卡、幂等保护、敏感信息脱敏和连接只读诊断。
+- 缺口：缺少可机器读取的 preflight/simulation 入口，不能在执行前回答“这个任务会读什么、会写什么、是否需要 dry-run、失败后怎么恢复”。
+- 参考项目：`hashicorp/terraform` 的 plan 思路、MCP 规范的 tools/resources 边界和 `gitleaks/gitleaks` 的敏感信息扫描；只做本地安全预检，不引入审批流。
+- 落地产物：新增 `dataspec preflight` 或等价 API/MCP 工具；输入 taskType、projectId、targetResources 和 requestedActions，输出 allowedActions、requiredDryRun、writeTargets、idempotencyRequired、redactionWarnings、resumeHint 和 stopReasons。
+- 验收标准：AI 执行反向导入、批量 lint、候选采纳、fixedSql 补丁或证据包导出前能得到明确边界；高风险写入必须提示 dry-run 或人工确认；失败输出可被任务卡续跑。
+- 边界：不做企业权限审批，不赋予 AI 新权限，不替代后端真实鉴权；preflight 只是执行前解释和门禁。
+
+### P6-110：文档与需求材料反向提取标准候选
+- 状态：待办。
+- 为什么做：字段标准不只来自数据库和接口契约，也常存在于 Markdown 需求、Excel 字段说明、OpenSpec proposal、README、接口说明和历史设计文档里；AI 使用这些材料时需要先转成可审阅候选，而不是直接写入正式标准。
+- 已有基础：已有 Excel 导入、自然语言标准候选、多源契约导入、标准候选 Inbox、业务术语表、AI Context 和标准决策理由库待办。
+- 缺口：缺少从文档文本中抽取字段、枚举、业务术语、约束和决策理由的统一入口；候选来源、置信度和人工确认状态也无法追踪。
+- 参考项目：`glideapps/quicktype` 的结构推断思路、`Redocly/redocly-cli` 的契约文档化和 OpenSpec proposal/archive 的需求语境；只借鉴提取与结构化，不把文档内容当成已确认标准。
+- 落地产物：新增文档候选提取 API/CLI 或前端导入入口；支持 Markdown、CSV/Excel 字段表和 OpenSpec 文档，输出 candidateFields、candidateEnums、terms、constraints、decisionHints、sourceRanges、confidence 和 inboxAction。
+- 验收标准：给定一份需求文档或字段说明表，能生成可审阅标准候选并进入候选 Inbox；低置信度内容明确标记人工确认；导入过程不保存无关正文或敏感片段。
+- 边界：第一版不做复杂 PDF/OCR，不直接写正式标准，不承诺理解所有自然语言；只处理结构相对清晰的本地文档。
 
 ## 参考项目索引
 

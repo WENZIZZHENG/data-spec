@@ -1348,6 +1348,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-feedback/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAiFeedbackReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-context/rules-yaml": {
         parameters: {
             query?: never;
@@ -3542,6 +3558,78 @@ export interface components {
             message?: string;
             error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["PageResultAiBatchRunListItem"];
+        };
+        AiFeedbackEvidence: {
+            sourceKind?: string;
+            /** Format: int64 */
+            sourceId?: number;
+            description?: string;
+        };
+        AiFeedbackSignal: {
+            signalType?: string;
+            title?: string;
+            /** Format: int32 */
+            count?: number;
+            severity?: string;
+            evidence?: components["schemas"]["AiFeedbackEvidence"][];
+            suggestedAction?: string;
+            targetRoute?: string;
+        };
+        AiFeedbackAction: {
+            title?: string;
+            description?: string;
+            priority?: string;
+            targetRoute?: string;
+        };
+        AiFeedbackSummary: {
+            /** Format: int32 */
+            aiJobCount?: number;
+            /** Format: int32 */
+            sqlCheckCount?: number;
+            /** Format: int32 */
+            ruleExemptionCount?: number;
+            /** Format: int32 */
+            fieldSourceCount?: number;
+            /** Format: int32 */
+            fieldSignalCount?: number;
+            /** Format: int32 */
+            ruleSignalCount?: number;
+            /** Format: int32 */
+            fixedSqlAvailableCount?: number;
+            insufficientSuggestionHistory?: boolean;
+            recommendationHistoryNote?: string;
+        };
+        AiFeedbackSampleSize: {
+            /** Format: int32 */
+            aiJobRecords?: number;
+            /** Format: int32 */
+            sqlCheckRecords?: number;
+            /** Format: int32 */
+            ruleExemptions?: number;
+            /** Format: int32 */
+            fieldSources?: number;
+            /** Format: int32 */
+            fields?: number;
+        };
+        AiFeedbackReport: {
+            /** Format: int64 */
+            projectId?: number;
+            summary?: components["schemas"]["AiFeedbackSummary"];
+            fieldSignals?: components["schemas"]["AiFeedbackSignal"][];
+            ruleSignals?: components["schemas"]["AiFeedbackSignal"][];
+            fixedSqlSignals?: components["schemas"]["AiFeedbackSignal"][];
+            unmanagedSignals?: components["schemas"]["AiFeedbackSignal"][];
+            nextActions?: components["schemas"]["AiFeedbackAction"][];
+            sampleSize?: components["schemas"]["AiFeedbackSampleSize"];
+            /** Format: date-time */
+            generatedAt?: string;
+        };
+        RAiFeedbackReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["AiFeedbackReport"];
         };
     };
     responses: never;
@@ -6083,6 +6171,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiBatchDeliveryPackage"];
+                };
+            };
+        };
+    };
+    getAiFeedbackReport: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiFeedbackReport"];
                 };
             };
         };

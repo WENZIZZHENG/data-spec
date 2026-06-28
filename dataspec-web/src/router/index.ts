@@ -97,6 +97,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'AI 批量任务' }
   },
   {
+    path: '/ai-feedback',
+    name: 'AiFeedback',
+    component: () => import('@/views/AiFeedback.vue'),
+    meta: { title: 'AI 反馈' }
+  },
+  {
     path: '/import-export',
     name: 'ImportExport',
     component: () => import('@/views/ImportExport.vue'),
