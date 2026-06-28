@@ -28,3 +28,10 @@
 - 测试：新增 dump fixture 和 adapter/service 单测，覆盖 PostgreSQL/MySQL metadata、dump 脱敏、preview/compare/coverage 复现。
 - 前端/API：第一版优先提供后端 API 契约，前端可在后续 P6-62/P6-69 等数据库浏览和大库扫描任务中继续增强可视化。
 - 文档：README/TODO 记录 schema dump 命令/接口边界和“不扫描业务数据行”的约束。
+
+## Verification Evidence
+
+- `mvn test`：270 tests, 0 failures, 0 errors。
+- `npx.cmd openspec validate add-db-metadata-dump-adapter`：Change valid。
+- `git diff --check`：exit 0，仅 CRLF 工作区换行提示。
+- 本地结构化代码评审：删除旧 `DatabaseReverseImportServiceImpl` 内部 JDBC metadata 私有读取方法，避免与 `JdbcDatabaseMetadataAdapter` 形成双实现漂移；fixture 读取显式使用 UTF-8。
