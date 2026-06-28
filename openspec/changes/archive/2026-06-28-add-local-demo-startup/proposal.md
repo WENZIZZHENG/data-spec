@@ -24,3 +24,12 @@ DataSpec 已有后端、前端、Flyway 和演示项目入口，但新机器仍�
 - 根目录 Docker Compose、本地脚本、README/TODO 和 OpenSpec。
 - 后端/前端运行配置只通过环境变量覆盖，不改默认开发配置。
 - 依赖 Docker Compose、Maven、pnpm 和现有 `/api/projects/demo`、`/api/dashboard`、`/api/lint` 等接口。
+
+## Verification Evidence
+
+- `node --test tools/dataspec-local-smoke.test.mjs`：5 tests passed，覆盖参数解析、健康链路 JSON 输出、失败脱敏、通用脱敏和 compose/Vite 代理契约。
+- `pnpm build`（`dataspec-web/`）：通过；仅保留现有 Rolldown `INVALID_ANNOTATION` 与 chunk size 警告。
+- `npx.cmd openspec validate add-local-demo-startup`：通过。
+- `git diff --check` / `git diff --cached --check`：通过；仅有 Windows LF/CRLF 提示。
+- `docker compose -f docker-compose.local.yml config`：当前机器未安装 `docker` 或不在 PATH，无法执行实际 Compose 解析；已用源码级 compose 契约测试作为本环境兜底。
+- 结构化代码评审：未发现必须修复的功能、安全、性能或文档问题；确认 smoke 输出不泄漏 token/password/JDBC，compose 文档明确限定为个人本地开发而非生产部署。
