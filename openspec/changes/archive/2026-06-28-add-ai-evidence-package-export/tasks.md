@@ -23,5 +23,5 @@
 - [x] 4.1 更新 README、TODO 和 docs/ai-contracts.md，说明 evidence package、脱敏边界和非审计边界。
 - [x] 4.2 执行后端、前端、CLI/MCP、OpenSpec 和 diff 验证。
 - [x] 4.3 完成结构化代码评审并修复 findings。
-- [ ] 4.4 创建本地 commit。
-- [ ] 4.5 归档 OpenSpec change 并再次验证。
+- [x] 4.4 创建本地 commit。
+- [x] 4.5 归档 OpenSpec change 并再次验证。

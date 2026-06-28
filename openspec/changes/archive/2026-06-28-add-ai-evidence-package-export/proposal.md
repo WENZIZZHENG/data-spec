@@ -32,3 +32,13 @@ AI 完成 SQL 修复、覆盖率分析、反向导入或批量检查后，用户
 - CLI/MCP：新增命令和工具，输出稳定 JSON；zip 输出只写用户指定路径。
 - 文档/规范：更新 README、docs/ai-contracts.md、TODO 和 OpenSpec specs。
 - 测试：后端单测覆盖四类 source、zip 内容和脱敏；前端 smoke 覆盖入口；Node 测试覆盖 CLI/MCP；`mvn test`、`pnpm test/build`、`node --test` 和 `openspec validate --all` 作为验证入口。
+
+## Verification Evidence
+
+- `mvn test`（`dataspec-server`）：308 tests，0 failures，0 errors，BUILD SUCCESS。
+- `pnpm test`（`dataspec-web`）：79 tests，79 pass，0 fail。
+- `pnpm build`（`dataspec-web`）：`vue-tsc --noEmit && vite build` 通过；仅保留 `@vueuse/core` pure annotation 和 chunk size 既有构建警告。
+- `node --test tools\dataspec-cli.test.mjs tools\dataspec-mcp.test.mjs`：84 tests，84 pass，0 fail。
+- `npx.cmd openspec validate --all`：75 passed，0 failed。
+- `git diff --check`：通过；仅输出工作区既有 CRLF 行尾提示。
+- 本地结构化代码评审（用户要求不使用子 agent）：修复 `COVERAGE_REPORT` 未写入脱敏 `payloadSummary` 的交接上下文缺口，并为覆盖率页和 AI 批量页复制证据 JSON 增加剪贴板降级逻辑。
