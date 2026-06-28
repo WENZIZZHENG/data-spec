@@ -14,7 +14,8 @@
 8. 最新追加优化建议已补为 P6-123 到 P6-128：标准向 API/DTO Schema 导出、ORM/代码模型候选提取、前端组件状态样例库、规则变异回归、Context 增量更新包和前端包体性能预算。
 9. 本次新增优化建议已补为 P6-129 到 P6-134：标准包 Lockfile、SQL 格式化 Profile、脱敏样例采样、标准消费清单、规则覆盖率和前端 mock 演示模式。
 10. 本次继续新增优化建议已补为 P6-135 到 P6-140：AI 任务预检、反向导入 plan/apply、配置 Schema、凭据复用、标准变更迁移 recipe 和统一任务结果协议。
-11. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+11. 本次补充优化建议已补为 P6-141 到 P6-146：AI 输出验证沙箱、多 schema 反向导入合并、Agent 启动包、质量异常归因、前端修复 Action 和个人健康摘要。
+12. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -1394,6 +1395,66 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 落地产物：新增 TaskResult JSON Schema/DTO、CLI/MCP 输出适配和前端结果卡片组件；SQL 校验、Context 导出、反向导入、doctor/preflight 逐步接入；文档列出字段语义。
 - 验收标准：AI 调用任一核心任务都能用同一方式判断是否成功、下一步做什么、证据在哪；前端失败卡片与 CLI JSON 的关键字段一致；兼容旧响应并有契约测试。
 - 边界：不要求所有历史接口一次性迁移，不做长任务队列，不改变现有 API 的核心业务语义；第一版先包裹高频任务结果。
+
+### P6-141：AI 输出 SQL/DDL 执行前验证沙箱
+- 状态：待办。
+- 为什么做：AI 生成的 SQL、DDL 或 fixedSql 即使通过规则检查，也可能在目标数据库方言、保留字、索引约束或权限边界上失败；执行前需要一个只读、可解释的验证沙箱。
+- 已有基础：已有 SQL lint、fixedSql、DDL 生成、多方言诊断、数据库直连只读诊断、数据库连接预设、规则模板库和执行证据包待办。
+- 缺口：缺少面向 AI 的 `validate-only` 入口，无法在不写源库的前提下返回 parse/explain/plan 结果、方言降级原因、风险等级和建议修复。
+- 参考项目：`bytebase/bytebase` 的 SQL Review、`ariga/atlas` 的 schema lint 和 `sqlfluff/sqlfluff` 的规则诊断；只借鉴执行前验证，不默认执行真实变更。
+- 落地产物：新增 SQL/DDL 验证 API、CLI 和 MCP 工具；按数据源能力选择 parser-only、EXPLAIN、事务回滚或离线方言校验；输出 diagnostics、riskLevel、databaseCapability、suggestedFixes 和 evidenceRefs。
+- 验收标准：AI 在应用 fixedSql、建表 DDL 或迁移 SQL 前可获得明确的可执行/需修复结论；验证过程不修改业务数据库；失败信息可被前端、CLI 和 MCP 统一展示。
+- 边界：不执行 DML 写入，不替代数据库发布系统，不保存业务数据行；不支持的方言必须明确降级为 parser-only。
+
+### P6-142：多 schema / 多数据源反向导入合并策略
+- 状态：待办。
+- 为什么做：个人项目也可能同时连接本地库、测试库、多个 schema 或微服务数据库；反向导入若只按单连接处理，容易把同名字段、同义字段和环境差异混在一起。
+- 已有基础：已有数据库直连反向导入、compare、来源批次、字段映射策略、标准候选 Inbox、数据源连接器注册和多源契约导入待办。
+- 缺口：缺少跨连接的 source namespace、schema priority、conflict group、merge decision 和 environment tag，无法稳定回答“这个字段来自哪个库、是否应合并为同一标准”。
+- 参考项目：`datahub-project/datahub` 的数据源来源建模、`open-metadata/OpenMetadata` 的资产元数据和 `schemacrawler/SchemaCrawler` 的 schema 抽取；只做本地标准候选合并，不做完整数据目录平台。
+- 落地产物：新增多数据源导入计划模型；反向导入预览可按连接/schema 分组，支持冲突合并建议、来源权重、环境标签和批次级 apply summary；AI Context 标明字段候选的来源集合。
+- 验收标准：从两个 schema 导入同名字段时能显示来源差异和推荐决策；跨库同义字段可进入同一候选合并组；apply 后来源批次可追溯每个字段的连接和 schema。
+- 边界：不自动跨库合并正式标准，不保存密码或完整连接串，不扫描业务数据行；第一版只服务人工确认和 AI 建议。
+
+### P6-143：Agent 专用项目启动包生成
+- 状态：待办。
+- 为什么做：DataSpec 优先给 AI 使用，但不同 Agent（Codex、Claude、Cursor、MCP client）读取项目说明、命令、配置和安全边界的方式不同；每次手写上下文容易遗漏项目 ID、profile、验证命令或禁写边界。
+- 已有基础：已有 AI 会话启动包、MCP/CLI 工作流模板、`.dataspec/config.json`、AI profile、doctor、README 快速开始和 `AGENTS.md` 约定。
+- 缺口：缺少按目标 Agent 生成的最小启动包，无法稳定产出 `AGENTS.md` 片段、MCP 配置、CLI 命令、任务 profile、只读边界和验证入口。
+- 参考项目：`agents.md` 的 Agent 指令约定、`modelcontextprotocol/servers` 的 MCP 配置样例和 `backstage/backstage` 的开发者入口；只生成本地说明和配置片段，不托管外部账号。
+- 落地产物：新增 `dataspec agent-kit export --target codex|claude|cursor|mcp` 或等价 API/前端下载；输出项目摘要、推荐 profile、MCP resource、CLI 命令、验证命令和敏感信息禁用清单。
+- 验收标准：新 Agent 拿到启动包后能完成读取标准、校验 SQL、导出 Context 和执行 doctor 的基础流程；包内不包含 token、密码、完整 JDBC URL 或业务数据行。
+- 边界：不创建外部工作区，不管理 Agent 权限，不把 profile 当鉴权；第一版只覆盖本地文件和命令说明。
+
+### P6-144：标准质量异常自动归因
+- 状态：待办。
+- 为什么做：字段质量分、覆盖率、冲突和候选采纳都会变化；如果只看到分数下降，AI 和用户仍要手动翻导入批次、规则变更和标准修改记录才能找到原因。
+- 已有基础：已有字段质量评分、覆盖率报告、项目活动时间线、标准候选 Inbox、导入来源批次、标准快照、全链路 Trace 和健康趋势待办。
+- 缺口：缺少 root-cause hints，无法把质量异常关联到最近导入批次、规则调整、字段合并、候选采纳、连接差异或契约导入。
+- 参考项目：`great-expectations/great_expectations` 的数据质量结果、`getsentry/sentry-javascript` 的错误上下文和 `OpenLineage/OpenLineage` 的运行事件；只借鉴归因线索，不做自动判责。
+- 落地产物：新增质量异常归因服务和前端摘要；按项目输出 changedMetrics、suspectedCauses、relatedEvents、evidenceRefs、recommendedChecks 和 suggestedCommands；CLI/MCP 可读取同一 JSON。
+- 验收标准：覆盖率或质量分下降时能列出最可能的 3 个原因和证据链接；AI 可基于建议命令继续排查；归因结果不会包含敏感值或源库明文。
+- 边界：不自动回滚标准，不把归因当最终事实，不引入复杂观测平台；第一版只基于 DataSpec 已保存的事件和脱敏摘要。
+
+### P6-145：前端错误到修复 Action 的闭环体验
+- 状态：待办。
+- 为什么做：前端页面已经有较多诊断、空状态和错误信息，但用户或 AI browser automation 真正需要的是下一步可执行动作，例如创建项目、选择 profile、运行 doctor、重新加载表或导出证据包。
+- 已有基础：已有前端统一数据状态、AI 可读错误码、任务式导航、端到端上手引导、doctor、preflight 待办和统一任务结果协议待办。
+- 缺口：错误提示缺少 action schema，页面无法统一展示 `primaryAction`、`secondaryActions`、`copyCommand`、`retry`、`openDocs` 和 `createTask` 等动作。
+- 参考项目：`TanStack/query` 的请求状态组织、`github/gh` 的命令式修复建议和 `microsoft/playwright` 的可测试用户动作；只做本地页面交互，不引入复杂流程引擎。
+- 落地产物：新增前端 `ActionableState` 组件和轻量 action schema；项目未选、后端未启动、API 契约漂移、反向导入连接失败、AI profile 缺失等高频状态接入修复按钮和复制命令。
+- 验收标准：关键页面遇到错误时至少提供一个明确可执行动作；按钮、命令和跳转可被 smoke 或浏览器测试覆盖；不会把敏感连接信息写入 URL 或剪贴板。
+- 边界：不替代后端真实错误码，不自动执行高风险写入，不做企业审批流；第一版聚焦前端高频阻塞状态。
+
+### P6-146：个人标准健康摘要与下一步报告
+- 状态：待办。
+- 为什么做：DataSpec 功能增多后，个人每天打开项目时需要快速知道“今天最值得处理什么”：新增候选、低质量字段、失败 SQL、导入差异、标准过期或 AI 任务阻塞。
+- 已有基础：已有项目工作台、活动时间线、健康趋势、候选 Inbox、检查记录、覆盖率报告、AI 任务推荐队列、执行证据包和统一任务结果协议待办。
+- 缺口：缺少按项目聚合的 digest DTO，无法稳定生成 todaySummary、topRisks、quickWins、blockedTasks、recommendedCommands 和 evidenceLinks。
+- 参考项目：GitHub Actions job summary、`langfuse/langfuse` 的任务观测和 `backstage/backstage` 的开发者入口；只做个人项目摘要，不做团队通知系统。
+- 落地产物：新增项目健康摘要 API、CLI `dataspec summary` 和前端工作台摘要卡；支持时间范围、只读导出 Markdown/JSON、复制给 AI 的下一步清单和证据链接。
+- 验收标准：打开项目即可看到候选、规则、质量、导入、AI 任务的关键摘要；AI 可读取 JSON 后自动选择下一步任务；摘要不暴露 token、密码、完整 JDBC URL 或业务数据行。
+- 边界：不发邮件/IM 通知，不做多人分派，不要求后台定时任务；第一版按用户主动打开或 CLI 调用即时生成。
 
 ## 参考项目索引
 
