@@ -38,6 +38,17 @@ class ErrorCatalogTest {
     }
 
     @Test
+    void failResponseRedactsSensitiveMessageValues() throws JsonProcessingException {
+        R<Void> response = R.fail(400, "连接失败 password=secret Authorization: Bearer raw.jwt jdbc:postgresql://localhost/app");
+        String json = objectMapper.writeValueAsString(response);
+
+        assertTrue(response.getMessage().contains("[REDACTED]"));
+        assertFalse(json.contains("secret"));
+        assertFalse(json.contains("raw.jwt"));
+        assertFalse(json.contains("jdbc:postgresql://localhost/app"));
+    }
+
+    @Test
     void classifiesAuthAndProjectAccessErrors() {
         ErrorDetail token = ErrorCatalog.from(401, "缺少 Authorization Bearer token");
         assertEquals("AUTH_TOKEN_MISSING_OR_INVALID", token.code());

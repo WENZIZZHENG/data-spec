@@ -223,7 +223,7 @@ class DatabaseReverseImportServiceTest {
 
         assertThat(result.success()).isTrue();
         assertThat(result.security().riskLevel()).isEqualTo("WARNING");
-        assertThat(result.security().warnings()).anyMatch(warning -> warning.contains("<redacted>"));
+        assertThat(result.security().warnings()).anyMatch(warning -> warning.contains("[REDACTED]"));
         assertThat(result.security().warnings()).noneMatch(warning -> warning.contains("secret"));
     }
 
@@ -241,7 +241,7 @@ class DatabaseReverseImportServiceTest {
 
         assertThat(result.success()).isFalse();
         assertThat(result.security()).isNull();
-        assertThat(result.message()).contains("<redacted>");
+        assertThat(result.message()).contains("[REDACTED]");
         assertThat(result.message()).doesNotContain("top-secret", "jdbc:postgresql://localhost:5432/demo", "token123");
     }
 

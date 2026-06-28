@@ -1,5 +1,6 @@
 package com.dataspec.common.result;
 
+import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 
@@ -28,9 +29,10 @@ public class R<T> {
 
     public static <T> R<T> fail(int code, String message) {
         R<T> r = new R<>();
+        String sanitizedMessage = SensitiveDataSanitizer.redactText(message);
         r.setCode(code);
-        r.setMessage(message);
-        r.setError(ErrorCatalog.from(code, message));
+        r.setMessage(sanitizedMessage);
+        r.setError(ErrorCatalog.from(code, sanitizedMessage));
         return r;
     }
 

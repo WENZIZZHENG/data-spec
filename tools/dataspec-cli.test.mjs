@@ -524,7 +524,17 @@ test('lint-files writes AI batch delivery package without changing json stdout',
           suggestionCount: 0,
           fixedSql: "CREATE TABLE user_order (id bigint); -- password='quoted-secret' token=ds_secret jdbc:postgresql://localhost/db",
           fixedSqlDiff: '--- before\n+++ after\n',
-          issues: [{ ruleCode: 'table_naming_snake_case', ruleName: '表名 snake_case', message: 'Bearer abc' }]
+          issues: [{ ruleCode: 'table_naming_snake_case', ruleName: '表名 snake_case', message: 'Bearer abc' }],
+          dialectDiagnostics: [{
+            code: 'SECRET',
+            params: {
+              tokenHash: 'hash_raw',
+              dbPassword: 'nested-secret',
+              githubApiKey: 'api_raw',
+              connectionString: 'jdbc:mysql://localhost/app'
+            }
+          }],
+          errorMessage: 'Authorization: Bearer raw.jwt.token'
         }
       })
     })
@@ -552,7 +562,9 @@ test('lint-files writes AI batch delivery package without changing json stdout',
     assert.equal(pkg.summary.totalItems, 1)
     assert.equal(pkg.issueSummary.errorCount, 1)
     assert.equal(pkg.items[0].fixedSqlAvailable, true)
-    assert.doesNotMatch(JSON.stringify(pkg), /quoted-secret|ds_secret|Bearer abc|jdbc:postgresql:\/\/localhost\/db/)
+    assert.doesNotMatch(JSON.stringify(pkg), /quoted-secret|ds_secret|Bearer abc|raw\.jwt\.token|hash_raw|nested-secret|api_raw|jdbc:postgresql:\/\/localhost\/db|jdbc:mysql:\/\/localhost\/app/)
+    assert.match(JSON.stringify(pkg), /Authorization: Bearer \*\*\*/)
+    assert.match(JSON.stringify(pkg), /"\*\*\*"/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

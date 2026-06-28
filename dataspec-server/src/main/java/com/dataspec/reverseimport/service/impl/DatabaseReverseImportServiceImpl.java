@@ -1,6 +1,7 @@
 package com.dataspec.reverseimport.service.impl;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.coverage.model.FieldCoverageReport;
 import com.dataspec.coverage.service.FieldCoverageService;
 import com.dataspec.dialect.service.SqlDialectCompatibilityService;
@@ -30,7 +31,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
-import java.util.regex.Pattern;
 
 /**
  * 基于 JDBC metadata 的数据库直连反向导入。
@@ -422,20 +422,7 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         if (message == null) {
             return "未知错误";
         }
-        String sanitized = message;
-        if (req != null && !isBlank(req.getPassword())) {
-            sanitized = sanitized.replace(req.getPassword(), "<redacted>");
-        }
-        sanitized = Pattern.compile("(?i)(password|pwd)\\s*=\\s*[^\\s;,&]+").matcher(sanitized)
-                .replaceAll("$1=<redacted>");
-        sanitized = Pattern.compile("(?i)Bearer\\s+[A-Za-z0-9._~+\\-/]+=*").matcher(sanitized)
-                .replaceAll("Bearer <redacted>");
-        sanitized = Pattern.compile("jdbc:[^\\s;]+").matcher(sanitized)
-                .replaceAll("jdbc:<redacted>");
-        if (sanitized.length() > 500) {
-            sanitized = sanitized.substring(0, 500) + "...";
-        }
-        return sanitized;
+        return SensitiveDataSanitizer.redactText(message, 500, req == null ? null : req.getPassword());
     }
 
     private String catalog(DatabaseConnectionReq req) {

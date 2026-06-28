@@ -1127,10 +1127,7 @@ function sanitizeMetadata(value) {
 }
 
 function redactSecrets(value) {
-  return String(value)
-    .replace(/jdbc:[^\s"'<>]+/gi, 'jdbc:***')
-    .replace(/((?:"|')?(?:password|pwd|token|api[_-]?token)(?:"|')?\s*[:=]\s*)(["']?)[^\s"';&,}]+\2/gi, '$1$2***$2')
-    .replace(/(bearer\s+)[A-Za-z0-9._-]+/gi, '$1***')
+  return sanitizeSecretText(value)
 }
 
 function appendOptionalParam(params, key, value) {
@@ -2405,7 +2402,10 @@ function sanitizeSecretValue(value) {
     return value.map((item) => sanitizeSecretValue(item))
   }
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizeSecretValue(item)]))
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+      key,
+      isSensitiveSecretKey(key) ? '***' : sanitizeSecretValue(item)
+    ]))
   }
   return value
 }
@@ -2416,9 +2416,40 @@ function sanitizeSecretText(value) {
   }
   return String(value)
     .replace(/jdbc:[^\s"'<>]+/gi, 'jdbc:***')
-    .replace(/\b(password|pwd)\s*=\s*(['"]?)[^\s"';&]+\2/gi, '$1=***')
-    .replace(/\b(token|api[_-]?token)\s*=\s*(['"]?)[^\s"';&]+\2/gi, '$1=***')
-    .replace(/\b(bearer\s+)[A-Za-z0-9._-]+/gi, '$1***')
+    .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s,;]+/gi, '$1***')
+    .replace(/(authorization\s*[:=]\s*)(?!\s*['"]?bearer\s+)(['"]?)[^,;}&\r\n]+\2/gi, '$1$2***$2')
+    .replace(/\b(bearer\s+)[A-Za-z0-9._~+/-]+=*/gi, '$1***')
+    .replace(/((?:"|')?\b(?:password|passwd|pwd|token|api[_-]?token|dataspec[_-]?token|api[_-]?key|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|plain[_-]?token|token[_-]?hash|jdbc[_-]?url|connection[_-]?string)\b(?:"|')?\s*[:=]\s*)(['"]?)[^\s"',;}&]+\2/gi, '$1$2***$2')
+}
+
+function isSensitiveSecretKey(key) {
+  const normalized = String(key ?? '').replace(/[^A-Za-z0-9]/g, '').toLowerCase()
+  return [
+    'password',
+    'passwd',
+    'pwd',
+    'token',
+    'apitoken',
+    'dataspectoken',
+    'apikey',
+    'authorization',
+    'secret',
+    'clientsecret',
+    'accesstoken',
+    'refreshtoken',
+    'plaintoken',
+    'tokenhash',
+    'jdbcurl',
+    'connectionstring'
+  ].includes(normalized) ||
+    normalized.endsWith('token') ||
+    normalized.endsWith('secret') ||
+    normalized.includes('apikey') ||
+    normalized.includes('password') ||
+    normalized.includes('authorization') ||
+    normalized.includes('tokenhash') ||
+    normalized.includes('connectionstring') ||
+    normalized.includes('jdbcurl')
 }
 
 function formatLintText(result) {

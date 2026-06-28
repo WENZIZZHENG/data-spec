@@ -496,6 +496,8 @@ VALUES ('default-cli', '<hash>', 'alice', '1,2');
 
 前端“系统设置 / API Token”提供日常管理入口：列表只展示 token 名称、操作者、项目范围、启停状态、创建时间、停用时间和最近使用时间，不返回 token hash；新建 token 时明文只显示一次，请立即复制保存。停用 token 后，后续 CLI/MCP/API 请求会被拒绝。
 
+后端错误响应、数据库直连诊断、AI evidence package、项目备份安全扫描和 CLI 本地交付包已接入统一脱敏边界：`password`、`token`、`plainToken`、`tokenHash`、`apiKey`、`Authorization/Bearer`、完整 `jdbc:` URL 和 `connectionString` 会以 `[REDACTED]` 或 `***` 形式输出。允许持久化和展示的是项目 ID、databaseType、host、port、databaseName、schemaName、表名、字段名、规则统计和摘要计数等非敏感元数据；数据库密码、API token 明文、token hash、完整连接串和源数据库业务数据行不应进入日志、证据包、备份包或可复制错误消息。第一版不承诺识别所有自然语言隐私片段，遇到业务高敏样例仍应通过后续个人安全红线策略继续收紧。
+
 ## CLI
 
 第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`。在业务仓库中可运行 `init` 生成 `.dataspec/config.json`、`.dataspec/README.md`，并可选写入带 marker 的 `AGENTS.md` 片段：

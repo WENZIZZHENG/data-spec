@@ -3,6 +3,7 @@ package com.dataspec.evidence.service.impl;
 import com.dataspec.aibatch.model.AiBatchDeliveryPackage;
 import com.dataspec.aibatch.model.AiBatchRunDetail;
 import com.dataspec.aibatch.service.AiBatchService;
+import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.aireplay.entity.AiJobRecord;
 import com.dataspec.aireplay.model.AiJobRecordDetail;
 import com.dataspec.aireplay.service.AiJobRecordService;
@@ -35,7 +36,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -48,11 +48,6 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
 
     private static final int TEXT_PREVIEW_LIMIT = 600;
     private static final int LIST_PREVIEW_LIMIT = 12;
-    private static final Pattern AUTHORIZATION_PATTERN = Pattern.compile("(?i)authorization\\s*[:=]\\s*bearer\\s+[^\\s,;]+");
-    private static final Pattern BEARER_PATTERN = Pattern.compile("(?i)bearer\\s+[a-z0-9._\\-]+");
-    private static final Pattern PASSWORD_PATTERN = Pattern.compile("(?i)(password|passwd|pwd)\\s*[:=]\\s*[^\\s,;]+");
-    private static final Pattern TOKEN_PATTERN = Pattern.compile("(?i)(token|dataspec-token|api[_-]?key)\\s*[:=]\\s*[^\\s,;]+");
-    private static final Pattern JDBC_PATTERN = Pattern.compile("jdbc:[^\\s\"']+");
 
     private final SqlCheckRecordService sqlCheckRecordService;
     private final AiJobRecordService aiJobRecordService;
@@ -365,7 +360,10 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                     result.put("_truncated", true);
                     break;
                 }
-                result.put(String.valueOf(entry.getKey()), sanitizeValue(entry.getValue(), depth + 1));
+                String key = String.valueOf(entry.getKey());
+                result.put(key, SensitiveDataSanitizer.isSensitiveKey(key)
+                        ? SensitiveDataSanitizer.REDACTION
+                        : sanitizeValue(entry.getValue(), depth + 1));
             }
             return result;
         }
@@ -396,12 +394,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
         if (text == null) {
             return null;
         }
-        String value = AUTHORIZATION_PATTERN.matcher(text).replaceAll("Authorization: [REDACTED]");
-        value = BEARER_PATTERN.matcher(value).replaceAll("Bearer [REDACTED]");
-        value = PASSWORD_PATTERN.matcher(value).replaceAll("$1=[REDACTED]");
-        value = TOKEN_PATTERN.matcher(value).replaceAll("$1=[REDACTED]");
-        value = JDBC_PATTERN.matcher(value).replaceAll("jdbc:[REDACTED]");
-        return value;
+        return SensitiveDataSanitizer.redactText(text);
     }
 
     private List<String> sanitizeStringList(List<String> values) {

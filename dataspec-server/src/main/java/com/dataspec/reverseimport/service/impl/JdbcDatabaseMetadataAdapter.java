@@ -1,6 +1,7 @@
 package com.dataspec.reverseimport.service.impl;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.lint.model.ColumnDef;
 import com.dataspec.lint.model.TableDef;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
@@ -22,7 +23,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * 基于 JDBC `DatabaseMetaData` 的 PostgreSQL/MySQL metadata 适配器。
@@ -230,16 +230,7 @@ public class JdbcDatabaseMetadataAdapter implements DatabaseMetadataAdapter {
         if (value == null) {
             return null;
         }
-        String sanitized = Pattern.compile("(?i)(password|pwd|token)\\s*=\\s*[^\\s;,&]+").matcher(value)
-                .replaceAll("$1=<redacted>");
-        sanitized = Pattern.compile("(?i)Bearer\\s+[A-Za-z0-9._~+\\-/]+=*").matcher(sanitized)
-                .replaceAll("Bearer <redacted>");
-        sanitized = Pattern.compile("jdbc:[^\\s;]+").matcher(sanitized)
-                .replaceAll("jdbc:<redacted>");
-        if (sanitized.length() > 1000) {
-            return sanitized.substring(0, 1000) + "...";
-        }
-        return sanitized;
+        return SensitiveDataSanitizer.redactText(value, 1000);
     }
 
     private String firstNonBlank(String first, String second) {

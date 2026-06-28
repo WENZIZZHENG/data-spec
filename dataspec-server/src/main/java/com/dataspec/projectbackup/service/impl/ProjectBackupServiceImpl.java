@@ -3,6 +3,7 @@ package com.dataspec.projectbackup.service.impl;
 import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.repository.StandardChangeLogRepository;
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.domain.entity.Domain;
 import com.dataspec.domain.repository.DomainRepository;
 import com.dataspec.enumdict.entity.EnumDict;
@@ -65,7 +66,6 @@ import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -78,9 +78,6 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
 
     private static final int SCHEMA_VERSION = 1;
     private static final int CHANGE_LOG_EXPORT_LIMIT = 200;
-    private static final Set<String> SENSITIVE_FIELD_NAMES = Set.of(
-            "password", "token", "tokenhash", "plaintoken", "apikey", "api_key", "jdbcurl", "jdbc_url", "connectionstring");
-
     private final ProjectRepository projectRepository;
     private final ProjectService projectService;
     private final DomainRepository domainRepository;
@@ -275,45 +272,10 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
     private boolean containsSensitivePayload(ProjectBackupPackage pkg) {
         try {
             JsonNode root = mapper().valueToTree(pkg);
-            return containsSensitivePayload(root, "");
+            return SensitiveDataSanitizer.containsSensitiveKeyOrValue(root);
         } catch (Exception e) {
             throw new BizException("备份包安全扫描失败: " + e.getMessage());
         }
-    }
-
-    private boolean containsSensitivePayload(JsonNode node, String fieldName) {
-        if (node == null || node.isNull()) {
-            return false;
-        }
-        if (isSensitiveFieldName(fieldName)) {
-            return true;
-        }
-        if (node.isTextual() && node.asText("").toLowerCase(Locale.ROOT).contains("jdbc:")) {
-            return true;
-        }
-        if (node.isObject()) {
-            var fields = node.fields();
-            while (fields.hasNext()) {
-                var entry = fields.next();
-                if (containsSensitivePayload(entry.getValue(), entry.getKey())) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        if (node.isArray()) {
-            for (JsonNode child : node) {
-                if (containsSensitivePayload(child, fieldName)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private boolean isSensitiveFieldName(String fieldName) {
-        String normalized = fieldName == null ? "" : fieldName.replace("-", "").replace("_", "").toLowerCase(Locale.ROOT);
-        return SENSITIVE_FIELD_NAMES.contains(normalized);
     }
 
     private Project targetProjectForPreview(Long targetProjectId) {
@@ -717,7 +679,7 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
 
     private FieldSource copySourceForBackup(FieldSource source) {
         FieldSource copy = copy(source, FieldSource.class);
-        if (copy.getMetadataJson() != null && copy.getMetadataJson().toLowerCase(Locale.ROOT).contains("password")) {
+        if (containsSensitiveSnapshot(copy.getMetadataJson())) {
             copy.setMetadataJson("{\"sanitized\":true}");
         }
         return copy;
@@ -734,11 +696,21 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
         if (value == null) {
             return null;
         }
-        String lower = value.toLowerCase(Locale.ROOT);
-        if (lower.contains("password") || lower.contains("tokenhash") || lower.contains("plaintoken") || lower.contains("jdbc:")) {
+        if (containsSensitiveSnapshot(value)) {
             return "{\"sanitized\":true}";
         }
         return value;
+    }
+
+    private boolean containsSensitiveSnapshot(String value) {
+        if (value == null) {
+            return false;
+        }
+        try {
+            return SensitiveDataSanitizer.containsSensitiveKeyOrValue(mapper().readTree(value));
+        } catch (Exception ignored) {
+            return SensitiveDataSanitizer.containsSensitiveText(value);
+        }
     }
 
     private Domain copyForRestore(Domain source, Long projectId) {
