@@ -7,19 +7,40 @@
       </div>
       <div class="header-actions">
         <el-tooltip content="刷新任务">
-          <el-button aria-label="刷新任务" :disabled="!hasProject" :loading="loading" @click="loadBatches">
+          <el-button aria-label="刷新任务" :disabled="!hasProject" :loading="listLoading" @click="loadBatches">
             <el-icon><Refresh /></el-icon>
           </el-button>
         </el-tooltip>
       </div>
     </div>
 
-    <el-empty v-if="!hasProject" description="请先创建并选择项目">
-      <el-button type="primary" @click="$router.push('/projects')">去项目列表</el-button>
-    </el-empty>
+    <ProjectRequired
+      v-if="!hasProject"
+      :has-project="hasProject"
+      title="请先创建并选择项目"
+      @action="goProjects"
+    />
 
     <template v-else>
-      <el-table :data="records" stripe empty-text="暂无 AI 批量任务" v-loading="loading">
+      <StateBlock
+        v-if="listState.errorMessage.value"
+        type="error"
+        title="AI 批量任务加载失败"
+        :description="listState.errorMessage.value"
+        :suggested-action="listState.suggestedAction.value"
+        :docs-ref="listState.docsRef.value"
+        action-text="重试"
+        @action="loadBatches"
+      />
+      <StateBlock
+        v-else-if="!listLoading && records.length === 0"
+        type="empty"
+        title="暂无 AI 批量任务"
+        description="通过 CLI lint-files 或后续 AI 批量流程生成任务后，这里会显示交付包和证据包入口。"
+        action-text="刷新"
+        @action="loadBatches"
+      />
+      <el-table v-else :data="records" stripe empty-text="暂无 AI 批量任务" v-loading="listLoading">
         <el-table-column label="时间" width="170">
           <template #default="{ row }">{{ formatAiBatchTime(row.createdAt) }}</template>
         </el-table-column>
@@ -64,7 +85,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="pagination-bar">
+      <div v-if="records.length > 0" class="pagination-bar">
         <el-pagination
           v-model:current-page="current"
           v-model:page-size="size"
@@ -193,9 +214,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { downloadAiBatchPackage, getAiBatchDetail, listAiBatches } from '@/api/aiBatch'
 import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
+import ProjectRequired from '@/components/ProjectRequired.vue'
+import StateBlock from '@/components/StateBlock.vue'
+import { useRequestState } from '@/composables/useRequestState'
 import { useProjectStore } from '@/stores/project'
 import {
   aiBatchStatusLabel,
@@ -203,20 +228,22 @@ import {
   buildAiBatchJson,
   formatAiBatchTime
 } from '@/utils/aiBatchDisplay'
-import type { AiBatchItemResult, AiBatchRunDetail, AiBatchRunListItem, LintIssue } from '@/types'
+import type { AiBatchItemResult, AiBatchRunDetail, AiBatchRunListItem, LintIssue, PageResult } from '@/types'
 
 const projectStore = useProjectStore()
+const router = useRouter()
 const records = ref<AiBatchRunListItem[]>([])
 const total = ref(0)
 const current = ref(1)
 const size = ref(10)
-const loading = ref(false)
+const listState = useRequestState<PageResult<AiBatchRunListItem>>()
 const detailLoading = ref(false)
 const detailVisible = ref(false)
 const activeDetail = ref<AiBatchRunDetail | null>(null)
 const evidenceActionId = ref<number | null>(null)
 
 const hasProject = computed(() => projectStore.currentProjectId !== null)
+const listLoading = computed(() => listState.loading.value)
 const activePackage = computed(() => activeDetail.value?.deliveryPackage)
 const activeSummary = computed(() => activePackage.value?.summary)
 const packageJson = computed(() => buildAiBatchJson(activePackage.value))
@@ -238,7 +265,7 @@ const fixedSqlItems = computed<AiBatchItemResult[]>(() =>
 )
 
 onMounted(() => {
-  loadBatches()
+  void loadBatches()
 })
 
 watch(
@@ -247,7 +274,7 @@ watch(
     current.value = 1
     activeDetail.value = null
     detailVisible.value = false
-    loadBatches()
+    void loadBatches()
   }
 )
 
@@ -256,15 +283,18 @@ async function loadBatches() {
   if (!projectId) {
     records.value = []
     total.value = 0
+    listState.reset()
     return
   }
-  loading.value = true
   try {
-    const page = await listAiBatches(projectId, current.value, size.value)
-    records.value = page.records ?? []
-    total.value = page.total ?? 0
-  } finally {
-    loading.value = false
+    await listState.run(async () => {
+      const page = await listAiBatches(projectId, current.value, size.value)
+      records.value = page.records ?? []
+      total.value = page.total ?? 0
+      return page
+    })
+  } catch {
+    // 统一错误块负责展示建议与重试入口，避免列表刷新散落未处理异常。
   }
 }
 
@@ -342,7 +372,11 @@ function saveBlob(blob: Blob, filename: string) {
 
 function handleSizeChange() {
   current.value = 1
-  loadBatches()
+  void loadBatches()
+}
+
+function goProjects() {
+  router.push('/projects')
 }
 
 async function copyText(text: string) {

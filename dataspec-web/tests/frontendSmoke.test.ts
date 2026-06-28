@@ -48,6 +48,9 @@ test('keeps AI batch delivery package page wired', () => {
 
   assertContains(view, [
     "import { downloadAiBatchPackage, getAiBatchDetail, listAiBatches } from '@/api/aiBatch'",
+    "import ProjectRequired from '@/components/ProjectRequired.vue'",
+    "import StateBlock from '@/components/StateBlock.vue'",
+    "import { useRequestState } from '@/composables/useRequestState'",
     'projectStore.currentProjectId',
     'async function loadBatches()',
     'await listAiBatches(projectId, current.value, size.value)',
@@ -386,7 +389,7 @@ test('keeps project activity timeline wired on dashboard', () => {
     'activityTimeline',
     'activityActionType',
     'async function loadActivities()',
-    'await listProjectActivities(',
+    'listProjectActivities(',
     'activityItems',
     'activityActionOptions',
     'goActivity(activity.detailRoute)',
@@ -659,8 +662,11 @@ test('keeps coverage and AI replay supporting flows wired', () => {
   const replayApi = readSource('src/api/aiJob.ts')
 
   assertContains(coverage, [
+    "import ProjectRequired from '@/components/ProjectRequired.vue'",
+    "import StateBlock from '@/components/StateBlock.vue'",
+    "import { useRequestState } from '@/composables/useRequestState'",
     'projectStore.currentProjectId',
-    'reportSqlCoverage(projectStore.currentProjectId, sqlText.value)',
+    'reportSqlCoverage(projectStore.currentProjectId as number, sqlText.value)',
     'reportDatabaseCoverage(databaseRequest())',
     'testDatabaseConnection(databaseRequest())',
     'listDatabaseTables(databaseRequest())',
@@ -687,6 +693,78 @@ test('keeps coverage and AI replay supporting flows wired', () => {
     "request.get<unknown, PageResult<AiJobRecordListItem>>('/ai-jobs'",
     'export function getAiJobDetail(id: number)'
   ], 'AI replay api')
+})
+
+test('keeps unified request state and recovery entrypoints wired', () => {
+  const requestState = readSource('src/composables/useRequestState.ts')
+  const stateBlock = readSource('src/components/StateBlock.vue')
+  const projectRequired = readSource('src/components/ProjectRequired.vue')
+  const dashboard = readSource('src/views/Dashboard.vue')
+  const aiBatch = readSource('src/views/AiBatch.vue')
+  const coverage = readSource('src/views/FieldCoverage.vue')
+  const sqlLint = readSource('src/views/SqlLint.vue')
+  const packageJson = readSource('package.json')
+
+  assertContains(requestState, [
+    'export function useRequestState',
+    'loading',
+    'errorMessage',
+    'suggestedAction',
+    'docsRef',
+    'lastUpdatedAt',
+    'async function retry',
+    'export function normalizeRequestError'
+  ], 'useRequestState')
+
+  assertContains(stateBlock, [
+    'data-state-type',
+    'state-suggestion',
+    'actionText',
+    "defineEmits"
+  ], 'StateBlock.vue')
+
+  assertContains(projectRequired, [
+    'StateBlock',
+    'hasProject',
+    '请先创建并选择项目',
+    '项目是字段标准、SQL 检查和 AI Context 的边界'
+  ], 'ProjectRequired.vue')
+
+  for (const [context, source] of [
+    ['Dashboard.vue', dashboard],
+    ['AiBatch.vue', aiBatch],
+    ['FieldCoverage.vue', coverage],
+    ['SqlLint.vue', sqlLint]
+  ] as const) {
+    assertContains(source, [
+      "import StateBlock from '@/components/StateBlock.vue'",
+      "import { useRequestState } from '@/composables/useRequestState'",
+      'action-text="重试"'
+    ], context)
+  }
+
+  assertContains(dashboard, [
+    "import ProjectRequired from '@/components/ProjectRequired.vue'",
+    '工作台加载失败',
+    'dashboardSuggestedAction',
+    'void loadDashboard()',
+    'void loadActivities()'
+  ], 'Dashboard.vue unified state')
+
+  assertContains(aiBatch, [
+    'void loadBatches()',
+    'AI 批量任务加载失败'
+  ], 'AiBatch.vue recoverable list state')
+
+  assertContains(sqlLint, [
+    '检查记录加载失败',
+    '刷新记录',
+    'goProjects'
+  ], 'SqlLint.vue unified state')
+
+  assertContains(packageJson, [
+    'tests/requestState.test.ts'
+  ], 'frontend test script')
 })
 
 test('keeps critical action labels and empty states visible', () => {

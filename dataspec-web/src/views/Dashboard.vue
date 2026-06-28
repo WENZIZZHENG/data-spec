@@ -5,23 +5,35 @@
         <h2>工作台</h2>
         <p class="page-subtitle">{{ projectStore.currentProjectName || '未选择项目' }}</p>
       </div>
-      <el-button :disabled="!hasProject" :loading="loading || activityLoading" @click="loadDashboard">
+      <el-button :disabled="!hasProject" :loading="dashboardLoading" @click="loadDashboard">
         <el-icon><Refresh /></el-icon>
         刷新
       </el-button>
     </div>
 
-    <el-empty v-if="!hasProject" description="请先创建并选择项目">
-      <div class="empty-actions">
-        <el-button type="primary" :loading="demoLoading" @click="handleCreateDemoProject">
-          创建演示项目
-        </el-button>
-        <el-button @click="$router.push('/projects')">去项目列表</el-button>
-      </div>
-    </el-empty>
+    <ProjectRequired
+      v-if="!hasProject"
+      :has-project="hasProject"
+      action-text="创建演示项目"
+      secondary-action-text="去项目列表"
+      :loading="demoLoading"
+      @action="handleCreateDemoProject"
+      @secondary="goProjects"
+    />
 
     <template v-else>
-      <div v-loading="loading" class="dashboard-content">
+      <StateBlock
+        v-if="dashboardErrorMessage"
+        type="error"
+        title="工作台加载失败"
+        :description="dashboardErrorMessage"
+        :suggested-action="dashboardSuggestedAction"
+        :docs-ref="dashboardDocsRef"
+        action-text="重试"
+        @action="loadDashboard"
+      />
+
+      <div v-else v-loading="dashboardLoading" class="dashboard-content">
         <section class="metric-grid">
           <div v-for="metric in metrics" :key="metric.key" class="metric-item">
             <div class="metric-label">{{ metric.label }}</div>
@@ -129,14 +141,14 @@
                   :value="action.actionType"
                 />
               </el-select>
-              <el-button text type="primary" :loading="activityLoading" @click="loadActivities">
+              <el-button text type="primary" :loading="activityState.loading.value" @click="loadActivities">
                 <el-icon><Refresh /></el-icon>
                 刷新
               </el-button>
             </div>
           </div>
 
-          <div v-loading="activityLoading" class="activity-body">
+          <div v-loading="activityState.loading.value" class="activity-body">
             <el-timeline v-if="activityItems.length" class="activity-timeline">
               <el-timeline-item
                 v-for="activity in activityItems"
@@ -196,6 +208,9 @@ import {
 import { ElMessage } from 'element-plus'
 import { listProjectActivities } from '@/api/activity'
 import { getDashboardSummary } from '@/api/dashboard'
+import ProjectRequired from '@/components/ProjectRequired.vue'
+import StateBlock from '@/components/StateBlock.vue'
+import { useRequestState } from '@/composables/useRequestState'
 import { useProjectStore } from '@/stores/project'
 import type { DashboardSummary, IssueTrendPoint, ProjectActivityTimeline } from '@/types'
 
@@ -219,11 +234,11 @@ const RECENT_TASKS_KEY = 'dataspec.dashboard.recentTasks.v1'
 
 const projectStore = useProjectStore()
 const router = useRouter()
-const loading = ref(false)
-const activityLoading = ref(false)
+const summaryState = useRequestState<DashboardSummary>()
+const activityState = useRequestState<ProjectActivityTimeline>()
+const summary = summaryState.data
+const activityTimeline = activityState.data
 const demoLoading = ref(false)
-const summary = ref<DashboardSummary | null>(null)
-const activityTimeline = ref<ProjectActivityTimeline | null>(null)
 const activityActionType = ref<string>('')
 const recentTasks = ref<RecentTask[]>([])
 
@@ -238,6 +253,10 @@ const taskEntries: DashboardTask[] = [
 ]
 
 const hasProject = computed(() => projectStore.currentProjectId !== null)
+const dashboardLoading = computed(() => summaryState.loading.value || activityState.loading.value)
+const dashboardErrorMessage = computed(() => summaryState.errorMessage.value || activityState.errorMessage.value)
+const dashboardSuggestedAction = computed(() => summaryState.suggestedAction.value || activityState.suggestedAction.value)
+const dashboardDocsRef = computed(() => summaryState.docsRef.value || activityState.docsRef.value)
 const metrics = computed(() => [
   { key: 'fields', label: '标准字段', value: summary.value?.fieldCount ?? 0 },
   { key: 'enums', label: '代码集', value: summary.value?.enumDictCount ?? 0 },
@@ -281,48 +300,46 @@ onMounted(async () => {
 watch(
   () => projectStore.currentProjectId,
   () => {
-    loadDashboard()
+    void loadDashboard()
   }
 )
 
 watch(
   () => activityActionType.value,
   () => {
-    loadActivities()
+    void loadActivities()
   }
 )
 
 async function loadDashboard() {
-  await Promise.all([loadSummary(), loadActivities()])
+  await Promise.allSettled([loadSummary(), loadActivities()])
 }
 
 async function loadSummary() {
   if (!projectStore.currentProjectId) {
-    summary.value = null
+    summaryState.reset()
     return
   }
-  loading.value = true
   try {
-    summary.value = await getDashboardSummary(projectStore.currentProjectId)
-  } finally {
-    loading.value = false
+    await summaryState.run(() => getDashboardSummary(projectStore.currentProjectId as number))
+  } catch {
+    // 页面级 StateBlock 会展示后端返回的建议与重试入口。
   }
 }
 
 async function loadActivities() {
   if (!projectStore.currentProjectId) {
-    activityTimeline.value = null
+    activityState.reset()
     return
   }
-  activityLoading.value = true
   try {
-    activityTimeline.value = await listProjectActivities(
-      projectStore.currentProjectId,
+    await activityState.run(() => listProjectActivities(
+      projectStore.currentProjectId as number,
       activityActionType.value || undefined,
       20
-    )
-  } finally {
-    activityLoading.value = false
+    ))
+  } catch {
+    // 活动列表失败不阻塞工作台其余区域，错误状态留给 StateBlock 呈现。
   }
 }
 
@@ -339,6 +356,10 @@ function openTask(task: DashboardTask) {
 
 function openRecentTask(task: RecentTask) {
   router.push(task.route)
+}
+
+function goProjects() {
+  router.push('/projects')
 }
 
 async function openDemoSqlLint() {

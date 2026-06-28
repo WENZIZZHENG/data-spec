@@ -13,9 +13,12 @@
       </div>
     </div>
 
-    <el-empty v-if="!hasProject" description="请先创建并选择项目">
-      <el-button type="primary" @click="$router.push('/projects')">去项目列表</el-button>
-    </el-empty>
+    <ProjectRequired
+      v-if="!hasProject"
+      :has-project="hasProject"
+      title="请先创建并选择项目"
+      @action="goProjects"
+    />
 
     <template v-else>
       <el-tabs v-model="activeMode" class="mode-tabs">
@@ -145,7 +148,18 @@
         </el-tab-pane>
       </el-tabs>
 
-      <section v-if="report" class="result-section">
+      <StateBlock
+        v-if="reportState.errorMessage.value"
+        type="error"
+        title="覆盖率报告生成失败"
+        :description="reportState.errorMessage.value"
+        :suggested-action="reportState.suggestedAction.value"
+        :docs-ref="reportState.docsRef.value"
+        action-text="重试"
+        @action="handleGenerateReport"
+      />
+
+      <section v-else-if="report" class="result-section">
         <div class="coverage-hero">
           <el-progress
             type="dashboard"
@@ -199,7 +213,15 @@
               </div>
             </div>
 
-            <el-table :data="filteredFields" stripe empty-text="当前筛选下暂无字段">
+            <StateBlock
+              v-if="filteredFields.length === 0"
+              type="empty"
+              title="当前筛选下暂无字段"
+              description="可以切换表或状态筛选，或重新生成覆盖率报告。"
+              action-text="重置筛选"
+              @action="resetCoverageFilters"
+            />
+            <el-table v-else :data="filteredFields" stripe empty-text="当前筛选下暂无字段">
               <el-table-column prop="tableName" label="表" min-width="130" />
               <el-table-column prop="columnName" label="字段" min-width="140" />
               <el-table-column label="状态" width="110">
@@ -267,6 +289,9 @@ import { Connection, DataAnalysis, Refresh, Search } from '@element-plus/icons-v
 import { reportDatabaseCoverage, reportSqlCoverage } from '@/api/coverage'
 import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
 import { listDatabaseTables, testDatabaseConnection } from '@/api/reverseImport'
+import ProjectRequired from '@/components/ProjectRequired.vue'
+import StateBlock from '@/components/StateBlock.vue'
+import { useRequestState } from '@/composables/useRequestState'
 import { useProjectStore } from '@/stores/project'
 import {
   coverageStatusLabel,
@@ -301,8 +326,8 @@ const projectStore = useProjectStore()
 const router = useRouter()
 const activeMode = ref<CoverageMode>('database')
 const sqlText = ref('')
-const report = ref<FieldCoverageReport | null>(null)
-const reportLoading = ref(false)
+const reportState = useRequestState<FieldCoverageReport>()
+const report = reportState.data
 const evidenceLoading = ref(false)
 const testLoading = ref(false)
 const tableLoading = ref(false)
@@ -325,6 +350,7 @@ const dbForm = reactive<DatabaseConnectionReq>({
 })
 
 const hasProject = computed(() => projectStore.currentProjectId !== null)
+const reportLoading = computed(() => reportState.loading.value)
 const canUseDatabaseConnection = computed(() =>
   hasProject.value
   && Boolean(dbForm.databaseType)
@@ -408,7 +434,12 @@ watch(
 )
 
 function resetReport() {
-  report.value = null
+  reportState.reset()
+  tableFilter.value = 'ALL'
+  statusFilter.value = 'ALL'
+}
+
+function resetCoverageFilters() {
   tableFilter.value = 'ALL'
   statusFilter.value = 'ALL'
 }
@@ -434,15 +465,14 @@ async function handleGenerateReport() {
   if (!projectStore.currentProjectId || !canGenerateReport.value) {
     return
   }
-  reportLoading.value = true
   try {
-    report.value = activeMode.value === 'sql'
-      ? await reportSqlCoverage(projectStore.currentProjectId, sqlText.value)
-      : await reportDatabaseCoverage(databaseRequest())
+    await reportState.run(() => activeMode.value === 'sql'
+      ? reportSqlCoverage(projectStore.currentProjectId as number, sqlText.value)
+      : reportDatabaseCoverage(databaseRequest()))
     tableFilter.value = 'ALL'
     statusFilter.value = 'ALL'
-  } finally {
-    reportLoading.value = false
+  } catch {
+    // 页面内 StateBlock 会展示可重试状态，避免只留下全局消息。
   }
 }
 
@@ -500,6 +530,10 @@ function saveBlob(blob: Blob, filename: string) {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+function goProjects() {
+  router.push('/projects')
 }
 
 async function copyText(text: string) {

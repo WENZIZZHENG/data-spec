@@ -236,9 +236,35 @@
             </div>
           </template>
 
-          <el-empty v-if="!projectStore.currentProjectId" description="请选择项目后查看记录" />
+          <StateBlock
+            v-if="!projectStore.currentProjectId"
+            type="project"
+            title="请选择项目后查看记录"
+            description="SQL 可以先校验；选择项目后会展示该项目最近检查记录、回放和证据包入口。"
+            action-text="去项目列表"
+            @action="goProjects"
+          />
           <template v-else>
+            <StateBlock
+              v-if="recordState.errorMessage.value"
+              type="error"
+              title="检查记录加载失败"
+              :description="recordState.errorMessage.value"
+              :suggested-action="recordState.suggestedAction.value"
+              :docs-ref="recordState.docsRef.value"
+              action-text="重试"
+              @action="loadRecords"
+            />
+            <StateBlock
+              v-else-if="!recordLoading && records.length === 0"
+              type="empty"
+              title="暂无检查记录"
+              description="执行一次项目内 SQL 校验后，记录、回放和证据包入口会出现在这里。"
+              action-text="刷新记录"
+              @action="loadRecords"
+            />
             <el-table
+              v-else
               v-loading="recordLoading"
               :data="records"
               stripe
@@ -413,12 +439,14 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as monaco from 'monaco-editor'
 import { listAiProfiles } from '@/api/aiProfile'
 import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
 import { getLintRecord, lintSql, listLintRecords } from '@/api/lint'
+import StateBlock from '@/components/StateBlock.vue'
+import { useRequestState } from '@/composables/useRequestState'
 import { useProjectStore } from '@/stores/project'
 import {
   readSelectedAiProfile,
@@ -438,6 +466,7 @@ import type {
   LintIssue,
   LintRequest,
   LintResult,
+  PageResult,
   RecordDetail,
   SqlCheckRecord,
   StandardSnapshotInfo
@@ -450,7 +479,7 @@ const records = ref<SqlCheckRecord[]>([])
 const recordTotal = ref(0)
 const recordCurrent = ref(1)
 const recordSize = ref(10)
-const recordLoading = ref(false)
+const recordState = useRequestState<PageResult<SqlCheckRecord>>()
 const recordDetailLoading = ref(false)
 const loadingRecordId = ref<number | null>(null)
 const activeRecord = ref<RecordDetail | null>(null)
@@ -466,6 +495,7 @@ const fixMaxRiskLevel = ref<NonNullable<FixPolicy['maxRiskLevel']>>('MEDIUM')
 const includeFixExplanations = ref(true)
 const projectStore = useProjectStore()
 const route = useRoute()
+const router = useRouter()
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
 
 const DEFAULT_SQL = `CREATE TABLE users (
@@ -517,6 +547,7 @@ const recordDiffLines = computed(() => {
   const record = activeRecord.value?.record
   return parseDiff(buildSqlDiff(record?.originalSql, record?.fixedSql))
 })
+const recordLoading = computed(() => recordState.loading.value)
 
 onMounted(() => {
   if (editorContainer.value) {
@@ -596,18 +627,21 @@ async function loadRecords() {
   if (!projectId) {
     records.value = []
     recordTotal.value = 0
+    recordState.reset()
     return
   }
 
-  recordLoading.value = true
   try {
-    const page = await listLintRecords(projectId, recordCurrent.value, recordSize.value)
-    records.value = page.records ?? []
-    recordTotal.value = page.total ?? 0
-    recordCurrent.value = page.current ?? recordCurrent.value
-    recordSize.value = page.size ?? recordSize.value
-  } finally {
-    recordLoading.value = false
+    await recordState.run(async () => {
+      const page = await listLintRecords(projectId, recordCurrent.value, recordSize.value)
+      records.value = page.records ?? []
+      recordTotal.value = page.total ?? 0
+      recordCurrent.value = page.current ?? recordCurrent.value
+      recordSize.value = page.size ?? recordSize.value
+      return page
+    })
+  } catch {
+    // 页面内 StateBlock 会展示可恢复错误和重试入口。
   }
 }
 
@@ -764,6 +798,10 @@ function saveBlob(blob: Blob, filename: string) {
 function handleRecordPageChange(page: number) {
   recordCurrent.value = page
   void loadRecords()
+}
+
+function goProjects() {
+  router.push('/projects')
 }
 
 function handleGoToIssue(issue: LintIssue) {

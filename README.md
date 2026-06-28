@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、项目活动时间线、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 执行证据包、API Token 安全基线与管理页、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、统一前端数据状态、项目活动时间线、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 执行证据包、API Token 安全基线与管理页、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -47,6 +47,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 基于表模板生成 PostgreSQL DDL，并自动运行 lint 自检。
 - Markdown/HTML 数据字典，包含概览统计、字段与数据域关系、枚举、模板、个人版字段元数据和 Mermaid 关系图。
 - 个人工作台，展示任务入口、最近任务、字段数、代码集数、规则数、检查数、字段命中率、最近检查、问题趋势和项目活动时间线。
+- 统一前端数据状态，Dashboard、AI 批量任务、覆盖率报告和 SQL 校验记录区已接入一致的项目缺失、空数据、请求失败和重试入口。
 
 ### AI 与自动化
 
@@ -670,7 +671,7 @@ docker compose -f docker-compose.local.yml config
 npx openspec validate --all
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、Prompt 模板 registry/eval、AI contract fixtures、AI evidence package、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、Prompt golden 输出、反向导入 metadata 预览摘要、Schema Registry、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览、执行证据包稳定字段与脱敏，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录/evidence 入口、数据库反向导入、字段库检索命中原因、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告 evidence 入口、AI 回放、AI 反馈、AI 批量任务 evidence 入口和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约、Prompt fixture 脚本和本地 smoke 脚本，包括 contract list/show/check、evidence export、schema-registry resource、workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容、Prompt golden marker、API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传，以及本地启动包的参数解析、输出结构、敏感信息脱敏和 compose/Vite 代理契约。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、Prompt 模板 registry/eval、AI contract fixtures、AI evidence package、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、Prompt golden 输出、反向导入 metadata 预览摘要、Schema Registry、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览、执行证据包稳定字段与脱敏，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、统一请求状态、SQL 校验 fixedSql/记录/evidence 入口、数据库反向导入、字段库检索命中原因、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告 evidence 入口、AI 回放、AI 反馈、AI 批量任务 evidence 入口和项目备份恢复的核心页面/API 耦合，以及关键按钮、空状态和失败重试入口；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约、Prompt fixture 脚本和本地 smoke 脚本，包括 contract list/show/check、evidence export、schema-registry resource、workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容、Prompt golden marker、API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传，以及本地启动包的参数解析、输出结构、敏感信息脱敏和 compose/Vite 代理契约。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
 
 ## 性能基线
 
@@ -818,6 +819,7 @@ data-spec/
 - [x] DataSpec MCP Server：resources、`ai-task-profiles`、`workflow-recipes`、`schema-registry`、prompts、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`search_fields`、`suggest_fields`、`generate_table_ddl`、`export_evidence_package`，支持 `.dataspec/config.json` 默认项目配置和 profile hint
 - [x] GitHub Actions 示例和 PR inline/fallback 评论式 SQL Review
 - [x] 本地 Docker Compose 一键启动包和 demo smoke 验证，支持 PostgreSQL/后端/前端联动、端口覆盖、依赖缓存、text/json 输出和敏感信息脱敏
+- [x] 前端统一数据状态第一版，Dashboard、AI 批量任务、覆盖率报告和 SQL 校验记录区支持一致的项目缺失、空数据、失败建议和重试入口
 
 ## 暂缓探索
 
