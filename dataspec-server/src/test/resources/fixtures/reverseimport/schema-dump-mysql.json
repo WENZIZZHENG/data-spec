@@ -1,0 +1,48 @@
+{
+  "kind": "dataspec-database-schema-dump",
+  "schemaVersion": 1,
+  "projectId": 1,
+  "databaseType": "MYSQL",
+  "databaseName": "shop",
+  "schemaName": null,
+  "generatedAt": "2026-06-28T00:00:00Z",
+  "source": {
+    "sourceType": "jdbc-metadata",
+    "databaseProductName": "MySQL",
+    "databaseProductVersion": "8.0",
+    "catalogName": "shop",
+    "schemaName": null,
+    "selectedTableNames": ["user_order"],
+    "tableCount": 1
+  },
+  "tables": [
+    {
+      "schemaName": null,
+      "tableName": "user_order",
+      "tableType": "TABLE",
+      "comment": "",
+      "columns": [
+        {
+          "columnName": "id",
+          "dataType": "BIGINT",
+          "nullable": false,
+          "defaultValue": null,
+          "comment": "主键",
+          "ordinalPosition": 1
+        },
+        {
+          "columnName": "legacy_code",
+          "dataType": "VARCHAR(32)",
+          "nullable": true,
+          "defaultValue": null,
+          "comment": "",
+          "ordinalPosition": 2
+        }
+      ],
+      "warnings": []
+    }
+  ],
+  "warnings": [
+    "MySQL metadata 使用 databaseName 作为 catalog，schemaName 不参与过滤。"
+  ]
+}

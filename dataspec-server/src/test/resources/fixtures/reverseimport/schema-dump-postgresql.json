@@ -1,0 +1,46 @@
+{
+  "kind": "dataspec-database-schema-dump",
+  "schemaVersion": 1,
+  "projectId": 1,
+  "databaseType": "POSTGRESQL",
+  "databaseName": "demo",
+  "schemaName": "public",
+  "generatedAt": "2026-06-28T00:00:00Z",
+  "source": {
+    "sourceType": "jdbc-metadata",
+    "databaseProductName": "PostgreSQL",
+    "databaseProductVersion": "16",
+    "catalogName": null,
+    "schemaName": "public",
+    "selectedTableNames": ["user_order"],
+    "tableCount": 1
+  },
+  "tables": [
+    {
+      "schemaName": "public",
+      "tableName": "user_order",
+      "tableType": "TABLE",
+      "comment": "订单表",
+      "columns": [
+        {
+          "columnName": "id",
+          "dataType": "BIGINT",
+          "nullable": false,
+          "defaultValue": null,
+          "comment": "主键",
+          "ordinalPosition": 1
+        },
+        {
+          "columnName": "mobile_no",
+          "dataType": "VARCHAR(20)",
+          "nullable": true,
+          "defaultValue": null,
+          "comment": "手机号",
+          "ordinalPosition": 2
+        }
+      ],
+      "warnings": []
+    }
+  ],
+  "warnings": []
+}

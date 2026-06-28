@@ -8,6 +8,7 @@ import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseConnectionSecurityDiagnostic;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
+import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
 import com.dataspec.reverseimport.model.FieldCandidate;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
@@ -269,6 +270,56 @@ class DatabaseReverseImportServiceTest {
         assertThat(preview.getDialectDiagnostics())
                 .extracting("code")
                 .contains("POSTGRESQL_DATABASE_METADATA", "POSTGRESQL_SCHEMA_PATTERN");
+    }
+
+    @Test
+    void exportDump_readsMetadataWithoutSecrets() throws Exception {
+        prepareMetadataDatabase();
+        DatabaseReverseImportServiceImpl service = service(mock(FieldService.class));
+        DatabaseConnectionReq req = connectionReq();
+        req.setPassword("top-secret");
+        req.setTableNames(List.of("USER_ORDER"));
+
+        var dump = service.exportDump(req);
+
+        assertThat(dump.getKind()).isEqualTo("dataspec-database-schema-dump");
+        assertThat(dump.getProjectId()).isEqualTo(1L);
+        assertThat(dump.getDatabaseType()).isEqualTo("POSTGRESQL");
+        assertThat(dump.getTables()).hasSize(1);
+        assertThat(dump.getTables().get(0).getColumns()).extracting("columnName")
+                .containsExactly("ID", "PHONE", "USER_NAME");
+        assertThat(dump.toString()).doesNotContain("top-secret", "jdbc:");
+    }
+
+    @Test
+    void dumpInput_replaysPreviewCompareAndCoverage() throws Exception {
+        prepareMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        Field id = standardField("id", null);
+        Field mobileNo = standardField("mobile_no", "phone,mobile");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(id, mobileNo));
+        when(fieldService.suggest(1L, "USER_NAME", 1)).thenReturn(List.of(new com.dataspec.field.model.FieldSuggestion(
+                null,
+                0,
+                "未命中已有标准字段",
+                "user_name",
+                false)));
+        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseConnectionReq connectionReq = connectionReq();
+        connectionReq.setTableNames(List.of("USER_ORDER"));
+        DatabaseSchemaDumpReq dumpReq = new DatabaseSchemaDumpReq();
+        dumpReq.setProjectId(1L);
+        dumpReq.setDump(service.exportDump(connectionReq));
+
+        ReverseImportPreview preview = service.previewDump(dumpReq);
+        ReverseImportCompareResult compare = service.compareDump(dumpReq);
+        var coverage = service.coverageDump(dumpReq);
+
+        assertThat(preview.getSummary().getColumnCount()).isEqualTo(3);
+        assertThat(compare.getSummary().getColumnCount()).isEqualTo(3);
+        assertThat(compare.getSummary().getNewCount()).isEqualTo(1);
+        assertThat(coverage.getSummary().getColumnCount()).isEqualTo(3);
+        assertThat(coverage.getSummary().getUnmanagedCount()).isEqualTo(1);
     }
 
     @Test

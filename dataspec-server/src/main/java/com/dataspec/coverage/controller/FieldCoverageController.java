@@ -4,6 +4,7 @@ import com.dataspec.common.result.R;
 import com.dataspec.coverage.model.FieldCoverageReport;
 import com.dataspec.coverage.service.FieldCoverageService;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
+import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.service.DatabaseReverseImportService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -33,6 +34,11 @@ public class FieldCoverageController {
     @PostMapping("/database")
     public R<FieldCoverageReport> reportDatabase(@Valid @RequestBody DatabaseConnectionReq req) {
         return R.ok(databaseReverseImportService.coverage(req));
+    }
+
+    @PostMapping("/dump")
+    public R<FieldCoverageReport> reportDump(@Valid @RequestBody DatabaseSchemaDumpReq req) {
+        return R.ok(databaseReverseImportService.coverageDump(req));
     }
 
     public record SqlCoverageReq(

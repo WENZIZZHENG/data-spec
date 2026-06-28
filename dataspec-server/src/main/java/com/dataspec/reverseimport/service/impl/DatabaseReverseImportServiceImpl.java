@@ -4,14 +4,15 @@ import com.dataspec.common.exception.BizException;
 import com.dataspec.coverage.model.FieldCoverageReport;
 import com.dataspec.coverage.service.FieldCoverageService;
 import com.dataspec.dialect.service.SqlDialectCompatibilityService;
-import com.dataspec.lint.model.ColumnDef;
-import com.dataspec.lint.model.TableDef;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseConnectionSecurityDiagnostic;
+import com.dataspec.reverseimport.model.DatabaseSchemaDump;
+import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
+import com.dataspec.reverseimport.service.DatabaseMetadataAdapter;
 import com.dataspec.reverseimport.service.DatabaseReverseImportService;
 import com.dataspec.reverseimport.service.ReverseImportService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,12 +26,10 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -49,25 +48,35 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     private final ReverseImportService reverseImportService;
     private final FieldCoverageService fieldCoverageService;
     private final ConnectionProvider connectionProvider;
+    private final DatabaseMetadataAdapter metadataAdapter;
     private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
 
     @Autowired
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
-                                            FieldCoverageService fieldCoverageService) {
-        this(reverseImportService, fieldCoverageService, new DriverManagerConnectionProvider());
+                                            FieldCoverageService fieldCoverageService,
+                                            DatabaseMetadataAdapter metadataAdapter) {
+        this(reverseImportService, fieldCoverageService, new DriverManagerConnectionProvider(), metadataAdapter);
     }
 
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
                                             ConnectionProvider connectionProvider) {
-        this(reverseImportService, null, connectionProvider);
+        this(reverseImportService, null, connectionProvider, new JdbcDatabaseMetadataAdapter());
     }
 
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
                                             FieldCoverageService fieldCoverageService,
                                             ConnectionProvider connectionProvider) {
+        this(reverseImportService, fieldCoverageService, connectionProvider, new JdbcDatabaseMetadataAdapter());
+    }
+
+    public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
+                                            FieldCoverageService fieldCoverageService,
+                                            ConnectionProvider connectionProvider,
+                                            DatabaseMetadataAdapter metadataAdapter) {
         this.reverseImportService = reverseImportService;
         this.fieldCoverageService = fieldCoverageService;
         this.connectionProvider = connectionProvider;
+        this.metadataAdapter = metadataAdapter;
     }
 
     @Override
@@ -83,109 +92,64 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     public List<DatabaseTableInfo> listTables(DatabaseConnectionReq req) {
         validateConnectionReq(req);
         try (Connection connection = connectionProvider.open(req)) {
-            return readTables(connection, req);
+            return metadataAdapter.listTables(connection, req);
         } catch (SQLException e) {
             throw new BizException("读取数据库表失败: " + e.getMessage());
         }
     }
 
     @Override
-    public ReverseImportPreview preview(DatabaseConnectionReq req) {
+    public DatabaseSchemaDump exportDump(DatabaseConnectionReq req) {
         validateConnectionReq(req);
         if (req.getTableNames() == null || req.getTableNames().isEmpty()) {
             throw new BizException("请至少选择一张表");
         }
         try (Connection connection = connectionProvider.open(req)) {
-            List<TableDef> tables = readSelectedTables(connection, req);
-            ReverseImportPreview preview = reverseImportService.previewTables(req.getProjectId(), tables);
-            preview.setDialectDiagnostics(dialectCompatibilityService.diagnoseDatabase(req.getDatabaseType(), req.getSchemaName()));
-            return preview;
+            return metadataAdapter.exportDump(connection, req);
         } catch (SQLException e) {
             throw new BizException("读取数据库表结构失败: " + e.getMessage());
         }
+    }
+
+    @Override
+    public ReverseImportPreview preview(DatabaseConnectionReq req) {
+        DatabaseSchemaDump dump = exportDump(req);
+        ReverseImportPreview preview = reverseImportService.previewTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), dump));
+        preview.setDialectDiagnostics(dialectCompatibilityService.diagnoseDatabase(req.getDatabaseType(), req.getSchemaName()));
+        return preview;
+    }
+
+    @Override
+    public ReverseImportPreview previewDump(DatabaseSchemaDumpReq req) {
+        return reverseImportService.previewTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), req.getDump()));
     }
 
     @Override
     public ReverseImportCompareResult compare(DatabaseConnectionReq req) {
-        validateConnectionReq(req);
-        if (req.getTableNames() == null || req.getTableNames().isEmpty()) {
-            throw new BizException("请至少选择一张表");
-        }
-        try (Connection connection = connectionProvider.open(req)) {
-            List<TableDef> tables = readSelectedTables(connection, req);
-            return reverseImportService.compareTables(req.getProjectId(), tables);
-        } catch (SQLException e) {
-            throw new BizException("读取数据库表结构失败: " + e.getMessage());
-        }
+        DatabaseSchemaDump dump = exportDump(req);
+        return reverseImportService.compareTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), dump));
+    }
+
+    @Override
+    public ReverseImportCompareResult compareDump(DatabaseSchemaDumpReq req) {
+        return reverseImportService.compareTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), req.getDump()));
     }
 
     @Override
     public FieldCoverageReport coverage(DatabaseConnectionReq req) {
-        validateConnectionReq(req);
-        if (req.getTableNames() == null || req.getTableNames().isEmpty()) {
-            throw new BizException("请至少选择一张表");
-        }
         if (fieldCoverageService == null) {
             throw new BizException("字段覆盖率服务未初始化");
         }
-        try (Connection connection = connectionProvider.open(req)) {
-            List<TableDef> tables = readSelectedTables(connection, req);
-            return fieldCoverageService.reportTables(req.getProjectId(), tables);
-        } catch (SQLException e) {
-            throw new BizException("读取数据库表结构失败: " + e.getMessage());
-        }
+        DatabaseSchemaDump dump = exportDump(req);
+        return fieldCoverageService.reportTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), dump));
     }
 
-    private List<DatabaseTableInfo> readTables(Connection connection, DatabaseConnectionReq req) throws SQLException {
-        DatabaseMetaData metaData = connection.getMetaData();
-        List<DatabaseTableInfo> tables = new ArrayList<>();
-        try (ResultSet rs = metaData.getTables(catalog(req), schemaPattern(req), "%", new String[]{"TABLE"})) {
-            while (rs.next()) {
-                tables.add(new DatabaseTableInfo(
-                        rs.getString("TABLE_SCHEM"),
-                        rs.getString("TABLE_NAME"),
-                        rs.getString("TABLE_TYPE"),
-                        rs.getString("REMARKS")));
-            }
+    @Override
+    public FieldCoverageReport coverageDump(DatabaseSchemaDumpReq req) {
+        if (fieldCoverageService == null) {
+            throw new BizException("字段覆盖率服务未初始化");
         }
-        return tables;
-    }
-
-    private List<TableDef> readSelectedTables(Connection connection, DatabaseConnectionReq req) throws SQLException {
-        DatabaseMetaData metaData = connection.getMetaData();
-        Set<String> selectedNames = new LinkedHashSet<>(req.getTableNames());
-        List<TableDef> tables = new ArrayList<>();
-        for (DatabaseTableInfo tableInfo : readTables(connection, req)) {
-            if (!containsIgnoreCase(selectedNames, tableInfo.tableName())) {
-                continue;
-            }
-            tables.add(TableDef.builder()
-                    .name(tableInfo.tableName())
-                    .comment(tableInfo.comment())
-                    .columns(readColumns(metaData, req, tableInfo.tableName()))
-                    .build());
-        }
-        if (tables.isEmpty()) {
-            throw new BizException("未找到所选表");
-        }
-        return tables;
-    }
-
-    private List<ColumnDef> readColumns(DatabaseMetaData metaData, DatabaseConnectionReq req, String tableName)
-            throws SQLException {
-        List<ColumnDef> columns = new ArrayList<>();
-        try (ResultSet rs = metaData.getColumns(catalog(req), schemaPattern(req), tableName, "%")) {
-            while (rs.next()) {
-                columns.add(ColumnDef.builder()
-                        .name(rs.getString("COLUMN_NAME"))
-                        .dataType(formatDataType(rs))
-                        .nullable(rs.getInt("NULLABLE") == DatabaseMetaData.columnNullable)
-                        .defaultValue(rs.getString("COLUMN_DEF"))
-                        .comment(rs.getString("REMARKS"))
-                        .build());
-            }
-        }
-        return columns;
+        return fieldCoverageService.reportTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), req.getDump()));
     }
 
     private DatabaseConnectionSecurityDiagnostic diagnoseConnectionSecurity(Connection connection,
@@ -472,44 +436,6 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
             sanitized = sanitized.substring(0, 500) + "...";
         }
         return sanitized;
-    }
-
-    private String formatDataType(ResultSet rs) throws SQLException {
-        String typeName = rs.getString("TYPE_NAME");
-        int size = rs.getInt("COLUMN_SIZE");
-        int scale = rs.getInt("DECIMAL_DIGITS");
-        if (typeName == null || typeName.isBlank()) {
-            return "";
-        }
-        String normalized = typeName.toUpperCase(Locale.ROOT);
-        if (size > 0 && isSizedType(normalized)) {
-            if (scale > 0 && isDecimalType(normalized)) {
-                return normalized + "(" + size + "," + scale + ")";
-            }
-            return normalized + "(" + size + ")";
-        }
-        return normalized;
-    }
-
-    private boolean isSizedType(String typeName) {
-        return typeName.contains("CHAR")
-                || typeName.contains("TEXT")
-                || typeName.contains("NUMERIC")
-                || typeName.contains("DECIMAL")
-                || typeName.contains("NUMBER");
-    }
-
-    private boolean isDecimalType(String typeName) {
-        return typeName.contains("NUMERIC") || typeName.contains("DECIMAL") || typeName.contains("NUMBER");
-    }
-
-    private boolean containsIgnoreCase(Set<String> values, String value) {
-        for (String item : values) {
-            if (item != null && item.equalsIgnoreCase(value)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private String catalog(DatabaseConnectionReq req) {

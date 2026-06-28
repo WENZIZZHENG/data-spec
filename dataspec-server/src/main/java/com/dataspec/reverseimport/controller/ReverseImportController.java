@@ -5,6 +5,8 @@ import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
 import com.dataspec.reverseimport.model.DatabaseImportResult;
+import com.dataspec.reverseimport.model.DatabaseSchemaDump;
+import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
@@ -47,14 +49,29 @@ public class ReverseImportController {
         return R.ok(databaseReverseImportService.listTables(req));
     }
 
+    @PostMapping("/database/dump")
+    public R<DatabaseSchemaDump> exportDatabaseDump(@Valid @RequestBody DatabaseConnectionReq req) {
+        return R.ok(databaseReverseImportService.exportDump(req));
+    }
+
     @PostMapping("/database/preview")
     public R<ReverseImportPreview> previewDatabase(@Valid @RequestBody DatabaseConnectionReq req) {
         return R.ok(databaseReverseImportService.preview(req));
     }
 
+    @PostMapping("/dump/preview")
+    public R<ReverseImportPreview> previewDump(@Valid @RequestBody DatabaseSchemaDumpReq req) {
+        return R.ok(databaseReverseImportService.previewDump(req));
+    }
+
     @PostMapping("/database/compare")
     public R<ReverseImportCompareResult> compareDatabase(@Valid @RequestBody DatabaseConnectionReq req) {
         return R.ok(databaseReverseImportService.compare(req));
+    }
+
+    @PostMapping("/dump/compare")
+    public R<ReverseImportCompareResult> compareDump(@Valid @RequestBody DatabaseSchemaDumpReq req) {
+        return R.ok(databaseReverseImportService.compareDump(req));
     }
 
     @PostMapping("/database/import")
