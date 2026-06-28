@@ -23,4 +23,4 @@
 - [x] 4.2 更新 README、TODO 和必要契约文档，说明能力清单边界。
 - [x] 4.3 运行 OpenSpec validate、后端测试、前端测试/build、CLI/MCP Node 测试和 diff 检查。
 - [x] 4.4 执行本地结构化代码评审并修复 findings。
-- [ ] 4.5 完成提交并归档 OpenSpec change。
+- [x] 4.5 完成提交并归档 OpenSpec change。

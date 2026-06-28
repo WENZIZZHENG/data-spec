@@ -112,3 +112,20 @@ The MCP server SHALL guide AI clients to use evidence packages for handoff.
 #### Scenario: Prompts mention evidence package
 - **WHEN** an MCP client gets a SQL, field design, or workflow prompt
 - **THEN** the prompt tells the agent to export an evidence package before handing off completed work.
+
+### Requirement: MCP exposes capability catalog resource
+The DataSpec MCP server SHALL expose the AI capability catalog as a resource that agents can read before choosing tools.
+
+#### Scenario: Read global capability catalog resource
+- **WHEN** an MCP client reads the capability catalog resource
+- **THEN** the server returns JSON text and structuredContent containing the DataSpec capability catalog
+- **AND** the resource metadata describes it as read-only self-description.
+
+#### Scenario: Read project-scoped capability catalog resource
+- **WHEN** the MCP server has a configured projectId
+- **THEN** the capability catalog resource includes project-aware diagnostics from the DataSpec server.
+
+#### Scenario: MCP catalog read failure
+- **WHEN** the DataSpec server is unavailable or returns an error
+- **THEN** the MCP response includes AI-readable DataSpec error data
+- **AND** it does not fabricate a successful catalog.
