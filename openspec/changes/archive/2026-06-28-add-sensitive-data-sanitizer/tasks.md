@@ -22,4 +22,4 @@
 - [x] 4.2 运行 `mvn test`、`node --test tools\dataspec-cli.test.mjs` 和必要前端测试。
 - [x] 4.3 运行 `git diff --check`。
 - [x] 4.4 执行本地结构化代码评审并修复 findings，不使用子 agent。
-- [ ] 4.5 完成提交并归档 OpenSpec change。
+- [x] 4.5 完成提交并归档 OpenSpec change。
