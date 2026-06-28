@@ -26,3 +26,12 @@ AI Prompt、DDL 生成和 SQL 修复提示已经进入核心链路，但模板�
 - 后端 prompt 生成、SQL lint AI 回放、DDL preview 回放改为引用统一版本常量。
 - 测试资源新增 prompt fixture/golden 样例，并接入 `mvn test`。
 - README/TODO 更新 P6-31 状态、用法和验证说明。
+
+## Verification Evidence
+
+- `mvn test`（`dataspec-server`）：275 tests, 0 failures, 0 errors。
+- `node --test tools/prompt-template-eval.test.mjs`：4 tests, 0 failures。
+- `node tools/prompt-template-eval.mjs --format json`：create-table/fix-sql prompt fixtures 均 `passed: true`。
+- `npx.cmd openspec validate add-prompt-template-eval`：valid。
+- `git diff --check`：退出码 0，仅 Windows 行尾提示。
+- 结构化代码评审：不使用子 agent；已修复 registry 重复/版本格式防护、脚本参数缺值错误处理两个 findings。

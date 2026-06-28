@@ -38,3 +38,18 @@ The contract fixtures MUST be executed through the existing project validation c
 #### Scenario: Developer runs standard validation
 - **WHEN** a developer runs `mvn test` or `node --test` for the affected module
 - **THEN** the AI contract fixture checks are included without requiring a separate external service.
+
+### Requirement: Prompt template contracts have fixture coverage
+The system SHALL verify prompt template registry and prompt output constraints through existing backend validation.
+
+#### Scenario: Prompt template metadata changes
+- **WHEN** a prompt template key, version, required section, required phrase, or output format changes
+- **THEN** backend tests detect incompatible or incomplete registry metadata.
+
+#### Scenario: Prompt output contract changes
+- **WHEN** generated create-table or fix-sql prompt output loses a required section, required phrase, or promptVersion marker
+- **THEN** backend tests fail with a readable assertion.
+
+#### Scenario: Golden prompt output changes
+- **WHEN** generated prompt text changes from the checked-in golden fixture
+- **THEN** backend tests fail and report a readable diff for review.

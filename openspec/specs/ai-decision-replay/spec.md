@@ -9,6 +9,7 @@ The system SHALL persist lightweight AI job records for DataSpec-generated promp
 #### Scenario: AI job record stores replay metadata
 - **WHEN** an AI-related operation is recorded for a project
 - **THEN** the record includes projectId, jobType, title, inputSummary, promptVersion, status, inputPayloadJson, outputPayloadJson, and createdAt.
+- **AND** promptVersion matches a registered prompt template version for the recorded job type.
 - **AND** the record includes standardSnapshotId, standardSnapshotVersion, and standardSnapshotHash when the operation used a versioned standard snapshot.
 
 #### Scenario: Recording rejects invalid payload
@@ -20,19 +21,19 @@ The system SHALL create replay records from existing DataSpec flows without chan
 
 #### Scenario: Create table prompt is recorded
 - **WHEN** a user generates a create-table AI prompt
-- **THEN** the system records the business description, prompt text, promptVersion, and standard snapshot metadata.
+- **THEN** the system records the business description, prompt text, registry promptVersion, and standard snapshot metadata.
 
 #### Scenario: Fix SQL prompt is recorded
 - **WHEN** a user generates a SQL fix prompt
-- **THEN** the system records the original SQL, lint result summary, prompt text, promptVersion, and standard snapshot metadata.
+- **THEN** the system records the original SQL, lint result summary, prompt text, registry promptVersion, and standard snapshot metadata.
 
 #### Scenario: SQL lint fixedSql is recorded
 - **WHEN** a user runs SQL lint for a project and DataSpec produces fixedSql
-- **THEN** the system records originalSql, fixedSql, lint issue counts, linked sqlCheckRecordId, and standard snapshot metadata.
+- **THEN** the system records originalSql, fixedSql, lint issue counts, linked sqlCheckRecordId, registry promptVersion, and standard snapshot metadata.
 
 #### Scenario: DDL preview is recorded
 - **WHEN** a user previews DDL from a table template
-- **THEN** the system records templateId, tableName, generated DDL, lint result summary, and standard snapshot metadata.
+- **THEN** the system records templateId, tableName, generated DDL, lint result summary, registry promptVersion, and standard snapshot metadata.
 
 #### Scenario: Replay recording failure does not block primary flow
 - **WHEN** replay recording fails during prompt generation, lint, or DDL preview

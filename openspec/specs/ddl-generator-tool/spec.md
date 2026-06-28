@@ -51,3 +51,10 @@ DDL generation SHALL expose the target SQL dialect and compatibility boundary in
 #### Scenario: DDL lint result preserves diagnostics
 - **WHEN** generated DDL is checked by the lint engine
 - **THEN** the nested lint result includes dialect diagnostics for the same generated SQL
+
+### Requirement: DDL preview prompt template version
+DDL generation SHALL record its AI replay promptVersion from the prompt template registry.
+
+#### Scenario: DDL replay references registry version
+- **WHEN** a user previews DDL from a table template
+- **THEN** the AI job record promptVersion matches the DDL preview template registered in the prompt template registry.
