@@ -16,7 +16,8 @@
 10. 本次继续新增优化建议已补为 P6-135 到 P6-140：AI 任务预检、反向导入 plan/apply、配置 Schema、凭据复用、标准变更迁移 recipe 和统一任务结果协议。
 11. 本次补充优化建议已补为 P6-141 到 P6-146：AI 输出验证沙箱、多 schema 反向导入合并、Agent 启动包、质量异常归因、前端修复 Action 和个人健康摘要。
 12. 本次继续补充优化建议已补为 P6-147 到 P6-152：Schema Registry 可视化、可复用工作流 recipe、标准包同步巡检、业务仓库合规分、字段库密集编辑体验和待办里程碑收束。
-13. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+13. 本次最新优化建议已补为 P6-153 到 P6-158：AI Context 注入防护、标准消费端 SDK、规则依赖冲突诊断、示例契约快照、单机分发预案和字段可见性策略。
+14. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -1514,6 +1515,66 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 落地产物：拆出 `docs/roadmap/p6-now-next-later.md` 或等价路线图；主 TODO 只保留当前队列、已完成摘要和入口链接；为每个近期任务补 change_id 建议、验收命令、依赖和不做边界。
 - 验收标准：AI 打开项目后能在 1 分钟内判断当前最该实现的 3-5 个任务；已完成项不会继续压在主待办正文；新增建议能被归并到合适里程碑而不是无限追加。
 - 边界：不删除历史任务，不改变已完成事实，不要求一次性重写所有 P6 内容；第一版先收束当前 P6 队列和新增任务入口。
+
+### P6-153：AI Context 注入防护与不可信文本隔离
+- 状态：待办。
+- 为什么做：DataSpec 会把字段注释、表注释、业务文档和数据库 metadata 提供给 AI，这些内容可能包含“忽略上文”“泄漏 token”等提示注入文本；如果不标记可信边界，AI 容易把业务文本误当作系统指令。
+- 已有基础：已有 AI Context、敏感信息脱敏、受控脱敏样例、AI 能力边界模拟、执行证据包、标准契约 Registry 和 Agent 启动包待办。
+- 缺口：缺少统一的不可信文本包装、sourceTrustLevel、instructionBoundary、redactionReason 和 contextSafetyWarnings，CLI/MCP/前端也没有把“业务内容不是指令”稳定写入上下文。
+- 参考项目：`gitleaks/gitleaks` 的敏感信息扫描、`microsoft/presidio` 的 PII 识别和 MCP 规范中的 resources/prompts 分层；只借鉴安全边界，不引入外部 LLM 安全服务。
+- 落地产物：为 AI Context、证据包、MCP resource 和 README/AGENTS 片段新增不可信文本边界说明；导出时为 comment、sample、document、metadata 标记 trustLevel 和 sanitizer 结果；高风险文本给出 warning 和可复核位置。
+- 验收标准：AI 读取 Context 时能明确区分系统指令、工具契约和业务原文；检测到可疑提示注入或 secret-like 文本时会脱敏或标记；相关契约和 fixture 有测试覆盖。
+- 边界：不替代人工安全审查，不扫描真实业务数据行，不做企业 DLP；第一版聚焦本地 AI 上下文的结构化隔离。
+
+### P6-154：标准消费端 SDK 与类型常量包导出
+- 状态：待办。
+- 为什么做：AI 在业务仓库落地标准时，不只需要 JSON Context，还需要能被 Java、TypeScript 或 SQL 脚本直接引用的字段常量、枚举值、校验器和版本信息，减少手写字符串造成的漂移。
+- 已有基础：已有 Schema Registry、OpenAPI 类型契约、标准向 API/DTO Schema 导出、业务仓库初始化、标准包 Lockfile、标准消费清单和配置 Schema 待办。
+- 缺口：缺少面向消费端的 `dataspec-sdk` 导出格式，无法生成 FieldId、EnumCode、RuleCode、snapshotHash、deprecated 标记和兼容提示，也没有把生成物纳入 lockfile 校验。
+- 参考项目：`OpenAPITools/openapi-generator` 的代码生成、`glideapps/quicktype` 的类型推导和 `bufbuild/buf` 的契约兼容检查；只生成轻量本地包，不发布公共包管理仓库。
+- 落地产物：新增 CLI `dataspec sdk export --lang ts|java --output ...`；生成只读常量、枚举、schema version 和 README；AI Context 中记录 SDK 版本与生成命令；doctor 可检查 SDK 是否过期。
+- 验收标准：业务仓库能引用生成的标准常量而不是散落字符串；标准变更后能检测 SDK 过期并提示重新生成；输出不包含 token、密码、连接串或业务数据行。
+- 边界：第一版不做运行时 ORM 集成，不自动修改业务代码，不上传 npm/maven 仓库；只支持稳定字段契约和高频语言。
+
+### P6-155：规则依赖图与冲突诊断
+- 状态：待办。
+- 为什么做：规则越来越多后，AI 和用户需要知道“哪些规则互相依赖、哪些规则可能给出冲突修复建议、为什么同一字段被多个规则命中”；否则会出现 fixedSql 或候选建议互相打架。
+- 已有基础：已有规则配置、规则模板库、规则调试器、规则覆盖率、死规则清理、变异回归、fixedSql 策略和标准质量门禁待办。
+- 缺口：缺少 ruleDependencies、conflictsWith、fixPriority、mutuallyExclusive 和 diagnosticExamples 等元数据，无法生成规则依赖图或冲突报告。
+- 参考项目：`eslint/eslint` 的规则元数据、`sqlfluff/sqlfluff` 的规则分层和 `great-expectations/great_expectations` 的验证结果结构；只借鉴规则解释，不引入复杂规则引擎。
+- 落地产物：扩展规则元数据契约；新增 CLI/API 输出规则依赖图和冲突诊断；前端规则配置页可查看“影响哪些检查/修复”；fixedSql 生成时按优先级解释取舍。
+- 验收标准：新增或调整规则时能声明依赖和冲突；同一 SQL 出现多规则建议时能解释优先级；冲突诊断有 fixture 覆盖并纳入统一验证入口。
+- 边界：不重写现有 lint 引擎，不强制所有历史规则一次性补齐完整图谱；第一版覆盖默认启用和 fixedSql 相关规则。
+
+### P6-156：OpenAPI/CLI/MCP 示例契约快照自动生成
+- 状态：待办。
+- 为什么做：DataSpec 已有 OpenAPI、CLI 和 MCP 多个 AI 出口，但示例请求/响应如果靠手写，极易与真实契约漂移；AI 最需要的是可直接复制、可回归测试的示例快照。
+- 已有基础：已有 OpenAPI 类型契约、Schema Registry、MCP/CLI 工具契约验收、AI 场景样例库、核心 fixture/golden 基线和 README 状态一致性检查待办。
+- 缺口：缺少从测试 fixture 或本地服务自动生成 examples 的工具，无法让 docs、MCP prompts、CLI help 和契约测试共享同一份示例源。
+- 参考项目：`Redocly/redocly-cli` 的 OpenAPI 文档化、`Schemathesis/schemathesis` 的契约测试和 `modelcontextprotocol/servers` 的工具示例组织；只生成本地快照，不引入远程文档平台。
+- 落地产物：新增 `tools/generate-examples` 或等价脚本；从后端/CLI/MCP fixture 生成 `docs/examples/*.json|md`；README、MCP prompts 和 CLI help 引用生成产物；变更时通过测试提示更新。
+- 验收标准：核心 API、CLI 命令和 MCP 工具有稳定示例；契约字段变化会导致示例快照差异可见；AI 可直接读取 examples 执行任务。
+- 边界：不追求覆盖所有边缘接口，不把示例当成真实用户数据，不在构建时强制启动完整外部数据库。
+
+### P6-157：个人单机分发包与离线启动预案
+- 状态：待办。
+- 为什么做：DataSpec 优先自己用，如果每次换机器或断网都要手动装 Java、Node、PostgreSQL、pnpm 和配置环境，AI 使用入口会被运行环境拖住；需要一个个人单机可迁移方案。
+- 已有基础：已有本地部署与演示数据一键启动包、本地数据清理、备份恢复迁移包、前端 mock 模式、doctor、环境配置漂移检测和本地运行诊断待办。
+- 缺口：缺少打包产物矩阵、离线依赖缓存、默认端口探测、版本升级说明和故障恢复脚本，README 也没有明确“新电脑 10 分钟启动”的离线路径。
+- 参考项目：`dbeaver/dbeaver` 的本地数据库工具体验、`vitejs/vite` 的开发构建和 `backstage/backstage` 的开发者入口；只做个人单机包，不做云部署平台。
+- 落地产物：补充 `scripts/package-local` 或等价流程；打包 server、web 静态资源、示例数据、配置模板和启动脚本；doctor 能识别离线包版本和缺失依赖；README 增加离线恢复路径。
+- 验收标准：新机器在无公网或弱网环境下能按文档启动演示项目；升级时能保留本地数据或明确提示备份；启动失败时有可复制给 AI 的诊断包。
+- 边界：不承诺跨平台安装器第一版完整覆盖，不自动修改系统级服务，不内置真实业务数据。
+
+### P6-158：字段可见性等级与 AI Context 最小暴露策略
+- 状态：待办。
+- 为什么做：即使不包含业务数据行，字段名、注释、枚举值和样例也可能暴露业务敏感信息；AI Context 需要按任务只暴露必要字段，尤其是个人把 Context 交给不同 AI 工具时。
+- 已有基础：已有 AI Context 裁剪、上下文预算、敏感信息脱敏、受控脱敏样例、字段生命周期、标准消费清单、API Token 和 AI 使用画像待办。
+- 缺口：缺少字段级 visibility、sensitivity、allowedTasks、maskingProfile、reason 和 exportDecision，无法解释某字段为什么出现在某个 Context 包里，也不能按任务模式自动隐藏敏感字段。
+- 参考项目：`microsoft/presidio` 的敏感信息识别、`faker-js/faker` 的安全样例生成和 `gitleaks/gitleaks` 的 secret 防泄漏；只借鉴识别与标记，不做复杂权限系统。
+- 落地产物：扩展字段标准元数据和 AI profile；导出 Context 时按 taskProfile、visibility 和 maskingProfile 做最小暴露；CLI/MCP 输出 exportSummary，列出包含/排除字段数量、原因和脱敏策略。
+- 验收标准：同一项目在 SQL 修复、字段推荐、文档问答等任务下导出的字段范围不同且可解释；敏感字段默认被遮蔽或仅提供安全别名；导出结果有测试覆盖。
+- 边界：不做企业权限审批，不对历史 Context 包回溯删除，不扫描真实业务数据行；第一版只服务个人/小团队的 AI 使用安全。
 
 ## 参考项目索引
 
