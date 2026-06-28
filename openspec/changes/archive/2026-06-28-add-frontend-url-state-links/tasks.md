@@ -23,4 +23,4 @@
 - [x] 4.2 更新 README、TODO 和必要前端说明，记录可复制链接范围与敏感信息边界。
 - [x] 4.3 运行 `openspec validate add-frontend-url-state-links --strict`、`pnpm test`、`pnpm build` 和 `git diff --check`。
 - [x] 4.4 执行本地结构化代码评审并修复 findings，不使用子 agent。
-- [ ] 4.5 完成提交并归档 OpenSpec change。
+- [x] 4.5 完成提交并归档 OpenSpec change。
