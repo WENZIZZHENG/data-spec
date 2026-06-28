@@ -26,3 +26,12 @@
 - 前端：新增 API wrapper、OpenAPI/类型、候选 Inbox 页面、导航入口和展示工具测试。
 - 数据库：新增轻量候选表，保存项目、候选字段、来源、证据、状态、决策原因和关联字段。
 - 测试：新增后端 service/controller 单测、前端 utility/smoke 测试，并接入 `mvn test`、`pnpm test`、`pnpm build`、OpenSpec validate 和 `git diff --check`。
+
+## Verification Evidence
+
+- `mvn test`（`dataspec-server`）：263 tests，0 failures，0 errors，BUILD SUCCESS。
+- `pnpm test`（`dataspec-web`）：71 tests，71 pass，0 fail。
+- `pnpm build`（`dataspec-web`）：`vue-tsc --noEmit && vite build` 通过；仅保留 `@vueuse/core` pure annotation 和 chunk size 既有构建警告。
+- `npx.cmd openspec validate add-standard-candidate-inbox`：Change valid。
+- `git diff --check`：通过；仅输出工作区既有 CRLF 行尾提示。
+- 本地结构化代码评审（未使用子 agent）：修复候选证据 JSON `token/password` 脱敏不足、候选 `data_type` 长度与正式字段不一致、前端项目切换后旧弹窗继续提交的边界问题。
