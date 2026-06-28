@@ -26,6 +26,7 @@ import com.dataspec.lint.rules.RecommendedFieldNameRule;
 import com.dataspec.lint.rules.RequiredColumnsRule;
 import com.dataspec.lint.rules.TableNameSnakeCaseRule;
 import com.dataspec.lint.service.SqlCheckRecordService;
+import com.dataspec.prompt.service.PromptTemplateRegistry;
 import com.dataspec.reverseimport.model.FieldCandidate;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
@@ -155,7 +156,8 @@ class CoreGoldenFixturesTest {
                 new FixedSqlGenerator(),
                 new NoopCheckRecordService(),
                 new NoopAiJobRecordService(),
-                mock(RuleExemptionService.class));
+                mock(RuleExemptionService.class),
+                new PromptTemplateRegistry());
     }
 
     private List<LintRule> commonRules() {

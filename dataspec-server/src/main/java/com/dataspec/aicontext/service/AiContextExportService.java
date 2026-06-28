@@ -11,6 +11,7 @@ import com.dataspec.field.model.FieldGroupingSummaries;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintResult;
+import com.dataspec.prompt.service.PromptTemplateRegistry;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.rulebaseline.model.RuleBaselineInfo;
@@ -58,8 +59,6 @@ import java.util.zip.ZipOutputStream;
 @Slf4j
 public class AiContextExportService {
 
-    private static final String CREATE_TABLE_PROMPT_VERSION = "create-table-prompt@1";
-    private static final String FIX_SQL_PROMPT_VERSION = "fix-sql-prompt@1";
     private static final String PACKAGE_FILE_NAME = "dataspec-ai-context.zip";
     private static final int DATASPEC_CONTEXT_SCHEMA_VERSION = 1;
     private static final long FIELD_CATALOG_WARN_MS = 1_000;
@@ -97,6 +96,7 @@ public class AiContextExportService {
     private final AiJobRecordService aiJobRecordService;
     private final RuleExemptionService ruleExemptionService;
     private final RuleBaselineService ruleBaselineService;
+    private final PromptTemplateRegistry promptTemplateRegistry;
 
     /**
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
@@ -390,8 +390,16 @@ public class AiContextExportService {
         String fieldCatalogJson = generateFieldCatalogJson(projectId, snapshot);
         String rulesYaml = generateRulesYaml(projectId, snapshot);
         String databaseRules = generateDatabaseRules(projectId);
+        String promptVersion = promptTemplateRegistry.promptVersion(PromptTemplateRegistry.CREATE_TABLE);
         String prompt = """
                 # DataSpec 建表 Prompt
+
+                ## Prompt Metadata
+
+                - templateKey: %s
+                - promptVersion: %s
+                - scenario: CREATE_TABLE
+                - outputFormat: POSTGRESQL_DDL_WITH_COMMENTS
 
                 你是数据库设计助手。请严格依据 DataSpec 字段目录和命名规则生成 PostgreSQL DDL。
 
@@ -424,6 +432,8 @@ public class AiContextExportService {
                 - 输出 PostgreSQL CREATE TABLE，并补全 COMMENT ON TABLE / COMMENT ON COLUMN。
                 - 必须包含必含列；新增非标准字段时说明命名理由和建议是否加入标准字段库。
                 """.formatted(
+                PromptTemplateRegistry.CREATE_TABLE,
+                promptVersion,
                 description,
                 fieldCatalogJson,
                 rulesYaml,
@@ -434,7 +444,7 @@ public class AiContextExportService {
                 "CREATE_TABLE_PROMPT",
                 "建表 Prompt",
                 description,
-                CREATE_TABLE_PROMPT_VERSION,
+                promptVersion,
                 orderedMap("businessDescription", description),
                 orderedMap("prompt", prompt),
                 snapshot
@@ -451,8 +461,16 @@ public class AiContextExportService {
         String issuesJson = writePrettyJson(lintResult.getIssues());
         String fieldCatalogJson = generateFieldCatalogJson(projectId, snapshot);
         String rulesYaml = generateRulesYaml(projectId, snapshot);
+        String promptVersion = promptTemplateRegistry.promptVersion(PromptTemplateRegistry.FIX_SQL);
         String prompt = """
                 # DataSpec SQL 修正 Prompt
+
+                ## Prompt Metadata
+
+                - templateKey: %s
+                - promptVersion: %s
+                - scenario: FIX_SQL
+                - outputFormat: MARKDOWN_WITH_FIXED_SQL
 
                 你是 DataSpec SQL Review 助手。请根据 lint 问题、字段目录和命名规则修正 SQL。
 
@@ -492,6 +510,8 @@ public class AiContextExportService {
                 - 输出一份修正后的 SQL，包含 CREATE TABLE 和 COMMENT ON 语句。
                 - 优先复用标准字段；无法复用时说明新增字段建议。
                 """.formatted(
+                PromptTemplateRegistry.FIX_SQL,
+                promptVersion,
                 sql,
                 lintResult.getErrorCount(),
                 lintResult.getWarningCount(),
@@ -505,7 +525,7 @@ public class AiContextExportService {
                 "FIX_SQL_PROMPT",
                 "SQL 修正 Prompt",
                 summary(sql),
-                FIX_SQL_PROMPT_VERSION,
+                promptVersion,
                 orderedMap(
                         "sql", sql,
                         "lintSummary", lintSummary(lintResult)

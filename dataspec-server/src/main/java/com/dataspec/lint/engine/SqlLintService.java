@@ -5,6 +5,7 @@ import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.dialect.service.SqlDialectCompatibilityService;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.*;
+import com.dataspec.prompt.service.PromptTemplateRegistry;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
@@ -33,6 +34,7 @@ public class SqlLintService {
     private final SqlCheckRecordService sqlCheckRecordService;
     private final AiJobRecordService aiJobRecordService;
     private final RuleExemptionService ruleExemptionService;
+    private final PromptTemplateRegistry promptTemplateRegistry;
     private final SqlIssueSourceSpanResolver sourceSpanResolver = new SqlIssueSourceSpanResolver();
     private final SqlDiffGenerator sqlDiffGenerator = new SqlDiffGenerator();
     private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
@@ -161,7 +163,7 @@ public class SqlLintService {
                     "SQL_LINT_FIX",
                     "SQL 检查与修正",
                     summary(sql),
-                    "sql-lint-fix@1",
+                    promptTemplateRegistry.promptVersion(PromptTemplateRegistry.SQL_LINT_FIX),
                     "SUCCESS",
                     orderedMap(
                             "sql", sql

@@ -8,6 +8,7 @@ import com.dataspec.dialect.service.SqlDialectCompatibilityService;
 import com.dataspec.generator.model.DdlGenerateResult;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintResult;
+import com.dataspec.prompt.service.PromptTemplateRegistry;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.template.entity.Template;
@@ -44,6 +45,7 @@ public class DdlGeneratorService {
     private final SqlLintService sqlLintService;
     private final StandardSnapshotService standardSnapshotService;
     private final AiJobRecordService aiJobRecordService;
+    private final PromptTemplateRegistry promptTemplateRegistry;
     private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
 
     /**
@@ -96,7 +98,7 @@ public class DdlGeneratorService {
                     "DDL_PREVIEW",
                     "DDL 预览",
                     tableName,
-                    "ddl-preview@1",
+                    promptTemplateRegistry.promptVersion(PromptTemplateRegistry.DDL_PREVIEW),
                     "SUCCESS",
                     orderedMap(
                             "templateId", templateId,

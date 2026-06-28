@@ -17,6 +17,7 @@ import com.dataspec.lint.model.ColumnDef;
 import com.dataspec.lint.model.TableDef;
 import com.dataspec.lint.rules.TableNameSnakeCaseRule;
 import com.dataspec.lint.service.SqlCheckRecordService;
+import com.dataspec.prompt.service.PromptTemplateRegistry;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
@@ -141,7 +142,8 @@ class PerformanceBaselineTest {
                 new FixedSqlGenerator(),
                 sqlCheckRecordService,
                 aiJobRecordService,
-                ruleExemptionService
+                ruleExemptionService,
+                new PromptTemplateRegistry()
         );
         return new AiContextExportService(
                 ruleConfigService,
@@ -152,7 +154,8 @@ class PerformanceBaselineTest {
                 objectMapper,
                 aiJobRecordService,
                 ruleExemptionService,
-                ruleBaselineService
+                ruleBaselineService,
+                new PromptTemplateRegistry()
         );
     }
 

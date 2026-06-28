@@ -164,10 +164,18 @@ curl -X POST "http://localhost:8090/api/projects/1/standard-snapshots" \
 
 ## AI Prompt 生成
 
-后端提供纯文本 Prompt 生成 API，不直接调用外部 LLM：
+后端提供纯文本 Prompt 生成 API，不直接调用外部 LLM。建表、SQL 修正、SQL lint/fixedSql、DDL preview 和字段推荐解释模板已登记到 Prompt template registry，统一输出 `templateKey`、`promptVersion`、场景、输出格式、必备段落和变更说明；建表与 SQL 修正 Prompt 文本中会带上当前 `promptVersion`，AI 回放记录也使用同一版本。
 
 - `POST /api/ai-context/prompts/create-table`：传入 `projectId` 和 `businessDescription`，生成建表 Prompt。
 - `POST /api/ai-context/prompts/fix-sql`：传入 `projectId` 和 `sql`，先运行 DataSpec lint，再生成 SQL 修正 Prompt。
+- `GET /api/prompt-templates`：查看已注册模板及其稳定输出约束。
+- `POST /api/prompt-templates/evaluate`：传入 `templateKey` 和 `output`，本地检查必备段落、必备短语和版本标记，不调用外部 LLM。
+
+Prompt golden fixture 位于 `dataspec-server/src/test/resources/fixtures/prompts/`，后端 `mvn test` 会覆盖 registry、评测和 create-table / fix-sql Prompt 契约；模板文本变更时，评测会输出可读 diff，便于审阅是否属于有意调整。
+
+```bash
+node tools/prompt-template-eval.mjs --format json
+```
 
 ## AI 回放
 
@@ -549,7 +557,7 @@ node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dat
 npx openspec validate --all
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告、AI 回放、AI 反馈和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、Prompt 模板 registry/eval、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、Prompt golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告、AI 回放、AI 反馈和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约和 Prompt fixture 脚本，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容、Prompt golden marker，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
 
 ## 性能基线
 
@@ -671,7 +679,7 @@ data-spec/
 - [x] AI 输出契约文档与 contract fixtures，覆盖 AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览、CLI/MCP JSON 稳定字段
 - [x] AI 可读错误诊断，API 失败响应、CLI stderr 和 MCP JSON-RPC error 可输出 code/category/retryable/suggestedAction/docsRef
 - [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
-- [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
+- [x] AI 建表 Prompt、SQL 修正 Prompt、Prompt template registry 和本地评测
 - [x] AI 回放记录，支持查看 Prompt、lint/fixedSql、DDL 预览的输入输出和标准快照
 - [x] AI 反馈报告，按项目聚合字段、规则、fixedSql、未纳管信号和下一步维护动作
 - [x] AI 批量任务交付包，支持后端保存 SQL lint batch run、CLI 写出同构 package、前端查看详情并下载 JSON

@@ -16,6 +16,7 @@ import com.dataspec.lint.rules.RecommendedFieldNameRule;
 import com.dataspec.lint.rules.RequiredColumnsRule;
 import com.dataspec.lint.rules.TableNameSnakeCaseRule;
 import com.dataspec.lint.service.SqlCheckRecordService;
+import com.dataspec.prompt.service.PromptTemplateRegistry;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.ruleexemption.entity.RuleExemption;
@@ -76,7 +77,8 @@ class SqlLintServiceTest {
                 new FixedSqlGenerator(),
                 recordService,
                 new NoopAiJobRecordService(),
-                new NoopRuleExemptionService()
+                new NoopRuleExemptionService(),
+                new PromptTemplateRegistry()
         );
 
         // 验收示例:含 create_time 且缺 created_at 等必备列
@@ -114,7 +116,8 @@ class SqlLintServiceTest {
                 new FixedSqlGenerator(),
                 recordService,
                 new NoopAiJobRecordService(),
-                new NoopRuleExemptionService()
+                new NoopRuleExemptionService(),
+                new PromptTemplateRegistry()
         );
 
         LintResult result = service.lint("""
@@ -221,7 +224,8 @@ class SqlLintServiceTest {
                 new FixedSqlGenerator(),
                 recordService,
                 new NoopAiJobRecordService(),
-                new NoopRuleExemptionService()
+                new NoopRuleExemptionService(),
+                new PromptTemplateRegistry()
         );
 
         LintResult result = service.lint("CREATE TABLE users (id bigint);", null);
@@ -246,7 +250,8 @@ class SqlLintServiceTest {
                 new FixedSqlGenerator(),
                 recordService,
                 aiJobRecordService,
-                new NoopRuleExemptionService()
+                new NoopRuleExemptionService(),
+                new PromptTemplateRegistry()
         );
     }
 
@@ -291,7 +296,8 @@ class SqlLintServiceTest {
                 new FixedSqlGenerator(),
                 recordService,
                 new NoopAiJobRecordService(),
-                new StaticRuleExemptionService(List.of(exemption))
+                new StaticRuleExemptionService(List.of(exemption)),
+                new PromptTemplateRegistry()
         );
 
         LintResult result = service.lint("""

@@ -15,6 +15,8 @@ import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.rules.TableNameSnakeCaseRule;
 import com.dataspec.lint.service.SqlCheckRecordService;
+import com.dataspec.prompt.service.PromptTemplateEvaluationService;
+import com.dataspec.prompt.service.PromptTemplateRegistry;
 import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.rulebaseline.model.RuleBaselineInfo;
 import com.dataspec.rulebaseline.service.BuiltInRuleBaselines;
@@ -385,6 +387,10 @@ class AiContextExportServiceTest {
         assertTrue(prompt.contains("mobile_no"));
         assertTrue(prompt.contains("naming:"));
         assertTrue(prompt.contains("CREATE TABLE"));
+        assertTrue(prompt.contains("promptVersion: create-table-prompt@1"));
+        assertTrue(new PromptTemplateEvaluationService(new PromptTemplateRegistry())
+                .evaluate(PromptTemplateRegistry.CREATE_TABLE, prompt)
+                .passed());
     }
 
     @Test
@@ -417,6 +423,10 @@ class AiContextExportServiceTest {
         assertTrue(prompt.contains("table_naming_snake_case"));
         assertTrue(prompt.contains("UserOrder"));
         assertTrue(prompt.contains("修正后的 SQL"));
+        assertTrue(prompt.contains("promptVersion: fix-sql-prompt@1"));
+        assertTrue(new PromptTemplateEvaluationService(new PromptTemplateRegistry())
+                .evaluate(PromptTemplateRegistry.FIX_SQL, prompt)
+                .passed());
     }
 
     @Test
@@ -507,7 +517,8 @@ class AiContextExportServiceTest {
                 new FixedSqlGenerator(),
                 sqlCheckRecordService,
                 aiJobRecordService,
-                ruleExemptionService
+                ruleExemptionService,
+                new PromptTemplateRegistry()
         );
         return new AiContextExportService(
                 ruleConfigService,
@@ -518,7 +529,8 @@ class AiContextExportServiceTest {
                 objectMapper,
                 aiJobRecordService,
                 ruleExemptionService,
-                ruleBaselineService
+                ruleBaselineService,
+                new PromptTemplateRegistry()
         );
     }
 
