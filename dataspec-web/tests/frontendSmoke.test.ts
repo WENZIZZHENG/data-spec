@@ -110,6 +110,10 @@ test('keeps database reverse import and comparison flow wired', () => {
     'async function handleImportCandidates()',
     'previewDialectDiagnostics',
     'dialectSummary(previewDialectDiagnostics)',
+    'connectionSecurity',
+    'securityRiskLabel(connectionSecurity.riskLevel)',
+    'connectionSecurity.recommendedSql',
+    '只读安全诊断',
     'goToFieldLibrary'
   ], 'ReverseImport.vue')
 
@@ -289,6 +293,10 @@ test('keeps coverage and AI replay supporting flows wired', () => {
     'reportDatabaseCoverage(databaseRequest())',
     'testDatabaseConnection(databaseRequest())',
     'listDatabaseTables(databaseRequest())',
+    'connectionSecurity',
+    'securityRiskLabel(connectionSecurity.riskLevel)',
+    'connectionSecurity.recommendedSql',
+    '只读安全诊断',
     'handleGenerateReport'
   ], 'FieldCoverage.vue')
   assertContains(coverageApi, [
@@ -318,7 +326,7 @@ test('keeps critical action labels and empty states visible', () => {
     },
     {
       path: 'src/views/ReverseImport.vue',
-      snippets: ['生成预览', '生成差异', '确认导入', '方言诊断', '请先创建并选择项目', '暂无表，请先加载', '当前筛选下暂无差异']
+      snippets: ['生成预览', '生成差异', '确认导入', '方言诊断', '只读安全诊断', '请先创建并选择项目', '暂无表，请先加载', '当前筛选下暂无差异']
     },
     {
       path: 'src/views/FieldLibrary.vue',
@@ -334,7 +342,7 @@ test('keeps critical action labels and empty states visible', () => {
     },
     {
       path: 'src/views/FieldCoverage.vue',
-      snippets: ['生成报告', '请先创建并选择项目', '暂无表，请先加载', '当前筛选下暂无字段', '暂无未纳管字段']
+      snippets: ['生成报告', '只读安全诊断', '请先创建并选择项目', '暂无表，请先加载', '当前筛选下暂无字段', '暂无未纳管字段']
     },
     {
       path: 'src/views/AiReplay.vue',

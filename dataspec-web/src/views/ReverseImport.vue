@@ -146,6 +146,32 @@
                     加载表
                   </el-button>
                 </div>
+                <div v-if="connectionSecurity" class="security-diagnostic">
+                  <div class="security-header">
+                    <span>只读安全诊断</span>
+                    <el-tag :type="securityRiskTagType(connectionSecurity.riskLevel)" effect="plain">
+                      {{ securityRiskLabel(connectionSecurity.riskLevel) }}
+                    </el-tag>
+                  </div>
+                  <div class="security-summary">{{ databaseSecuritySummary(connectionSecurity) }}</div>
+                  <div class="security-meta">
+                    <span>{{ readOnlyLabel(connectionSecurity.readOnly) }}</span>
+                    <span>{{ writeRiskLabel(connectionSecurity.writeRisk) }}</span>
+                    <span>{{ connectionSecurity.accessibleSchemaCount ?? 0 }} 个 schema</span>
+                    <span>{{ connectionSecurity.accessibleTableCount ?? 0 }} 张表</span>
+                  </div>
+                  <div v-if="connectionSecurity.warnings?.length" class="security-list">
+                    <div v-for="warning in connectionSecurity.warnings" :key="warning" class="security-line">
+                      {{ warning }}
+                    </div>
+                  </div>
+                  <div v-if="connectionSecurity.recommendedActions?.length" class="security-list">
+                    <div v-for="action in connectionSecurity.recommendedActions" :key="action" class="security-line muted">
+                      {{ action }}
+                    </div>
+                  </div>
+                  <pre v-if="connectionSecurity.recommendedSql?.length" class="security-sql">{{ connectionSecurity.recommendedSql.join('\n') }}</pre>
+                </div>
               </div>
 
               <div class="db-panel">
@@ -497,10 +523,18 @@ import {
   diagnosticTagType,
   dialectSummary
 } from '@/utils/dialectDiagnostics'
+import {
+  databaseSecuritySummary,
+  readOnlyLabel,
+  securityRiskLabel,
+  securityRiskTagType,
+  writeRiskLabel
+} from '@/utils/databaseSecurityDiagnostic'
 import type {
   DatabaseConnectionReq,
   DatabaseConnectionPreset,
   DatabaseConnectionPresetReq,
+  DatabaseConnectionSecurityDiagnostic,
   DatabaseImportResult,
   DatabaseTableInfo,
   FieldCandidate,
@@ -539,6 +573,7 @@ const databaseTables = ref<DatabaseTableInfo[]>([])
 const tableSearch = ref('')
 const connectionStatus = ref<ConnectionStatus>('idle')
 const connectionMessage = ref('')
+const connectionSecurity = ref<DatabaseConnectionSecurityDiagnostic | null>(null)
 const selectedCandidateKeys = ref<Set<string>>(new Set())
 const presets = ref<DatabaseConnectionPreset[]>([])
 const presetId = ref<number | null>(null)
@@ -734,7 +769,8 @@ watch(
     dbForm.port,
     dbForm.databaseName,
     dbForm.schemaName,
-    dbForm.username
+    dbForm.username,
+    dbForm.password
   ],
   () => {
     if (restoringMemory.value) {
@@ -777,6 +813,7 @@ function resetResults() {
 function resetConnectionStatus() {
   connectionStatus.value = 'idle'
   connectionMessage.value = ''
+  connectionSecurity.value = null
 }
 
 function clearSql() {
@@ -963,6 +1000,7 @@ async function handleTestConnection() {
   testLoading.value = true
   try {
     const result = await testDatabaseConnection(databaseRequest())
+    connectionSecurity.value = result.security ?? null
     if (result.success) {
       connectionStatus.value = 'success'
       connectionMessage.value = result.message || '连接成功'
@@ -970,6 +1008,7 @@ async function handleTestConnection() {
     } else {
       connectionStatus.value = 'error'
       connectionMessage.value = result.message || '连接失败'
+      connectionSecurity.value = null
       ElMessage.error(result.message || '连接失败')
     }
   } finally {
@@ -1372,6 +1411,65 @@ function browserStorage() {
 
 .diagnostic-copy small {
   color: #909399;
+}
+
+.security-diagnostic {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid #dcdfe6;
+  background: #fff;
+}
+
+.security-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #303133;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.security-summary,
+.security-meta,
+.security-line {
+  color: #606266;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.security-meta {
+  display: flex;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+}
+
+.security-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.security-line.muted {
+  color: #6b7280;
+}
+
+.security-sql {
+  max-height: 160px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #374151;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .input-toolbar {

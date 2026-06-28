@@ -1881,6 +1881,21 @@ export interface components {
         DatabaseConnectionResult: {
             success?: boolean;
             message?: string;
+            security?: components["schemas"]["DatabaseConnectionSecurityDiagnostic"];
+        };
+        DatabaseConnectionSecurityDiagnostic: {
+            databaseType?: string;
+            currentUser?: string;
+            readOnly?: boolean;
+            writeRisk?: boolean;
+            riskLevel?: string;
+            /** Format: int32 */
+            accessibleSchemaCount?: number;
+            /** Format: int32 */
+            accessibleTableCount?: number;
+            warnings?: string[];
+            recommendedActions?: string[];
+            recommendedSql?: string[];
         };
         RDatabaseConnectionResult: {
             /** Format: int32 */

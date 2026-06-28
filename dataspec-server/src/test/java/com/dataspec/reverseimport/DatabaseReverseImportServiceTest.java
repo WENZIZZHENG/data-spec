@@ -5,6 +5,8 @@ import com.dataspec.field.service.FieldService;
 import com.dataspec.coverage.model.FieldCoverageStatus;
 import com.dataspec.coverage.service.impl.FieldCoverageServiceImpl;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
+import com.dataspec.reverseimport.model.DatabaseConnectionResult;
+import com.dataspec.reverseimport.model.DatabaseConnectionSecurityDiagnostic;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
 import com.dataspec.reverseimport.model.FieldCandidate;
@@ -17,15 +19,21 @@ import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -45,6 +53,195 @@ class DatabaseReverseImportServiceTest {
         List<DatabaseTableInfo> tables = service.listTables(req);
 
         assertThat(tables).extracting(DatabaseTableInfo::tableName).contains("USER_ORDER");
+    }
+
+    @Test
+    void testConnection_returnsPostgresqlReadonlySecurityDiagnostic() throws Exception {
+        DatabaseConnectionReq req = connectionReq();
+        Connection connection = mock(Connection.class);
+        DatabaseMetaData metaData = mock(DatabaseMetaData.class);
+        Statement statement = mock(Statement.class);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(connection.isReadOnly()).thenReturn(true);
+        when(connection.createStatement()).thenReturn(statement);
+        when(metaData.getUserName()).thenReturn("dataspec_ro");
+        when(metaData.isReadOnly()).thenReturn(true);
+        ResultSet schemas = rowCountResult(1);
+        ResultSet tables = rowCountResult(2);
+        when(metaData.getSchemas()).thenReturn(schemas);
+        when(metaData.getTables(any(), any(), any(), any())).thenReturn(tables);
+        when(statement.executeQuery(anyString())).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0, String.class).toLowerCase();
+            if (sql.contains("current_user")) {
+                return stringResult("dataspec_ro");
+            }
+            if (sql.contains("transaction_read_only")) {
+                return stringResult("on");
+            }
+            if (sql.contains("has_database_privilege")) {
+                return booleanResult(false);
+            }
+            throw new SQLException("unexpected query: " + sql);
+        });
+        DatabaseReverseImportServiceImpl service = new DatabaseReverseImportServiceImpl(
+                mock(com.dataspec.reverseimport.service.ReverseImportService.class),
+                ignored -> connection);
+
+        DatabaseConnectionResult result = service.testConnection(req);
+
+        assertThat(result.success()).isTrue();
+        DatabaseConnectionSecurityDiagnostic security = result.security();
+        assertThat(security).isNotNull();
+        assertThat(security.databaseType()).isEqualTo("POSTGRESQL");
+        assertThat(security.currentUser()).isEqualTo("dataspec_ro");
+        assertThat(security.readOnly()).isTrue();
+        assertThat(security.writeRisk()).isFalse();
+        assertThat(security.riskLevel()).isEqualTo("SAFE");
+        assertThat(security.accessibleSchemaCount()).isEqualTo(1);
+        assertThat(security.accessibleTableCount()).isEqualTo(2);
+        assertThat(security.recommendedSql()).anyMatch(sql -> sql.contains("GRANT SELECT ON ALL TABLES"));
+        verify(statement, never()).execute(anyString());
+        verify(statement, never()).executeUpdate(anyString());
+    }
+
+    @Test
+    void testConnection_returnsMysqlWriteRiskDiagnostic() throws Exception {
+        DatabaseConnectionReq req = connectionReq();
+        req.setDatabaseType("mysql");
+        req.setDatabaseName("shop");
+        req.setSchemaName(null);
+        Connection connection = mock(Connection.class);
+        DatabaseMetaData metaData = mock(DatabaseMetaData.class);
+        Statement statement = mock(Statement.class);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(connection.isReadOnly()).thenReturn(false);
+        when(connection.createStatement()).thenReturn(statement);
+        when(metaData.getUserName()).thenReturn("root@%");
+        when(metaData.isReadOnly()).thenReturn(false);
+        ResultSet catalogs = rowCountResult(1);
+        ResultSet tables = rowCountResult(3);
+        when(metaData.getCatalogs()).thenReturn(catalogs);
+        when(metaData.getTables(any(), any(), any(), any())).thenReturn(tables);
+        when(statement.executeQuery(anyString())).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0, String.class).toLowerCase();
+            if (sql.contains("show grants")) {
+                return stringResult("GRANT SELECT, INSERT, UPDATE ON `shop`.* TO 'root'@'%'");
+            }
+            if (sql.contains("current_user()")) {
+                return stringResult("root@%");
+            }
+            if (sql.contains("@@read_only") || sql.contains("@@super_read_only")) {
+                return stringResult("0");
+            }
+            throw new SQLException("unexpected query: " + sql);
+        });
+        DatabaseReverseImportServiceImpl service = new DatabaseReverseImportServiceImpl(
+                mock(com.dataspec.reverseimport.service.ReverseImportService.class),
+                ignored -> connection);
+
+        DatabaseConnectionResult result = service.testConnection(req);
+
+        assertThat(result.success()).isTrue();
+        DatabaseConnectionSecurityDiagnostic security = result.security();
+        assertThat(security.databaseType()).isEqualTo("MYSQL");
+        assertThat(security.writeRisk()).isTrue();
+        assertThat(security.riskLevel()).isEqualTo("DANGER");
+        assertThat(security.warnings()).anyMatch(warning -> warning.contains("可能具备写入"));
+        assertThat(security.recommendedSql()).contains("GRANT SELECT, SHOW VIEW ON `shop`.* TO 'dataspec_ro'@'%';");
+        verify(statement, never()).execute(anyString());
+        verify(statement, never()).executeUpdate(anyString());
+    }
+
+    @Test
+    void testConnection_returnsMysqlReadonlyDiagnosticFromGrants() throws Exception {
+        DatabaseConnectionReq req = connectionReq();
+        req.setDatabaseType("mysql");
+        req.setDatabaseName("shop");
+        req.setSchemaName(null);
+        Connection connection = mock(Connection.class);
+        DatabaseMetaData metaData = mock(DatabaseMetaData.class);
+        Statement statement = mock(Statement.class);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(connection.isReadOnly()).thenReturn(false);
+        when(connection.createStatement()).thenReturn(statement);
+        when(metaData.getUserName()).thenReturn("dataspec_ro@%");
+        when(metaData.isReadOnly()).thenReturn(false);
+        ResultSet catalogs = rowCountResult(1);
+        ResultSet tables = rowCountResult(4);
+        when(metaData.getCatalogs()).thenReturn(catalogs);
+        when(metaData.getTables(any(), any(), any(), any())).thenReturn(tables);
+        when(statement.executeQuery(anyString())).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0, String.class).toLowerCase();
+            if (sql.contains("show grants")) {
+                return stringResult("GRANT SELECT, SHOW VIEW ON `shop`.* TO 'dataspec_ro'@'%'");
+            }
+            if (sql.contains("current_user()")) {
+                return stringResult("dataspec_ro@%");
+            }
+            if (sql.contains("@@read_only") || sql.contains("@@super_read_only")) {
+                return stringResult("0");
+            }
+            throw new SQLException("unexpected query: " + sql);
+        });
+        DatabaseReverseImportServiceImpl service = new DatabaseReverseImportServiceImpl(
+                mock(com.dataspec.reverseimport.service.ReverseImportService.class),
+                ignored -> connection);
+
+        DatabaseConnectionResult result = service.testConnection(req);
+
+        assertThat(result.success()).isTrue();
+        DatabaseConnectionSecurityDiagnostic security = result.security();
+        assertThat(security.readOnly()).isTrue();
+        assertThat(security.writeRisk()).isFalse();
+        assertThat(security.riskLevel()).isEqualTo("SAFE");
+        assertThat(security.accessibleTableCount()).isEqualTo(4);
+        verify(statement, never()).execute(anyString());
+        verify(statement, never()).executeUpdate(anyString());
+    }
+
+    @Test
+    void testConnection_keepsSuccessWhenSecurityDiagnosticQueryFails() throws Exception {
+        DatabaseConnectionReq req = connectionReq();
+        req.setPassword("secret");
+        Connection connection = mock(Connection.class);
+        DatabaseMetaData metaData = mock(DatabaseMetaData.class);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(connection.isReadOnly()).thenReturn(false);
+        when(connection.createStatement()).thenThrow(new SQLException("permission denied password=secret"));
+        when(metaData.getUserName()).thenReturn("limited_user");
+        when(metaData.isReadOnly()).thenReturn(false);
+        ResultSet schemas = rowCountResult(0);
+        ResultSet tables = rowCountResult(0);
+        when(metaData.getSchemas()).thenReturn(schemas);
+        when(metaData.getTables(any(), any(), any(), any())).thenReturn(tables);
+        DatabaseReverseImportServiceImpl service = new DatabaseReverseImportServiceImpl(
+                mock(com.dataspec.reverseimport.service.ReverseImportService.class),
+                ignored -> connection);
+
+        DatabaseConnectionResult result = service.testConnection(req);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.security().riskLevel()).isEqualTo("WARNING");
+        assertThat(result.security().warnings()).anyMatch(warning -> warning.contains("<redacted>"));
+        assertThat(result.security().warnings()).noneMatch(warning -> warning.contains("secret"));
+    }
+
+    @Test
+    void testConnection_sanitizesFailureMessage() {
+        DatabaseConnectionReq req = connectionReq();
+        req.setPassword("top-secret");
+        DatabaseReverseImportServiceImpl service = new DatabaseReverseImportServiceImpl(
+                mock(com.dataspec.reverseimport.service.ReverseImportService.class),
+                ignored -> {
+                    throw new SQLException("bad jdbc:postgresql://localhost:5432/demo password=top-secret Bearer token123");
+                });
+
+        DatabaseConnectionResult result = service.testConnection(req);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.security()).isNull();
+        assertThat(result.message()).contains("<redacted>");
+        assertThat(result.message()).doesNotContain("top-secret", "jdbc:postgresql://localhost:5432/demo", "token123");
     }
 
     @Test
@@ -206,6 +403,28 @@ class DatabaseReverseImportServiceTest {
 
     private Connection openMetadataConnection() throws SQLException {
         return DriverManager.getConnection("jdbc:h2:mem:reverse_import;MODE=PostgreSQL;DB_CLOSE_DELAY=-1");
+    }
+
+    private ResultSet rowCountResult(int count) throws SQLException {
+        ResultSet rs = mock(ResultSet.class);
+        AtomicInteger index = new AtomicInteger();
+        when(rs.next()).thenAnswer(invocation -> index.getAndIncrement() < count);
+        return rs;
+    }
+
+    private ResultSet stringResult(String... values) throws SQLException {
+        ResultSet rs = mock(ResultSet.class);
+        AtomicInteger index = new AtomicInteger(-1);
+        when(rs.next()).thenAnswer(invocation -> index.incrementAndGet() < values.length);
+        when(rs.getString(1)).thenAnswer(invocation -> values[index.get()]);
+        return rs;
+    }
+
+    private ResultSet booleanResult(boolean value) throws SQLException {
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.next()).thenReturn(true, false);
+        when(rs.getBoolean(1)).thenReturn(value);
+        return rs;
     }
 
     private DatabaseConnectionReq connectionReq() {

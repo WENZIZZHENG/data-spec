@@ -552,6 +552,20 @@ export interface DatabaseConnectionPresetReq {
 export interface DatabaseConnectionResult {
   success?: boolean
   message?: string
+  security?: DatabaseConnectionSecurityDiagnostic
+}
+
+export interface DatabaseConnectionSecurityDiagnostic {
+  databaseType?: string
+  currentUser?: string
+  readOnly?: boolean
+  writeRisk?: boolean
+  riskLevel?: 'SAFE' | 'WARNING' | 'DANGER' | 'UNKNOWN' | string
+  accessibleSchemaCount?: number
+  accessibleTableCount?: number
+  warnings?: string[]
+  recommendedActions?: string[]
+  recommendedSql?: string[]
 }
 
 export interface DatabaseTableInfo {

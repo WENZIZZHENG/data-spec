@@ -3,5 +3,11 @@ package com.dataspec.reverseimport.model;
 /**
  * 数据库连接测试结果。
  */
-public record DatabaseConnectionResult(boolean success, String message) {
+public record DatabaseConnectionResult(boolean success,
+                                       String message,
+                                       DatabaseConnectionSecurityDiagnostic security) {
+
+    public DatabaseConnectionResult(boolean success, String message) {
+        this(success, message, null);
+    }
 }
