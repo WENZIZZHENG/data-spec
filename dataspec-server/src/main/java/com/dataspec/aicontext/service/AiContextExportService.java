@@ -63,6 +63,8 @@ import java.util.zip.ZipOutputStream;
 @Slf4j
 public class AiContextExportService {
 
+    private static final String STARTER_KIT_TAG_PREFIX = "starter:";
+
     private static final String PACKAGE_FILE_NAME = "dataspec-ai-context.zip";
     private static final int DATASPEC_CONTEXT_SCHEMA_VERSION = 1;
     private static final long FIELD_CATALOG_WARN_MS = 1_000;
@@ -222,6 +224,8 @@ public class AiContextExportService {
                 if (f.getDisplayName() != null) fn.put("displayName", f.getDisplayName());
                 if (f.getCategory() != null) fn.put("category", f.getCategory());
                 if (f.getTags() != null) fn.put("tags", f.getTags());
+                ArrayNode starterKitSourcesNode = starterKitSourcesToArrayNode(mapper, f.getTags());
+                if (!starterKitSourcesNode.isEmpty()) fn.set("starterKitSources", starterKitSourcesNode);
                 if (f.getCodeSetId() != null) fn.put("codeSetId", f.getCodeSetId());
                 if (f.getExampleValue() != null) fn.put("example", f.getExampleValue());
                 ArrayNode aliasesNode = aliasesToArrayNode(mapper, f.getAliases());
@@ -287,6 +291,10 @@ public class AiContextExportService {
                 copyText(fn, field, "displayName", "displayName");
                 copyText(fn, field, "category", "category");
                 copyText(fn, field, "tags", "tags");
+                ArrayNode starterKitSourcesNode = starterKitSourcesToArrayNode(mapper, field.path("tags").asText(null));
+                if (!starterKitSourcesNode.isEmpty()) {
+                    fn.set("starterKitSources", starterKitSourcesNode);
+                }
                 copyLong(fn, field, "codeSetId", "codeSetId");
                 copyText(fn, field, "exampleValue", "example");
                 ArrayNode aliasesNode = aliasesToArrayNode(mapper, field.path("aliases").asText(null));
@@ -1466,6 +1474,18 @@ public class AiContextExportService {
                             "enum": ["enabled", "disabled", "deprecated"]
                           },
                           "tags": { "type": "string" },
+                          "starterKitSources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": ["kitKey", "kitVersion"],
+                              "properties": {
+                                "kitKey": { "type": "string" },
+                                "kitVersion": { "type": "string" }
+                              }
+                            }
+                          },
                           "matchReasons": {
                             "type": "array",
                             "items": { "type": "string" }
@@ -1515,6 +1535,31 @@ public class AiContextExportService {
                 .distinct()
                 .forEach(node::add);
         return node;
+    }
+
+    private ArrayNode starterKitSourcesToArrayNode(ObjectMapper mapper, String tags) {
+        ArrayNode node = mapper.createArrayNode();
+        if (tags == null || tags.isBlank()) {
+            return node;
+        }
+        Arrays.stream(tags.split("[,，]"))
+                .map(String::trim)
+                .filter(tag -> tag.startsWith(STARTER_KIT_TAG_PREFIX))
+                .distinct()
+                .forEach(tag -> addStarterKitSource(node, tag));
+        return node;
+    }
+
+    private void addStarterKitSource(ArrayNode node, String tag) {
+        String marker = tag.substring(STARTER_KIT_TAG_PREFIX.length());
+        int versionSeparator = marker.lastIndexOf('@');
+        if (versionSeparator <= 0 || versionSeparator == marker.length() - 1) {
+            return;
+        }
+        ObjectNode source = node.objectNode();
+        source.put("kitKey", marker.substring(0, versionSeparator));
+        source.put("kitVersion", marker.substring(versionSeparator + 1));
+        node.add(source);
     }
 
     private String fieldStatusForExport(String status) {

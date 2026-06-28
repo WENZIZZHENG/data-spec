@@ -155,8 +155,8 @@ test('keeps AI profile review and selection flow wired', () => {
   assertContains(schema, [
     '"/api/ai-profiles"',
     '"/api/ai-profiles/{profileOrTaskType}"',
-    'listAiTaskProfiles',
-    'getAiTaskProfile',
+    'listProfiles',
+    'getProfile',
     'AiTaskProfileCatalog',
     'RAiTaskProfileDetail'
   ], 'AI profile schema')
@@ -213,16 +213,16 @@ test('keeps AI evidence package actions wired on high frequency result pages', (
   ], 'evidence api')
 
   assertContains(types, [
-    "export type EvidenceSourceType = Schemas['EvidenceSourceType']",
+    "export type EvidenceSourceType = NonNullable<Schemas['AiEvidencePackageReq']['sourceType']>",
     "export type AiEvidencePackage = Schemas['AiEvidencePackage']",
-    "export type AiEvidencePackageReq = Schemas['AiEvidencePackageReq']"
+    "export type AiEvidencePackageReq = Omit<Schemas['AiEvidencePackageReq'], 'payloadSummary'>"
   ], 'evidence types')
 
   assertContains(schema, [
     '"/api/evidence-packages"',
     '"/api/evidence-packages/download"',
-    'generateEvidencePackage',
-    'downloadEvidencePackage',
+    'operations["generate"]',
+    'operations["download"]',
     'AiEvidencePackage',
     'AiEvidencePackageReq',
     'RAiEvidencePackage'
@@ -341,6 +341,39 @@ test('keeps global project selector backed by the project store', () => {
     'function setCurrentProjectById(projectId: number | null)',
     'function clearCurrentProject()'
   ], 'project store')
+})
+
+test('keeps domain starter kit project workflow wired', () => {
+  const projectList = readSource('src/views/ProjectList.vue')
+  const starterKitApi = readSource('src/api/starterKit.ts')
+  const types = readSource('src/types/index.ts')
+
+  assertContains(projectList, [
+    "from '@/api/starterKit'",
+    'listStarterKits',
+    'applyStarterKit',
+    'listStarterKitInstallations',
+    'selectedStarterKitKeys',
+    'applyStarterKitKeys',
+    'openStarterKitDialog(row)',
+    'handleApplyStarterKits',
+    'applyStarterKitsAfterCreate(created)',
+    '最近安装记录',
+    'Starter Kit'
+  ], 'ProjectList.vue starter kit workflow')
+
+  assertContains(starterKitApi, [
+    "request.get<unknown, StarterKitDefinition[]>('/starter-kits')",
+    "request.post<unknown, StarterKitApplyResult>('/starter-kits/apply'",
+    "request.get<unknown, StarterKitInstallationInfo[]>('/starter-kits/installations'"
+  ], 'starter kit api')
+
+  assertContains(types, [
+    "export type StarterKitDefinition = Schemas['StarterKitDefinition']",
+    "export type StarterKitApplyResult = Schemas['StarterKitApplyResult']",
+    "export type StarterKitInstallationInfo = Schemas['StarterKitInstallationInfo']",
+    "export type StarterKitApplyCounts = Schemas['StarterKitApplyCounts']"
+  ], 'starter kit types')
 })
 
 test('keeps dashboard task entrypoints, recent tasks, and breadcrumbs wired', () => {

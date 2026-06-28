@@ -146,6 +146,7 @@ class AiContextExportServiceTest {
         assertTrue(fieldProperties.has("status"));
         assertTrue(fieldProperties.has("codeSetId"));
         assertTrue(fieldProperties.has("example"));
+        assertTrue(fieldProperties.has("starterKitSources"));
     }
 
     @Test
@@ -327,6 +328,20 @@ class AiContextExportServiceTest {
         assertEquals(2, root.path("contextScope").path("totalFieldCount").asInt());
         assertEquals(1, root.path("contextScope").path("matchedFieldCount").asInt());
         assertEquals(1, root.path("contextScope").path("returnedFieldCount").asInt());
+    }
+
+    @Test
+    void generateFieldCatalogJson_exportsStarterKitSourcesFromTags() throws Exception {
+        AiContextExportService service = createService(List.of(
+                sampleField("user_id", "用户ID", "identifier", "user,starter:user_account@2026.06", "uid")
+        ));
+
+        String content = service.generateFieldCatalogJson(PROJECT_ID);
+
+        var root = new ObjectMapper().readTree(content);
+        var source = root.path("fields").get(0).path("starterKitSources").get(0);
+        assertEquals("user_account", source.path("kitKey").asText());
+        assertEquals("2026.06", source.path("kitVersion").asText());
     }
 
     @Test

@@ -37,6 +37,15 @@ public class TemplateRepository {
                         .orderByAsc(Template::getName));
     }
 
+    /** 根据项目内模板名称查找模板 */
+    public Optional<Template> findByNameInProject(String name, Long projectId) {
+        return Optional.ofNullable(templateMapper.selectOne(
+                new LambdaQueryWrapper<Template>()
+                        .eq(Template::getName, name)
+                        .eq(Template::getProjectId, projectId)
+                        .last("limit 1")));
+    }
+
     /** 新增模板 */
     public int insert(Template template) {
         return templateMapper.insert(template);

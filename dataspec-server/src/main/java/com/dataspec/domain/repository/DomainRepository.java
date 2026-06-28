@@ -32,6 +32,15 @@ public class DomainRepository {
                         .orderByAsc(Domain::getCode));
     }
 
+    /** 根据项目内编码查找数据域 */
+    public Optional<Domain> findByCodeInProject(String code, Long projectId) {
+        return Optional.ofNullable(domainMapper.selectOne(
+                new LambdaQueryWrapper<Domain>()
+                        .eq(Domain::getCode, code)
+                        .eq(Domain::getProjectId, projectId)
+                        .last("limit 1")));
+    }
+
     /** 检查项目内数据域编码是否重复 */
     public boolean existsByCodeInProject(String code, Long projectId) {
         return domainMapper.exists(

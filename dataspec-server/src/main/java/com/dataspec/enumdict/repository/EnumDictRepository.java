@@ -37,6 +37,15 @@ public class EnumDictRepository {
                         .orderByAsc(EnumDict::getCode));
     }
 
+    /** 根据项目内编码查找枚举字典 */
+    public Optional<EnumDict> findDictByCodeInProject(String code, Long projectId) {
+        return Optional.ofNullable(enumDictMapper.selectOne(
+                new LambdaQueryWrapper<EnumDict>()
+                        .eq(EnumDict::getCode, code)
+                        .eq(EnumDict::getProjectId, projectId)
+                        .last("limit 1")));
+    }
+
     /** 检查项目内枚举编码是否重复 */
     public boolean existsDictByCodeInProject(String code, Long projectId) {
         return enumDictMapper.exists(
@@ -68,6 +77,14 @@ public class EnumDictRepository {
                 new LambdaQueryWrapper<EnumValue>()
                         .eq(EnumValue::getEnumId, enumId)
                         .orderByAsc(EnumValue::getSortOrder));
+    }
+
+    /** 检查枚举值是否已存在 */
+    public boolean existsValueByEnumIdAndValue(Long enumId, String value) {
+        return enumValueMapper.exists(
+                new LambdaQueryWrapper<EnumValue>()
+                        .eq(EnumValue::getEnumId, enumId)
+                        .eq(EnumValue::getValue, value));
     }
 
     /** 根据 ID 查找枚举值 */

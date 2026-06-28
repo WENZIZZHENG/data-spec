@@ -288,6 +288,17 @@ export type RuleBaselinePackage = Schemas['RuleBaselinePackage']
 export type RuleBaselineApplyReq = Schemas['RuleBaselineApplyReq']
 export type RuleBaselineImportReq = Schemas['RuleBaselineImportReq']
 export type RuleBaselineApplyResult = Schemas['RuleBaselineApplyResult']
+export type StarterKitDomain = Schemas['StarterKitDomain']
+export type StarterKitEnumValue = Schemas['StarterKitEnumValue']
+export type StarterKitEnumDefinition = Schemas['StarterKitEnumDefinition']
+export type StarterKitFieldDefinition = Schemas['StarterKitFieldDefinition']
+export type StarterKitTemplateField = Schemas['StarterKitTemplateField']
+export type StarterKitTemplateDefinition = Schemas['StarterKitTemplateDefinition']
+export type StarterKitDefinition = Schemas['StarterKitDefinition']
+export type StarterKitApplyCounts = Schemas['StarterKitApplyCounts']
+export type StarterKitApplyReq = Schemas['StarterKitApplyReq']
+export type StarterKitApplyResult = Schemas['StarterKitApplyResult']
+export type StarterKitInstallationInfo = Schemas['StarterKitInstallationInfo']
 
 export interface RuleExemption {
   id?: number
@@ -332,13 +343,15 @@ export type SchemaCompatibilityPolicy = Schemas['SchemaCompatibilityPolicy']
 export type SchemaContractSummary = Schemas['SchemaContractSummary']
 export type SchemaContract = Schemas['SchemaContract']
 export type SchemaRegistryCatalog = Schemas['SchemaRegistryCatalog']
-export type EvidenceSourceType = Schemas['EvidenceSourceType']
+export type EvidenceSourceType = NonNullable<Schemas['AiEvidencePackageReq']['sourceType']>
 export type AiEvidenceSource = Schemas['AiEvidenceSource']
 export type AiEvidenceStandardSnapshot = Schemas['AiEvidenceStandardSnapshot']
 export type AiEvidenceArtifact = Schemas['AiEvidenceArtifact']
 export type AiEvidenceDiagnostic = Schemas['AiEvidenceDiagnostic']
 export type AiEvidencePackage = Schemas['AiEvidencePackage']
-export type AiEvidencePackageReq = Schemas['AiEvidencePackageReq']
+export type AiEvidencePackageReq = Omit<Schemas['AiEvidencePackageReq'], 'payloadSummary'> & {
+  payloadSummary?: Record<string, unknown>
+}
 export type AuthMe = Schemas['AuthMe']
 export type DdlGenerateResult = Schemas['DdlGenerateResult']
 export type DialectDiagnostic = Schemas['DialectDiagnostic']

@@ -51,6 +51,15 @@ public class FieldRepository {
                         .orderByAsc(Field::getName));
     }
 
+    /** 根据项目内字段名查找字段 */
+    public Optional<Field> findByNameInProject(String name, Long projectId) {
+        return Optional.ofNullable(fieldMapper.selectOne(
+                new LambdaQueryWrapper<Field>()
+                        .eq(Field::getName, name)
+                        .eq(Field::getProjectId, projectId)
+                        .last("limit 1")));
+    }
+
     /** 检查项目内字段名是否重复 */
     public boolean existsByNameInProject(String name, Long projectId) {
         return fieldMapper.exists(

@@ -52,54 +52,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/standard-changes/preview/rules/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["previewRuleUpdate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/standard-changes/preview/rules/{id}/toggle": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["previewRuleToggle"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/standard-changes/preview/fields/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["previewFieldUpdate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/projects/{id}": {
         parameters: {
             query?: never;
@@ -244,6 +196,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/starter-kits/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-changes/preview/rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewRuleUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-changes/preview/rules/{id}/toggle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewRuleToggle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-changes/preview/fields/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewFieldUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/standard-candidates": {
         parameters: {
             query?: never;
@@ -381,7 +397,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["apply"];
+        post: operations["apply_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -772,6 +788,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/evidence-packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["generate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence-packages/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["download"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/enums": {
         parameters: {
             query?: never;
@@ -980,6 +1028,38 @@ export interface paths {
         patch: operations["disable"];
         trace?: never;
     };
+    "/api/starter-kits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listKits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/starter-kits/installations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listInstallations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rule-exemptions/{id}": {
         parameters: {
             query?: never;
@@ -1166,102 +1246,6 @@ export interface paths {
         get: operations["getRecord"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-profiles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listAiTaskProfiles"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-profiles/{profileOrTaskType}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getAiTaskProfile"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/contracts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listContracts"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/contracts/{contractId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getContract"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/evidence-packages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["generateEvidencePackage"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/evidence-packages/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["downloadEvidencePackage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1572,6 +1556,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/contracts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listContracts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/contracts/{contractId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getContract"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/change-logs": {
         parameters: {
             query?: never;
@@ -1596,6 +1612,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProfiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-profiles/{profileOrTaskType}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getProfile"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1803,7 +1851,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["download"];
+        get: operations["download_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1923,64 +1971,6 @@ export interface components {
             updatedAt?: string;
             isDeleted?: boolean;
         };
-        RuleChangePreviewReq: {
-            /** Format: int64 */
-            projectId?: number;
-            ruleName?: string;
-            severity?: string;
-            enabled?: boolean;
-            paramsJson?: string;
-        };
-        RStandardChangePreview: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["StandardChangePreview"];
-            error?: components["schemas"]["ErrorDetail"];
-        };
-        StandardChangePreview: {
-            /** Format: int64 */
-            projectId?: number;
-            targetType?: string;
-            /** Format: int64 */
-            targetId?: number;
-            targetName?: string;
-            operation?: string;
-            riskLevel?: string;
-            requiresConfirmation?: boolean;
-            summary?: string;
-            changes?: components["schemas"]["StandardChangePreviewChange"][];
-            impacts?: components["schemas"]["StandardChangePreviewImpact"][];
-            validationCommands?: string[];
-            rollbackHints?: components["schemas"]["StandardChangeRollbackHint"][];
-            currentSnapshot?: components["schemas"]["StandardSnapshotInfo"];
-        };
-        StandardChangePreviewChange: {
-            attribute?: string;
-            beforeValue?: Record<string, never>;
-            afterValue?: Record<string, never>;
-            riskLevel?: string;
-            description?: string;
-        };
-        StandardChangePreviewImpact: {
-            impactType?: string;
-            severity?: string;
-            /** Format: int64 */
-            sourceId?: number;
-            title?: string;
-            /** Format: int32 */
-            count?: number;
-            description?: string;
-            metadata?: {
-                [key: string]: Record<string, never>;
-            };
-        };
-        StandardChangeRollbackHint: {
-            type?: string;
-            action?: string;
-            description?: string;
-            targetPath?: string;
-        };
         CreateProjectReq: {
             name: string;
             description?: string;
@@ -2012,32 +2002,6 @@ export interface components {
             name: string;
             displayName?: string;
             dataType: string;
-            /** Format: int32 */
-            length?: number;
-            /** Format: int32 */
-            precisionVal?: number;
-            /** Format: int32 */
-            scaleVal?: number;
-            nullable?: boolean;
-            defaultValue?: string;
-            comment?: string;
-            /** Format: int64 */
-            domainId?: number;
-            tags?: string;
-            aliases?: string;
-            category?: string;
-            /** Format: int64 */
-            codeSetId?: number;
-            sensitive?: boolean;
-            status?: string;
-            exampleValue?: string;
-        };
-        FieldChangePreviewReq: {
-            /** Format: int64 */
-            projectId?: number;
-            name?: string;
-            displayName?: string;
-            dataType?: string;
             /** Format: int32 */
             length?: number;
             /** Format: int32 */
@@ -2255,6 +2219,149 @@ export interface components {
             message?: string;
             data?: components["schemas"]["ApiTokenCreateResp"];
             error?: components["schemas"]["ErrorDetail"];
+        };
+        StarterKitApplyReq: {
+            /** Format: int64 */
+            projectId: number;
+            kitKey: string;
+            kitVersion?: string;
+        };
+        RStarterKitApplyResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StarterKitApplyResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StarterKitApplyCounts: {
+            /** Format: int32 */
+            domains?: number;
+            /** Format: int32 */
+            enums?: number;
+            /** Format: int32 */
+            enumValues?: number;
+            /** Format: int32 */
+            fields?: number;
+            /** Format: int32 */
+            templates?: number;
+            /** Format: int32 */
+            templateFields?: number;
+        };
+        StarterKitApplyResult: {
+            /** Format: int64 */
+            projectId?: number;
+            kitKey?: string;
+            kitName?: string;
+            kitVersion?: string;
+            created?: components["schemas"]["StarterKitApplyCounts"];
+            skipped?: components["schemas"]["StarterKitApplyCounts"];
+            createdFields?: string[];
+            skippedFields?: string[];
+            createdEnums?: string[];
+            skippedEnums?: string[];
+            createdTemplates?: string[];
+            skippedTemplates?: string[];
+            warnings?: string[];
+            /** Format: date-time */
+            appliedAt?: string;
+        };
+        RuleChangePreviewReq: {
+            /** Format: int64 */
+            projectId?: number;
+            ruleName?: string;
+            severity?: string;
+            enabled?: boolean;
+            paramsJson?: string;
+        };
+        RStandardChangePreview: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardChangePreview"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardChangePreview: {
+            /** Format: int64 */
+            projectId?: number;
+            targetType?: string;
+            /** Format: int64 */
+            targetId?: number;
+            targetName?: string;
+            operation?: string;
+            riskLevel?: string;
+            requiresConfirmation?: boolean;
+            summary?: string;
+            changes?: components["schemas"]["StandardChangePreviewChange"][];
+            impacts?: components["schemas"]["StandardChangePreviewImpact"][];
+            validationCommands?: string[];
+            rollbackHints?: components["schemas"]["StandardChangeRollbackHint"][];
+            currentSnapshot?: components["schemas"]["StandardSnapshotInfo"];
+        };
+        StandardChangePreviewChange: {
+            attribute?: string;
+            beforeValue?: Record<string, never>;
+            afterValue?: Record<string, never>;
+            riskLevel?: string;
+            description?: string;
+        };
+        StandardChangePreviewImpact: {
+            impactType?: string;
+            severity?: string;
+            /** Format: int64 */
+            sourceId?: number;
+            title?: string;
+            /** Format: int32 */
+            count?: number;
+            description?: string;
+            metadata?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        StandardChangeRollbackHint: {
+            type?: string;
+            action?: string;
+            description?: string;
+            targetPath?: string;
+        };
+        StandardSnapshotInfo: {
+            /** Format: int64 */
+            snapshotId?: number;
+            /** Format: int64 */
+            projectId?: number;
+            specVersion?: string;
+            name?: string;
+            description?: string;
+            specHash?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            versioned?: boolean;
+            source?: string;
+        };
+        FieldChangePreviewReq: {
+            /** Format: int64 */
+            projectId?: number;
+            name?: string;
+            displayName?: string;
+            dataType?: string;
+            /** Format: int32 */
+            length?: number;
+            /** Format: int32 */
+            precisionVal?: number;
+            /** Format: int32 */
+            scaleVal?: number;
+            nullable?: boolean;
+            defaultValue?: string;
+            comment?: string;
+            /** Format: int64 */
+            domainId?: number;
+            tags?: string;
+            aliases?: string;
+            category?: string;
+            /** Format: int64 */
+            codeSetId?: number;
+            sensitive?: boolean;
+            status?: string;
+            exampleValue?: string;
         };
         StandardCandidateCreateReq: {
             /** Format: int64 */
@@ -2697,20 +2804,6 @@ export interface components {
             data?: components["schemas"]["StandardSnapshotInfo"];
             error?: components["schemas"]["ErrorDetail"];
         };
-        StandardSnapshotInfo: {
-            /** Format: int64 */
-            snapshotId?: number;
-            /** Format: int64 */
-            projectId?: number;
-            specVersion?: string;
-            name?: string;
-            description?: string;
-            specHash?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            versioned?: boolean;
-            source?: string;
-        };
         DemoProjectResult: {
             project?: components["schemas"]["Project"];
             /** Format: int64 */
@@ -2948,233 +3041,12 @@ export interface components {
             plan?: components["schemas"]["ProjectRestorePlan"];
             record?: components["schemas"]["ProjectRestoreRecord"];
         };
-        AiTaskContextScope: {
-            scope?: string;
-            query?: string;
-            status?: string;
-            /** Format: int32 */
-            limit?: number;
-        };
-        AiTaskRuleset: {
-            strictness?: string;
-            requiredRuleCodes?: string[];
-            optionalRuleCodes?: string[];
-        };
-        AiTaskOutputFormat: {
-            format?: string;
-            schemaRef?: string;
-            includeEvidence?: boolean;
-            includeNextActions?: boolean;
-        };
-        AiProfileDiagnostic: {
-            code?: string;
-            status?: string;
-            message?: string;
-            nextAction?: string;
-        };
-        AiTaskProfile: {
-            profileId?: string;
-            taskType?: string;
-            displayName?: string;
-            description?: string;
-            contextScope?: components["schemas"]["AiTaskContextScope"];
-            ruleset?: components["schemas"]["AiTaskRuleset"];
-            fixedSqlPolicy?: components["schemas"]["FixPolicy"];
-            outputFormat?: components["schemas"]["AiTaskOutputFormat"];
-            /** Format: int32 */
-            maxContextFields?: number;
-            recommendedCommands?: string[];
-            nextActions?: string[];
-            defaultProfile?: boolean;
-        };
-        AiTaskProfileCatalog: {
-            /** Format: int64 */
-            projectId?: number;
-            defaultProfileId?: string;
-            selectedProfileId?: string;
-            profiles?: components["schemas"]["AiTaskProfile"][];
-            diagnostics?: components["schemas"]["AiProfileDiagnostic"][];
-            supportedTaskTypes?: string[];
-        };
-        AiTaskProfileDetail: {
-            /** Format: int64 */
-            projectId?: number;
-            requestedProfile?: string;
-            profile?: components["schemas"]["AiTaskProfile"];
-            diagnostics?: components["schemas"]["AiProfileDiagnostic"][];
-            supportedProfileIds?: string[];
-            supportedTaskTypes?: string[];
-        };
-        RAiTaskProfileCatalog: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["AiTaskProfileCatalog"];
-            error?: components["schemas"]["ErrorDetail"];
-        };
-        RAiTaskProfileDetail: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["AiTaskProfileDetail"];
-            error?: components["schemas"]["ErrorDetail"];
-        };
-        DeprecatedContractField: {
-            fieldPath?: string;
-            deprecatedSince?: string;
-            removalAfter?: string;
-            replacement?: string;
-            reason?: string;
-        };
-        SchemaCompatibilityPolicy: {
-            level?: string;
-            compatibleSince?: string;
-            additiveFieldPolicy?: string;
-            breakingChangePolicy?: string;
-            deprecationPolicy?: string;
-            compatibilityWindow?: string;
-        };
-        SchemaContractSummary: {
-            contractId?: string;
-            displayName?: string;
-            description?: string;
-            schemaVersion?: string;
-            jsonSchemaRef?: string;
-            stableFields?: string[];
-            deprecatedFields?: components["schemas"]["DeprecatedContractField"][];
-            compatibility?: components["schemas"]["SchemaCompatibilityPolicy"];
-            docsRef?: string;
-        };
-        SchemaContract: {
-            contractId?: string;
-            displayName?: string;
-            description?: string;
-            schemaVersion?: string;
-            jsonSchemaRef?: string;
-            jsonSchema?: {
-                [key: string]: unknown;
-            };
-            stableFields?: string[];
-            deprecatedFields?: components["schemas"]["DeprecatedContractField"][];
-            compatibility?: components["schemas"]["SchemaCompatibilityPolicy"];
-            docsRef?: string;
-            examples?: {
-                [key: string]: unknown;
-            }[];
-        };
-        SchemaRegistryCatalog: {
-            kind?: string;
-            /** Format: int32 */
-            schemaVersion?: number;
-            registryVersion?: string;
-            compatibilityPolicy?: components["schemas"]["SchemaCompatibilityPolicy"];
-            contracts?: components["schemas"]["SchemaContractSummary"][];
-            requiredContractIds?: string[];
-            nextActions?: string[];
-        };
-        RSchemaRegistryCatalog: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["SchemaRegistryCatalog"];
-            error?: components["schemas"]["ErrorDetail"];
-        };
-        RSchemaContract: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["SchemaContract"];
-            error?: components["schemas"]["ErrorDetail"];
-        };
-        /** @enum {string} */
-        EvidenceSourceType: "AI_JOB" | "SQL_CHECK" | "COVERAGE_REPORT" | "AI_BATCH_RUN";
-        AiEvidenceSource: {
-            sourceType?: components["schemas"]["EvidenceSourceType"];
-            /** Format: int64 */
-            sourceId?: number;
-            sourceTitle?: string;
-            status?: string;
-            persisted?: boolean;
-        };
-        AiEvidenceStandardSnapshot: {
-            /** Format: int64 */
-            snapshotId?: number;
-            specVersion?: string;
-            specHash?: string;
-            versioned?: boolean;
-        };
-        AiEvidenceArtifact: {
-            artifactType?: string;
-            title?: string;
-            format?: string;
-            summary?: {
-                [key: string]: unknown;
-            };
-        };
-        AiEvidenceDiagnostic: {
-            level?: string;
-            code?: string;
-            message?: string;
-        };
-        AiEvidencePackage: {
-            kind?: string;
-            /** Format: int32 */
-            schemaVersion?: number;
-            packageId?: string;
-            /** Format: int64 */
-            projectId?: number;
-            /** Format: date-time */
-            generatedAt?: string;
-            source?: components["schemas"]["AiEvidenceSource"];
-            standardSnapshot?: components["schemas"]["AiEvidenceStandardSnapshot"];
-            inputsSummary?: {
-                [key: string]: unknown;
-            };
-            outputsSummary?: {
-                [key: string]: unknown;
-            };
-            validationSummary?: {
-                [key: string]: unknown;
-            };
-            artifacts?: components["schemas"]["AiEvidenceArtifact"][];
-            nextActions?: string[];
-            suggestedCommands?: string[];
-            diagnostics?: components["schemas"]["AiEvidenceDiagnostic"][];
-        };
-        AiEvidencePackageReq: {
-            /** Format: int64 */
-            projectId?: number;
-            sourceType: components["schemas"]["EvidenceSourceType"];
-            /** Format: int64 */
-            sourceId?: number;
-            sourceTitle?: string;
-            coverageReport?: components["schemas"]["FieldCoverageReport"];
-            standardSnapshot?: components["schemas"]["AiEvidenceStandardSnapshot"];
-            payloadSummary?: {
-                [key: string]: unknown;
-            };
-        };
-        RAiEvidencePackage: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["AiEvidencePackage"];
-            error?: components["schemas"]["ErrorDetail"];
-        };
         RProjectRestoreResult: {
             /** Format: int32 */
             code?: number;
             message?: string;
             data?: components["schemas"]["ProjectRestoreResult"];
             error?: components["schemas"]["ErrorDetail"];
-        };
-        LintRequest: {
-            sql: string;
-            /** Format: int64 */
-            projectId?: number;
-            profileId?: string;
-            taskType?: string;
-            fixPolicy?: components["schemas"]["FixPolicy"];
         };
         FixPolicy: {
             /** @enum {string} */
@@ -3184,6 +3056,14 @@ export interface components {
             enabledRuleCodes?: string[];
             disabledRuleCodes?: string[];
             includeExplanations?: boolean;
+        };
+        LintRequest: {
+            sql: string;
+            /** Format: int64 */
+            projectId?: number;
+            profileId?: string;
+            taskType?: string;
+            fixPolicy?: components["schemas"]["FixPolicy"];
         };
         FixChange: {
             /** @enum {string} */
@@ -3450,10 +3330,26 @@ export interface components {
             data?: components["schemas"]["FieldBulkUpdatePreview"];
             error?: components["schemas"]["ErrorDetail"];
         };
-        SqlCoverageReq: {
+        AiEvidencePackageReq: {
             /** Format: int64 */
-            projectId: number;
-            sql: string;
+            projectId?: number;
+            /** @enum {string} */
+            sourceType: "AI_JOB" | "SQL_CHECK" | "COVERAGE_REPORT" | "AI_BATCH_RUN";
+            /** Format: int64 */
+            sourceId?: number;
+            sourceTitle?: string;
+            coverageReport?: components["schemas"]["FieldCoverageReport"];
+            standardSnapshot?: components["schemas"]["AiEvidenceStandardSnapshot"];
+            payloadSummary?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        AiEvidenceStandardSnapshot: {
+            /** Format: int64 */
+            snapshotId?: number;
+            specVersion?: string;
+            specHash?: string;
+            versioned?: boolean;
         };
         FieldCoverageItem: {
             tableName?: string;
@@ -3507,13 +3403,6 @@ export interface components {
             coverageRate?: number;
             fields?: components["schemas"]["FieldCoverageItem"][];
         };
-        RFieldCoverageReport: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["FieldCoverageReport"];
-            error?: components["schemas"]["ErrorDetail"];
-        };
         UnmanagedFieldRanking: {
             columnName?: string;
             /** Format: int32 */
@@ -3521,6 +3410,72 @@ export interface components {
             tables?: string[];
             recommendedFieldName?: string;
             reason?: string;
+        };
+        AiEvidenceArtifact: {
+            artifactType?: string;
+            title?: string;
+            format?: string;
+            summary?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        AiEvidenceDiagnostic: {
+            level?: string;
+            code?: string;
+            message?: string;
+        };
+        AiEvidencePackage: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            packageId?: string;
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: date-time */
+            generatedAt?: string;
+            source?: components["schemas"]["AiEvidenceSource"];
+            standardSnapshot?: components["schemas"]["AiEvidenceStandardSnapshot"];
+            inputsSummary?: {
+                [key: string]: Record<string, never>;
+            };
+            outputsSummary?: {
+                [key: string]: Record<string, never>;
+            };
+            validationSummary?: {
+                [key: string]: Record<string, never>;
+            };
+            artifacts?: components["schemas"]["AiEvidenceArtifact"][];
+            nextActions?: string[];
+            suggestedCommands?: string[];
+            diagnostics?: components["schemas"]["AiEvidenceDiagnostic"][];
+        };
+        AiEvidenceSource: {
+            /** @enum {string} */
+            sourceType?: "AI_JOB" | "SQL_CHECK" | "COVERAGE_REPORT" | "AI_BATCH_RUN";
+            /** Format: int64 */
+            sourceId?: number;
+            sourceTitle?: string;
+            status?: string;
+            persisted?: boolean;
+        };
+        RAiEvidencePackage: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiEvidencePackage"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        SqlCoverageReq: {
+            /** Format: int64 */
+            projectId: number;
+            sql: string;
+        };
+        RFieldCoverageReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldCoverageReport"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         FixSqlPromptReq: {
             /** Format: int64 */
@@ -3672,6 +3627,110 @@ export interface components {
             message?: string;
             data?: components["schemas"]["TemplateField"][];
             error?: components["schemas"]["ErrorDetail"];
+        };
+        RListStarterKitDefinition: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StarterKitDefinition"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StarterKitDefinition: {
+            key?: string;
+            name?: string;
+            version?: string;
+            description?: string;
+            tags?: string[];
+            useCases?: string[];
+            domains?: components["schemas"]["StarterKitDomain"][];
+            enums?: components["schemas"]["StarterKitEnumDefinition"][];
+            fields?: components["schemas"]["StarterKitFieldDefinition"][];
+            templates?: components["schemas"]["StarterKitTemplateDefinition"][];
+            /** Format: int32 */
+            fieldCount?: number;
+            /** Format: int32 */
+            enumCount?: number;
+            /** Format: int32 */
+            templateCount?: number;
+        };
+        StarterKitDomain: {
+            code?: string;
+            name?: string;
+            description?: string;
+        };
+        StarterKitEnumDefinition: {
+            code?: string;
+            name?: string;
+            description?: string;
+            valueType?: string;
+            values?: components["schemas"]["StarterKitEnumValue"][];
+        };
+        StarterKitEnumValue: {
+            value?: string;
+            label?: string;
+            /** Format: int32 */
+            sortOrder?: number;
+        };
+        StarterKitFieldDefinition: {
+            name?: string;
+            displayName?: string;
+            dataType?: string;
+            /** Format: int32 */
+            length?: number;
+            /** Format: int32 */
+            precisionVal?: number;
+            /** Format: int32 */
+            scaleVal?: number;
+            nullable?: boolean;
+            defaultValue?: string;
+            comment?: string;
+            domainCode?: string;
+            tags?: string;
+            aliases?: string;
+            category?: string;
+            codeSetCode?: string;
+            sensitive?: boolean;
+            status?: string;
+            exampleValue?: string;
+        };
+        StarterKitTemplateDefinition: {
+            name?: string;
+            description?: string;
+            tablePrefix?: string;
+            fields?: components["schemas"]["StarterKitTemplateField"][];
+        };
+        StarterKitTemplateField: {
+            fieldName?: string;
+            name?: string;
+            dataType?: string;
+            nullable?: boolean;
+            defaultValue?: string;
+            comment?: string;
+            /** Format: int32 */
+            sortOrder?: number;
+            required?: boolean;
+        };
+        RListStarterKitInstallationInfo: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StarterKitInstallationInfo"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StarterKitInstallationInfo: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            kitKey?: string;
+            kitName?: string;
+            kitVersion?: string;
+            created?: components["schemas"]["StarterKitApplyCounts"];
+            skipped?: components["schemas"]["StarterKitApplyCounts"];
+            warnings?: string[];
+            operatorName?: string;
+            /** Format: date-time */
+            appliedAt?: string;
         };
         PageResultStandardCandidate: {
             records?: components["schemas"]["StandardCandidate"][];
@@ -4268,6 +4327,73 @@ export interface components {
             /** Format: int32 */
             issueCount?: number;
         };
+        DeprecatedContractField: {
+            fieldPath?: string;
+            deprecatedSince?: string;
+            removalAfter?: string;
+            replacement?: string;
+            reason?: string;
+        };
+        RSchemaRegistryCatalog: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["SchemaRegistryCatalog"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        SchemaCompatibilityPolicy: {
+            level?: string;
+            compatibleSince?: string;
+            additiveFieldPolicy?: string;
+            breakingChangePolicy?: string;
+            deprecationPolicy?: string;
+            compatibilityWindow?: string;
+        };
+        SchemaContractSummary: {
+            contractId?: string;
+            displayName?: string;
+            description?: string;
+            schemaVersion?: string;
+            jsonSchemaRef?: string;
+            stableFields?: string[];
+            deprecatedFields?: components["schemas"]["DeprecatedContractField"][];
+            compatibility?: components["schemas"]["SchemaCompatibilityPolicy"];
+            docsRef?: string;
+        };
+        SchemaRegistryCatalog: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            registryVersion?: string;
+            compatibilityPolicy?: components["schemas"]["SchemaCompatibilityPolicy"];
+            contracts?: components["schemas"]["SchemaContractSummary"][];
+            requiredContractIds?: string[];
+            nextActions?: string[];
+        };
+        RSchemaContract: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["SchemaContract"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        SchemaContract: {
+            contractId?: string;
+            displayName?: string;
+            description?: string;
+            schemaVersion?: string;
+            jsonSchemaRef?: string;
+            jsonSchema?: {
+                [key: string]: Record<string, never>;
+            };
+            stableFields?: string[];
+            deprecatedFields?: components["schemas"]["DeprecatedContractField"][];
+            compatibility?: components["schemas"]["SchemaCompatibilityPolicy"];
+            docsRef?: string;
+            examples?: {
+                [key: string]: Record<string, never>;
+            }[];
+        };
         PageResultStandardChangeLog: {
             records?: components["schemas"]["StandardChangeLog"][];
             /** Format: int64 */
@@ -4296,6 +4422,77 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["AuthMe"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        AiProfileDiagnostic: {
+            code?: string;
+            status?: string;
+            message?: string;
+            nextAction?: string;
+        };
+        AiTaskContextScope: {
+            scope?: string;
+            query?: string;
+            status?: string;
+            /** Format: int32 */
+            limit?: number;
+        };
+        AiTaskOutputFormat: {
+            format?: string;
+            schemaRef?: string;
+            includeEvidence?: boolean;
+            includeNextActions?: boolean;
+        };
+        AiTaskProfile: {
+            profileId?: string;
+            taskType?: string;
+            displayName?: string;
+            description?: string;
+            contextScope?: components["schemas"]["AiTaskContextScope"];
+            ruleset?: components["schemas"]["AiTaskRuleset"];
+            fixedSqlPolicy?: components["schemas"]["FixPolicy"];
+            outputFormat?: components["schemas"]["AiTaskOutputFormat"];
+            /** Format: int32 */
+            maxContextFields?: number;
+            recommendedCommands?: string[];
+            nextActions?: string[];
+            defaultProfile?: boolean;
+        };
+        AiTaskProfileCatalog: {
+            /** Format: int64 */
+            projectId?: number;
+            defaultProfileId?: string;
+            selectedProfileId?: string;
+            profiles?: components["schemas"]["AiTaskProfile"][];
+            diagnostics?: components["schemas"]["AiProfileDiagnostic"][];
+            supportedTaskTypes?: string[];
+        };
+        AiTaskRuleset: {
+            strictness?: string;
+            requiredRuleCodes?: string[];
+            optionalRuleCodes?: string[];
+        };
+        RAiTaskProfileCatalog: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiTaskProfileCatalog"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        AiTaskProfileDetail: {
+            /** Format: int64 */
+            projectId?: number;
+            requestedProfile?: string;
+            profile?: components["schemas"]["AiTaskProfile"];
+            diagnostics?: components["schemas"]["AiProfileDiagnostic"][];
+            supportedProfileIds?: string[];
+            supportedTaskTypes?: string[];
+        };
+        RAiTaskProfileDetail: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiTaskProfileDetail"];
             error?: components["schemas"]["ErrorDetail"];
         };
         AiJobRecordListItem: {
@@ -4633,83 +4830,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RVoid"];
-                };
-            };
-        };
-    };
-    previewRuleUpdate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RuleChangePreviewReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RStandardChangePreview"];
-                };
-            };
-        };
-    };
-    previewRuleToggle: {
-        parameters: {
-            query: {
-                projectId: number;
-                enabled: boolean;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RStandardChangePreview"];
-                };
-            };
-        };
-    };
-    previewFieldUpdate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FieldChangePreviewReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RStandardChangePreview"];
                 };
             };
         };
@@ -5320,6 +5440,107 @@ export interface operations {
             };
         };
     };
+    apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StarterKitApplyReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStarterKitApplyResult"];
+                };
+            };
+        };
+    };
+    previewRuleUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleChangePreviewReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardChangePreview"];
+                };
+            };
+        };
+    };
+    previewRuleToggle: {
+        parameters: {
+            query: {
+                projectId: number;
+                enabled: boolean;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardChangePreview"];
+                };
+            };
+        };
+    };
+    previewFieldUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldChangePreviewReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardChangePreview"];
+                };
+            };
+        };
+    };
     page: {
         parameters: {
             query: {
@@ -5591,7 +5812,7 @@ export interface operations {
             };
         };
     };
-    apply: {
+    apply_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -6276,6 +6497,54 @@ export interface operations {
             };
         };
     };
+    generate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiEvidencePackageReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiEvidencePackage"];
+                };
+            };
+        };
+    };
+    download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiEvidencePackageReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
     list_5: {
         parameters: {
             query: {
@@ -6676,6 +6945,48 @@ export interface operations {
             };
         };
     };
+    listKits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListStarterKitDefinition"];
+                };
+            };
+        };
+    };
+    listInstallations: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListStarterKitInstallationInfo"];
+                };
+            };
+        };
+    };
     getById_2: {
         parameters: {
             query?: never;
@@ -6957,143 +7268,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RRecordDetail"];
-                };
-            };
-        };
-    };
-    listAiTaskProfiles: {
-        parameters: {
-            query?: {
-                projectId?: number;
-                profile?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RAiTaskProfileCatalog"];
-                };
-            };
-        };
-    };
-    getAiTaskProfile: {
-        parameters: {
-            query?: {
-                projectId?: number;
-            };
-            header?: never;
-            path: {
-                profileOrTaskType: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RAiTaskProfileDetail"];
-                };
-            };
-        };
-    };
-    listContracts: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RSchemaRegistryCatalog"];
-                };
-            };
-        };
-    };
-    getContract: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contractId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RSchemaContract"];
-                };
-            };
-        };
-    };
-    generateEvidencePackage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AiEvidencePackageReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RAiEvidencePackage"];
-                };
-            };
-        };
-    };
-    downloadEvidencePackage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AiEvidencePackageReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": string;
                 };
             };
         };
@@ -7527,6 +7701,48 @@ export interface operations {
             };
         };
     };
+    listContracts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RSchemaRegistryCatalog"];
+                };
+            };
+        };
+    };
+    getContract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contractId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RSchemaContract"];
+                };
+            };
+        };
+    };
     page_2: {
         parameters: {
             query: {
@@ -7569,6 +7785,53 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RAuthMe"];
+                };
+            };
+        };
+    };
+    listProfiles: {
+        parameters: {
+            query?: {
+                projectId?: number;
+                profile?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiTaskProfileCatalog"];
+                };
+            };
+        };
+    };
+    getProfile: {
+        parameters: {
+            query?: {
+                projectId?: number;
+            };
+            header?: never;
+            path: {
+                profileOrTaskType: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiTaskProfileDetail"];
                 };
             };
         };
@@ -7698,6 +7961,8 @@ export interface operations {
                 query?: string;
                 status?: string;
                 limit?: number;
+                profileId?: string;
+                taskType?: string;
                 snapshotId?: number;
                 snapshotVersion?: string;
             };
@@ -7726,6 +7991,8 @@ export interface operations {
                 query?: string;
                 status?: string;
                 limit?: number;
+                profileId?: string;
+                taskType?: string;
                 snapshotId?: number;
                 snapshotVersion?: string;
             };
@@ -7754,6 +8021,8 @@ export interface operations {
                 query?: string;
                 status?: string;
                 limit?: number;
+                profileId?: string;
+                taskType?: string;
                 snapshotId?: number;
                 snapshotVersion?: string;
             };
@@ -7782,6 +8051,8 @@ export interface operations {
                 query?: string;
                 status?: string;
                 limit?: number;
+                profileId?: string;
+                taskType?: string;
                 snapshotId?: number;
                 snapshotVersion?: string;
             };
@@ -7810,6 +8081,8 @@ export interface operations {
                 query?: string;
                 status?: string;
                 limit?: number;
+                profileId?: string;
+                taskType?: string;
                 snapshotId?: number;
                 snapshotVersion?: string;
             };
@@ -7876,7 +8149,7 @@ export interface operations {
             };
         };
     };
-    download: {
+    download_1: {
         parameters: {
             query?: never;
             header?: never;
