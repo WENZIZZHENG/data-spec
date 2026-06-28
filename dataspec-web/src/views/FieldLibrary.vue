@@ -576,14 +576,18 @@ import {
   undoFieldChange,
   updateField
 } from '@/api/field'
+import { previewFieldChange } from '@/api/standardChange'
 import { useProjectStore } from '@/stores/project'
 import {
-  criticalFieldChanged,
-  fieldImpactSummaryText,
   impactSeverityTagType,
   impactTypeLabel,
   warningSummaryText
 } from '@/utils/fieldImpactDisplay'
+import {
+  shouldShowStandardChangeConfirm,
+  standardChangeConfirmMessage,
+  standardChangeRiskText
+} from '@/utils/standardChangeDisplay'
 import type {
   Domain,
   Field,
@@ -598,6 +602,7 @@ import type {
   FieldSearchReq,
   FieldSearchSummary,
   FieldSourceDetail,
+  StandardChangePreview,
   StandardChangeLog
 } from '@/types'
 
@@ -1271,44 +1276,37 @@ async function handleSubmit() {
 async function confirmImpactBeforeSave() {
   const projectId = projectStore.currentProjectId
   const field = editingField.value
-  if (!projectId || !field?.id || !criticalFieldChanged(fieldCriticalValue(field), fieldCriticalValue(form))) {
+  if (!projectId || !field?.id) {
     return true
   }
-  let report: FieldImpactReport
+  const payload: FieldReq = {
+    ...form,
+    projectId
+  }
+  let preview: StandardChangePreview
   try {
-    report = await getFieldImpactReport(field.id, projectId)
+    preview = await previewFieldChange(field.id, payload)
   } catch {
-    ElMessage.warning('影响分析暂不可用，已继续保存')
+    ElMessage.warning('标准变更预览暂不可用，已继续保存')
     return true
   }
-  if (!report.editWarnings?.length) {
+  if (!shouldShowStandardChangeConfirm(preview)) {
     return true
   }
-  const warningText = warningSummaryText(report.editWarnings)
-  const summaryText = fieldImpactSummaryText(report.summary)
   try {
     await ElMessageBox.confirm(
-      `${summaryText}。将修改：${warningText}。`,
-      '影响提示',
+      standardChangeConfirmMessage(preview),
+      `标准变更预览：${standardChangeRiskText(preview.riskLevel)}`,
       {
-        type: 'warning',
+        type: preview.riskLevel === 'HIGH' ? 'error' : 'warning',
         confirmButtonText: '继续保存',
         cancelButtonText: '返回编辑'
       }
     )
     return true
   } catch {
+    ElMessage.info('已取消保存')
     return false
-  }
-}
-
-function fieldCriticalValue(field: Field | FieldReq) {
-  return {
-    name: field.name,
-    dataType: field.dataType,
-    status: field.status,
-    codeSetId: field.codeSetId,
-    sensitive: field.sensitive
   }
 }
 

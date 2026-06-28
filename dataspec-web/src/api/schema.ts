@@ -52,6 +52,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/standard-changes/preview/rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewRuleUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-changes/preview/rules/{id}/toggle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewRuleToggle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-changes/preview/fields/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewFieldUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{id}": {
         parameters: {
             query?: never;
@@ -1875,6 +1923,64 @@ export interface components {
             updatedAt?: string;
             isDeleted?: boolean;
         };
+        RuleChangePreviewReq: {
+            /** Format: int64 */
+            projectId?: number;
+            ruleName?: string;
+            severity?: string;
+            enabled?: boolean;
+            paramsJson?: string;
+        };
+        RStandardChangePreview: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardChangePreview"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardChangePreview: {
+            /** Format: int64 */
+            projectId?: number;
+            targetType?: string;
+            /** Format: int64 */
+            targetId?: number;
+            targetName?: string;
+            operation?: string;
+            riskLevel?: string;
+            requiresConfirmation?: boolean;
+            summary?: string;
+            changes?: components["schemas"]["StandardChangePreviewChange"][];
+            impacts?: components["schemas"]["StandardChangePreviewImpact"][];
+            validationCommands?: string[];
+            rollbackHints?: components["schemas"]["StandardChangeRollbackHint"][];
+            currentSnapshot?: components["schemas"]["StandardSnapshotInfo"];
+        };
+        StandardChangePreviewChange: {
+            attribute?: string;
+            beforeValue?: Record<string, never>;
+            afterValue?: Record<string, never>;
+            riskLevel?: string;
+            description?: string;
+        };
+        StandardChangePreviewImpact: {
+            impactType?: string;
+            severity?: string;
+            /** Format: int64 */
+            sourceId?: number;
+            title?: string;
+            /** Format: int32 */
+            count?: number;
+            description?: string;
+            metadata?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        StandardChangeRollbackHint: {
+            type?: string;
+            action?: string;
+            description?: string;
+            targetPath?: string;
+        };
         CreateProjectReq: {
             name: string;
             description?: string;
@@ -1906,6 +2012,32 @@ export interface components {
             name: string;
             displayName?: string;
             dataType: string;
+            /** Format: int32 */
+            length?: number;
+            /** Format: int32 */
+            precisionVal?: number;
+            /** Format: int32 */
+            scaleVal?: number;
+            nullable?: boolean;
+            defaultValue?: string;
+            comment?: string;
+            /** Format: int64 */
+            domainId?: number;
+            tags?: string;
+            aliases?: string;
+            category?: string;
+            /** Format: int64 */
+            codeSetId?: number;
+            sensitive?: boolean;
+            status?: string;
+            exampleValue?: string;
+        };
+        FieldChangePreviewReq: {
+            /** Format: int64 */
+            projectId?: number;
+            name?: string;
+            displayName?: string;
+            dataType?: string;
             /** Format: int32 */
             length?: number;
             /** Format: int32 */
@@ -4501,6 +4633,83 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    previewRuleUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleChangePreviewReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardChangePreview"];
+                };
+            };
+        };
+    };
+    previewRuleToggle: {
+        parameters: {
+            query: {
+                projectId: number;
+                enabled: boolean;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardChangePreview"];
+                };
+            };
+        };
+    };
+    previewFieldUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldChangePreviewReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardChangePreview"];
                 };
             };
         };

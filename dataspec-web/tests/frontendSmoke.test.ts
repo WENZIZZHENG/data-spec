@@ -504,6 +504,7 @@ test('keeps database reverse import and comparison flow wired', () => {
 test('keeps field library filtering, grouping, bulk maintenance, and undo flow wired', () => {
   const view = readSource('src/views/FieldLibrary.vue')
   const api = readSource('src/api/field.ts')
+  const standardChangeApi = readSource('src/api/standardChange.ts')
 
   assertContains(view, [
     'const fieldKeyword = ref',
@@ -520,6 +521,8 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
     'bulkUpdateFields(payload)',
     'listChangeLogs(projectId',
     'undoFieldChange(fieldId, log.id)',
+    'previewFieldChange(field.id, payload)',
+    'standardChangeConfirmMessage(preview)',
     'getFieldImpactReport(field.id, projectStore.currentProjectId)',
     'openBulkDialog',
     'handleUndoChange'
@@ -533,6 +536,12 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
     "request.post<unknown, FieldBulkUpdateResult>('/fields/bulk-update'",
     "request.post<unknown, FieldChangeUndoResult>(`/fields/${id}/undo`"
   ], 'field api')
+
+  assertContains(standardChangeApi, [
+    "request.post<unknown, StandardChangePreview>(`/standard-changes/preview/fields/${id}`",
+    "request.post<unknown, StandardChangePreview>(`/standard-changes/preview/rules/${id}`",
+    "request.post<unknown, StandardChangePreview>(`/standard-changes/preview/rules/${id}/toggle`"
+  ], 'standard change api')
 })
 
 test('keeps DDL generation and AI Context export flows project-scoped', () => {
@@ -592,6 +601,9 @@ test('keeps rule baseline suite workflow wired on rule config page', () => {
     'applyRuleBaseline({',
     'exportRuleBaseline(projectId)',
     'importRuleBaseline({',
+    'previewRuleChange(ruleId,',
+    'previewRuleToggle(rule.id, projectId, enabled)',
+    'standardChangeConfirmMessage(preview)',
     'overwriteBaseline',
     'baselineResultSummary',
     '请先选择项目'

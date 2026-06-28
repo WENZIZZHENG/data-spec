@@ -28,7 +28,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 标准快照，支持为当前项目字段、枚举和规则生成版本号、内容 hash 和可追溯 payload。
 - Excel `.xlsx` 模板下载、字段/代码集导出、导入预览和确认导入。
 - 项目备份恢复，支持导出项目标准资产 JSON 包、恢复 dry-run、冲突预览、确认恢复和恢复摘要记录。
-- 标准变更日志，记录字段、代码集、规则的新增、修改、删除、启停 before/after 和操作者；字段库可基于最近字段变更执行确认回退。
+- 标准变更日志和 What-if 预览，记录字段、代码集、规则的新增、修改、删除、启停 before/after 和操作者；字段/规则保存前可预览 diff、影响、验证命令、当前快照和回退提示，字段库可基于最近字段变更执行确认回退。
 
 ### SQL 规范闭环
 
@@ -450,7 +450,7 @@ curl "http://localhost:8090/api/project-backups/restore/records?projectId=1"
 
 项目活动时间线会按当前项目聚合字段变更、标准快照、反向导入批次、SQL 检查、AI job/DDL 记录和 API token 最近使用摘要，支持按动作类型筛选并跳转到相关详情页。活动 metadata 只返回安全摘要，不包含 SQL 原文、token hash/明文、数据库密码或连接串；token 使用摘要仅对全项目身份展示。
 
-标准变更日志会记录字段、代码集/枚举值、规则配置的创建、更新、删除、启停操作，保留 before/after JSON 和操作者便于追溯。
+标准变更日志会记录字段、代码集/枚举值、规则配置的创建、更新、删除、启停操作，保留 before/after JSON 和操作者便于追溯。字段和规则配置支持保存前 What-if 预览：后端返回属性 diff、风险等级、影响项、建议验证命令、当前标准快照和回退提示；前端在字段编辑、规则编辑和规则启停前展示确认摘要。第一版只做非阻断预览和回退辅助，不做审批流，不自动回滚数据库，也不自动创建快照。
 
 ## 安全基线
 
@@ -672,7 +672,7 @@ docker compose -f docker-compose.local.yml config
 npx openspec validate --all
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、Prompt 模板 registry/eval、AI contract fixtures、AI evidence package、AI 可读错误诊断、幂等写保护和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、Prompt golden 输出、反向导入 metadata 预览摘要、Schema Registry、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览、执行证据包稳定字段与脱敏、写入重复 key/任务锁冲突/AI job 去重，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、统一请求状态、SQL 校验 fixedSql/记录/evidence 入口、数据库反向导入、字段库检索命中原因、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告 evidence 入口、AI 回放、AI 反馈、AI 批量任务 evidence 入口和项目备份恢复的核心页面/API 耦合，以及关键按钮、空状态和失败重试入口；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约、Prompt fixture 脚本和本地 smoke 脚本，包括 contract list/show/check、evidence export、schema-registry resource、workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容、Prompt golden marker、Idempotency-Key 透传、API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传，以及本地启动包的参数解析、输出结构、敏感信息脱敏和 compose/Vite 代理契约。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、Prompt 模板 registry/eval、AI contract fixtures、AI evidence package、AI 可读错误诊断、幂等写保护、标准变更 What-if 预览和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、Prompt golden 输出、反向导入 metadata 预览摘要、Schema Registry、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览、执行证据包稳定字段与脱敏、写入重复 key/任务锁冲突/AI job 去重、字段/规则变更预览风险与回退提示，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、统一请求状态、SQL 校验 fixedSql/记录/evidence 入口、数据库反向导入、字段库检索命中原因、标准变更预览确认、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告 evidence 入口、AI 回放、AI 反馈、AI 批量任务 evidence 入口和项目备份恢复的核心页面/API 耦合，以及关键按钮、空状态和失败重试入口；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约、Prompt fixture 脚本和本地 smoke 脚本，包括 contract list/show/check、evidence export、schema-registry resource、workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容、Prompt golden marker、Idempotency-Key 透传、API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传，以及本地启动包的参数解析、输出结构、敏感信息脱敏和 compose/Vite 代理契约。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
 
 ## 性能基线
 
@@ -804,6 +804,7 @@ data-spec/
 - [x] AI 批量任务交付包，支持后端保存 SQL lint batch run、CLI 写出同构 package、前端查看详情并下载 JSON
 - [x] AI 执行证据包，支持 SQL_CHECK、AI_JOB、AI_BATCH_RUN 和 COVERAGE_REPORT 生成 JSON/zip，前端复制/下载，CLI/MCP 机器读取，并默认脱敏
 - [x] AI/CLI 并发写入幂等与任务锁第一版，覆盖标准快照、反向导入确认、AI 批量 SQL lint、项目恢复 apply、AI job 回放记录和 CLI Idempotency-Key 透传
+- [x] 标准变更 What-if 预览与回滚辅助第一版，覆盖字段编辑、规则编辑、规则启停的 diff、影响、验证命令、当前快照和回退提示
 - [x] Markdown/HTML 数据字典增强和 Mermaid ERD 输出
 - [x] Excel `.xlsx` 字段/代码集导入导出与 dry-run 明细预览
 - [x] 项目备份恢复，支持项目标准资产 JSON 导出、恢复 dry-run、冲突预览、确认恢复和恢复摘要记录

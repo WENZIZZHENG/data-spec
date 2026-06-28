@@ -274,6 +274,7 @@ import {
   toggleRuleConfig,
   updateRuleConfig
 } from '@/api/rule'
+import { previewRuleChange, previewRuleToggle } from '@/api/standardChange'
 import {
   applyRuleBaseline,
   exportRuleBaseline,
@@ -290,12 +291,18 @@ import {
   summarizeRuleParams,
   type RuleParamsForm
 } from '@/utils/ruleParams'
+import {
+  shouldShowStandardChangeConfirm,
+  standardChangeConfirmMessage,
+  standardChangeRiskText
+} from '@/utils/standardChangeDisplay'
 import type {
   RuleBaselineInfo,
   RuleBaselinePackage,
   RuleBaselineTemplate,
   RuleConfig,
-  RuleConfigReq
+  RuleConfigReq,
+  StandardChangePreview
 } from '@/types'
 
 interface AvailableRule {
@@ -544,15 +551,18 @@ async function handleSubmit() {
     return
   }
   await formRef.value?.validate()
+  const payload: RuleConfigReq = {
+    ...form,
+    projectId: projectStore.currentProjectId,
+    paramsJson: isStructuredRuleCode.value
+      ? buildRuleParamsJson(form.ruleCode, paramsForm)
+      : form.paramsJson?.trim() || undefined
+  }
+  if (!(await confirmRuleChangeBeforeSave(payload))) {
+    return
+  }
   submitting.value = true
   try {
-    const payload: RuleConfigReq = {
-      ...form,
-      projectId: projectStore.currentProjectId,
-      paramsJson: isStructuredRuleCode.value
-        ? buildRuleParamsJson(form.ruleCode, paramsForm)
-        : form.paramsJson?.trim() || undefined
-    }
     if (editingRule.value?.id) {
       await updateRuleConfig(editingRule.value.id, payload)
       ElMessage.success('规则已更新')
@@ -567,13 +577,73 @@ async function handleSubmit() {
   }
 }
 
+async function confirmRuleChangeBeforeSave(payload: RuleConfigReq) {
+  const ruleId = editingRule.value?.id
+  if (!ruleId) {
+    return true
+  }
+  let preview: StandardChangePreview
+  try {
+    preview = await previewRuleChange(ruleId, {
+      projectId: payload.projectId,
+      ruleName: payload.ruleName,
+      severity: payload.severity,
+      enabled: payload.enabled,
+      paramsJson: payload.paramsJson
+    })
+  } catch {
+    ElMessage.warning('标准变更预览暂不可用，已继续保存')
+    return true
+  }
+  return confirmStandardChangePreview(preview)
+}
+
 async function handleToggle(rule: RuleConfig, enabled: boolean) {
   if (!rule.id) {
+    return
+  }
+  if (!(await confirmRuleToggleBeforeSave(rule, enabled))) {
     return
   }
   await toggleRuleConfig(rule.id, enabled)
   ElMessage.success(enabled ? '规则已启用' : '规则已停用')
   await loadRuleConfigs()
+}
+
+async function confirmRuleToggleBeforeSave(rule: RuleConfig, enabled: boolean) {
+  const projectId = projectStore.currentProjectId ?? rule.projectId
+  if (!rule.id || !projectId) {
+    return true
+  }
+  let preview: StandardChangePreview
+  try {
+    preview = await previewRuleToggle(rule.id, projectId, enabled)
+  } catch {
+    ElMessage.warning('标准变更预览暂不可用，已继续执行')
+    return true
+  }
+  return confirmStandardChangePreview(preview)
+}
+
+async function confirmStandardChangePreview(preview: StandardChangePreview) {
+  if (!shouldShowStandardChangeConfirm(preview)) {
+    return true
+  }
+  try {
+    await ElMessageBox.confirm(
+      standardChangeConfirmMessage(preview),
+      `标准变更预览：${standardChangeRiskText(preview.riskLevel)}`,
+      {
+        type: preview.riskLevel === 'HIGH' ? 'error' : 'warning',
+        confirmButtonText: '继续保存',
+        cancelButtonText: '返回'
+      }
+    )
+    return true
+  } catch {
+    ElMessage.info('已取消变更')
+    return false
+  }
 }
 
 function handleToggleChange(rule: RuleConfig, value: string | number | boolean) {

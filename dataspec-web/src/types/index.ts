@@ -226,6 +226,61 @@ export interface FieldImpactReport {
 
 export type RuleConfig = Schemas['RuleConfig']
 export type RuleConfigReq = Schemas['RuleConfigReq']
+
+export type StandardChangeRiskLevel = 'INFO' | 'WARNING' | 'HIGH'
+export type StandardChangeTargetType = 'field' | 'rule' | string
+
+export interface StandardChangePreviewChange {
+  attribute?: string
+  beforeValue?: unknown
+  afterValue?: unknown
+  riskLevel?: StandardChangeRiskLevel
+  description?: string
+}
+
+export interface StandardChangePreviewImpact {
+  impactType?: string
+  severity?: StandardChangeRiskLevel | string
+  sourceId?: number
+  title?: string
+  count?: number
+  description?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface StandardChangeRollbackHint {
+  type?: string
+  action?: string
+  description?: string
+  targetPath?: string
+}
+
+export interface StandardChangePreview {
+  projectId?: number
+  targetType?: StandardChangeTargetType
+  targetId?: number
+  targetName?: string
+  operation?: string
+  riskLevel?: StandardChangeRiskLevel
+  requiresConfirmation?: boolean
+  summary?: string
+  changes?: StandardChangePreviewChange[]
+  impacts?: StandardChangePreviewImpact[]
+  validationCommands?: string[]
+  rollbackHints?: StandardChangeRollbackHint[]
+  currentSnapshot?: StandardSnapshotInfo
+}
+
+export type FieldChangePreviewReq = FieldReq
+
+export interface RuleChangePreviewReq {
+  projectId?: number
+  ruleName?: string
+  severity?: string
+  enabled?: boolean
+  paramsJson?: string
+}
+
 export type RuleBaselineRule = Schemas['RuleBaselineRule']
 export type RuleBaselineTemplate = Schemas['RuleBaselineTemplate']
 export type RuleBaselineInfo = Schemas['RuleBaselineInfo']
