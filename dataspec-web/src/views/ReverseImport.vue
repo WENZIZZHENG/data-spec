@@ -6,6 +6,10 @@
         <p class="page-subtitle">{{ projectStore.currentProjectName || '未选择项目' }}</p>
       </div>
       <div class="header-actions">
+        <el-button plain :disabled="!hasProject" @click="handleCopyReverseImportLink">
+          <el-icon><Link /></el-icon>
+          复制链接
+        </el-button>
         <el-button type="primary" :disabled="!canGeneratePreview" :loading="previewLoading" @click="handleGeneratePreview">
           <el-icon><View /></el-icon>
           生成预览
@@ -226,6 +230,16 @@
           </section>
         </el-tab-pane>
       </el-tabs>
+
+      <div v-if="urlSourceBatchId" class="source-link-panel">
+        <div>
+          <strong>来源批次 #{{ urlSourceBatchId }}</strong>
+          <span>当前链接定位到一次反向导入来源，可跳转字段库查看该批次字段。</span>
+        </div>
+        <el-button size="small" type="primary" plain @click="goToFieldLibraryBySourceBatch">
+          查看批次字段
+        </el-button>
+      </div>
 
       <el-dialog v-model="presetDialogVisible" title="保存连接预设" width="460px">
         <el-form label-width="82px">
@@ -483,9 +497,9 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
-import { Check, Connection, Refresh, Search, Upload, View } from '@element-plus/icons-vue'
+import { Check, Connection, Link, Refresh, Search, Upload, View } from '@element-plus/icons-vue'
 import {
   createDatabaseConnectionPreset,
   listDatabaseConnectionPresets
@@ -530,6 +544,7 @@ import {
   securityRiskTagType,
   writeRiskLabel
 } from '@/utils/databaseSecurityDiagnostic'
+import { copyRouteUrl, readEnumQuery, readPositiveIntQuery, readStringQuery, replaceRouteQuery } from '@/utils/urlState'
 import type {
   DatabaseConnectionReq,
   DatabaseConnectionPreset,
@@ -554,6 +569,7 @@ type CompareTableGroup = Omit<ReverseImportTableDiff, 'fieldDiffs'> & {
 }
 
 const projectStore = useProjectStore()
+const route = useRoute()
 const router = useRouter()
 const activeMode = ref<ReverseImportMode>('sql')
 const sqlText = ref('')
@@ -721,12 +737,16 @@ const compareGroups = computed<CompareTableGroup[]>(() =>
     }))
     .filter((group) => group.fieldDiffs.length > 0)
 )
+const urlSourceBatchId = computed(() =>
+  readPositiveIntQuery(route.query, 'sourceBatchId') ?? readPositiveIntQuery(route.query, 'batchId')
+)
 
 onMounted(async () => {
   if (!projectStore.currentProjectId && projectStore.projects.length === 0) {
     await projectStore.loadProjects()
   }
   applySavedReverseImportMemory()
+  applyReverseImportUrlState()
   await loadPresets()
 })
 
@@ -741,6 +761,7 @@ watch(
     presets.value = []
     resetConnectionStatus()
     applySavedReverseImportMemory()
+    applyReverseImportUrlState()
     void loadPresets()
   }
 )
@@ -802,6 +823,18 @@ watch(
     persistReverseImportMemory()
   }
 )
+
+watch(
+  () => [route.query.table, route.query.status, route.query.sourceBatchId, route.query.batchId],
+  () => applyReverseImportUrlState()
+)
+
+watch([tableSearch, compareStatusFilter], () => {
+  if (restoringMemory.value) {
+    return
+  }
+  void syncReverseImportUrlState()
+})
 
 function resetResults() {
   preview.value = null
@@ -987,7 +1020,7 @@ async function handleGenerateCompare() {
   try {
     compareResult.value = await compareDatabaseReverseImport(databaseRequest())
     importResult.value = null
-    compareStatusFilter.value = 'ALL'
+    applyReverseImportUrlState()
   } finally {
     compareLoading.value = false
   }
@@ -1182,8 +1215,68 @@ function changeText(change: ReverseImportFieldChange) {
 function goToFieldLibrary() {
   router.push({
     path: '/fields',
-    query: fieldLibraryQueryForImportResult(importResult.value?.importedFields ?? [])
+    query: {
+      projectId: projectStore.currentProjectId ?? undefined,
+      ...fieldLibraryQueryForImportResult(importResult.value?.importedFields ?? [])
+    }
   })
+}
+
+function goToFieldLibraryBySourceBatch() {
+  router.push({
+    path: '/fields',
+    query: {
+      projectId: projectStore.currentProjectId ?? undefined,
+      sourceBatchId: urlSourceBatchId.value ?? undefined
+    }
+  })
+}
+
+function applyReverseImportUrlState() {
+  if (hasRouteQuery('table')) {
+    const table = readStringQuery(route.query, 'table')
+    if (tableSearch.value !== table) {
+      tableSearch.value = table
+    }
+  }
+  if (hasRouteQuery('status')) {
+    const nextStatus = readEnumQuery(route.query, 'status', compareStatusOptions.map((item) => item.value))
+    if (!nextStatus) {
+      ElMessage.warning('链接中的反向导入状态筛选无效，已恢复为全部')
+      compareStatusFilter.value = 'ALL'
+      void syncReverseImportUrlState({ status: null })
+    } else {
+      compareStatusFilter.value = nextStatus
+    }
+  }
+  if (route.query.batchId && urlSourceBatchId.value) {
+    void syncReverseImportUrlState({ sourceBatchId: urlSourceBatchId.value, batchId: null })
+  }
+}
+
+function hasRouteQuery(key: string) {
+  return Object.prototype.hasOwnProperty.call(route.query, key)
+}
+
+async function syncReverseImportUrlState(patch: Record<string, string | number | null> = {}) {
+  await replaceRouteQuery(router, route, {
+    projectId: projectStore.currentProjectId,
+    table: tableSearch.value.trim() || null,
+    status: compareStatusFilter.value !== 'ALL' ? compareStatusFilter.value : null,
+    sourceBatchId: urlSourceBatchId.value,
+    batchId: null,
+    ...patch
+  })
+}
+
+async function handleCopyReverseImportLink() {
+  try {
+    await syncReverseImportUrlState()
+    await copyRouteUrl(route, navigator.clipboard)
+    ElMessage.success('已复制链接')
+  } catch {
+    ElMessage.error('复制失败，请手动复制浏览器地址')
+  }
 }
 
 function applySavedReverseImportMemory() {
@@ -1365,6 +1458,25 @@ function browserStorage() {
 .result-section {
   border-top: 1px solid #ebeef5;
   margin-top: 16px;
+}
+
+.source-link-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d9ecff;
+  border-radius: 4px;
+  background: #f4faff;
+  color: #1f2937;
+}
+
+.source-link-panel span {
+  margin-left: 8px;
+  color: #606266;
+  font-size: 13px;
 }
 
 .dialect-panel {

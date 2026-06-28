@@ -322,6 +322,13 @@
         <div class="record-evidence-actions">
           <el-button
             size="small"
+            @click="handleCopyRecordLink"
+          >
+            <el-icon><CopyDocument /></el-icon>
+            复制链接
+          </el-button>
+          <el-button
+            size="small"
             :loading="evidenceLoading"
             @click="handleCopyRecordEvidence"
           >
@@ -459,6 +466,7 @@ import {
   diagnosticTagType,
   dialectSummary
 } from '@/utils/dialectDiagnostics'
+import { copyRouteUrl, readPositiveIntQuery, replaceRouteQuery } from '@/utils/urlState'
 import type {
   AiTaskProfile,
   FixChange,
@@ -550,6 +558,7 @@ const recordDiffLines = computed(() => {
 const recordLoading = computed(() => recordState.loading.value)
 
 onMounted(() => {
+  applyRecordPageFromRoute()
   if (editorContainer.value) {
     editor = monaco.editor.create(editorContainer.value, {
       value: initialSql(),
@@ -580,11 +589,33 @@ onBeforeUnmount(() => {
 watch(
   () => projectStore.currentProjectId,
   () => {
-    recordCurrent.value = 1
+    applyRecordPageFromRoute()
     void loadRecords()
     void loadAiProfiles()
   }
 )
+
+watch(
+  () => route.query.page,
+  () => {
+    applyRecordPageFromRoute()
+    void loadRecords()
+  }
+)
+
+watch(
+  () => route.query.recordId,
+  () => {
+    void openRecordFromRoute()
+  }
+)
+
+watch(recordDialogVisible, (visible) => {
+  if (!visible && route.query.recordId) {
+    activeRecord.value = null
+    void syncRecordUrlState({ recordId: null })
+  }
+})
 
 watch(
   () => route.query.demo,
@@ -616,6 +647,7 @@ async function handleLint() {
     }
     lintResult.value = await lintSql(request)
     recordCurrent.value = 1
+    await syncRecordUrlState({ recordId: null })
     await loadRecords()
   } finally {
     linting.value = false
@@ -638,6 +670,7 @@ async function loadRecords() {
       recordTotal.value = page.total ?? 0
       recordCurrent.value = page.current ?? recordCurrent.value
       recordSize.value = page.size ?? recordSize.value
+      await openRecordFromRoute()
       return page
     })
   } catch {
@@ -730,9 +763,58 @@ async function handleViewRecord(id?: number) {
   try {
     activeRecord.value = await getLintRecord(id)
     recordDialogVisible.value = true
+    await syncRecordUrlState({ recordId: id })
+  } catch {
+    ElMessage.warning('链接中的检查记录不存在或不可访问')
+    await syncRecordUrlState({ recordId: null })
   } finally {
     recordDetailLoading.value = false
     loadingRecordId.value = null
+  }
+}
+
+async function openRecordFromRoute() {
+  const recordId = readPositiveIntQuery(route.query, 'recordId')
+  if (!recordId) {
+    if (recordDialogVisible.value) {
+      recordDialogVisible.value = false
+      activeRecord.value = null
+    }
+    return
+  }
+  if (!projectStore.currentProjectId || loadingRecordId.value === recordId) {
+    return
+  }
+  if (recordDialogVisible.value && activeRecord.value?.record?.id === recordId) {
+    return
+  }
+  historyActiveNames.value = ['records']
+  await handleViewRecord(recordId)
+}
+
+function applyRecordPageFromRoute() {
+  recordCurrent.value = readPositiveIntQuery(route.query, 'page') ?? 1
+}
+
+async function syncRecordUrlState(patch: Record<string, number | null> = {}) {
+  await replaceRouteQuery(router, route, {
+    projectId: projectStore.currentProjectId,
+    page: recordCurrent.value > 1 ? recordCurrent.value : null,
+    ...patch
+  })
+}
+
+async function handleCopyRecordLink() {
+  const recordId = activeRecord.value?.record?.id
+  if (!recordId) {
+    return
+  }
+  try {
+    await syncRecordUrlState({ recordId })
+    await copyRouteUrl(route, navigator.clipboard)
+    ElMessage.success('已复制链接')
+  } catch {
+    ElMessage.error('复制失败，请手动复制浏览器地址')
   }
 }
 
@@ -797,7 +879,7 @@ function saveBlob(blob: Blob, filename: string) {
 
 function handleRecordPageChange(page: number) {
   recordCurrent.value = page
-  void loadRecords()
+  void syncRecordUrlState()
 }
 
 function goProjects() {

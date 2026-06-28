@@ -60,7 +60,7 @@
           :page-sizes="[10, 20, 50]"
           layout="total, sizes, prev, pager, next"
           :total="total"
-          @current-change="loadJobs"
+          @current-change="handlePageChange"
           @size-change="handleSizeChange"
         />
       </div>
@@ -90,6 +90,7 @@
           </div>
 
           <div class="detail-actions">
+            <el-button size="small" @click="copyReplayLink">复制链接</el-button>
             <el-button size="small" @click="copyText(activeDetail.replayCommand || '')">复制命令</el-button>
             <el-button size="small" type="primary" @click="copyText(replayJson)">复制 JSON</el-button>
           </div>
@@ -117,6 +118,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 import { getAiJobDetail, listAiJobs } from '@/api/aiJob'
 import { useProjectStore } from '@/stores/project'
 import {
@@ -125,6 +127,7 @@ import {
   buildReplayJson,
   formatAiJobTime
 } from '@/utils/aiReplayDisplay'
+import { copyRouteUrl, readEnumQuery, readPositiveIntQuery, replaceRouteQuery } from '@/utils/urlState'
 import type { AiJobRecord, AiJobRecordDetail, AiJobRecordListItem } from '@/types'
 
 interface LintSummary {
@@ -134,6 +137,8 @@ interface LintSummary {
 }
 
 const projectStore = useProjectStore()
+const route = useRoute()
+const router = useRouter()
 const records = ref<AiJobRecordListItem[]>([])
 const total = ref(0)
 const current = ref(1)
@@ -160,18 +165,41 @@ const lintSummary = computed(
 )
 
 onMounted(() => {
+  applyReplayUrlState()
   loadJobs()
 })
 
 watch(
   () => projectStore.currentProjectId,
   () => {
-    current.value = 1
+    applyReplayUrlState()
     activeDetail.value = null
     detailVisible.value = false
     loadJobs()
   }
 )
+
+watch(
+  () => [route.query.jobType, route.query.page, route.query.size],
+  () => {
+    applyReplayUrlState()
+    loadJobs()
+  }
+)
+
+watch(
+  () => route.query.aiJobId,
+  () => {
+    void openDetailFromRoute()
+  }
+)
+
+watch(detailVisible, (visible) => {
+  if (!visible && route.query.aiJobId) {
+    activeDetail.value = null
+    void syncReplayUrlState({ aiJobId: null })
+  }
+})
 
 async function loadJobs() {
   if (!projectStore.currentProjectId) {
@@ -184,6 +212,7 @@ async function loadJobs() {
     const page = await listAiJobs(projectStore.currentProjectId, current.value, size.value, jobTypeFilter.value)
     records.value = page.records ?? []
     total.value = page.total ?? 0
+    await openDetailFromRoute()
   } finally {
     loading.value = false
   }
@@ -198,8 +227,11 @@ async function openDetail(id?: number) {
   detailLoading.value = true
   try {
     activeDetail.value = await getAiJobDetail(id)
+    await syncReplayUrlState({ aiJobId: id })
   } catch {
+    ElMessage.warning('链接中的 AI 回放记录不存在或不可访问')
     detailVisible.value = false
+    await syncReplayUrlState({ aiJobId: null })
   } finally {
     detailLoading.value = false
   }
@@ -207,12 +239,69 @@ async function openDetail(id?: number) {
 
 function handleFilterChange() {
   current.value = 1
-  loadJobs()
+  void syncReplayUrlState()
 }
 
 function handleSizeChange() {
   current.value = 1
-  loadJobs()
+  void syncReplayUrlState()
+}
+
+function handlePageChange() {
+  void syncReplayUrlState()
+}
+
+async function openDetailFromRoute() {
+  const aiJobId = readPositiveIntQuery(route.query, 'aiJobId')
+  if (!aiJobId) {
+    if (detailVisible.value) {
+      detailVisible.value = false
+      activeDetail.value = null
+    }
+    return
+  }
+  if (!projectStore.currentProjectId || detailLoading.value) {
+    return
+  }
+  if (detailVisible.value && activeRecord.value?.id === aiJobId) {
+    return
+  }
+  await openDetail(aiJobId)
+}
+
+function applyReplayUrlState() {
+  current.value = readPositiveIntQuery(route.query, 'page') ?? 1
+  size.value = readPositiveIntQuery(route.query, 'size') ?? 10
+  const jobType = readEnumQuery(route.query, 'jobType', jobTypeOptions.map((item) => item.value))
+  if (route.query.jobType && !jobType) {
+    ElMessage.warning('链接中的 AI 回放类型筛选无效，已恢复为全部')
+    void syncReplayUrlState({ jobType: null })
+  }
+  jobTypeFilter.value = jobType ?? ''
+}
+
+async function syncReplayUrlState(patch: Record<string, string | number | null> = {}) {
+  await replaceRouteQuery(router, route, {
+    projectId: projectStore.currentProjectId,
+    jobType: jobTypeFilter.value || null,
+    page: current.value > 1 ? current.value : null,
+    size: size.value !== 10 ? size.value : null,
+    ...patch
+  })
+}
+
+async function copyReplayLink() {
+  const aiJobId = activeRecord.value?.id
+  if (!aiJobId) {
+    return
+  }
+  try {
+    await syncReplayUrlState({ aiJobId })
+    await copyRouteUrl(route, navigator.clipboard)
+    ElMessage.success('已复制链接')
+  } catch {
+    ElMessage.error('复制失败，请手动复制浏览器地址')
+  }
 }
 
 function snapshotText(record?: AiJobRecord | AiJobRecordListItem) {

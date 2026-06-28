@@ -36,6 +36,10 @@
           <el-button :disabled="selectedFields.length === 0" @click="openBatchDialog">
             批量归组
           </el-button>
+          <el-button plain @click="handleCopyFieldLink">
+            <el-icon><Link /></el-icon>
+            复制链接
+          </el-button>
           <el-button type="primary" plain :disabled="selectedFields.length === 0" @click="openBulkDialog">
             批量维护
           </el-button>
@@ -556,9 +560,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Link, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { listChangeLogs } from '@/api/changeLog'
 import { listDomains } from '@/api/domain'
 import {
@@ -588,6 +592,11 @@ import {
   standardChangeConfirmMessage,
   standardChangeRiskText
 } from '@/utils/standardChangeDisplay'
+import {
+  copyRouteUrl,
+  readPositiveIntQuery,
+  replaceRouteQuery
+} from '@/utils/urlState'
 import type {
   Domain,
   Field,
@@ -608,6 +617,7 @@ import type {
 
 const projectStore = useProjectStore()
 const route = useRoute()
+const router = useRouter()
 const fields = ref<Field[]>([])
 const groupSummary = ref<FieldGroupSummary | null>(null)
 const domains = ref<Domain[]>([])
@@ -615,6 +625,7 @@ const fieldKeyword = ref(routeKeyword(route.query.keyword))
 const fieldSearchItems = ref<FieldSearchItem[]>([])
 const fieldSearchSummary = ref<FieldSearchSummary | null>(null)
 const fieldSearchNextActions = ref<string[]>([])
+const sourceBatchIdFilter = computed(() => readPositiveIntQuery(route.query, 'sourceBatchId'))
 const loading = ref(false)
 const submitting = ref(false)
 const batchSubmitting = ref(false)
@@ -739,7 +750,7 @@ const groupOptions = computed(() => [
   }))
 ])
 const hasFieldSearchConditions = computed(() =>
-  Boolean(fieldKeyword.value.trim()) || isSearchableGroupKey(activeGroupKey.value)
+  Boolean(fieldKeyword.value.trim()) || isSearchableGroupKey(activeGroupKey.value) || Boolean(sourceBatchIdFilter.value)
 )
 const fieldSearchHints = computed(() => fieldSearchSummary.value?.hints?.filter(Boolean) ?? [])
 const fieldSearchItemByFieldId = computed(() => {
@@ -809,7 +820,15 @@ watch(
 watch([fieldKeyword, activeGroupKey], () => {
   pagination.current = 1
   selectedFields.value = []
+  void syncFieldUrlState({ fieldId: null })
   void loadFields()
+})
+
+watch(dialogVisible, (visible) => {
+  if (!visible && route.query.fieldId) {
+    openedRouteFieldId.value = null
+    void syncFieldUrlState({ fieldId: null })
+  }
 })
 
 watch(bulkForm, () => {
@@ -821,6 +840,15 @@ watch(
   () => {
     openedRouteFieldId.value = null
     void openFieldFromRoute()
+  }
+)
+
+watch(
+  () => route.query.sourceBatchId,
+  () => {
+    pagination.current = 1
+    selectedFields.value = []
+    void loadFields()
   }
 )
 
@@ -891,7 +919,10 @@ function buildFieldSearchRequest(projectId: number): FieldSearchReq | null {
   if (groupType === 'tag' && groupKey) {
     request.tag = groupKey
   }
-  return request.query || request.category || request.tag ? request : null
+  if (sourceBatchIdFilter.value) {
+    request.sourceBatchId = sourceBatchIdFilter.value
+  }
+  return request.query || request.category || request.tag || request.sourceBatchId ? request : null
 }
 
 function handleSizeChange(size: number) {
@@ -1122,12 +1153,19 @@ function openEditDialog(field: Field) {
   editingField.value = field
   resetForm(field)
   dialogVisible.value = true
+  if (field.id) {
+    void syncFieldUrlState({ fieldId: field.id })
+  }
 }
 
 async function openFieldFromRoute() {
-  const fieldId = routeFieldId(route.query.fieldId)
+  const fieldId = routeFieldId()
   const projectId = projectStore.currentProjectId
-  if (!fieldId || !projectId || openedRouteFieldId.value === fieldId) {
+  if (!fieldId) {
+    openedRouteFieldId.value = null
+    return
+  }
+  if (!projectId || openedRouteFieldId.value === fieldId) {
     return
   }
   let field = fields.value.find((item) => item.id === fieldId)
@@ -1135,14 +1173,36 @@ async function openFieldFromRoute() {
     try {
       field = await getField(fieldId)
     } catch {
+      ElMessage.warning('链接中的字段不存在或不可访问')
+      void syncFieldUrlState({ fieldId: null })
       return
     }
   }
   if (field?.projectId !== projectId) {
+    ElMessage.warning('链接中的字段不属于当前项目')
+    void syncFieldUrlState({ fieldId: null })
     return
   }
   openedRouteFieldId.value = fieldId
   openEditDialog(field)
+}
+
+async function syncFieldUrlState(patch: Record<string, string | number | null> = {}) {
+  await replaceRouteQuery(router, route, {
+    projectId: projectStore.currentProjectId,
+    keyword: fieldKeyword.value.trim() || null,
+    ...patch
+  })
+}
+
+async function handleCopyFieldLink() {
+  try {
+    await syncFieldUrlState()
+    await copyRouteUrl(route, navigator.clipboard)
+    ElMessage.success('已复制链接')
+  } catch {
+    ElMessage.error('复制失败，请手动复制浏览器地址')
+  }
 }
 
 async function openSourceDialog(field: Field) {
@@ -1589,18 +1649,18 @@ function formatDate(value?: string) {
 
 function routeKeyword(value: unknown) {
   if (Array.isArray(value)) {
-    return value[0] ?? ''
+    return typeof value[0] === 'string' ? value[0].trim() : ''
   }
-  return typeof value === 'string' ? value : ''
+  return typeof value === 'string' ? value.trim() : ''
 }
 
-function routeFieldId(value: unknown) {
-  const rawValue = Array.isArray(value) ? value[0] : value
-  if (typeof rawValue !== 'string' || rawValue.trim() === '') {
-    return null
+function routeFieldId() {
+  const fieldId = readPositiveIntQuery(route.query, 'fieldId')
+  if (route.query.fieldId && !fieldId) {
+    ElMessage.warning('链接中的字段 ID 无效，已清理')
+    void syncFieldUrlState({ fieldId: null })
   }
-  const id = Number(rawValue)
-  return Number.isInteger(id) && id > 0 ? id : null
+  return fieldId
 }
 </script>
 

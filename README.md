@@ -49,6 +49,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - Markdown/HTML 数据字典，包含概览统计、字段与数据域关系、枚举、模板、个人版字段元数据和 Mermaid 关系图。
 - 个人工作台，展示任务入口、最近任务、字段数、代码集数、规则数、检查数、字段命中率、最近检查、问题趋势和项目活动时间线。
 - 统一前端数据状态，Dashboard、AI 批量任务、覆盖率报告和 SQL 校验记录区已接入一致的项目缺失、空数据、请求失败和重试入口。
+- 前端可复现操作链接，字段库、SQL 检查记录、AI 回放、覆盖率报告和反向导入支持把项目、筛选条件和详情 ID 写入安全 query 并复制链接；不会把 SQL 原文、数据库连接信息、token 或密码写入 URL。
 
 ### AI 与自动化
 
@@ -350,9 +351,9 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 
 ## SQL 校验记录与反向导入
 
-`/api/lint` 会返回 lint 结果、结构化修复建议、`fixedSql`、`fixedSqlDiff`、`fixPolicy`、`fixChanges`、`fixSummary` 和 `dialectDiagnostics`，并保存 SQL 检查记录。`fixPolicy` 是请求级策略，支持 `GENERATE`、`DRY_RUN`、`DISABLED` 和最高风险等级；dry-run 只表示预览候选 SQL，不会写回业务仓库，应用前仍需人工确认 diff、风险和方言诊断。方言诊断第一版支持 PostgreSQL/MySQL：SQL 文本会根据 `COMMENT ON`、反引号、`AUTO_INCREMENT`、`ENGINE`、`DEFAULT CHARSET`、inline `COMMENT` 等特征做保守识别；混合或未知方言会返回稳定 code 与 nextAction，不会被静默标成已验证。前端 SQL 校验页支持查看修正 SQL、复制、修复策略摘要、变更风险、当前方言/降级提示、最近检查记录分页和详情；记录详情会展示当时标准、当前标准、回放状态、历史 Context 导出命令和下一步建议。无快照的旧记录显示为 `unversioned`，仍保留原始 SQL 与问题列表。
+`/api/lint` 会返回 lint 结果、结构化修复建议、`fixedSql`、`fixedSqlDiff`、`fixPolicy`、`fixChanges`、`fixSummary` 和 `dialectDiagnostics`，并保存 SQL 检查记录。`fixPolicy` 是请求级策略，支持 `GENERATE`、`DRY_RUN`、`DISABLED` 和最高风险等级；dry-run 只表示预览候选 SQL，不会写回业务仓库，应用前仍需人工确认 diff、风险和方言诊断。方言诊断第一版支持 PostgreSQL/MySQL：SQL 文本会根据 `COMMENT ON`、反引号、`AUTO_INCREMENT`、`ENGINE`、`DEFAULT CHARSET`、inline `COMMENT` 等特征做保守识别；混合或未知方言会返回稳定 code 与 nextAction，不会被静默标成已验证。前端 SQL 校验页支持查看修正 SQL、复制、修复策略摘要、变更风险、当前方言/降级提示、最近检查记录分页和详情；记录详情会展示当时标准、当前标准、回放状态、历史 Context 导出命令和下一步建议，并可复制只包含 `projectId`、页码和 `recordId` 的可复现链接。无快照的旧记录显示为 `unversioned`，仍保留原始 SQL 与问题列表。
 
-反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。SQL 文本和数据库直连预览都会展示方言诊断；PostgreSQL 直连会提示 schema 过滤，MySQL 直连会提示 databaseName 作为 catalog、schemaName 不参与过滤等边界。直连模式还可以生成只读二次比对，按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。页面会按项目在浏览器本地记住数据库类型、host、port、database、schema、username、表选择、搜索词和差异筛选，不保存数据库密码、token 或完整连接串。当前项目可保存多个数据库连接预设，服务端只持久化预设名、databaseType、host、port、databaseName、schemaName 和 tableNames；反向导入页可选择预设回填连接元数据和表选择，用户名和密码仍由用户当次输入。确认导入创建的新字段会记录导入批次、来源 schema/table/column 和原始 metadata 快照，字段库可查看来源摘要；从导入结果跳转字段库时会自动携带字段关键词并筛选当前页结果。直连模式不会修改源数据库，也不会做定时同步。
+反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。SQL 文本和数据库直连预览都会展示方言诊断；PostgreSQL 直连会提示 schema 过滤，MySQL 直连会提示 databaseName 作为 catalog、schemaName 不参与过滤等边界。直连模式还可以生成只读二次比对，按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。页面会按项目在浏览器本地记住数据库类型、host、port、database、schema、username、表选择、搜索词和差异筛选，不保存数据库密码、token 或完整连接串。当前项目可保存多个数据库连接预设，服务端只持久化预设名、databaseType、host、port、databaseName、schemaName 和 tableNames；反向导入页可选择预设回填连接元数据和表选择，用户名和密码仍由用户当次输入。确认导入创建的新字段会记录导入批次、来源 schema/table/column 和原始 metadata 快照，字段库可查看来源摘要；从导入结果跳转字段库时会自动携带字段关键词并筛选当前页结果，带 `sourceBatchId` 的链接也能直达字段库来源筛选。直连模式不会修改源数据库，也不会做定时同步。
 
 后端支持将直连 metadata 导出为离线 schema dump，并用同一份 dump 复现标准分析：
 

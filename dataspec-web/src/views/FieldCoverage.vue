@@ -6,6 +6,10 @@
         <p class="page-subtitle">{{ projectStore.currentProjectName || '未选择项目' }}</p>
       </div>
       <div class="header-actions">
+        <el-button plain :disabled="!hasProject" @click="handleCopyCoverageLink">
+          <el-icon><Link /></el-icon>
+          复制链接
+        </el-button>
         <el-button type="primary" :disabled="!canGenerateReport" :loading="reportLoading" @click="handleGenerateReport">
           <el-icon><DataAnalysis /></el-icon>
           生成报告
@@ -283,9 +287,9 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Connection, DataAnalysis, Refresh, Search } from '@element-plus/icons-vue'
+import { Connection, DataAnalysis, Link, Refresh, Search } from '@element-plus/icons-vue'
 import { reportDatabaseCoverage, reportSqlCoverage } from '@/api/coverage'
 import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
 import { listDatabaseTables, testDatabaseConnection } from '@/api/reverseImport'
@@ -310,6 +314,7 @@ import {
   securityRiskTagType,
   writeRiskLabel
 } from '@/utils/databaseSecurityDiagnostic'
+import { copyRouteUrl, readEnumQuery, readStringQuery, replaceRouteQuery } from '@/utils/urlState'
 import type {
   DatabaseConnectionReq,
   DatabaseConnectionSecurityDiagnostic,
@@ -323,6 +328,7 @@ type ConnectionStatus = 'idle' | 'success' | 'error'
 type StatusFilter = 'ALL' | FieldCoverageStatus
 
 const projectStore = useProjectStore()
+const route = useRoute()
 const router = useRouter()
 const activeMode = ref<CoverageMode>('database')
 const sqlText = ref('')
@@ -407,6 +413,8 @@ const filteredFields = computed(() =>
   filterCoverageFields(report.value?.tables ?? [], tableFilter.value, statusFilter.value)
 )
 
+applyCoverageUrlState()
+
 watch(
   () => projectStore.currentProjectId,
   () => {
@@ -416,6 +424,15 @@ watch(
 )
 
 watch(activeMode, () => resetReport())
+
+watch(
+  () => [route.query.table, route.query.status],
+  () => applyCoverageUrlState()
+)
+
+watch([tableFilter, statusFilter], () => {
+  void syncCoverageUrlState()
+})
 
 watch(
   () => [
@@ -435,13 +452,13 @@ watch(
 
 function resetReport() {
   reportState.reset()
-  tableFilter.value = 'ALL'
-  statusFilter.value = 'ALL'
+  applyCoverageUrlState()
 }
 
 function resetCoverageFilters() {
   tableFilter.value = 'ALL'
   statusFilter.value = 'ALL'
+  void syncCoverageUrlState()
 }
 
 function resetDatabaseConnectionState() {
@@ -469,10 +486,39 @@ async function handleGenerateReport() {
     await reportState.run(() => activeMode.value === 'sql'
       ? reportSqlCoverage(projectStore.currentProjectId as number, sqlText.value)
       : reportDatabaseCoverage(databaseRequest()))
-    tableFilter.value = 'ALL'
-    statusFilter.value = 'ALL'
+    applyCoverageUrlState()
   } catch {
     // 页面内 StateBlock 会展示可重试状态，避免只留下全局消息。
+  }
+}
+
+async function syncCoverageUrlState(patch: Record<string, string | number | null> = {}) {
+  await replaceRouteQuery(router, route, {
+    projectId: projectStore.currentProjectId,
+    table: tableFilter.value !== 'ALL' ? tableFilter.value : null,
+    status: statusFilter.value !== 'ALL' ? statusFilter.value : null,
+    ...patch
+  })
+}
+
+function applyCoverageUrlState() {
+  const table = readStringQuery(route.query, 'table')
+  tableFilter.value = table || 'ALL'
+  const nextStatus = readEnumQuery(route.query, 'status', statusOptions.map((item) => item.value))
+  if (route.query.status && !nextStatus) {
+    ElMessage.warning('链接中的覆盖率状态筛选无效，已恢复为全部')
+    void syncCoverageUrlState({ status: null })
+  }
+  statusFilter.value = nextStatus ?? 'ALL'
+}
+
+async function handleCopyCoverageLink() {
+  try {
+    await syncCoverageUrlState()
+    await copyRouteUrl(route, navigator.clipboard)
+    ElMessage.success('已复制链接')
+  } catch {
+    ElMessage.error('复制失败，请手动复制浏览器地址')
   }
 }
 
@@ -618,7 +664,10 @@ function clearSelectedTables() {
 function goToFieldLibrary(keyword?: string) {
   router.push({
     path: '/fields',
-    query: keyword ? { keyword } : undefined
+    query: {
+      projectId: projectStore.currentProjectId ?? undefined,
+      ...(keyword ? { keyword } : {})
+    }
   })
 }
 

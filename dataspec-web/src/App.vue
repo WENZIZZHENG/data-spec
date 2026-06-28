@@ -219,14 +219,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
 import { AUTH_CLEARED_EVENT } from '@/api/authStorage'
+import { readPositiveIntQuery, replaceRouteQuery } from '@/utils/urlState'
 
 const route = useRoute()
+const router = useRouter()
 const projectStore = useProjectStore()
 const authStore = useAuthStore()
 const tokenInput = ref('')
@@ -235,9 +237,10 @@ const tokenInput = ref('')
 const activeMenu = computed(() => route.path)
 const routeTitle = computed(() => String(route.meta.title || ''))
 
-onMounted(() => {
+onMounted(async () => {
   authStore.restore()
-  projectStore.loadProjects()
+  await projectStore.loadProjects()
+  applyRouteProjectId()
   window.addEventListener(AUTH_CLEARED_EVENT, authStore.handleAuthCleared)
 })
 
@@ -248,6 +251,32 @@ onBeforeUnmount(() => {
 // 切换项目
 const handleProjectChange = (val: number | null) => {
   projectStore.setCurrentProjectById(val)
+  void syncProjectQuery(projectStore.currentProjectId)
+}
+
+watch(
+  () => route.query.projectId,
+  () => applyRouteProjectId()
+)
+
+function applyRouteProjectId() {
+  const routeProjectId = readPositiveIntQuery(route.query, 'projectId')
+  if (!routeProjectId || projectStore.loading) {
+    return
+  }
+  const project = projectStore.projects.find((item) => item.id === routeProjectId)
+  if (project) {
+    projectStore.setCurrentProject(project)
+    return
+  }
+  if (projectStore.projects.length > 0) {
+    ElMessage.warning('链接中的项目不可访问，请重新选择项目')
+    void syncProjectQuery(projectStore.currentProjectId)
+  }
+}
+
+async function syncProjectQuery(projectId: number | null) {
+  await replaceRouteQuery(router, route, { projectId })
 }
 
 const handleLogin = async () => {

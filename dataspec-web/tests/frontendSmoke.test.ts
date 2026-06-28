@@ -343,6 +343,93 @@ test('keeps global project selector backed by the project store', () => {
   ], 'project store')
 })
 
+test('keeps reproducible URL state links wired on core workflow pages', () => {
+  const packageJson = readSource('package.json')
+  const urlState = readSource('src/utils/urlState.ts')
+  const urlStateTest = readSource('tests/urlState.test.ts')
+  const app = readSource('src/App.vue')
+  const fieldLibrary = readSource('src/views/FieldLibrary.vue')
+  const sqlLint = readSource('src/views/SqlLint.vue')
+  const aiReplay = readSource('src/views/AiReplay.vue')
+  const fieldCoverage = readSource('src/views/FieldCoverage.vue')
+  const reverseImport = readSource('src/views/ReverseImport.vue')
+
+  assertContains(packageJson, ['tests/urlState.test.ts'], 'package test script URL state')
+  assertContains(urlState, [
+    'export function readPositiveIntQuery',
+    'export function readEnumQuery',
+    'export function sanitizeQuery',
+    'export async function replaceRouteQuery',
+    'export async function copyRouteUrl',
+    'UNSAFE_QUERY_KEY_PATTERN'
+  ], 'URL state utility')
+  assertContains(urlStateTest, [
+    'readPositiveIntQuery',
+    'sanitizeQuery',
+    'password: \'secret\'',
+    'jdbcUrl:',
+    'buildRouteUrl',
+    'copyRouteUrl'
+  ], 'URL state tests')
+
+  assertContains(app, [
+    "import { readPositiveIntQuery, replaceRouteQuery } from '@/utils/urlState'",
+    'await projectStore.loadProjects()',
+    'applyRouteProjectId()',
+    '() => route.query.projectId',
+    "readPositiveIntQuery(route.query, 'projectId')",
+    'async function syncProjectQuery(projectId: number | null)'
+  ], 'App.vue project URL state')
+
+  assertContains(fieldLibrary, [
+    'sourceBatchIdFilter',
+    "readPositiveIntQuery(route.query, 'sourceBatchId')",
+    'async function openFieldFromRoute()',
+    'async function syncFieldUrlState',
+    'async function handleCopyFieldLink()',
+    '复制链接'
+  ], 'FieldLibrary.vue URL state')
+
+  assertContains(sqlLint, [
+    "readPositiveIntQuery(route.query, 'recordId')",
+    'async function openRecordFromRoute()',
+    'async function syncRecordUrlState',
+    'async function handleCopyRecordLink()',
+    'recordId',
+    '复制链接'
+  ], 'SqlLint.vue URL state')
+
+  assertContains(aiReplay, [
+    "readPositiveIntQuery(route.query, 'aiJobId')",
+    "readEnumQuery(route.query, 'jobType'",
+    'async function openDetailFromRoute()',
+    'function applyReplayUrlState()',
+    'async function syncReplayUrlState',
+    'async function copyReplayLink()',
+    'aiJobId'
+  ], 'AiReplay.vue URL state')
+
+  assertContains(fieldCoverage, [
+    "readStringQuery(route.query, 'table')",
+    "readEnumQuery(route.query, 'status'",
+    'async function syncCoverageUrlState',
+    'function applyCoverageUrlState()',
+    'async function handleCopyCoverageLink()',
+    '复制链接'
+  ], 'FieldCoverage.vue URL state')
+
+  assertContains(reverseImport, [
+    "readPositiveIntQuery(route.query, 'sourceBatchId')",
+    "readPositiveIntQuery(route.query, 'batchId')",
+    'function applyReverseImportUrlState()',
+    'function hasRouteQuery(key: string)',
+    'async function syncReverseImportUrlState',
+    'async function handleCopyReverseImportLink()',
+    'goToFieldLibraryBySourceBatch',
+    '复制链接'
+  ], 'ReverseImport.vue URL state')
+})
+
 test('keeps domain starter kit project workflow wired', () => {
   const projectList = readSource('src/views/ProjectList.vue')
   const starterKitApi = readSource('src/api/starterKit.ts')
