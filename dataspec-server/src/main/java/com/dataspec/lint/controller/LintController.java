@@ -5,6 +5,7 @@ import com.dataspec.common.result.PageResult;
 import com.dataspec.common.result.R;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.entity.SqlCheckRecord;
+import com.dataspec.lint.model.FixPolicy;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.lint.model.SqlCheckReplay;
@@ -34,7 +35,7 @@ public class LintController {
      */
     @PostMapping
     public R<LintResult> lint(@Valid @RequestBody LintRequest req) {
-        LintResult result = sqlLintService.lint(req.sql(), req.projectId());
+        LintResult result = sqlLintService.lint(req.sql(), req.projectId(), req.fixPolicy());
         return R.ok(result);
     }
 
@@ -71,7 +72,8 @@ public class LintController {
 
     public record LintRequest(
             @NotBlank(message = "SQL 不能为空") String sql,
-            Long projectId
+            Long projectId,
+            FixPolicy fixPolicy
     ) {}
 
     /** 检查记录详情:记录本身 + 反序列化后的结构化问题 */

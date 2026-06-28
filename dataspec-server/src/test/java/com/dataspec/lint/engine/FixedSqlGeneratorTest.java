@@ -1,6 +1,11 @@
 package com.dataspec.lint.engine;
 
 import com.dataspec.lint.model.ColumnDef;
+import com.dataspec.lint.model.FixChangeStatus;
+import com.dataspec.lint.model.FixMode;
+import com.dataspec.lint.model.FixPolicy;
+import com.dataspec.lint.model.FixRiskLevel;
+import com.dataspec.lint.model.FixedSqlPlan;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.lint.model.Severity;
@@ -270,5 +275,180 @@ class FixedSqlGeneratorTest {
         assertNotNull(fixedSql);
         long createCount = fixedSql.lines().filter(l -> l.startsWith("CREATE TABLE")).count();
         assertEquals(2, createCount, "应渲染两张表");
+    }
+
+    @Test
+    void generatePlan_safeOnlySkipsRequiredColumns() {
+        TableDef table = TableDef.builder()
+                .name("UserOrder")
+                .columns(List.of(
+                        ColumnDef.builder().name("id").dataType("bigserial").nullable(false).build()
+                ))
+                .build();
+        List<LintIssue> issues = List.of(
+                LintIssue.builder()
+                        .ruleCode("table_naming_snake_case")
+                        .tableName("UserOrder")
+                        .replacement("user_order")
+                        .confidence(90)
+                        .build(),
+                LintIssue.builder()
+                        .ruleCode("required_columns")
+                        .tableName("UserOrder")
+                        .replacement("created_at")
+                        .after("created_at timestamp with time zone NOT NULL DEFAULT now()")
+                        .confidence(85)
+                        .build()
+        );
+        LintResult result = LintResult.of(List.of(table), issues);
+
+        FixedSqlPlan plan = generator.generatePlan(result, FixPolicy.builder()
+                .maxRiskLevel(FixRiskLevel.LOW)
+                .build());
+
+        assertNotNull(plan.getFixedSql());
+        assertTrue(plan.getFixedSql().contains("CREATE TABLE user_order"));
+        assertFalse(plan.getFixedSql().contains("created_at"), "LOW 策略不应应用 MEDIUM 的必备列补齐");
+        assertEquals(1, plan.getFixSummary().getAppliedCount());
+        assertEquals(1, plan.getFixSummary().getSkippedCount());
+        assertEquals(FixChangeStatus.SKIPPED, issues.get(1).getFixStatus());
+        assertEquals("RISK_EXCEEDS_POLICY", issues.get(1).getFixReasonCode());
+    }
+
+    @Test
+    void generatePlan_disabledPolicyReturnsOnlyExplanations() {
+        TableDef table = TableDef.builder()
+                .name("UserOrder")
+                .columns(List.of(
+                        ColumnDef.builder().name("id").dataType("bigserial").nullable(false).build()
+                ))
+                .build();
+        LintIssue issue = LintIssue.builder()
+                .ruleCode("table_naming_snake_case")
+                .tableName("UserOrder")
+                .replacement("user_order")
+                .confidence(90)
+                .build();
+        LintResult result = LintResult.of(List.of(table), List.of(issue));
+
+        FixedSqlPlan plan = generator.generatePlan(result, FixPolicy.builder()
+                .mode(FixMode.DISABLED)
+                .build());
+
+        assertNull(plan.getFixedSql());
+        assertEquals(1, plan.getFixSummary().getSkippedCount());
+        assertEquals(FixChangeStatus.SKIPPED, issue.getFixStatus());
+        assertEquals("POLICY_DISABLED", issue.getFixReasonCode());
+        assertTrue(plan.getFixNextActions().get(0).contains("关闭"));
+    }
+
+    @Test
+    void generatePlan_dryRunMarksPlannedChanges() {
+        TableDef table = TableDef.builder()
+                .name("UserOrder")
+                .columns(List.of(
+                        ColumnDef.builder().name("id").dataType("bigserial").nullable(false).build()
+                ))
+                .build();
+        LintIssue issue = LintIssue.builder()
+                .ruleCode("table_naming_snake_case")
+                .tableName("UserOrder")
+                .replacement("user_order")
+                .confidence(90)
+                .build();
+        LintResult result = LintResult.of(List.of(table), List.of(issue));
+
+        FixedSqlPlan plan = generator.generatePlan(result, FixPolicy.builder()
+                .mode(FixMode.DRY_RUN)
+                .build());
+
+        assertTrue(plan.getFixDryRun());
+        assertNotNull(plan.getFixedSql());
+        assertEquals(1, plan.getFixSummary().getPlannedCount());
+        assertEquals(FixChangeStatus.PLANNED, issue.getFixStatus());
+        assertTrue(plan.getFixNextActions().get(0).contains("dry-run"));
+    }
+
+    @Test
+    void generatePlan_suppressedIssueIsSkipped() {
+        TableDef table = TableDef.builder()
+                .name("UserOrder")
+                .columns(List.of(
+                        ColumnDef.builder().name("id").dataType("bigserial").nullable(false).build()
+                ))
+                .build();
+        LintIssue issue = LintIssue.builder()
+                .ruleCode("table_naming_snake_case")
+                .tableName("UserOrder")
+                .replacement("user_order")
+                .suppressed(true)
+                .confidence(90)
+                .build();
+        LintResult result = LintResult.of(List.of(table), List.of(issue));
+
+        FixedSqlPlan plan = generator.generatePlan(result, FixPolicy.defaults());
+
+        assertNull(plan.getFixedSql());
+        assertEquals(FixChangeStatus.SKIPPED, issue.getFixStatus());
+        assertEquals("SUPPRESSED", issue.getFixReasonCode());
+        assertTrue(plan.getFixExplanations().stream()
+                .anyMatch(change -> "SUPPRESSED".equals(change.getReasonCode())));
+    }
+
+    @Test
+    void generatePlan_unsupportedTypeFixIsExplainedButNotApplied() {
+        TableDef table = TableDef.builder()
+                .name("users")
+                .columns(List.of(
+                        ColumnDef.builder().name("user_id").dataType("varchar").nullable(false).build()
+                ))
+                .build();
+        LintIssue issue = LintIssue.builder()
+                .ruleCode("field_suffix_type")
+                .ruleName("字段后缀/前缀类型规则")
+                .tableName("users")
+                .columnName("user_id")
+                .before("varchar")
+                .after("bigint")
+                .replacement("bigint")
+                .confidence(75)
+                .build();
+        LintResult result = LintResult.of(List.of(table), List.of(issue));
+
+        FixedSqlPlan plan = generator.generatePlan(result, FixPolicy.defaults());
+
+        assertNotNull(plan.getFixedSql(), "可安全格式化原结构，但不应应用类型改写");
+        assertTrue(plan.getFixedSql().contains("user_id varchar"));
+        assertEquals(FixChangeStatus.SKIPPED, issue.getFixStatus());
+        assertEquals("UNSUPPORTED_FIXER", issue.getFixReasonCode());
+        assertEquals(FixRiskLevel.HIGH, issue.getFixRiskLevel());
+    }
+
+    @Test
+    void generatePlan_includeExplanationsFalseSuppressesExplanationList() {
+        TableDef table = TableDef.builder()
+                .name("UserOrder")
+                .columns(List.of(
+                        ColumnDef.builder().name("id").dataType("bigserial").nullable(false).build()
+                ))
+                .build();
+        LintIssue issue = LintIssue.builder()
+                .ruleCode("required_columns")
+                .tableName("UserOrder")
+                .replacement("created_at")
+                .after("created_at timestamp with time zone NOT NULL DEFAULT now()")
+                .confidence(85)
+                .build();
+        LintResult result = LintResult.of(List.of(table), List.of(issue));
+
+        FixedSqlPlan plan = generator.generatePlan(result, FixPolicy.builder()
+                .maxRiskLevel(FixRiskLevel.LOW)
+                .includeExplanations(false)
+                .build());
+
+        assertTrue(plan.getFixExplanations().isEmpty(), "关闭解释后不应返回 fixExplanations 列表");
+        assertEquals(1, plan.getFixChanges().size(), "fixChanges 仍保留状态供前端和 AI 判断");
+        assertEquals(FixChangeStatus.SKIPPED, issue.getFixStatus());
+        assertTrue(plan.getFixNextActions().stream().anyMatch(action -> action.contains("开启解释")));
     }
 }

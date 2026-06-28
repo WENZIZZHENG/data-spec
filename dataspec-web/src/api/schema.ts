@@ -2731,6 +2731,48 @@ export interface components {
             sql: string;
             /** Format: int64 */
             projectId?: number;
+            fixPolicy?: components["schemas"]["FixPolicy"];
+        };
+        FixPolicy: {
+            /** @enum {string} */
+            mode?: "GENERATE" | "DRY_RUN" | "DISABLED";
+            /** @enum {string} */
+            maxRiskLevel?: "LOW" | "MEDIUM" | "HIGH";
+            enabledRuleCodes?: string[];
+            disabledRuleCodes?: string[];
+            includeExplanations?: boolean;
+        };
+        FixChange: {
+            /** @enum {string} */
+            status?: "APPLIED" | "PLANNED" | "SKIPPED";
+            reasonCode?: string;
+            ruleCode?: string;
+            ruleName?: string;
+            /** @enum {string} */
+            riskLevel?: "LOW" | "MEDIUM" | "HIGH";
+            /** @enum {string} */
+            changeType?: "TABLE_RENAME" | "COLUMN_RENAME" | "REQUIRED_COLUMN_ADD" | "UNSUPPORTED_RULE" | "UNSAFE_REBUILD";
+            tableName?: string;
+            columnName?: string;
+            before?: string;
+            after?: string;
+            explain?: string;
+            /** Format: int32 */
+            confidence?: number;
+            /** Format: int32 */
+            sourceStart?: number;
+            /** Format: int32 */
+            sourceEnd?: number;
+        };
+        FixPlanSummary: {
+            /** Format: int32 */
+            availableCount?: number;
+            /** Format: int32 */
+            appliedCount?: number;
+            /** Format: int32 */
+            plannedCount?: number;
+            /** Format: int32 */
+            skippedCount?: number;
         };
         LintIssue: {
             /** @enum {string} */
@@ -2746,6 +2788,14 @@ export interface components {
             after?: string;
             /** Format: int32 */
             confidence?: number;
+            /** @enum {string} */
+            fixRiskLevel?: "LOW" | "MEDIUM" | "HIGH";
+            /** @enum {string} */
+            fixChangeType?: "TABLE_RENAME" | "COLUMN_RENAME" | "REQUIRED_COLUMN_ADD" | "UNSUPPORTED_RULE" | "UNSAFE_REBUILD";
+            /** @enum {string} */
+            fixStatus?: "APPLIED" | "PLANNED" | "SKIPPED";
+            fixExplain?: string;
+            fixReasonCode?: string;
             /** Format: int32 */
             line?: number;
             /** Format: int32 */
@@ -2777,6 +2827,12 @@ export interface components {
             suppressedCount?: number;
             fixedSql?: string;
             fixedSqlDiff?: string;
+            fixPolicy?: components["schemas"]["FixPolicy"];
+            fixDryRun?: boolean;
+            fixChanges?: components["schemas"]["FixChange"][];
+            fixExplanations?: components["schemas"]["FixChange"][];
+            fixSummary?: components["schemas"]["FixPlanSummary"];
+            fixNextActions?: string[];
             dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
         };
         RLintResult: {

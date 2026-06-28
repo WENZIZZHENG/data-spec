@@ -1,12 +1,20 @@
 package com.dataspec.lint.engine;
 
 import com.dataspec.lint.model.ColumnDef;
+import com.dataspec.lint.model.FixChange;
+import com.dataspec.lint.model.FixChangeStatus;
+import com.dataspec.lint.model.FixChangeType;
+import com.dataspec.lint.model.FixPlanSummary;
+import com.dataspec.lint.model.FixPolicy;
+import com.dataspec.lint.model.FixRiskLevel;
+import com.dataspec.lint.model.FixedSqlPlan;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.lint.model.TableDef;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -24,29 +32,306 @@ import java.util.regex.Pattern;
  * <p>
  * 设计取舍:不直接对原 SQL 文本做替换(缺乏 source span,易误伤同名字段),
  * 而是用解析模型重建,确保生成结果可被 DataSpec lint 自检通过。
- * 第一版只做确定性改写:表名/字段名 snake_case、禁用/推荐字段名替换、补必备列;
- * 金额字段类型等语义改写留给 AI。
  */
 @Component
 public class FixedSqlGenerator {
 
     private static final Pattern SAFE_IDENTIFIER = Pattern.compile("^[a-z][a-z0-9_]*$");
+    private static final Set<String> FIELD_RENAME_RULES = Set.of(
+            "field_naming_snake_case",
+            "forbidden_field_name",
+            "recommended_field_name"
+    );
+    private static final Set<String> UNSUPPORTED_FIXABLE_RULES = Set.of(
+            "field_suffix_type",
+            "amount_field_type"
+    );
 
     /**
-     * 生成修正后的 SQL。无法确定性重建时返回 null。
+     * 兼容旧调用方:只返回修正后的 SQL。无法确定性重建时返回 null。
      */
     public String generate(LintResult result) {
-        if (result == null || result.getTables() == null || result.getTables().isEmpty()) {
-            return null;
+        return generatePlan(result, FixPolicy.defaults()).getFixedSql();
+    }
+
+    /**
+     * 生成修正 SQL 与机器可读修复计划。
+     */
+    public FixedSqlPlan generatePlan(LintResult result, FixPolicy requestedPolicy) {
+        FixPolicy policy = FixPolicy.effective(requestedPolicy);
+        List<TableDef> tables = result == null || result.getTables() == null ? List.of() : result.getTables();
+        List<LintIssue> issues = result == null || result.getIssues() == null ? List.of() : result.getIssues();
+        if (tables.isEmpty()) {
+            return plan(policy, null, List.of(), List.of("未解析到可重建的 CREATE TABLE，已跳过 fixedSql。"));
         }
 
-        FixIndex fixIndex = indexFixes(result.getIssues());
+        List<CandidateFix> candidates = buildCandidates(issues, policy);
+        resolveFieldRenameConflicts(candidates);
+        List<FixChange> changes = changes(candidates);
 
+        String fixedSql = null;
+        if (!policy.disabled()) {
+            FixIndex fixIndex = indexFixes(candidates);
+            fixedSql = rebuildAll(tables, fixIndex);
+            if (fixedSql == null) {
+                markUnsafeRebuild(candidates);
+                changes = changes(candidates);
+            }
+        }
+
+        List<String> nextActions = nextActions(policy, fixedSql, changes);
+        return plan(policy, fixedSql, changes, nextActions);
+    }
+
+    private FixedSqlPlan plan(FixPolicy policy, String fixedSql, List<FixChange> changes, List<String> nextActions) {
+        List<FixChange> safeChanges = changes == null ? List.of() : changes;
+        List<FixChange> explanations = policy.explanationsEnabled()
+                ? safeChanges.stream()
+                        .filter(change -> change.getStatus() == FixChangeStatus.SKIPPED)
+                        .toList()
+                : List.of();
+        return FixedSqlPlan.builder()
+                .fixPolicy(policy)
+                .fixDryRun(policy.dryRun())
+                .fixedSql(fixedSql)
+                .fixChanges(safeChanges)
+                .fixExplanations(explanations)
+                .fixSummary(summary(safeChanges))
+                .fixNextActions(nextActions)
+                .build();
+    }
+
+    private FixPlanSummary summary(List<FixChange> changes) {
+        int applied = 0;
+        int planned = 0;
+        int skipped = 0;
+        for (FixChange change : changes) {
+            if (change.getStatus() == FixChangeStatus.APPLIED) {
+                applied += 1;
+            } else if (change.getStatus() == FixChangeStatus.PLANNED) {
+                planned += 1;
+            } else if (change.getStatus() == FixChangeStatus.SKIPPED) {
+                skipped += 1;
+            }
+        }
+        return FixPlanSummary.builder()
+                .availableCount(changes.size())
+                .appliedCount(applied)
+                .plannedCount(planned)
+                .skippedCount(skipped)
+                .build();
+    }
+
+    private List<String> nextActions(FixPolicy policy, String fixedSql, List<FixChange> changes) {
+        List<String> actions = new ArrayList<>();
+        if (policy.disabled()) {
+            actions.add("fixedSql 已按策略关闭，请根据 issue 建议手动修复。");
+        } else if (policy.dryRun()) {
+            actions.add("当前为 dry-run 预览，应用 fixedSql 前请人工确认 diff 与风险。");
+        } else if (fixedSql != null) {
+            actions.add("应用 fixedSql 前请人工确认 diff、方言诊断和风险等级。");
+        }
+        if (changes.stream().anyMatch(change -> change.getStatus() == FixChangeStatus.SKIPPED)) {
+            actions.add(policy.explanationsEnabled()
+                    ? "存在未应用修复项，请查看 fixExplanations 后决定是否调整策略或人工修复。"
+                    : "存在未应用修复项，可查看 fixChanges 状态或开启解释后再决定是否调整策略。");
+        }
+        return actions;
+    }
+
+    private List<CandidateFix> buildCandidates(List<LintIssue> issues, FixPolicy policy) {
+        List<CandidateFix> candidates = new ArrayList<>();
+        for (LintIssue issue : issues) {
+            CandidateFix candidate = candidate(issue);
+            if (candidate == null) {
+                continue;
+            }
+            applyPolicy(candidate, policy);
+            candidates.add(candidate);
+        }
+        return candidates;
+    }
+
+    private CandidateFix candidate(LintIssue issue) {
+        if (issue == null) {
+            return null;
+        }
+        String ruleCode = issue.getRuleCode();
+        String tableLower = lower(issue.getTableName());
+        if ("table_naming_snake_case".equals(ruleCode)
+                && issue.getReplacement() != null
+                && issue.getTableName() != null) {
+            FixChange change = baseChange(issue, FixRiskLevel.LOW, FixChangeType.TABLE_RENAME,
+                    issue.getTableName(), issue.getReplacement(), "按表名 snake_case 规则重命名表。");
+            return new CandidateFix(issue, change, "table|" + tableLower, true);
+        }
+
+        if (FIELD_RENAME_RULES.contains(ruleCode)
+                && issue.getReplacement() != null
+                && issue.getTableName() != null
+                && issue.getColumnName() != null) {
+            FixChange change = baseChange(issue, FixRiskLevel.LOW, FixChangeType.COLUMN_RENAME,
+                    issue.getColumnName(), issue.getReplacement(), "按字段命名规则重命名字段。");
+            return new CandidateFix(issue, change,
+                    "column|" + tableLower + "|" + lower(issue.getColumnName()), true);
+        }
+
+        if ("required_columns".equals(ruleCode)
+                && issue.getReplacement() != null
+                && issue.getAfter() != null
+                && issue.getTableName() != null) {
+            FixChange change = baseChange(issue, FixRiskLevel.MEDIUM, FixChangeType.REQUIRED_COLUMN_ADD,
+                    null, issue.getAfter(), "按必备列规则补充缺失字段。");
+            return new CandidateFix(issue, change,
+                    "required|" + tableLower + "|" + lower(issue.getReplacement()), true);
+        }
+
+        if (UNSUPPORTED_FIXABLE_RULES.contains(ruleCode) && (issue.getReplacement() != null || issue.getAfter() != null)) {
+            FixChange change = baseChange(issue, FixRiskLevel.HIGH, FixChangeType.UNSUPPORTED_RULE,
+                    issue.getBefore(), firstNonBlank(issue.getAfter(), issue.getReplacement()),
+                    "该规则涉及语义或类型变更，本轮只解释，不自动改写。");
+            return new CandidateFix(issue, change,
+                    "unsupported|" + lower(ruleCode) + "|" + tableLower + "|" + lower(issue.getColumnName()), false);
+        }
+
+        return null;
+    }
+
+    private FixChange baseChange(LintIssue issue, FixRiskLevel risk, FixChangeType type,
+                                 String before, String after, String explain) {
+        return FixChange.builder()
+                .ruleCode(issue.getRuleCode())
+                .ruleName(issue.getRuleName())
+                .riskLevel(risk)
+                .changeType(type)
+                .tableName(issue.getTableName())
+                .columnName(issue.getColumnName())
+                .before(before)
+                .after(after)
+                .explain(explain)
+                .confidence(issue.getConfidence())
+                .sourceStart(issue.getSourceStart())
+                .sourceEnd(issue.getSourceEnd())
+                .build();
+    }
+
+    private void applyPolicy(CandidateFix candidate, FixPolicy policy) {
+        FixChange change = candidate.change();
+        LintIssue issue = candidate.issue();
+        if (Boolean.TRUE.equals(issue.getSuppressed())) {
+            skip(candidate, "SUPPRESSED", "该问题已被规则例外豁免，不参与 fixedSql。");
+        } else if (policy.disabled()) {
+            skip(candidate, "POLICY_DISABLED", "当前 fixPolicy.mode=DISABLED，仅返回解释。");
+        } else if (!candidate.rebuildSupported()) {
+            skip(candidate, "UNSUPPORTED_FIXER", change.getExplain());
+        } else if (!policy.allowsRule(change.getRuleCode())) {
+            skip(candidate, "RULE_FILTERED", "当前 fixPolicy 未允许该规则参与 fixedSql。");
+        } else if (!policy.allowsRisk(change.getRiskLevel())) {
+            skip(candidate, "RISK_EXCEEDS_POLICY", "该修复风险高于当前 fixPolicy.maxRiskLevel。");
+        } else {
+            change.setStatus(policy.dryRun() ? FixChangeStatus.PLANNED : FixChangeStatus.APPLIED);
+            change.setReasonCode(null);
+            annotateIssue(issue, change);
+        }
+    }
+
+    private void resolveFieldRenameConflicts(List<CandidateFix> candidates) {
+        Map<String, CandidateFix> selectedByKey = new HashMap<>();
+        for (CandidateFix candidate : candidates) {
+            if (!candidate.rebuildUsable() || !candidate.key().startsWith("column|")) {
+                continue;
+            }
+            CandidateFix current = selectedByKey.get(candidate.key());
+            if (current == null || confidence(candidate) > confidence(current)) {
+                selectedByKey.put(candidate.key(), candidate);
+            }
+        }
+        for (CandidateFix candidate : candidates) {
+            if (!candidate.rebuildUsable() || !candidate.key().startsWith("column|")) {
+                continue;
+            }
+            CandidateFix selected = selectedByKey.get(candidate.key());
+            if (selected != candidate) {
+                skip(candidate, "LOWER_CONFIDENCE", "同一字段存在多个修复候选，已选择置信度更高的建议。");
+            }
+        }
+    }
+
+    private int confidence(CandidateFix candidate) {
+        Integer value = candidate.change().getConfidence();
+        return value == null ? 0 : value;
+    }
+
+    private void markUnsafeRebuild(List<CandidateFix> candidates) {
+        boolean changed = false;
+        for (CandidateFix candidate : candidates) {
+            if (candidate.rebuildUsable()) {
+                skip(candidate, "UNSAFE_REBUILD", "fixedSql 重建阶段发现标识符、列冲突或片段不安全，已整体跳过。");
+                changed = true;
+            }
+        }
+        if (!changed) {
+            // 没有候选时的格式化重建失败没有对应 issue，只能通过 nextActions 表达。
+        }
+    }
+
+    private void skip(CandidateFix candidate, String reasonCode, String explain) {
+        FixChange change = candidate.change();
+        change.setStatus(FixChangeStatus.SKIPPED);
+        change.setReasonCode(reasonCode);
+        change.setExplain(explain);
+        annotateIssue(candidate.issue(), change);
+    }
+
+    private void annotateIssue(LintIssue issue, FixChange change) {
+        issue.setFixRiskLevel(change.getRiskLevel());
+        issue.setFixChangeType(change.getChangeType());
+        issue.setFixStatus(change.getStatus());
+        issue.setFixExplain(change.getExplain());
+        issue.setFixReasonCode(change.getReasonCode());
+    }
+
+    private List<FixChange> changes(List<CandidateFix> candidates) {
+        return candidates.stream()
+                .map(CandidateFix::change)
+                .sorted(Comparator
+                        .comparing((FixChange change) -> change.getStatus() == FixChangeStatus.SKIPPED ? 1 : 0)
+                        .thenComparing(change -> nullToEmpty(change.getTableName()))
+                        .thenComparing(change -> nullToEmpty(change.getColumnName()))
+                        .thenComparing(change -> nullToEmpty(change.getRuleCode())))
+                .toList();
+    }
+
+    private FixIndex indexFixes(List<CandidateFix> candidates) {
+        Map<String, String> tableRenames = new HashMap<>();
+        Map<String, FieldFix> fieldFixes = new HashMap<>();
+        Map<String, Map<String, String>> missingRequired = new LinkedHashMap<>();
+
+        for (CandidateFix candidate : candidates) {
+            if (!candidate.rebuildUsable()) {
+                continue;
+            }
+            FixChange change = candidate.change();
+            String tableLower = lower(change.getTableName());
+            if (change.getChangeType() == FixChangeType.TABLE_RENAME) {
+                tableRenames.put(tableLower, change.getAfter());
+            } else if (change.getChangeType() == FixChangeType.COLUMN_RENAME) {
+                String key = tableLower + "|" + lower(change.getColumnName());
+                fieldFixes.put(key, new FieldFix(change.getAfter(), change.getConfidence()));
+            } else if (change.getChangeType() == FixChangeType.REQUIRED_COLUMN_ADD) {
+                missingRequired
+                        .computeIfAbsent(tableLower, k -> new LinkedHashMap<>())
+                        .put(lower(candidate.issue().getReplacement()), change.getAfter());
+            }
+        }
+        return new FixIndex(tableRenames, fieldFixes, missingRequired);
+    }
+
+    private String rebuildAll(List<TableDef> tables, FixIndex fixIndex) {
         StringBuilder sb = new StringBuilder();
-        for (TableDef table : result.getTables()) {
+        for (TableDef table : tables) {
             String block = rebuildTable(table, fixIndex);
             if (block == null) {
-                // 任一表无法安全重建则整体放弃,保持“不生成危险 SQL”原则
                 return null;
             }
             if (!sb.isEmpty()) {
@@ -58,67 +343,6 @@ public class FixedSqlGenerator {
     }
 
     /**
-     * 把扁平的 issues 索引成“按表/列可查询”的修复映射,便于重建阶段快速定位。
-     */
-    private FixIndex indexFixes(List<LintIssue> issues) {
-        Map<String, String> tableRenames = new HashMap<>();
-        // key: 表名(小写) + "|" + 原字段名(小写)
-        Map<String, FieldFix> fieldFixes = new HashMap<>();
-        // key: 表名(小写),value: 缺失的必备列名 → 完整列定义片段
-        Map<String, Map<String, String>> missingRequired = new LinkedHashMap<>();
-
-        if (issues == null) {
-            return new FixIndex(tableRenames, fieldFixes, missingRequired);
-        }
-
-        for (LintIssue issue : issues) {
-            if (Boolean.TRUE.equals(issue.getSuppressed())) {
-                continue;
-            }
-            String ruleCode = issue.getRuleCode();
-            String tableLower = lower(issue.getTableName());
-
-            // 表名重命名:只认 table_naming_snake_case 的 replacement
-            if ("table_naming_snake_case".equals(ruleCode)
-                    && issue.getReplacement() != null
-                    && issue.getTableName() != null) {
-                tableRenames.put(tableLower, issue.getReplacement());
-                continue;
-            }
-
-            // 字段级修复:snake_case / forbidden / recommended 都给 replacement
-            if (isFieldRenameRule(ruleCode)
-                    && issue.getReplacement() != null
-                    && issue.getColumnName() != null) {
-                String key = tableLower + "|" + issue.getColumnName().toLowerCase();
-                FieldFix existing = fieldFixes.get(key);
-                FieldFix candidate = new FieldFix(issue.getReplacement(), issue.getConfidence());
-                // 同一字段取 confidence 最高的修复建议
-                if (existing == null || candidate.higherThan(existing)) {
-                    fieldFixes.put(key, candidate);
-                }
-                continue;
-            }
-
-            // 必备列缺失:用 after 作为完整列定义片段
-            if ("required_columns".equals(ruleCode)
-                    && issue.getReplacement() != null
-                    && issue.getAfter() != null) {
-                missingRequired
-                        .computeIfAbsent(tableLower, k -> new LinkedHashMap<>())
-                        .put(issue.getReplacement().toLowerCase(), issue.getAfter());
-            }
-        }
-        return new FixIndex(tableRenames, fieldFixes, missingRequired);
-    }
-
-    private boolean isFieldRenameRule(String ruleCode) {
-        return "field_naming_snake_case".equals(ruleCode)
-                || "forbidden_field_name".equals(ruleCode)
-                || "recommended_field_name".equals(ruleCode);
-    }
-
-    /**
      * 重建单表的 CREATE TABLE + COMMENT ON。
      * 返回 null 表示无法安全重建(如重命名后标识符非法、类型片段异常)。
      */
@@ -127,14 +351,12 @@ public class FixedSqlGenerator {
         if (originalName == null) {
             return null;
         }
-        String tableLower = originalName.toLowerCase();
+        String tableLower = originalName.toLowerCase(Locale.ROOT);
         String targetName = fixIndex.tableRenames().getOrDefault(tableLower, originalName);
         if (!SAFE_IDENTIFIER.matcher(targetName).matches()) {
-            // 重建出来的表名必须仍是合法标识符,否则放弃
             return null;
         }
 
-        // 收集最终列(保留原顺序),并记录每个最终列的注释
         List<ColumnDef> originalColumns = table.getColumns() != null ? table.getColumns() : List.of();
         List<ColumnDef> finalColumns = new ArrayList<>();
         Map<String, String> finalColumnComments = new LinkedHashMap<>();
@@ -144,14 +366,13 @@ public class FixedSqlGenerator {
             if (col.getName() == null) {
                 return null;
             }
-            String fixKey = tableLower + "|" + col.getName().toLowerCase();
+            String fixKey = tableLower + "|" + col.getName().toLowerCase(Locale.ROOT);
             FieldFix fix = fixIndex.fieldFixes().get(fixKey);
             String finalName = fix != null ? fix.replacement() : col.getName();
             if (!SAFE_IDENTIFIER.matcher(finalName).matches()) {
                 return null;
             }
-            // 防止重命名后与已有列冲突(例如两个字段都建议改成同名),冲突则放弃该表重建
-            String finalNameLower = finalName.toLowerCase();
+            String finalNameLower = finalName.toLowerCase(Locale.ROOT);
             if (finalColumnNamesLower.contains(finalNameLower)) {
                 return null;
             }
@@ -168,7 +389,6 @@ public class FixedSqlGenerator {
             finalColumnComments.put(finalNameLower, col.getComment());
         }
 
-        // 补必备列:只补当前不存在的(用最终列名集合判断)
         Map<String, String> missing = fixIndex.missingRequired().get(tableLower);
         if (missing != null) {
             for (Map.Entry<String, String> entry : missing.entrySet()) {
@@ -178,7 +398,6 @@ public class FixedSqlGenerator {
                 }
                 ColumnDef requiredCol = parseColumnSnippet(entry.getValue());
                 if (requiredCol == null) {
-                    // after 片段不是确定的“列名 类型”格式,放弃重建
                     return null;
                 }
                 finalColumns.add(requiredCol);
@@ -272,7 +491,7 @@ public class FixedSqlGenerator {
                     .append(" IS '").append(escapeSqlLiteral(tableComment)).append("';\n");
         }
         for (ColumnDef col : columns) {
-            String comment = columnComments.get(col.getName().toLowerCase());
+            String comment = columnComments.get(col.getName().toLowerCase(Locale.ROOT));
             if (comment != null && !comment.isBlank()) {
                 sb.append("COMMENT ON COLUMN ").append(tableName).append(".").append(col.getName())
                         .append(" IS '").append(escapeSqlLiteral(comment)).append("';\n");
@@ -289,13 +508,24 @@ public class FixedSqlGenerator {
         return value == null ? "" : value.toLowerCase(Locale.ROOT);
     }
 
+    private String firstNonBlank(String first, String second) {
+        return first != null && !first.isBlank() ? first : second;
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    private record CandidateFix(LintIssue issue, FixChange change, String key, boolean rebuildSupported) {
+        boolean rebuildUsable() {
+            return rebuildSupported
+                    && (change.getStatus() == FixChangeStatus.APPLIED
+                    || change.getStatus() == FixChangeStatus.PLANNED);
+        }
+    }
+
     /** 单个字段的修复建议(replacement + 置信度) */
     private record FieldFix(String replacement, Integer confidence) {
-        boolean higherThan(FieldFix other) {
-            int mine = confidence == null ? 0 : confidence;
-            int theirs = other.confidence == null ? 0 : other.confidence;
-            return mine > theirs;
-        }
     }
 
     /** 预索引的修复集合 */

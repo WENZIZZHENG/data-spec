@@ -7,6 +7,25 @@
         执行校验
       </el-button>
     </div>
+    <div class="fix-policy-toolbar">
+      <div class="policy-control">
+        <span class="policy-label">修复模式</span>
+        <el-radio-group v-model="fixPolicyMode" size="small">
+          <el-radio-button label="GENERATE">生成</el-radio-button>
+          <el-radio-button label="DRY_RUN">dry-run</el-radio-button>
+          <el-radio-button label="DISABLED">关闭</el-radio-button>
+        </el-radio-group>
+      </div>
+      <div class="policy-control">
+        <span class="policy-label">最高风险</span>
+        <el-select v-model="fixMaxRiskLevel" size="small" class="risk-select">
+          <el-option label="低" value="LOW" />
+          <el-option label="中" value="MEDIUM" />
+          <el-option label="高" value="HIGH" />
+        </el-select>
+      </div>
+      <el-switch v-model="includeFixExplanations" size="small" active-text="解释" inactive-text="简略" />
+    </div>
 
     <div class="lint-content">
       <div class="editor-panel">
@@ -49,6 +68,56 @@
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div v-if="hasFixPlan" class="fix-plan-panel">
+              <div class="fix-plan-header">
+                <span>修复策略</span>
+                <div class="fix-plan-tags">
+                  <el-tag size="small" type="info">{{ fixModeLabel(lintResult.fixPolicy?.mode) }}</el-tag>
+                  <el-tag size="small" :type="riskTagType(lintResult.fixPolicy?.maxRiskLevel)">
+                    {{ riskLabel(lintResult.fixPolicy?.maxRiskLevel) }}
+                  </el-tag>
+                  <el-tag v-if="lintResult.fixDryRun" size="small" type="warning">dry-run</el-tag>
+                </div>
+              </div>
+              <div class="fix-summary-row">
+                <el-tag size="small" type="success">应用 {{ lintResult.fixSummary?.appliedCount ?? 0 }}</el-tag>
+                <el-tag size="small" type="warning">预览 {{ lintResult.fixSummary?.plannedCount ?? 0 }}</el-tag>
+                <el-tag size="small" type="info">跳过 {{ lintResult.fixSummary?.skippedCount ?? 0 }}</el-tag>
+              </div>
+              <ul v-if="lintResult.fixNextActions?.length" class="fix-actions">
+                <li v-for="(action, index) in lintResult.fixNextActions" :key="index">{{ action }}</li>
+              </ul>
+              <el-table
+                v-if="fixChanges.length"
+                :data="fixChanges"
+                size="small"
+                class="fix-change-table"
+                empty-text="暂无修复变更"
+              >
+                <el-table-column label="状态" width="86">
+                  <template #default="{ row }">
+                    <el-tag size="small" :type="fixStatusType(row.status)">
+                      {{ fixStatusLabel(row.status) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="风险" width="76">
+                  <template #default="{ row }">
+                    <el-tag size="small" :type="riskTagType(row.riskLevel)">
+                      {{ riskLabel(row.riskLevel) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="ruleCode" label="规则" min-width="150" />
+                <el-table-column label="变更" min-width="220" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    {{ fixChangeLabel(row) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="explain" label="解释" min-width="240" show-overflow-tooltip />
+              </el-table>
             </div>
 
             <div v-if="lintResult.fixedSql" class="fixed-sql-panel">
@@ -96,6 +165,14 @@
                 </template>
               </el-table-column>
               <el-table-column prop="ruleCode" label="规则" width="180" />
+              <el-table-column label="修复" width="100">
+                <template #default="{ row }">
+                  <el-tag v-if="row.fixStatus" size="small" :type="fixStatusType(row.fixStatus)">
+                    {{ fixStatusLabel(row.fixStatus) }}
+                  </el-tag>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="message" label="描述" min-width="260" />
               <el-table-column label="建议" min-width="240" show-overflow-tooltip>
                 <template #default="{ row }">
@@ -257,6 +334,17 @@
               </template>
             </el-table-column>
             <el-table-column prop="ruleCode" label="规则" width="170" />
+            <el-table-column label="修复" width="120">
+              <template #default="{ row }">
+                <div v-if="row.fixStatus" class="issue-fix-cell">
+                  <el-tag size="small" :type="fixStatusType(row.fixStatus)">
+                    {{ fixStatusLabel(row.fixStatus) }}
+                  </el-tag>
+                  <span v-if="row.fixRiskLevel">{{ riskLabel(row.fixRiskLevel) }}</span>
+                </div>
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="message" label="描述" min-width="240" />
           </el-table>
         </div>
@@ -278,7 +366,15 @@ import {
   diagnosticTagType,
   dialectSummary
 } from '@/utils/dialectDiagnostics'
-import type { LintIssue, LintResult, RecordDetail, SqlCheckRecord, StandardSnapshotInfo } from '@/types'
+import type {
+  FixChange,
+  FixPolicy,
+  LintIssue,
+  LintResult,
+  RecordDetail,
+  SqlCheckRecord,
+  StandardSnapshotInfo
+} from '@/types'
 
 const editorContainer = ref<HTMLElement>()
 const lintResult = ref<LintResult | null>(null)
@@ -293,6 +389,9 @@ const loadingRecordId = ref<number | null>(null)
 const activeRecord = ref<RecordDetail | null>(null)
 const recordDialogVisible = ref(false)
 const historyActiveNames = ref<string[]>([])
+const fixPolicyMode = ref<NonNullable<FixPolicy['mode']>>('GENERATE')
+const fixMaxRiskLevel = ref<NonNullable<FixPolicy['maxRiskLevel']>>('MEDIUM')
+const includeFixExplanations = ref(true)
 const projectStore = useProjectStore()
 const route = useRoute()
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
@@ -326,6 +425,18 @@ const issueTotal = computed(() => {
 })
 const fixedSqlDiffLines = computed(() => parseDiff(lintResult.value?.fixedSqlDiff))
 const lintDialectDiagnostics = computed(() => lintResult.value?.dialectDiagnostics ?? [])
+const currentFixPolicy = computed<FixPolicy>(() => ({
+  mode: fixPolicyMode.value,
+  maxRiskLevel: fixMaxRiskLevel.value,
+  includeExplanations: includeFixExplanations.value
+}))
+const fixChanges = computed<FixChange[]>(() => lintResult.value?.fixChanges ?? [])
+const hasFixPlan = computed(() => Boolean(
+  lintResult.value?.fixSummary ||
+  lintResult.value?.fixPolicy ||
+  fixChanges.value.length ||
+  lintResult.value?.fixNextActions?.length
+))
 const recordDiffLines = computed(() => {
   const record = activeRecord.value?.record
   return parseDiff(buildSqlDiff(record?.originalSql, record?.fixedSql))
@@ -383,7 +494,8 @@ async function handleLint() {
   try {
     lintResult.value = await lintSql({
       sql,
-      projectId: projectStore.currentProjectId ?? undefined
+      projectId: projectStore.currentProjectId ?? undefined,
+      fixPolicy: currentFixPolicy.value
     })
     recordCurrent.value = 1
     await loadRecords()
@@ -496,6 +608,58 @@ function fixSuggestion(issue: LintIssue) {
     return `建议替换为 ${issue.replacement}`
   }
   return '-'
+}
+
+function fixModeLabel(mode?: FixPolicy['mode']) {
+  const map: Record<string, string> = {
+    GENERATE: '生成',
+    DRY_RUN: 'dry-run',
+    DISABLED: '关闭'
+  }
+  return mode ? map[mode] ?? mode : '生成'
+}
+
+function riskLabel(risk?: FixPolicy['maxRiskLevel'] | FixChange['riskLevel']) {
+  const map: Record<string, string> = {
+    LOW: '低风险',
+    MEDIUM: '中风险',
+    HIGH: '高风险'
+  }
+  return risk ? map[risk] ?? risk : '中风险'
+}
+
+function riskTagType(risk?: FixPolicy['maxRiskLevel'] | FixChange['riskLevel']) {
+  const map: Record<string, 'success' | 'warning' | 'danger'> = {
+    LOW: 'success',
+    MEDIUM: 'warning',
+    HIGH: 'danger'
+  }
+  return risk ? map[risk] ?? 'warning' : 'warning'
+}
+
+function fixStatusLabel(status?: FixChange['status'] | LintIssue['fixStatus']) {
+  const map: Record<string, string> = {
+    APPLIED: '已应用',
+    PLANNED: '预览',
+    SKIPPED: '跳过'
+  }
+  return status ? map[status] ?? status : '-'
+}
+
+function fixStatusType(status?: FixChange['status'] | LintIssue['fixStatus']) {
+  const map: Record<string, 'success' | 'warning' | 'info'> = {
+    APPLIED: 'success',
+    PLANNED: 'warning',
+    SKIPPED: 'info'
+  }
+  return status ? map[status] ?? 'info' : 'info'
+}
+
+function fixChangeLabel(change: FixChange) {
+  const target = [change.tableName, change.columnName].filter(Boolean).join('.')
+  const before = change.before ?? '-'
+  const after = change.after ?? '-'
+  return `${target || change.changeType || '变更'}：${before} -> ${after}`
 }
 
 function locationLabel(issue: LintIssue) {
@@ -659,6 +823,33 @@ function buildDiffLines(originalLines: string[], fixedLines: string[]) {
   margin: 0;
 }
 
+.fix-policy-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+}
+
+.policy-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.policy-label {
+  color: #606266;
+  font-size: 13px;
+}
+
+.risk-select {
+  width: 92px;
+}
+
 .lint-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -704,19 +895,23 @@ function buildDiffLines(originalLines: string[], fixedLines: string[]) {
 }
 
 .fixed-sql-panel,
-.history-panel {
+.history-panel,
+.fix-plan-panel {
   background: #fff;
   border: 1px solid #e4e7ed;
   border-radius: 4px;
 }
 
-.fixed-sql-panel {
+.fixed-sql-panel,
+.fix-plan-panel {
   margin-bottom: 14px;
 }
 
 .fixed-sql-header,
 .history-title,
-.pagination-row {
+.pagination-row,
+.fix-plan-header,
+.fix-summary-row {
   display: flex;
   align-items: center;
 }
@@ -734,6 +929,50 @@ function buildDiffLines(originalLines: string[], fixedLines: string[]) {
   gap: 8px;
   width: 100%;
   font-weight: 600;
+}
+
+.fix-plan-panel {
+  padding: 10px 12px;
+}
+
+.fix-plan-header {
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.fix-plan-tags,
+.fix-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fix-summary-row {
+  margin-bottom: 8px;
+}
+
+.fix-actions {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.fix-change-table {
+  width: 100%;
+}
+
+.issue-fix-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #909399;
+  font-size: 12px;
 }
 
 .sql-code {

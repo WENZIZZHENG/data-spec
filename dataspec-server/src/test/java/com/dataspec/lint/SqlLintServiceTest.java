@@ -9,6 +9,10 @@ import com.dataspec.lint.engine.FixedSqlGenerator;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.entity.SqlCheckRecord;
+import com.dataspec.lint.model.FixChangeStatus;
+import com.dataspec.lint.model.FixMode;
+import com.dataspec.lint.model.FixPolicy;
+import com.dataspec.lint.model.FixRiskLevel;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.SqlCheckReplay;
@@ -103,6 +107,67 @@ class SqlLintServiceTest {
     }
 
     @Test
+    void lintSafeOnlyPolicySkipsMediumRiskRequiredColumnsAndPersistsMetadata() {
+        RecordingCheckRecordService recordService = new RecordingCheckRecordService();
+        SqlLintService service = new SqlLintService(
+                new SqlParserService(),
+                new EmptyRuleConfigService(),
+                List.of(
+                        new TableNameSnakeCaseRule(),
+                        new RequiredColumnsRule()
+                ),
+                new ObjectMapper(),
+                new FixedSqlGenerator(),
+                recordService,
+                new NoopAiJobRecordService(),
+                new NoopRuleExemptionService(),
+                new PromptTemplateRegistry()
+        );
+
+        LintResult result = service.lint("""
+                CREATE TABLE UserOrder (
+                    id bigserial PRIMARY KEY
+                );
+                """, null, FixPolicy.builder()
+                .maxRiskLevel(FixRiskLevel.LOW)
+                .build());
+
+        assertNotNull(result.getFixedSql());
+        assertTrue(result.getFixedSql().contains("CREATE TABLE user_order"));
+        assertTrue(result.getFixPolicy().getMaxRiskLevel() == FixRiskLevel.LOW);
+        assertEquals(1, result.getFixSummary().getAppliedCount());
+        assertTrue(result.getFixSummary().getSkippedCount() >= 1);
+        assertTrue(result.getFixExplanations().stream()
+                .anyMatch(change -> "RISK_EXCEEDS_POLICY".equals(change.getReasonCode())));
+        assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"fixRiskLevel\":\"MEDIUM\""));
+        assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"fixReasonCode\":\"RISK_EXCEEDS_POLICY\""));
+    }
+
+    @Test
+    void lintDisabledPolicyReturnsNoFixedSqlAndRecordsAiPayload() {
+        RecordingCheckRecordService recordService = new RecordingCheckRecordService();
+        RecordingAiJobRecordService aiJobRecordService = new RecordingAiJobRecordService();
+        SqlLintService service = newService(recordService, aiJobRecordService);
+
+        LintResult result = service.lint("""
+                CREATE TABLE UserOrder (
+                    id bigserial PRIMARY KEY
+                );
+                """, 1L, FixPolicy.builder()
+                .mode(FixMode.DISABLED)
+                .build());
+
+        assertNull(result.getFixedSql());
+        assertEquals(FixMode.DISABLED, result.getFixPolicy().getMode());
+        assertEquals(1, result.getFixSummary().getSkippedCount());
+        assertEquals(FixChangeStatus.SKIPPED, result.getIssues().get(0).getFixStatus());
+        assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"fixReasonCode\":\"POLICY_DISABLED\""));
+        assertEquals(1, aiJobRecordService.created.size());
+        assertTrue(aiJobRecordService.created.get(0).outputPayload().toString().contains("fixSummary"));
+        assertTrue(aiJobRecordService.created.get(0).outputPayload().toString().contains("POLICY_DISABLED"));
+    }
+
+    @Test
     void lintFillsSourceLocationForTableAndColumnIssues() {
         RecordingCheckRecordService recordService = new RecordingCheckRecordService();
         SqlLintService service = new SqlLintService(
@@ -171,6 +236,10 @@ class SqlLintServiceTest {
         assertEquals(0, root.path("suppressedCount").asInt());
         assertTrue(root.path("fixedSql").asText().contains("CREATE TABLE user_order"));
         assertTrue(root.path("fixedSqlDiff").asText().contains("-CREATE TABLE UserOrder"));
+        assertEquals("GENERATE", root.path("fixPolicy").path("mode").asText());
+        assertEquals("MEDIUM", root.path("fixPolicy").path("maxRiskLevel").asText());
+        assertEquals(1, root.path("fixSummary").path("appliedCount").asInt());
+        assertTrue(root.path("fixChanges").isArray());
         assertTrue(root.path("dialectDiagnostics").isArray());
         assertEquals("POSTGRESQL_DIALECT_INFERRED", root.path("dialectDiagnostics").get(0).path("code").asText());
 
@@ -185,12 +254,16 @@ class SqlLintServiceTest {
         assertEquals(1, issue.path("line").asInt());
         assertEquals(14, issue.path("column").asInt());
         assertEquals("table", issue.path("locationKind").asText());
+        assertEquals("LOW", issue.path("fixRiskLevel").asText());
+        assertEquals("TABLE_RENAME", issue.path("fixChangeType").asText());
+        assertEquals("APPLIED", issue.path("fixStatus").asText());
 
         JsonNode persistedIssue = new ObjectMapper()
                 .readTree(recordService.saved.get(0).getIssuesJson())
                 .get(0);
         assertEquals("table_naming_snake_case", persistedIssue.path("ruleCode").asText());
         assertEquals("table", persistedIssue.path("locationKind").asText());
+        assertEquals("APPLIED", persistedIssue.path("fixStatus").asText());
     }
 
     @Test
@@ -316,7 +389,10 @@ class SqlLintServiceTest {
         assertEquals(0, result.getErrorCount());
         assertEquals(1, result.getSuppressedCount());
         assertNull(result.getFixedSql(), "已豁免的问题不应继续驱动 fixedSql 重命名");
+        assertEquals(FixChangeStatus.SKIPPED, issue.getFixStatus());
+        assertEquals("SUPPRESSED", issue.getFixReasonCode());
         assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"suppressed\":true"));
+        assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"fixReasonCode\":\"SUPPRESSED\""));
     }
 
     private static class EmptyRuleConfigService implements RuleConfigService {

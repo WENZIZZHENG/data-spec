@@ -270,6 +270,17 @@ test('keeps SQL lint fixed SQL and record history flow wired', () => {
   assertContains(view, [
     "import { getLintRecord, lintSql, listLintRecords } from '@/api/lint'",
     'projectId: projectStore.currentProjectId ?? undefined',
+    'fixPolicy: currentFixPolicy.value',
+    'fixPolicyMode',
+    'fixMaxRiskLevel',
+    'includeFixExplanations',
+    '修复模式',
+    '最高风险',
+    '修复策略',
+    'fixChanges',
+    'fixSummary',
+    'fixStatusLabel',
+    'fixChangeLabel',
     'lintResult.fixedSql',
     'handleCopySql',
     'copyToClipboard(fixedSql',
@@ -289,6 +300,16 @@ test('keeps SQL lint fixed SQL and record history flow wired', () => {
     'export function getLintRecord(id: number)',
     'RecordDetail'
   ], 'lint api')
+
+  const schema = readSource('src/api/schema.ts')
+  assertContains(schema, [
+    'FixPolicy',
+    'FixChange',
+    'FixPlanSummary',
+    'fixPolicy?: components["schemas"]["FixPolicy"]',
+    'fixChanges?: components["schemas"]["FixChange"][]',
+    'fixRiskLevel?: "LOW" | "MEDIUM" | "HIGH"'
+  ], 'lint schema fixedSql policy')
 })
 
 test('keeps database reverse import and comparison flow wired', () => {
@@ -522,7 +543,7 @@ test('keeps critical action labels and empty states visible', () => {
   const pageExpectations = [
     {
       path: 'src/views/SqlLint.vue',
-      snippets: ['执行校验', '最近检查记录', '方言诊断', '请输入 SQL 并点击执行校验', '暂无检查记录', '已复制修正 SQL']
+      snippets: ['执行校验', '最近检查记录', '方言诊断', '修复模式', '修复策略', '最高风险', '请输入 SQL 并点击执行校验', '暂无检查记录', '已复制修正 SQL']
     },
     {
       path: 'src/views/ReverseImport.vue',

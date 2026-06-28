@@ -47,6 +47,21 @@ public class LintIssue {
     /** 建议置信度，范围 0-100 */
     private Integer confidence;
 
+    /** fixedSql 修复风险等级；仅确定性 fixer 可用 */
+    private FixRiskLevel fixRiskLevel;
+
+    /** fixedSql 变更类型；仅确定性 fixer 可用 */
+    private FixChangeType fixChangeType;
+
+    /** 当前 fixPolicy 下该问题的 fixedSql 处理状态 */
+    private FixChangeStatus fixStatus;
+
+    /** fixedSql 策略解释或跳过原因 */
+    private String fixExplain;
+
+    /** fixedSql 跳过原因稳定编码；未跳过时为空 */
+    private String fixReasonCode;
+
     /** 1-based 源 SQL 行号；无法定位时为空 */
     private Integer line;
 

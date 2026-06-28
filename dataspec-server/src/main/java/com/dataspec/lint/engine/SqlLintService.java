@@ -43,17 +43,25 @@ public class SqlLintService {
      * 校验 SQL（不指定项目，使用所有内置规则）
      */
     public LintResult lint(String sql) {
-        return lint(sql, null);
+        return lint(sql, null, null);
     }
 
     /**
      * 校验 SQL（指定项目，根据项目规则配置过滤）
      */
     public LintResult lint(String sql, Long projectId) {
+        return lint(sql, projectId, null);
+    }
+
+    /**
+     * 校验 SQL（指定项目和 fixedSql 策略，根据项目规则配置过滤）
+     */
+    public LintResult lint(String sql, Long projectId, FixPolicy fixPolicy) {
         // 1. 解析 SQL
         List<TableDef> tables = sqlParserService.parse(sql);
         if (tables.isEmpty()) {
             LintResult emptyResult = LintResult.of(tables, List.of());
+            applyFixedSqlPlan(emptyResult, fixedSqlGenerator.generatePlan(emptyResult, fixPolicy), sql);
             emptyResult.setDialectDiagnostics(dialectCompatibilityService.diagnoseSql(sql));
             // 无可解析表时仍落库一条记录,用于命中率统计与审计
             try {
@@ -135,11 +143,9 @@ public class SqlLintService {
         ruleExemptionService.applySuppressions(projectId, issues);
 
         LintResult result = LintResult.of(tables, issues);
-        // 基于确定性修复建议重建修正 SQL
-        String fixedSql = fixedSqlGenerator.generate(result);
-        result.setFixedSql(fixedSql);
-        result.setFixedSqlDiff(sqlDiffGenerator.generate(sql, fixedSql));
-        result.setDialectDiagnostics(dialectCompatibilityService.diagnoseSql(sql, fixedSql != null));
+        // 基于确定性修复建议和请求级策略重建修正 SQL/计划
+        applyFixedSqlPlan(result, fixedSqlGenerator.generatePlan(result, fixPolicy), sql);
+        result.setDialectDiagnostics(dialectCompatibilityService.diagnoseSql(sql, result.getFixedSql() != null));
 
         // 落库检查记录(失败不阻断主流程,仅记录日志)
         SqlCheckRecord record = null;
@@ -151,6 +157,17 @@ public class SqlLintService {
         recordAiReplayJob(projectId, sql, result, record);
 
         return result;
+    }
+
+    private void applyFixedSqlPlan(LintResult result, FixedSqlPlan plan, String sql) {
+        result.setFixPolicy(plan.getFixPolicy());
+        result.setFixDryRun(plan.getFixDryRun());
+        result.setFixChanges(plan.getFixChanges());
+        result.setFixExplanations(plan.getFixExplanations());
+        result.setFixSummary(plan.getFixSummary());
+        result.setFixNextActions(plan.getFixNextActions());
+        result.setFixedSql(plan.getFixedSql());
+        result.setFixedSqlDiff(sqlDiffGenerator.generate(sql, plan.getFixedSql()));
     }
 
     private void recordAiReplayJob(Long projectId, String sql, LintResult result, SqlCheckRecord record) {
@@ -171,6 +188,12 @@ public class SqlLintService {
                     orderedMap(
                             "fixedSql", result.getFixedSql(),
                             "fixedSqlDiff", result.getFixedSqlDiff(),
+                            "fixPolicy", result.getFixPolicy(),
+                            "fixDryRun", result.getFixDryRun(),
+                            "fixSummary", result.getFixSummary(),
+                            "fixChanges", result.getFixChanges(),
+                            "fixExplanations", result.getFixExplanations(),
+                            "fixNextActions", result.getFixNextActions(),
                             "errorCount", result.getErrorCount(),
                             "warningCount", result.getWarningCount(),
                             "suggestionCount", result.getSuggestionCount(),

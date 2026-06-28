@@ -22,9 +22,14 @@
 
 稳定字段：
 
-- `LintResult`: `tables`、`issues`、`errorCount`、`warningCount`、`suggestionCount`、`suppressedCount`、`fixedSql`、`fixedSqlDiff`。
-- `LintIssue`: `severity`、`ruleCode`、`ruleName`、`message`、`tableName`、`columnName`、`suggestion`、`replacement`、`before`、`after`、`confidence`、`line`、`column`、`lineEnd`、`columnEnd`、`sourceStart`、`sourceEnd`、`locationKind`、`suppressed`、`suppressionId`、`suppressionReason`。
-- 稳定枚举：`severity` 使用 `ERROR`、`WARNING`、`SUGGESTION`；`locationKind` 至少包含 `table`、`column`、`comment_column`。
+- `LintResult`: `tables`、`issues`、`errorCount`、`warningCount`、`suggestionCount`、`suppressedCount`、`fixedSql`、`fixedSqlDiff`、`fixPolicy`、`fixDryRun`、`fixChanges`、`fixExplanations`、`fixSummary`、`fixNextActions`。
+- `FixPolicy`: `mode`、`maxRiskLevel`、`enabledRuleCodes`、`disabledRuleCodes`、`includeExplanations`。
+- `FixChange`: `status`、`reasonCode`、`ruleCode`、`ruleName`、`riskLevel`、`changeType`、`tableName`、`columnName`、`before`、`after`、`explain`、`confidence`、`sourceStart`、`sourceEnd`。
+- `FixPlanSummary`: `availableCount`、`appliedCount`、`plannedCount`、`skippedCount`。
+- `LintIssue`: `severity`、`ruleCode`、`ruleName`、`message`、`tableName`、`columnName`、`suggestion`、`replacement`、`before`、`after`、`confidence`、`fixRiskLevel`、`fixChangeType`、`fixStatus`、`fixExplain`、`fixReasonCode`、`line`、`column`、`lineEnd`、`columnEnd`、`sourceStart`、`sourceEnd`、`locationKind`、`suppressed`、`suppressionId`、`suppressionReason`。
+- 稳定枚举：`severity` 使用 `ERROR`、`WARNING`、`SUGGESTION`；`locationKind` 至少包含 `table`、`column`、`comment_column`；`FixPolicy.mode` 使用 `GENERATE`、`DRY_RUN`、`DISABLED`；`fixRiskLevel` 使用 `LOW`、`MEDIUM`、`HIGH`；`fixStatus` 使用 `APPLIED`、`PLANNED`、`SKIPPED`。
+
+`fixedSql` 仍只是候选输出，不代表已经写回业务仓库；`fixPolicy.mode=DRY_RUN` 时 AI 必须把结果视为预览，并结合 `fixedSqlDiff`、`fixChanges` 和 `dialectDiagnostics` 人工确认后再继续。`fixPolicy.includeExplanations=false` 时 `fixExplanations` 可为空，AI 仍应以 `fixChanges.status/reasonCode` 判断跳过项。
 
 ## 字段推荐
 
