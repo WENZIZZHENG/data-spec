@@ -22,4 +22,4 @@
 - [x] 4.2 更新 README / TODO，说明 P6-39 已完成能力和边界。
 - [x] 4.3 执行 `pnpm test`、`pnpm build`、`npx.cmd openspec validate --all` 和 `git diff --check`。
 - [x] 4.4 完成本地结构化代码评审并修复 findings。
-- [ ] 4.5 创建本地 commit，归档 OpenSpec change 并再次验证。
+- [x] 4.5 创建本地 commit，归档 OpenSpec change 并再次验证。
