@@ -21,7 +21,8 @@
 15. 本次追加优化建议已补为 P6-165 到 P6-170：标准对象稳定标识、AI 输出后置校验、标准查询 DSL、MCP 资源游标分页、前端操作录制和标准维护工作量估算。
 16. 本次新增工程化优化建议已补为 P6-171 到 P6-176：数据质量测试导出、标准变更事件流、IDE 提示、跨协议 Schema 导出、指标口径映射和消费端兼容套件。
 17. 本次新增优化建议已补为 P6-177 到 P6-182：OpenSpec 准备度评分、MCP 会话状态记忆、业务代码 Patch Plan、数据库采集断点续扫、维护 Inbox 可执行工作流和前端页面对象测试层。
-18. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+18. 本次继续新增优化建议已补为 P6-183 到 P6-188：数据库 COMMENT 回写计划、中英文命名映射、标准驱动测试数据包、AI Context 质量预算、字段使用契约和标准问答可采纳度。
+19. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -1816,6 +1817,66 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：E2E 用例能通过页面对象完成核心流程；页面文案调整不破坏选择器；AI 自动化脚本能复用 page object 输出的动作名称和失败截图。
 - 边界：不做全量视觉回归，不要求所有组件立刻补选择器；第一版先覆盖主路径和高频故障页。
 
+### P6-183：标准字段到数据库 COMMENT 回写计划
+- 状态：待办。
+- 为什么做：反向导入能把现有数据库补进 DataSpec，但反过来，当字段标准被修正后，源数据库的表注释和列注释也可能长期落后；AI 需要一份可审阅的 COMMENT 回写计划，而不是直接生成不可控的修改 SQL。
+- 已有基础：已有数据库直连 metadata、schema dump、二次比对、字段来源批次、schema plan 预览、DDL 生成和 SQL/DDL 验证沙箱待办。
+- 缺口：缺少 commentPatchPlan、currentComment、targetComment、commentDiff、dryRunSql、dialectSupport、riskLevel 和 rollbackHint；目前只能导入注释，不能稳定输出“标准 -> 数据库注释”的只读预览。
+- 参考项目：`bytebase/bytebase` 的数据库变更预览、`ariga/atlas` 的 schema diff 和 `k1LoW/tbls` 的数据库文档化；只借鉴注释差异表达，不默认写源数据库。
+- 落地产物：新增 COMMENT 回写计划 API/CLI/前端预览；按 PostgreSQL/MySQL 方言生成 COMMENT ON 或 ALTER COMMENT 草稿，标记 no-op、missing、changed 和 unsupported；支持导出 SQL 与 JSON 证据。
+- 验收标准：连接数据库后能看到 DataSpec 标准注释与当前库注释差异；默认只 dry-run，不执行数据库写入；输出内容不包含密码、token、完整 JDBC URL 或业务数据行。
+- 边界：第一版只处理表/列注释，不处理表重命名、字段重命名、索引调整或数据迁移；真实执行仍交给用户或后续显式 apply 流程。
+
+### P6-184：字段标准中英文命名与翻译辅助
+- 状态：待办。
+- 为什么做：项目里常见“用户/会员/account/user”“手机号/mobile/phone”等中英文混用；如果没有结构化命名映射，AI 生成字段、搜索标准或解释差异时容易把翻译偏好当成猜测。
+- 已有基础：已有字段 displayName/name、aliases、业务术语表、字段检索、字段推荐、数据字典、AI Context 和 Prompt 生成。
+- 缺口：缺少 localizedNames、preferredEnglishName、forbiddenTranslations、translationAliases、translationConfidence 和 exampleMappings；当前别名能粗略匹配，但不能表达“推荐翻译”和“不要这样翻译”。
+- 参考项目：`open-metadata/OpenMetadata` 的 glossary/term 管理、`datahub-project/datahub` 的元数据标签和 `i18next/i18next` 的 key/value 资源组织；只借鉴命名映射，不做完整 UI 国际化。
+- 落地产物：扩展字段或术语模型，支持中文名、英文推荐名、禁用翻译、别名和示例映射；字段推荐、标准搜索、AI Context 和数据字典导出可返回 translationReason。
+- 验收标准：AI 查询“会员手机号”或生成用户表字段时，能明确知道推荐字段名、可接受别名和禁用翻译；冲突翻译能在术语表或字段库中被提示。
+- 边界：不接入外部机器翻译服务，不自动覆盖已有字段名；第一版只维护项目级命名映射和 AI 可读说明。
+
+### P6-185：标准驱动测试数据与边界用例包
+- 状态：待办。
+- 为什么做：AI 在业务仓库写单测、mock、seed 或示例 SQL 时，需要安全、符合标准的样例值，也需要典型无效值验证规则；不能从真实业务数据里复制样例。
+- 已有基础：已有字段格式约束、示例/反例库、受控脱敏样例采样、前端 mock 演示模式、数据质量测试导出和 fixture/golden 基线。
+- 缺口：缺少 testDataCase、validExamples、invalidExamples、boundaryExamples、seedProfile、mockPayload 和 coverageReport；现有样例分散在字段描述、fixture 和手写文档里。
+- 参考项目：`faker-js/faker` 的合成数据生成、`mswjs/msw` 的前端 mock、`storybookjs/storybook` 的状态样例和 `great-expectations/great_expectations` 的期望/反例组织；只生成安全样例，不采集真实数据行。
+- 落地产物：新增测试数据包生成 API/CLI；按字段标准、枚举、格式、敏感标记和业务对象生成 JSON/CSV/SQL seed/mock 草稿，同时输出有效、无效和边界样例。
+- 验收标准：手机号、金额、时间、枚举、JSON 等字段能生成可解释样例；导出包可被前端 mock、后端测试或 AI 生成单测复用；生成结果不包含原始业务数据。
+- 边界：不自动写入业务数据库，不保证满足所有业务规则；第一版聚焦字段级和轻量对象级样例。
+
+### P6-186：AI Context 质量预算与可用性评分
+- 状态：待办。
+- 为什么做：AI Context 已能裁剪和导出，但 AI 还需要知道“这份上下文是否够用”：字段是否缺枚举、样例是否太少、规则是否被截断、token 预算是否被低价值内容占满。
+- 已有基础：已有 AI Context zip、按需裁剪、上下文预算、字段质量评分、标准查询 DSL、AI profile、Context 增量更新包和 Prompt 评测待办。
+- 缺口：缺少 contextQualityScore、tokenBudgetBreakdown、missingCriticalFields、truncatedResources、coverageByCategory、staleContextWarnings 和 nextContextActions；现在只能看导出是否成功，不能判断是否适合某个 AI 任务。
+- 参考项目：`promptfoo/promptfoo` 的 prompt 评测、`langfuse/langfuse` 的 trace/score 和 `OpenLineage/OpenLineage` 的运行元数据；只做确定性评分，不调用外部 LLM 打分。
+- 落地产物：新增 Context 质量评分 API/CLI；导出前后输出质量摘要、token 分布、缺口、截断说明和推荐补充动作；前端 AI Context 页面展示评分与可复制 JSON。
+- 验收标准：最小 Context、标准 Context 和完整 Context 能分别给出可解释评分；缺少枚举、格式、业务术语或关键规则时有明确 nextAction；AI 可据此决定继续、补导出或停止。
+- 边界：评分不替代真实任务结果，不保证 AI 一定生成正确；第一版只基于 DataSpec 元数据和导出内容做静态评估。
+
+### P6-187：字段使用契约与禁用场景说明
+- 状态：待办。
+- 为什么做：同一个字段“是什么”不等于“什么时候该用”；AI 生成 SQL/DDL 时常会混用统计口径、展示字段、内部状态或废弃字段，需要字段级 usage contract 明确推荐场景和禁用场景。
+- 已有基础：已有字段状态、敏感标记、字段格式约束、派生字段/单位规则、指标口径映射、字段知识卡、业务对象关系图和标准问答入口。
+- 缺口：缺少 preferredUseCases、avoidWhen、joinHints、defaultFilters、aggregationHints、replacementGuidance 和 misuseExamples；当前 AI 只能从描述和标签推断使用边界。
+- 参考项目：`dbt-labs/dbt-core` 的模型文档、`OpenLineage/OpenLineage` 的上下游语义和 `open-metadata/OpenMetadata` 的资产说明；只借鉴使用说明结构，不建设重型血缘平台。
+- 落地产物：扩展字段标准或新增轻量使用契约模型；字段详情、AI Context、DDL/Prompt 生成、标准问答和字段推荐可读取使用建议、禁用场景和常见误用。
+- 验收标准：AI 查询“订单金额应该用哪个字段统计”时能看到单位、聚合、过滤和禁用提示；废弃或展示专用字段不会被推荐为写入字段；误用样例可进入规则或问答提示。
+- 边界：不做完整指标平台，不要求每个字段都补齐契约；第一版优先高风险金额、状态、时间、用户和敏感字段。
+
+### P6-188：标准问答答案可采纳度与低置信处理
+- 状态：待办。
+- 为什么做：标准问答能让 AI 或用户快速问“字段叫什么”，但答案如果证据不足、标准冲突或命中候选字段，应该明确低置信，而不是给出一个看似确定的字段名。
+- 已有基础：已有字段检索、标准问答入口、业务术语表、标准证据置信度、AI 输出引用证据、候选 Inbox、字段质量评分和标准查询 DSL 待办。
+- 缺口：缺少 answerability、confidenceReason、missingEvidence、candidateOnly、conflictingStandards、suggestedNextQuery 和 escalateToInbox；问答结果还不能稳定表达“可直接采用/需要确认/不能回答”。
+- 参考项目：`sourcegraph/sourcegraph` 的搜索解释、`promptfoo/promptfoo` 的评测断言和 `langfuse/langfuse` 的评分记录；只借鉴答案评分与证据展示，不接入在线问答模型。
+- 落地产物：为标准问答和字段搜索增加可采纳度摘要；输出 answerStatus、confidence、evidenceRefs、missingFacts、conflicts 和 nextActions；前端展示低置信提示，CLI/MCP 可机器读取。
+- 验收标准：同义词冲突、候选未采纳、字段缺格式、低质量字段或无命中时，问答不会伪装成确定答案；AI 能根据 answerStatus 决定采用、追问、转候选或停止。
+- 边界：不实现通用自然语言问答引擎，不调用外部 LLM；第一版基于现有检索、术语表、证据和质量分确定性判断。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -1833,6 +1894,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`great-expectations/great_expectations`](https://github.com/great-expectations/great_expectations)：数据质量规则、验证结果和文档化体验参考。
 - [`datahub-project/datahub`](https://github.com/datahub-project/datahub)：数据目录、字段影响分析和元数据关系参考。
 - [`open-metadata/OpenMetadata`](https://github.com/open-metadata/OpenMetadata)：元数据采集、数据质量和资产视图参考。
+- [`i18next/i18next`](https://github.com/i18next/i18next)：多语言资源、key/value 命名和翻译映射组织参考。
 - [`schemacrawler/SchemaCrawler`](https://github.com/schemacrawler/SchemaCrawler)：数据库 metadata 抽取、schema 快照和文档化参考。
 - [`prisma/prisma`](https://github.com/prisma/prisma)：schema introspection、开发期数据库工具和本地工作流参考。
 - [`pnpm/pnpm`](https://github.com/pnpm/pnpm)：lockfile、依赖解析和可复现安装参考。
