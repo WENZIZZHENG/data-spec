@@ -22,3 +22,11 @@ DataSpec 页面已经覆盖字段库、反向导入、SQL 校验、覆盖率和 
 
 - 前端 `App.vue`、`Dashboard.vue`、源码级 smoke 测试和 README/TODO。
 - 不新增后端 API、数据库迁移或外部依赖。
+
+## Verification Evidence
+
+- `pnpm test`（`dataspec-web`）：73 tests, 0 failures。
+- `pnpm build`（`dataspec-web`）：通过；仅保留既有 Rolldown pure annotation 和 chunk size warning。
+- `npx.cmd openspec validate add-task-navigation-empty-states`：通过。
+- `git diff --check`：通过；仅提示仓库既有 LF/CRLF 换行提醒。
+- 结构化代码评审：发现并修复 localStorage 为数组但混入坏记录时未同步清理持久化值的问题；复测通过。
