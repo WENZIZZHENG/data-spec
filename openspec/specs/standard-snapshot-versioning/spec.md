@@ -16,15 +16,15 @@ The system SHALL allow users to create a project-level standard snapshot for the
 - **THEN** DataSpec returns the original snapshot result without creating a duplicate snapshot row.
 
 ### Requirement: Latest snapshot metadata
-The system SHALL expose latest standard snapshot metadata for a project without requiring callers to parse payload JSON.
+The system SHALL expose latest standard snapshot metadata for a project without requiring callers to parse payload JSON, including for standard change previews.
 
 #### Scenario: Latest snapshot exists
 - **WHEN** a caller requests current standard version metadata for a project with snapshots
 - **THEN** the system returns snapshot ID, version, name, hash, and created time.
 
-#### Scenario: No snapshot exists
-- **WHEN** a caller requests current standard version metadata for a project without snapshots
-- **THEN** the system returns an unversioned metadata value and does not block existing workflows.
+#### Scenario: What-if preview includes snapshot
+- **WHEN** a standard change preview is generated for a project with a latest snapshot
+- **THEN** the preview includes the latest snapshot metadata and a hint to create a new snapshot after accepting the change.
 
 ### Requirement: AI Context version metadata
 AI Context exports SHALL include standard snapshot metadata.

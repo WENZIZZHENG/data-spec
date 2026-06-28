@@ -35,15 +35,15 @@ The system SHALL summarize known project-local sources that reference or may ref
 - **THEN** the report includes snapshot/context impact items with latest version, hash, or export timestamp when available.
 
 ### Requirement: Provide edit warnings
-The system SHALL provide non-blocking edit warnings for field changes likely to affect downstream outputs.
+The system SHALL provide non-blocking edit warnings and what-if inputs for field changes likely to affect downstream outputs.
 
 #### Scenario: Critical field attributes
 - **WHEN** a report contains template, SQL check, import source, snapshot, or code set impacts
 - **THEN** the report includes warnings for changes to field name, data type, status, code set, or sensitive flag.
 
-#### Scenario: No known impacts
-- **WHEN** no known impact source references the field
-- **THEN** the report returns zero impact counts and an empty warning list.
+#### Scenario: Field what-if preview reuses impact report
+- **WHEN** DataSpec previews a field update
+- **THEN** the preview uses the field impact report as the source for field impact items and warning attributes.
 
 ### Requirement: Frontend impact visibility
 The frontend SHALL expose field impact analysis from the field library.

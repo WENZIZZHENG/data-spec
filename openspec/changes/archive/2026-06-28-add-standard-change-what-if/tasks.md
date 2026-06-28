@@ -22,4 +22,4 @@
 - [x] 4.1 执行 `mvn test`、`pnpm test`、`pnpm build`、`npx.cmd openspec validate --all` 和 `git diff --check`。
 - [x] 4.2 完成本地结构化代码评审并修复 findings。
 - [x] 4.3 更新 TODO/README 状态和 Verification Evidence。
-- [ ] 4.4 创建本地 commit，归档 OpenSpec change 并再次验证。
+- [x] 4.4 创建本地 commit，归档 OpenSpec change 并再次验证。
