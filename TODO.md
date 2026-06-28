@@ -15,7 +15,8 @@
 9. 本次新增优化建议已补为 P6-129 到 P6-134：标准包 Lockfile、SQL 格式化 Profile、脱敏样例采样、标准消费清单、规则覆盖率和前端 mock 演示模式。
 10. 本次继续新增优化建议已补为 P6-135 到 P6-140：AI 任务预检、反向导入 plan/apply、配置 Schema、凭据复用、标准变更迁移 recipe 和统一任务结果协议。
 11. 本次补充优化建议已补为 P6-141 到 P6-146：AI 输出验证沙箱、多 schema 反向导入合并、Agent 启动包、质量异常归因、前端修复 Action 和个人健康摘要。
-12. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+12. 本次继续补充优化建议已补为 P6-147 到 P6-152：Schema Registry 可视化、可复用工作流 recipe、标准包同步巡检、业务仓库合规分、字段库密集编辑体验和待办里程碑收束。
+13. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -1455,6 +1456,66 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：打开项目即可看到候选、规则、质量、导入、AI 任务的关键摘要；AI 可读取 JSON 后自动选择下一步任务；摘要不暴露 token、密码、完整 JDBC URL 或业务数据行。
 - 边界：不发邮件/IM 通知，不做多人分派，不要求后台定时任务；第一版按用户主动打开或 CLI 调用即时生成。
 
+### P6-147：Schema Registry 契约浏览器与兼容说明页
+- 状态：待办。
+- 为什么做：Schema Registry 第一版偏向 AI/CLI/MCP 消费，但用户和 AI browser automation 也需要在前端快速确认某个契约的版本、稳定字段、废弃字段和兼容策略。
+- 已有基础：已有标准契约 registry 待办、OpenAPI 类型契约、AI Context manifest、CLI/MCP 契约出口和 README 兼容说明。
+- 缺口：缺少前端可视化入口，无法按 contractId 查看 JSON Schema、stableFields、deprecatedFields、breakingChangePolicy 和示例 payload，也不能把契约 URI 复制给 AI。
+- 参考项目：`Redocly/redocly-cli` 的契约文档化、`SchemaStore/schemastore` 的 Schema 目录和 `bufbuild/buf` 的 breaking change 检查；只借鉴浏览与兼容说明，不做外部 schema registry 服务。
+- 落地产物：新增“系统设置 / 契约 Registry”页面或等价入口；支持契约列表、详情、兼容策略、废弃字段提示、示例 JSON 和复制 CLI/MCP resource URI；前端类型由 OpenAPI schema.ts 生成或 re-export。
+- 验收标准：用户能在页面看到 Field、Rule、LintResult、AI Context 等契约的版本和稳定字段；AI 可复制一段契约上下文继续执行任务；契约字段变化有最小前端 smoke 或类型验证覆盖。
+- 边界：不重做完整文档站，不允许前端编辑契约，不把内部 DTO 全量暴露为稳定契约；第一版只展示 AI 消费面。
+
+### P6-148：可复用 AI 工作流 Recipe 编排
+- 状态：待办。
+- 为什么做：很多 AI 任务不是单个 API 调用，而是 doctor、preflight、导出 Context、执行 lint、生成 fixedSql、导出证据包等步骤的组合；每次在聊天里临时拼命令容易漏验证和边界。
+- 已有基础：已有 MCP/CLI 工作流模板、AI 任务卡、AI 任务推荐队列、任务结果协议、执行证据包、doctor 和 preflight 待办。
+- 缺口：缺少 machine-readable workflow recipe，无法表达 steps、inputs、requiredCapabilities、verificationCommands、artifacts、rollbackHint 和 blockedReason。
+- 参考项目：GitHub Actions reusable workflow、`go-task/task` 的本地任务组织和 `casey/just` 的命令 recipe；只借鉴步骤声明，不引入远程任务调度平台。
+- 落地产物：新增 `.dataspec/workflows/*.json|yaml` 约定、CLI `dataspec workflow list/run --dry-run` 和 MCP prompt/resource；内置 `safe-sql-fix`、`reverse-import-review`、`export-ai-context` 等个人高频流程。
+- 验收标准：AI 能列出当前项目可执行工作流，先 dry-run 展示步骤和验证命令，再逐步执行并产出 TaskResult；失败步骤能给出可恢复位置和下一步建议。
+- 边界：不做长任务队列，不自动执行高风险写入，不替代 OpenSpec 实施流程；第一版只编排已有能力和只读/显式确认步骤。
+
+### P6-149：标准包同步巡检与漂移修复建议
+- 状态：待办。
+- 为什么做：业务仓库里缓存的 `.dataspec/`、Context 包、lockfile、标准快照和 CLI 配置会随 DataSpec 项目变化而过期；AI 如果读取旧包，会生成不符合当前标准的 SQL 或代码。
+- 已有基础：已有业务仓库初始化、离线 AI Context 缓存、标准包 Lockfile、Context 增量更新包、版本兼容矩阵、doctor 和标准消费清单待办。
+- 缺口：缺少同步巡检入口，无法比较业务仓库当前标准包与 DataSpec 服务端 registry/snapshot 的差异，也缺少安全的更新建议。
+- 参考项目：`renovatebot/renovate` 的依赖漂移检测、`pnpm/pnpm` 与 `rust-lang/cargo` 的 lockfile 可复现策略；只借鉴漂移报告，不自动改业务仓库。
+- 落地产物：新增 CLI `dataspec sync check` 或等价 doctor 子检查；输出 currentVersion、latestVersion、missingContracts、staleFiles、recommendedCommands 和 safeUpdatePlan；README 说明何时需要刷新 Context。
+- 验收标准：业务仓库标准包过期时能明确提示需要更新哪些文件和原因；AI 可根据 JSON 输出生成更新 PR 建议；报告不包含 token、密码或业务数据行。
+- 边界：不自动提交业务仓库，不强制联网，不把所有历史 Context 包回填；第一版只检查本地 `.dataspec/` 与当前服务端/导出物差异。
+
+### P6-150：业务仓库标准合规分与 PR 摘要
+- 状态：待办。
+- 为什么做：DataSpec 的标准价值最终要体现在业务仓库变更里；单个 lint 结果太局部，AI 和用户需要一个 PR/变更级摘要判断本次修改对字段标准、命名、枚举、SQL 和 Context 版本的影响。
+- 已有基础：已有 GitHub inline review、字段影响分析、标准质量门禁、业务代码字段引用索引、规则覆盖率、执行证据包和 TaskResult 待办。
+- 缺口：缺少变更级 complianceScore、passedChecks、warnings、requiredActions、evidenceRefs 和 suggestedFixes，无法把多项检查合成一个可读 PR summary。
+- 参考项目：`reviewdog/reviewdog` 的 diff 诊断聚合、GitHub Actions job summary 和 `great-expectations/great_expectations` 的验证结果结构；只借鉴摘要与分数，不把它变成团队审批流。
+- 落地产物：新增 `dataspec review summary --format markdown|json`；聚合 SQL lint、字段引用、标准包版本、契约兼容、敏感信息和迁移 recipe；前端或证据包可展示同一摘要。
+- 验收标准：一次业务仓库变更能生成机器可读和人可读的标准合规摘要；AI 可据此优先修复高风险项；低分原因必须有证据链接或可执行命令。
+- 边界：不阻断用户本地提交，不替代 CI 审批，不读取业务数据行；第一版聚合已有静态检查和 DataSpec 元数据。
+
+### P6-151：字段库密集编辑与大表格键盘体验
+- 状态：待办。
+- 为什么做：字段标准数量增加后，用户日常维护会从“偶尔新增一个字段”变成“批量筛选、对比、编辑、标记、撤销”；当前表格体验如果不够密集高效，会拖慢个人使用和 AI browser automation。
+- 已有基础：已有字段库、字段分组、批量维护、来源追踪、质量评分、冲突检测、字段检索、前端性能和可访问性待办。
+- 缺口：缺少可保存筛选视图、键盘多选、批量编辑草稿、列配置、虚拟滚动、行内校验和撤销提示，AI 自动化也缺少稳定 data-testid 与可预测焦点流。
+- 参考项目：`TanStack/table` 的表格状态模型、`ag-grid/ag-grid` 的密集数据编辑体验和 Element Plus 表格组件；只借鉴交互模式，不引入过重企业表格平台。
+- 落地产物：升级字段库表格体验；支持密集模式、列显示配置、保存筛选、键盘导航、多选批量操作、批量编辑预览和错误行定位；补前端 smoke/单测覆盖关键交互。
+- 验收标准：用户能在几百到几千字段下流畅筛选和批量维护；键盘操作、焦点状态和错误提示可用；批量保存前能预览影响并保留撤销路径。
+- 边界：不重做整个前端设计系统，不一次性迁移所有表格，不牺牲简单项目的轻量体验；第一版聚焦字段库和候选 Inbox 高频表格。
+
+### P6-152：P6 待办里程碑收束与实施队列
+- 状态：待办。
+- 为什么做：P6 待办已经覆盖大量增强方向，如果只按编号线性追加，AI 和用户都容易在“下一个最该做什么”上迷路；需要把待办转成更可执行的 Now/Next/Later 和 OpenSpec 输入队列。
+- 已有基础：已有 TODO 路线图、OpenSpec change 流程、归档记录、README 当前功能摘要、执行证据包和 TODO 到 OpenSpec 交接助手待办。
+- 缺口：缺少里程碑分组、依赖关系、容量限制、冻结窗口和完成证据索引，导致新增建议越来越多但实施顺序不够清晰。
+- 参考项目：`backstage/backstage` 的开发者入口、`changesets/changesets` 的变更组织和 OpenSpec tasks 的可验证清单；只借鉴规划方式，不引入外部项目管理系统。
+- 落地产物：拆出 `docs/roadmap/p6-now-next-later.md` 或等价路线图；主 TODO 只保留当前队列、已完成摘要和入口链接；为每个近期任务补 change_id 建议、验收命令、依赖和不做边界。
+- 验收标准：AI 打开项目后能在 1 分钟内判断当前最该实现的 3-5 个任务；已完成项不会继续压在主待办正文；新增建议能被归并到合适里程碑而不是无限追加。
+- 边界：不删除历史任务，不改变已完成事实，不要求一次性重写所有 P6 内容；第一版先收束当前 P6 队列和新增任务入口。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -1487,6 +1548,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`dbeaver/dbeaver`](https://github.com/dbeaver/dbeaver)：数据库连接配置、metadata 浏览和多方言体验参考。
 - [`reviewdog/reviewdog`](https://github.com/reviewdog/reviewdog)：基于 diff 的代码审查评论、诊断聚合和 PR 反馈参考。
 - [`pre-commit/pre-commit`](https://github.com/pre-commit/pre-commit)：本地变更钩子、按文件质量门禁和轻量开发工作流参考。
+- [`go-task/task`](https://github.com/go-task/task)：本地任务 recipe、跨平台命令编排和可复用工作流参考。
+- [`casey/just`](https://github.com/casey/just)：轻量命令 recipe、参数化本地工作流和开发者命令入口参考。
 - [`hashicorp/terraform`](https://github.com/hashicorp/terraform)：plan/apply、状态记录和 dry-run 风格的写入前演练参考。
 - [`openrewrite/rewrite`](https://github.com/openrewrite/rewrite)：代码迁移 recipe、批量修复 dry-run 和可审查补丁参考。
 - [`changesets/changesets`](https://github.com/changesets/changesets)：变更集、版本发布说明和迁移提示组织参考。
@@ -1499,6 +1562,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`getsentry/sentry-javascript`](https://github.com/getsentry/sentry-javascript)：前端错误上下文、breadcrumb 和本地反馈证据采集参考。
 - [`testcontainers/testcontainers-java`](https://github.com/testcontainers/testcontainers-java)：Java 集成测试中启动真实 PostgreSQL/MySQL 容器的参考。
 - [`TanStack/query`](https://github.com/TanStack/query)：前端 server state、请求缓存、重试和错误状态收口参考。
+- [`TanStack/table`](https://github.com/TanStack/table)：复杂表格状态、列配置、筛选排序和虚拟化体验参考。
+- [`ag-grid/ag-grid`](https://github.com/ag-grid/ag-grid)：密集数据表格、行内编辑和大数据量交互模式参考。
 - [`dequelabs/axe-core`](https://github.com/dequelabs/axe-core)：前端可访问性自动检查规则参考。
 - [`GoogleChrome/lighthouse`](https://github.com/GoogleChrome/lighthouse)：页面性能、可访问性和最佳实践审计参考。
 - [`storybookjs/storybook`](https://github.com/storybookjs/storybook)：前端组件状态样例库、交互文档和视觉回归预备参考。
