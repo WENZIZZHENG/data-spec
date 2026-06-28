@@ -20,4 +20,4 @@
 - [x] 4.1 运行 `openspec validate add-validation-command-advisor --strict`。
 - [x] 4.2 运行 Node 单测、后端/前端必要验证和 `git diff --check`。
 - [x] 4.3 执行本地结构化代码评审并修复 findings，不使用子 agent。
-- [ ] 4.4 完成提交并归档 OpenSpec change。
+- [x] 4.4 完成提交并归档 OpenSpec change。
