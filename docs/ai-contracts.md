@@ -8,6 +8,80 @@
 - 需要同步更新契约测试：删除字段、字段改名、稳定枚举改名、字段类型变化、同名字段语义变化。
 - 不作为稳定契约：时间戳具体值、Markdown 文案全文、数组中与业务数据相关的完整数量、内部 DTO 私有实现细节。
 
+## Schema Registry
+
+Schema Registry 是 DataSpec 对 AI 可消费输出结构的只读索引，不是权限、审批、发布流程或写入安全策略。AI、CLI、MCP 和离线 Context 包可以先读取它，再决定哪些字段名和版本可依赖。
+
+稳定入口：
+
+- API `GET /api/contracts`: 返回 registry catalog。
+- API `GET /api/contracts/{contractId}`: 返回单个契约详情。
+- CLI `contract list|show|check`: 读取 registry 并做轻量 invariants 检查。
+- MCP `schema-registry` resource: URI 形如 `dataspec://project/{projectId}/schema-registry`。
+- AI Context `.dataspec/schema-registry.json`: 离线包内的 registry catalog。
+
+Registry catalog 稳定字段：
+
+- `kind`: 固定为 `dataspec-schema-registry`。
+- `schemaVersion`: registry 文档结构版本，当前为整数。
+- `registryVersion`: 当前内置 registry 版本。
+- `compatibilityPolicy`: 兼容策略，稳定包含 `level`、`compatibleSince`、`additiveFieldPolicy`、`breakingChangePolicy`、`deprecationPolicy`、`compatibilityWindow`。
+- `contracts[]`: contract summary 列表。
+- `requiredContractIds[]`: 当前 DataSpec 认为 AI 高频入口必须存在的 contract id。
+- `nextActions[]`: AI 读取 registry 后可执行的下一步建议。
+
+Contract summary 稳定字段：
+
+- `contractId`
+- `displayName`
+- `description`
+- `schemaVersion`
+- `jsonSchemaRef`
+- `stableFields[]`
+- `deprecatedFields[]`
+- `compatibility`
+- `docsRef`
+
+Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`enum-dict`、`rule-config`、`template`、`standard-snapshot`、`lint-result`、`ai-context-manifest`、`ai-context-field-catalog` 和 `ai-task-profile`。
+
+`contract check` 的成功只说明 registry 结构对 AI 可用；它不会验证当前项目业务标准是否完整，也不会授权任何写入动作。
+
+### field
+
+标准字段契约，覆盖字段库和 AI Context 中的字段基础元数据，例如 `name`、`dataType`、`nullable`、`comment`、`status`、`aliases[]` 和 `matchReasons[]`。
+
+### enum-dict
+
+枚举字典契约，覆盖代码集、枚举值、展示标签和排序信息。
+
+### rule-config
+
+规则配置契约，覆盖 SQL lint 规则 code、名称、严重级别、启用状态和参数 JSON。
+
+### template
+
+表模板契约，覆盖 DDL 生成所需的模板元数据和模板字段。
+
+### standard-snapshot
+
+标准快照契约，覆盖 `specVersion`、`specHash`、来源和是否已版本化。
+
+### lint-result
+
+SQL 校验结果契约，覆盖问题列表、统计、fixedSql、diff、修复计划和方言诊断。
+
+### ai-context-manifest
+
+AI Context manifest 契约，覆盖离线包入口、标准版本、文件清单、命令和 registry 摘要。
+
+### ai-context-field-catalog
+
+AI Context 字段目录契约，覆盖字段、枚举、上下文裁剪条件和标准版本。
+
+### ai-task-profile
+
+AI 任务模式契约，覆盖 profileId、taskType、上下文范围、规则集、fixedSql 策略、输出格式和推荐命令。
+
 ## AI Task Profiles
 
 稳定字段：
@@ -28,7 +102,8 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 稳定字段：
 
-- `.dataspec/manifest.json`: `kind`、`schemaVersion`、`projectId`、`standard.specVersion`、`standard.specHash`、`generatedAt`、`files[]`、`contextScope.profileId`、`contextScope.taskType`、`commands.lint`、`commands.exportContext`、`commands.workflowList`。
+- `.dataspec/manifest.json`: `kind`、`schemaVersion`、`projectId`、`standard.specVersion`、`standard.specHash`、`generatedAt`、`files[]`、`contextScope.profileId`、`contextScope.taskType`、`contracts.schemaVersion`、`contracts.registryVersion`、`contracts.file`、`contracts.contractIds[]`、`commands.lint`、`commands.exportContext`、`commands.workflowList`、`commands.contractList`。
+- `.dataspec/schema-registry.json`: Schema Registry catalog，稳定字段遵循上方 Schema Registry 契约。
 - `.dataspec/field-catalog.json`: `projectId`、`standard.specVersion`、`standard.specHash`、`contextScope`、`fields[]`、`enums[]`。
 - `fields[]`: `name`、`dataType`、`nullable`、`sensitive`、`status`、`comment`、`displayName`、`category`、`tags`、`codeSetId`、`example`、`aliases[]`、`matchReasons[]`。
 - `.dataspec/rules.yaml`: `standard`、`naming`、`rules`、`rule_exemptions`。
@@ -86,8 +161,10 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 - CLI `lint`、`lint-files`、`suggest-field`、`search-fields`、`generate-ddl` 透传后端稳定字段。
 - CLI `profile list/show` 输出 AI Task Profiles 稳定字段；未知 profile 或 taskType 返回参数错误退出码。
+- CLI `contract list/show/check` 输出 Schema Registry 稳定字段；`check` 失败时退出码为 `2`，并返回 `diagnostics[]`。
 - CLI `workflow list/show` 输出 `kind`、`schemaVersion`、`recipes[]`、`recipe`；recipe 保留 `id`、`title`、`goal`、`requiredInputs`、`prechecks`、`steps`、`expectedArtifacts`、`failureHandling`、`nextActions`。
 - MCP resources/tools 返回 `structuredContent` 和 `content[].text`；`content[].text` 应保持可解析 JSON 或明确文本 fallback。
 - MCP `ai-task-profiles` resource 输出 `AiTaskProfileCatalog` 兼容结构。
+- MCP `schema-registry` resource 输出 Schema Registry catalog。
 - MCP `workflow-recipes` resource 输出 `kind`、`schemaVersion`、`projectId`、`recipes[]`。
 - MCP `search_fields` tool 返回字段检索稳定字段，`content[].text` 保持可解析 JSON。

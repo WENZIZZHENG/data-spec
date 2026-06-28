@@ -92,6 +92,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'profile' || command === 'profiles') {
       return await runProfile(rest, io, fetchFn)
     }
+    if (command === 'contract' || command === 'contracts') {
+      return await runContract(rest, io, fetchFn)
+    }
     if (command === 'workflow' || command === 'workflows') {
       return runWorkflow(rest, io)
     }
@@ -524,6 +527,85 @@ async function runProfile(args, io, fetchFn) {
     return 0
   }
   throw new Error(`未知 profile 子命令: ${subcommand}。支持: list, show`)
+}
+
+async function runContract(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (!subcommand || subcommand === 'list' || subcommand.startsWith('--')) {
+    const { positional, options } = parseArgs(subcommand === 'list' ? rest : args, [
+      'project',
+      'format',
+      'server',
+      'dataspec-token'
+    ])
+    if (positional.length > 0) {
+      throw new Error(`contract list 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (!['json', 'text'].includes(format)) {
+      throw new Error('contract list 仅支持 --format text|json')
+    }
+    const catalog = await fetchContractCatalog({
+      server: normalizeServer(options.server ?? config.server),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn
+    })
+    io.writeOut(format === 'json'
+      ? `${JSON.stringify(catalog, null, 2)}\n`
+      : formatContractCatalogText(catalog))
+    return 0
+  }
+
+  if (subcommand === 'show') {
+    const { positional, options } = parseArgs(rest, ['project', 'format', 'server', 'dataspec-token'])
+    const contractId = positional[0]
+    if (!contractId) {
+      throw new Error('contract show 需要提供 contractId')
+    }
+    if (positional.length > 1) {
+      throw new Error(`contract show 只接受一个 contractId，收到: ${positional.slice(1).join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (!['json', 'text'].includes(format)) {
+      throw new Error('contract show 仅支持 --format text|json')
+    }
+    const detail = await fetchContractDetail({
+      server: normalizeServer(options.server ?? config.server),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      contractId
+    })
+    io.writeOut(format === 'json'
+      ? `${JSON.stringify(detail, null, 2)}\n`
+      : formatContractDetailText(detail))
+    return 0
+  }
+
+  if (subcommand === 'check') {
+    const { positional, options } = parseArgs(rest, ['project', 'format', 'server', 'dataspec-token'])
+    if (positional.length > 0) {
+      throw new Error(`contract check 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (!['json', 'text'].includes(format)) {
+      throw new Error('contract check 仅支持 --format text|json')
+    }
+    const catalog = await fetchContractCatalog({
+      server: normalizeServer(options.server ?? config.server),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn
+    })
+    const result = checkContractRegistry(catalog)
+    io.writeOut(format === 'json'
+      ? `${JSON.stringify(result, null, 2)}\n`
+      : formatContractCheckText(result))
+    return result.ok ? 0 : 2
+  }
+
+  throw new Error(`未知 contract 子命令: ${subcommand}。支持: list, show, check`)
 }
 
 async function runInit(args, io, fetchFn) {
@@ -1067,6 +1149,86 @@ async function fetchProfileDetail({ server, projectId, apiToken, fetchFn, profil
   return unwrapResponse(await readJsonResponse(response))
 }
 
+async function fetchContractCatalog({ server, apiToken, fetchFn }) {
+  const response = await fetchFn(`${server}/api/contracts`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  return unwrapResponse(await readJsonResponse(response))
+}
+
+async function fetchContractDetail({ server, apiToken, fetchFn, contractId }) {
+  const response = await fetchFn(`${server}/api/contracts/${encodeURIComponent(contractId)}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  return unwrapResponse(await readJsonResponse(response))
+}
+
+const REQUIRED_CONTRACT_IDS = [
+  'field',
+  'enum-dict',
+  'rule-config',
+  'template',
+  'standard-snapshot',
+  'lint-result',
+  'ai-context-manifest',
+  'ai-context-field-catalog',
+  'ai-task-profile'
+]
+
+function checkContractRegistry(catalog) {
+  const diagnostics = []
+  if (catalog?.kind !== 'dataspec-schema-registry') {
+    diagnostics.push(contractDiagnostic('fail', 'INVALID_KIND', 'registry kind 必须是 dataspec-schema-registry'))
+  }
+  if (!Number.isInteger(catalog?.schemaVersion)) {
+    diagnostics.push(contractDiagnostic('fail', 'MISSING_SCHEMA_VERSION', 'registry 缺少整数 schemaVersion'))
+  }
+  if (!catalog?.registryVersion) {
+    diagnostics.push(contractDiagnostic('fail', 'MISSING_REGISTRY_VERSION', 'registry 缺少 registryVersion'))
+  }
+  if (!catalog?.compatibilityPolicy?.breakingChangePolicy) {
+    diagnostics.push(contractDiagnostic('fail', 'MISSING_COMPATIBILITY_POLICY', 'registry 缺少 breakingChangePolicy'))
+  }
+
+  const contracts = Array.isArray(catalog?.contracts) ? catalog.contracts : []
+  const byId = new Map(contracts.map((contract) => [contract.contractId, contract]))
+  for (const contractId of REQUIRED_CONTRACT_IDS) {
+    const contract = byId.get(contractId)
+    if (!contract) {
+      diagnostics.push(contractDiagnostic('fail', 'MISSING_CONTRACT', `缺少核心 contract: ${contractId}`))
+      continue
+    }
+    if (!contract.schemaVersion) {
+      diagnostics.push(contractDiagnostic('fail', 'MISSING_CONTRACT_SCHEMA_VERSION', `${contractId} 缺少 schemaVersion`))
+    }
+    if (!Array.isArray(contract.stableFields) || contract.stableFields.length === 0) {
+      diagnostics.push(contractDiagnostic('fail', 'MISSING_STABLE_FIELDS', `${contractId} 缺少 stableFields`))
+    }
+    if (!contract.jsonSchemaRef) {
+      diagnostics.push(contractDiagnostic('fail', 'MISSING_JSON_SCHEMA_REF', `${contractId} 缺少 jsonSchemaRef`))
+    }
+    if (!Array.isArray(contract.deprecatedFields)) {
+      diagnostics.push(contractDiagnostic('fail', 'INVALID_DEPRECATED_FIELDS', `${contractId} deprecatedFields 必须是数组`))
+    }
+  }
+
+  if (diagnostics.length === 0) {
+    diagnostics.push(contractDiagnostic('pass', 'REGISTRY_READY', 'schema registry 可用于 AI/CLI/MCP 契约确认'))
+  }
+  return {
+    kind: 'dataspec-contract-check',
+    schemaVersion: 1,
+    ok: diagnostics.every((item) => item.status !== 'fail'),
+    registryVersion: catalog?.registryVersion ?? null,
+    contractCount: contracts.length,
+    diagnostics
+  }
+}
+
+function contractDiagnostic(status, code, message) {
+  return { status, code, message }
+}
+
 function resolveProfileSelection(options = {}, config = {}) {
   const explicitProfile = normalizeOptionalCliText(options.profile)
   const explicitTaskType = normalizeOptionalCliText(options.taskType ?? options['task-type'])
@@ -1314,6 +1476,72 @@ function formatProfileScope(scope) {
     scope.status ? `status=${scope.status}` : null,
     scope.limit ? `limit=${scope.limit}` : null
   ].filter(Boolean).join(', ') || 'default'
+}
+
+function formatContractCatalogText(catalog) {
+  const lines = [
+    'DataSpec Schema Registry',
+    `kind: ${catalog.kind ?? '-'}`,
+    `schemaVersion: ${catalog.schemaVersion ?? '-'}`,
+    `registryVersion: ${catalog.registryVersion ?? '-'}`,
+    ''
+  ]
+  for (const contract of catalog.contracts ?? []) {
+    lines.push(`- ${contract.contractId}@${contract.schemaVersion} ${contract.displayName ?? ''}`.trim())
+    if (contract.description) {
+      lines.push(`  ${contract.description}`)
+    }
+    if ((contract.stableFields ?? []).length > 0) {
+      lines.push(`  stableFields: ${contract.stableFields.slice(0, 8).join(', ')}${contract.stableFields.length > 8 ? ', ...' : ''}`)
+    }
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+function formatContractDetailText(contract) {
+  const lines = [
+    'DataSpec Schema Contract',
+    `contractId: ${contract.contractId}`,
+    `schemaVersion: ${contract.schemaVersion}`,
+    `name: ${contract.displayName ?? ''}`,
+    `jsonSchemaRef: ${contract.jsonSchemaRef ?? '-'}`,
+    ''
+  ]
+  if (contract.description) {
+    lines.push(contract.description, '')
+  }
+  if ((contract.stableFields ?? []).length > 0) {
+    lines.push('stable fields:')
+    for (const field of contract.stableFields) {
+      lines.push(`  - ${field}`)
+    }
+  }
+  if ((contract.deprecatedFields ?? []).length > 0) {
+    lines.push('', 'deprecated fields:')
+    for (const field of contract.deprecatedFields) {
+      lines.push(`  - ${field.fieldPath}: ${field.replacement ?? '-'} (${field.reason ?? '-'})`)
+    }
+  }
+  if (contract.compatibility?.breakingChangePolicy) {
+    lines.push('', `breaking changes: ${contract.compatibility.breakingChangePolicy}`)
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+function formatContractCheckText(result) {
+  const lines = [
+    'DataSpec Contract Check',
+    `registryVersion: ${result.registryVersion ?? '-'}`,
+    `contractCount: ${result.contractCount ?? 0}`,
+    ''
+  ]
+  for (const diagnostic of result.diagnostics ?? []) {
+    lines.push(`[${diagnostic.status.toUpperCase()}] ${diagnostic.code}: ${diagnostic.message}`)
+  }
+  lines.push('', result.ok ? '结果: 可用' : '结果: 契约 registry 不可用', '')
+  return lines.join('\n')
 }
 
 function resolveInitDefaultPaths(rawValue, existingPaths = []) {
@@ -2322,6 +2550,9 @@ Usage:
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
   node tools/dataspec-cli.mjs doctor [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
+  node tools/dataspec-cli.mjs contract list [--format text|json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs contract show <contractId> [--format text|json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs contract check [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs profile list [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs profile show <id|taskType> [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs workflow list [--format text|json]
@@ -2338,6 +2569,7 @@ Options:
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   doctor 默认做轻量 OpenAPI 状态和 AI Context 缓存检查；传 --check-openapi 时执行完整 schema 漂移检查
+  contract 用于读取和检查 AI 可消费输出契约 registry，不代表权限或发布审批
   workflow 只输出任务计划和命令建议，不会自动执行步骤或调用外部 LLM
 `
 }

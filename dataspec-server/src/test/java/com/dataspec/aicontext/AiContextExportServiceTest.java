@@ -10,6 +10,7 @@ import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.aiprofile.model.AiTaskContextScope;
 import com.dataspec.aiprofile.model.AiTaskProfile;
 import com.dataspec.aiprofile.service.AiTaskProfileService;
+import com.dataspec.contract.service.impl.SchemaRegistryServiceImpl;
 import com.dataspec.enumdict.service.EnumDictService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
@@ -62,6 +63,7 @@ class AiContextExportServiceTest {
         assertTrue(entries.containsKey(".dataspec/DATABASE_RULES.md"));
         assertTrue(entries.containsKey(".dataspec/field-catalog.json"));
         assertTrue(entries.containsKey(".dataspec/field-catalog.schema.json"));
+        assertTrue(entries.containsKey(".dataspec/schema-registry.json"));
         assertTrue(entries.containsKey(".dataspec/manifest.json"));
         assertTrue(entries.containsKey(".dataspec/README.md"));
         assertTrue(entries.containsKey(".dataspec/rules.yaml"));
@@ -88,9 +90,11 @@ class AiContextExportServiceTest {
         assertTrue(entries.get(".dataspec/workflows.md").contains("reverse-import-standards"));
         assertTrue(entries.get(".dataspec/workflows.md").contains("export-min-context"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/manifest.json"));
+        assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/schema-registry.json"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/workflows.md"));
         assertTrue(entries.get(".dataspec/README.md").contains("dataspec lint"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/field-catalog.json"));
+        assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/schema-registry.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/manifest.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains("dataspec lint <path|-> --project 1 --format json"));
         assertTrue(entries.get(".dataspec/examples/good.sql").contains("CREATE TABLE users"));
@@ -103,9 +107,21 @@ class AiContextExportServiceTest {
         assertEquals("hash123", manifest.path("standard").path("specHash").asText());
         assertFalse(manifest.path("generatedAt").asText().isBlank());
         assertTrue(manifest.path("files").isArray());
+        assertTrue(manifest.path("files").toString().contains(".dataspec/schema-registry.json"));
         assertTrue(manifest.path("files").toString().contains(".dataspec/workflows.md"));
+        assertEquals(1, manifest.path("contracts").path("schemaVersion").asInt());
+        assertEquals("2026.06.28", manifest.path("contracts").path("registryVersion").asText());
+        assertEquals(".dataspec/schema-registry.json", manifest.path("contracts").path("file").asText());
+        assertTrue(manifest.path("contracts").path("contractIds").toString().contains("field"));
+        assertTrue(manifest.path("commands").path("contractList").asText().contains("contract list"));
         assertTrue(manifest.path("commands").path("lint").asText().contains("--project 1"));
         assertTrue(manifest.path("commands").path("workflowList").asText().contains("workflow list"));
+
+        var registry = new ObjectMapper().readTree(entries.get(".dataspec/schema-registry.json"));
+        assertEquals("dataspec-schema-registry", registry.path("kind").asText());
+        assertEquals("2026.06.28", registry.path("registryVersion").asText());
+        assertTrue(registry.path("contracts").toString().contains("lint-result"));
+        assertTrue(registry.path("compatibilityPolicy").path("breakingChangePolicy").asText().contains("schemaVersion"));
 
         var catalog = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.json"));
         assertEquals("v2026.06.24", catalog.path("standard").path("specVersion").asText());
@@ -146,6 +162,7 @@ class AiContextExportServiceTest {
         assertEquals("v2026.06.24", manifest.path("standard").path("specVersion").asText());
         assertEquals("hash123", manifest.path("standard").path("specHash").asText());
         assertTrue(manifest.path("files").toString().contains(".dataspec/field-catalog.json"));
+        assertTrue(manifest.path("files").toString().contains(".dataspec/schema-registry.json"));
         assertTrue(manifest.path("files").toString().contains(".dataspec/workflows.md"));
 
         var catalog = mapper.readTree(entries.get(".dataspec/field-catalog.json"));
@@ -587,7 +604,8 @@ class AiContextExportServiceTest {
                 ruleExemptionService,
                 ruleBaselineService,
                 new PromptTemplateRegistry(),
-                aiTaskProfileService
+                aiTaskProfileService,
+                new SchemaRegistryServiceImpl()
         );
     }
 

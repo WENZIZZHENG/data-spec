@@ -568,13 +568,25 @@ node tools/dataspec-mcp.mjs
 
 可在 MCP client 中按本地 stdio server 配置。当前暴露能力：
 
-- resources：`field-catalog`、`database-rules`、`rules-yaml`、`workflow-recipes`、`ai-task-profiles`，URI 形如 `dataspec://project/1/field-catalog`。
-- prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`，并提示 agent 先读取 profile resource 再选择上下文范围、fixedSql 模式和输出格式。
+- resources：`field-catalog`、`database-rules`、`rules-yaml`、`workflow-recipes`、`ai-task-profiles`、`schema-registry`，URI 形如 `dataspec://project/1/field-catalog`。
+- prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`，并提示 agent 先读取 schema registry 和 profile resource，再选择稳定字段名、兼容策略、上下文范围、fixedSql 模式和输出格式。
 - tools：`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`search_fields`、`generate_table_ddl`；`lint_sql`、`get_field_catalog` 和 `search_field_catalog` 可接收 `profileId/taskType` hint，显式工具参数仍优先于默认 profile；`get_field_catalog` 可传 `scope/query/status/limit`，`search_field_catalog` 默认按当前关键词读取较小字段目录，`search_fields` 调用 `/api/fields/search` 并返回字段、分数、命中原因和下一步建议；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功。
 
 ## AI 输出契约
 
-[docs/ai-contracts.md](docs/ai-contracts.md) 记录第一版 AI 可依赖的稳定字段，覆盖 AI Context、SQL lint/fixedSql、字段推荐、字段检索、DDL 预览、CLI JSON 和 MCP resources/tools。兼容策略是：新增可选字段默认兼容；删除、改名、类型变化或语义变化需要同步更新契约测试和文档。
+[docs/ai-contracts.md](docs/ai-contracts.md) 记录第一版 AI 可依赖的稳定字段，覆盖 Schema Registry、AI Context、SQL lint/fixedSql、字段推荐、字段检索、DDL 预览、CLI JSON 和 MCP resources/tools。兼容策略是：新增可选字段默认兼容；删除、改名、类型变化或语义变化需要同步更新契约测试和文档。
+
+Schema Registry 是只读输出结构契约，不是鉴权、审批、发布流程或写入安全策略。服务端提供 `GET /api/contracts` 和 `GET /api/contracts/{contractId}`，返回 `kind/schemaVersion/registryVersion/compatibilityPolicy/contracts[]`、稳定字段、废弃字段、JSON Schema 和兼容窗口。AI Context zip 会额外包含 `.dataspec/schema-registry.json`，manifest 的 `contracts` 摘要会记录 registry schemaVersion、registryVersion、文件路径和 contractIds，离线 agent 可先读取它再消费字段目录、规则和 lint 结果。
+
+CLI 可用下面命令读取或检查 registry：
+
+```bash
+node tools/dataspec-cli.mjs contract list --format json --server http://localhost:8090
+node tools/dataspec-cli.mjs contract show lint-result --format json --server http://localhost:8090
+node tools/dataspec-cli.mjs contract check --format json --server http://localhost:8090
+```
+
+`contract check` 只做轻量 invariants 检查，例如核心 contract id、schemaVersion、stableFields、deprecatedFields 和 compatibilityPolicy 是否存在；它不替代 OpenAPI 漂移检查，也不表示当前 token 拥有任何项目写入权限。
 
 ## AI 可读错误诊断
 
@@ -628,7 +640,7 @@ docker compose -f docker-compose.local.yml config
 npx openspec validate --all
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、Prompt 模板 registry/eval、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、Prompt golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告、AI 回放、AI 反馈和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约、Prompt fixture 脚本和本地 smoke 脚本，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容、Prompt golden marker、API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传，以及本地启动包的参数解析、输出结构、敏感信息脱敏和 compose/Vite 代理契约。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、Prompt 模板 registry/eval、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、Prompt golden 输出、反向导入 metadata 预览摘要、Schema Registry、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告、AI 回放、AI 反馈和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约、Prompt fixture 脚本和本地 smoke 脚本，包括 contract list/show/check、schema-registry resource、workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容、Prompt golden marker、API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传，以及本地启动包的参数解析、输出结构、敏感信息脱敏和 compose/Vite 代理契约。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
 
 ## 性能基线
 

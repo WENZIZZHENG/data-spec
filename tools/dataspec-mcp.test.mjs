@@ -44,7 +44,8 @@ test('resources list and read use configured project', async () => {
     'dataspec://project/7/database-rules',
     'dataspec://project/7/rules-yaml',
     'dataspec://project/7/workflow-recipes',
-    'dataspec://project/7/ai-task-profiles'
+    'dataspec://project/7/ai-task-profiles',
+    'dataspec://project/7/schema-registry'
   ])
 
   const read = await handler({
@@ -115,6 +116,35 @@ test('ai task profiles resource is read from backend with configured profile', a
   assert.equal(payload.profiles[0].taskType, 'SQL_FIX')
 })
 
+test('schema registry resource is read from backend without project query', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    calls.push(url)
+    return jsonResponse({
+      code: 200,
+      data: {
+        kind: 'dataspec-schema-registry',
+        schemaVersion: 1,
+        registryVersion: '2026.06.28',
+        contracts: [{ contractId: 'field', schemaVersion: '1.0', stableFields: ['name'] }]
+      }
+    })
+  })
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 33,
+    method: 'resources/read',
+    params: { uri: 'dataspec://project/7/schema-registry' }
+  })
+
+  const payload = JSON.parse(read.result.contents[0].text)
+  assert.equal(calls[0], 'http://dataspec.local/api/contracts')
+  assert.equal(read.result.contents[0].mimeType, 'application/json')
+  assert.equal(payload.kind, 'dataspec-schema-registry')
+  assert.equal(payload.contracts[0].contractId, 'field')
+})
+
 test('prompts list and get return DataSpec workflow guidance', async () => {
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
 
@@ -138,6 +168,7 @@ test('prompts list and get return DataSpec workflow guidance', async () => {
   assert.match(prompt.result.messages[0].content.text, /用户订单表/)
   assert.match(prompt.result.messages[0].content.text, /DataSpec/)
   assert.match(prompt.result.messages[0].content.text, /ai-task-profiles/)
+  assert.match(prompt.result.messages[0].content.text, /schema-registry/)
 })
 
 test('lint_sql tool returns structured lint result and json text content', async () => {

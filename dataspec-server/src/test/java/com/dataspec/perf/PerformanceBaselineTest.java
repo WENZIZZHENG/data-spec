@@ -3,6 +3,7 @@ package com.dataspec.perf;
 import com.dataspec.aicontext.service.AiContextExportService;
 import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.common.perf.PerformanceProbe;
+import com.dataspec.contract.service.impl.SchemaRegistryServiceImpl;
 import com.dataspec.enumdict.service.EnumDictService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldGroupSummary;
@@ -157,7 +158,8 @@ class PerformanceBaselineTest {
                 ruleExemptionService,
                 ruleBaselineService,
                 new PromptTemplateRegistry(),
-                null
+                null,
+                new SchemaRegistryServiceImpl()
         );
     }
 

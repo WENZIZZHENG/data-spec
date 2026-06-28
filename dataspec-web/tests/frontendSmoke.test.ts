@@ -167,6 +167,35 @@ test('keeps AI profile review and selection flow wired', () => {
   ], 'AI profile selection utility')
 })
 
+test('keeps schema registry contract api and types wired', () => {
+  const api = readSource('src/api/contract.ts')
+  const types = readSource('src/types/index.ts')
+  const schema = readSource('src/api/schema.ts')
+
+  assertContains(api, [
+    "request.get<unknown, SchemaRegistryCatalog>('/contracts')",
+    'export function getContract(contractId: string)',
+    '`/contracts/${encodeURIComponent(contractId)}`'
+  ], 'schema registry api')
+
+  assertContains(types, [
+    "export type DeprecatedContractField = Schemas['DeprecatedContractField']",
+    "export type SchemaCompatibilityPolicy = Schemas['SchemaCompatibilityPolicy']",
+    "export type SchemaContractSummary = Schemas['SchemaContractSummary']",
+    "export type SchemaContract = Schemas['SchemaContract']",
+    "export type SchemaRegistryCatalog = Schemas['SchemaRegistryCatalog']"
+  ], 'schema registry types')
+
+  assertContains(schema, [
+    '"/api/contracts"',
+    '"/api/contracts/{contractId}"',
+    'listContracts',
+    'getContract',
+    'SchemaRegistryCatalog',
+    'RSchemaContract'
+  ], 'schema registry schema')
+})
+
 test('keeps standard candidate inbox workbench wired', () => {
   const view = readSource('src/views/StandardCandidate.vue')
   const api = readSource('src/api/standardCandidate.ts')

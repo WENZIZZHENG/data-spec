@@ -1156,6 +1156,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/contracts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listContracts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/contracts/{contractId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getContract"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/import-export/fields/export": {
         parameters: {
             query?: never;
@@ -2821,6 +2853,73 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["AiTaskProfileDetail"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        DeprecatedContractField: {
+            fieldPath?: string;
+            deprecatedSince?: string;
+            removalAfter?: string;
+            replacement?: string;
+            reason?: string;
+        };
+        SchemaCompatibilityPolicy: {
+            level?: string;
+            compatibleSince?: string;
+            additiveFieldPolicy?: string;
+            breakingChangePolicy?: string;
+            deprecationPolicy?: string;
+            compatibilityWindow?: string;
+        };
+        SchemaContractSummary: {
+            contractId?: string;
+            displayName?: string;
+            description?: string;
+            schemaVersion?: string;
+            jsonSchemaRef?: string;
+            stableFields?: string[];
+            deprecatedFields?: components["schemas"]["DeprecatedContractField"][];
+            compatibility?: components["schemas"]["SchemaCompatibilityPolicy"];
+            docsRef?: string;
+        };
+        SchemaContract: {
+            contractId?: string;
+            displayName?: string;
+            description?: string;
+            schemaVersion?: string;
+            jsonSchemaRef?: string;
+            jsonSchema?: {
+                [key: string]: unknown;
+            };
+            stableFields?: string[];
+            deprecatedFields?: components["schemas"]["DeprecatedContractField"][];
+            compatibility?: components["schemas"]["SchemaCompatibilityPolicy"];
+            docsRef?: string;
+            examples?: {
+                [key: string]: unknown;
+            }[];
+        };
+        SchemaRegistryCatalog: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            registryVersion?: string;
+            compatibilityPolicy?: components["schemas"]["SchemaCompatibilityPolicy"];
+            contracts?: components["schemas"]["SchemaContractSummary"][];
+            requiredContractIds?: string[];
+            nextActions?: string[];
+        };
+        RSchemaRegistryCatalog: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["SchemaRegistryCatalog"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RSchemaContract: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["SchemaContract"];
             error?: components["schemas"]["ErrorDetail"];
         };
         RProjectRestoreResult: {
@@ -6581,6 +6680,48 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RAiTaskProfileDetail"];
+                };
+            };
+        };
+    };
+    listContracts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RSchemaRegistryCatalog"];
+                };
+            };
+        };
+    };
+    getContract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contractId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RSchemaContract"];
                 };
             };
         };

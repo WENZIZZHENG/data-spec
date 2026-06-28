@@ -1250,6 +1250,109 @@ test('profile show returns 2 for unknown profile with supported values', async (
   assert.match(io.stderr, /create-table/)
 })
 
+test('contract list prints machine-readable registry catalog', async () => {
+  const calls = []
+  const fetchFn = async (url) => {
+    calls.push(url)
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: contractCatalogFixture()
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'contract',
+    'list',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(calls[0], 'http://dataspec.local/api/contracts')
+  assert.equal(output.kind, 'dataspec-schema-registry')
+  assert.equal(output.contracts[0].contractId, 'field')
+  assert.equal(output.compatibilityPolicy.level, 'stable-ai-contract')
+})
+
+test('contract show prints contract detail', async () => {
+  const fetchFn = async (url) => {
+    assert.equal(url, 'http://dataspec.local/api/contracts/lint-result')
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          contractId: 'lint-result',
+          displayName: 'SQL 校验结果',
+          schemaVersion: '1.0',
+          jsonSchemaRef: 'dataspec://contracts/lint-result@1.0',
+          jsonSchema: { type: 'object', properties: { fixedSql: { type: 'string' } } },
+          stableFields: ['issues[]', 'fixedSql', 'dialectDiagnostics[]'],
+          deprecatedFields: [],
+          compatibility: { breakingChangePolicy: '更新 schemaVersion' },
+          docsRef: 'docs/ai-contracts.md#lint-result',
+          examples: [{ errorCount: 1 }]
+        }
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'contracts',
+    'show',
+    'lint-result',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(output.contractId, 'lint-result')
+  assert.deepEqual(output.deprecatedFields, [])
+  assert.equal(output.jsonSchema.properties.fixedSql.type, 'string')
+})
+
+test('contract check reports missing registry invariants', async () => {
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 200,
+      data: {
+        ...contractCatalogFixture(),
+        contracts: contractCatalogFixture().contracts.filter((item) => item.contractId !== 'lint-result')
+      }
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'contract',
+    'check',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 2)
+  assert.equal(output.ok, false)
+  assert.match(JSON.stringify(output.diagnostics), /lint-result/)
+})
+
 test('export-context passes snapshot options without secrets', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {
@@ -2279,6 +2382,40 @@ function makeZip(entries) {
   end.writeUInt32LE(centralDirectory.length, 12)
   end.writeUInt32LE(offset, 16)
   return Buffer.concat([...localParts, centralDirectory, end])
+}
+
+function contractCatalogFixture() {
+  const ids = [
+    'field',
+    'enum-dict',
+    'rule-config',
+    'template',
+    'standard-snapshot',
+    'lint-result',
+    'ai-context-manifest',
+    'ai-context-field-catalog',
+    'ai-task-profile'
+  ]
+  return {
+    kind: 'dataspec-schema-registry',
+    schemaVersion: 1,
+    registryVersion: '2026.06.28',
+    compatibilityPolicy: {
+      level: 'stable-ai-contract',
+      breakingChangePolicy: '删除或改名必须更新 schemaVersion'
+    },
+    contracts: ids.map((contractId) => ({
+      contractId,
+      displayName: contractId,
+      schemaVersion: '1.0',
+      jsonSchemaRef: `dataspec://contracts/${contractId}@1.0`,
+      stableFields: contractId === 'field' ? ['name', 'dataType'] : ['schemaVersion'],
+      deprecatedFields: [],
+      compatibility: { level: 'stable-ai-contract' },
+      docsRef: `docs/ai-contracts.md#${contractId}`
+    })),
+    requiredContractIds: ids
+  }
 }
 
 function createIo(stdin = '', cwd = process.cwd()) {
