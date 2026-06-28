@@ -27,3 +27,13 @@ DataSpec 优先服务个人/小团队，本地库、演示库和轻量部署经�
 - 数据：可新增轻量恢复记录表保存 restore summary；不保存源数据库数据行、数据库密码、API token 明文或完整连接串。
 - OpenAPI/类型：新增备份/恢复相关 schema 与前端 API wrapper。
 - 测试：后端覆盖导出脱敏、dry-run 冲突、恢复幂等和 overwrite 行为；前端 smoke 覆盖入口与项目边界。
+
+## Verification Evidence
+
+- `mvn test`：240 tests, 0 failures, 0 errors。
+- `pnpm test`：57 tests, 0 failures。
+- `pnpm build`：通过；仅保留既有第三方 `@vueuse/core` pure annotation 与 chunk size warning。
+- `node --test tools\dataspec-config.test.mjs tools\dataspec-cli.test.mjs tools\dataspec-mcp.test.mjs`：62 tests, 0 failures。
+- `npx.cmd openspec validate add-project-backup-restore-package`：valid。
+- `git diff --check`：通过；仅输出 Windows LF/CRLF 换行提示。
+- 直接代码评审：未使用子 agent；修复了前端 dry-run 参数变更未清空旧计划、手工 OpenAPI `StandardSnapshot` 字段与后端实体不一致两个 finding。
