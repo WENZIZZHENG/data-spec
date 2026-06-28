@@ -2402,6 +2402,7 @@ test('init with agents writes marker and replaces only with force', async () => 
     assert.equal(firstCode, 0)
     assert.match(firstAgents, /dataspec-agents:start/)
     assert.match(firstAgents, /project 7/)
+    assert.match(firstAgents, /dataspec-verify-advisor\.mjs --changed --format json/)
 
     const secondIo = createIo('', dir)
     await runCli([
@@ -2434,6 +2435,7 @@ test('init with agents writes marker and replaces only with force', async () => 
     ], forceIo, createReadyDoctorFetch('http://dataspec.local', 8))
     const forcedAgents = await readFile(agentsPath, 'utf8')
     assert.match(forcedAgents, /project 8/)
+    assert.match(forcedAgents, /dataspec-verify-advisor\.mjs --changed --format json/)
     assert.equal((forcedAgents.match(/dataspec-agents:start/g) ?? []).length, 1)
   } finally {
     await rm(dir, { recursive: true, force: true })

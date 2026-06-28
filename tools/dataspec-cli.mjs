@@ -2097,6 +2097,7 @@ function renderAgentsFragment({ projectId, server, defaultPaths }) {
 
 在创建或修改数据库 schema、SQL migration、ORM entity 或数据字典前：
 
+- 修改后先运行 \`node tools/dataspec-verify-advisor.mjs --changed --format json\` 获取建议验证命令。
 - 先运行 \`node tools/dataspec-cli.mjs doctor --format json\`。
 - 对默认路径运行 \`node tools/dataspec-cli.mjs lint-files --format json\`。
 - 如果仓库没有 \`tools/dataspec-cli.mjs\`，先替换为团队实际使用的 DataSpec CLI 路径或封装脚本。

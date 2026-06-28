@@ -1,0 +1,95 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import {
+  buildValidationAdvice,
+  collectChangedPathsFromGitOutput,
+  formatValidationAdviceText,
+  runAdvisorCli
+} from './dataspec-verify-advisor.mjs'
+
+test('recommends backend, openspec, docs and diff checks from paths', () => {
+  const advice = buildValidationAdvice([
+    'dataspec-server/src/main/java/com/dataspec/lint/SqlLintService.java',
+    'openspec/changes/add-x/specs/example/spec.md',
+    'README.md'
+  ])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  assert.equal(advice.kind, 'dataspec.validation-advice')
+  assert.equal(advice.schemaVersion, 1)
+  assert.deepEqual(advice.inputPaths, [
+    'dataspec-server/src/main/java/com/dataspec/lint/SqlLintService.java',
+    'openspec/changes/add-x/specs/example/spec.md',
+    'README.md'
+  ])
+  assert.ok(commandIds.indexOf('backend-tests') < commandIds.indexOf('diff-check'))
+  assert.ok(commandIds.includes('openspec-validate'))
+  assert.ok(commandIds.includes('diff-check'))
+  assert.match(advice.commands.find((command) => command.id === 'backend-tests').reason, /后端/)
+  assert.equal(advice.summary.totalCommands, advice.commands.length)
+})
+
+test('recommends frontend tests, build and OpenAPI check for frontend contract paths', () => {
+  const advice = buildValidationAdvice([
+    'dataspec-web/src/views/SqlLint.vue',
+    'dataspec-web/src/api/schema.ts',
+    'dataspec-web/package.json'
+  ])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  assert.ok(commandIds.includes('frontend-tests'))
+  assert.ok(commandIds.includes('frontend-build'))
+  assert.ok(commandIds.includes('frontend-api-check'))
+  assert.equal(advice.commands.find((command) => command.id === 'frontend-build').cwd, 'dataspec-web')
+})
+
+test('deduplicates CLI recommendations and renders readable text', () => {
+  const advice = buildValidationAdvice([
+    'tools/dataspec-cli.mjs',
+    'tools/dataspec-cli.test.mjs',
+    'tools/dataspec-mcp.mjs'
+  ])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  assert.equal(commandIds.filter((id) => id === 'cli-contract-tests').length, 1)
+  assert.ok(commandIds.includes('diff-check'))
+  assert.match(formatValidationAdviceText(advice), /CLI\/MCP/)
+  assert.match(formatValidationAdviceText(advice), /git diff --check/)
+})
+
+test('cli supports --changed json output with injected changed paths', async () => {
+  const io = createIo()
+  const code = await runAdvisorCli(['--changed', '--format', 'json'], io, {
+    getChangedPaths: async () => ['docker-compose.local.yml', 'tools/dataspec-local-smoke.mjs']
+  })
+
+  const output = JSON.parse(io.stdout)
+  const commandIds = output.commands.map((command) => command.id)
+  assert.equal(code, 0)
+  assert.ok(commandIds.includes('local-smoke-tests'))
+  assert.ok(commandIds.includes('docker-compose-config'))
+  assert.deepEqual(output.nextActions.slice(0, 1), ['先运行推荐命令中耗时最短且最贴近本次改动的检查。'])
+})
+
+test('collects tracked and untracked git changed paths without duplicates', () => {
+  assert.deepEqual(
+    collectChangedPathsFromGitOutput(
+      'README.md\ntools/dataspec-cli.mjs\n',
+      'tools/dataspec-verify-advisor.mjs\nREADME.md\n'
+    ),
+    ['README.md', 'tools/dataspec-cli.mjs', 'tools/dataspec-verify-advisor.mjs']
+  )
+})
+
+function createIo() {
+  return {
+    stdout: '',
+    stderr: '',
+    writeOut(text) {
+      this.stdout += text
+    },
+    writeErr(text) {
+      this.stderr += text
+    }
+  }
+}
