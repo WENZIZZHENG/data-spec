@@ -13,7 +13,8 @@
 7. 继续追加优化建议已补为 P6-117 到 P6-122：统一变更 Diff、全链路 Trace、版本兼容降级、AI 场景样例、数据模型契约和前端反馈转任务。
 8. 最新追加优化建议已补为 P6-123 到 P6-128：标准向 API/DTO Schema 导出、ORM/代码模型候选提取、前端组件状态样例库、规则变异回归、Context 增量更新包和前端包体性能预算。
 9. 本次新增优化建议已补为 P6-129 到 P6-134：标准包 Lockfile、SQL 格式化 Profile、脱敏样例采样、标准消费清单、规则覆盖率和前端 mock 演示模式。
-10. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+10. 本次继续新增优化建议已补为 P6-135 到 P6-140：AI 任务预检、反向导入 plan/apply、配置 Schema、凭据复用、标准变更迁移 recipe 和统一任务结果协议。
+11. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -1334,6 +1335,66 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：不启动后端也能打开核心前端页面并完成演示流程；mock 数据与 OpenAPI 类型保持一致；浏览器级测试可选择 mock 模式稳定复现 UI 状态。
 - 边界：不替代真实集成测试，不在生产构建启用 mock，不保存用户输入；第一版覆盖高频页面和失败状态即可。
 
+### P6-135：AI 任务预检与缺口补齐建议
+- 状态：待办。
+- 为什么做：DataSpec 越来越适合 AI 使用后，AI 在执行建表、修 SQL、反向导入、导出 Context 前，需要先知道当前项目是否具备必要字段、规则、快照、profile、lock 和连接配置；只靠通用 `doctor` 还不够任务化。
+- 已有基础：已有 `dataspec doctor`、AI 使用画像待办、标准快照、字段质量报告、AI Context、标准包 lockfile 待办和版本兼容矩阵。
+- 缺口：缺少按 `taskType` 输出的 preflight DTO，无法把 blockers、warnings、recommendedCommands、requiredInputs、contextBudget 和 stopReasons 一次性给 AI。
+- 参考项目：`backstage/backstage` 的模板执行前校验、`Schemathesis/schemathesis` 的契约前置检查和 `github/gh` 的命令式诊断体验；只借鉴任务预检，不做复杂流程编排。
+- 落地产物：新增 `/api/ai-preflight`、CLI `dataspec preflight --task` 和 MCP 工具；按任务返回 readiness、missingItems、safeToProceed、recommendedCommands、relatedDocs 和 machineReadableHints；前端 AI 工作台展示同一结果。
+- 验收标准：AI 在执行 SQL 修复或反向导入前能先拿到明确的可继续/需补齐判断；缺少 projectId、profile、字段标准、启用规则或 Context 过期时给出可执行命令；输出 JSON 有契约测试。
+- 边界：不自动修复项目配置，不替代人工确认，不把 preflight 做成审批流；第一版只覆盖核心 AI 任务。
+
+### P6-136：数据库直连反向导入 Plan/Apply 与可撤销批次
+- 状态：待办。
+- 为什么做：数据库直连反向导入已经能预览和确认导入，但大库或高冲突场景需要更清楚的“计划 -> 应用 -> 可追溯撤销”体验，避免 AI 或用户一次性采纳过多候选。
+- 已有基础：已有数据库直连 metadata、反向导入预览、compare、字段来源批次、导入映射策略待办、统一 diff 待办和标准候选 Inbox。
+- 缺口：缺少持久化 import plan、逐项 decision、apply summary、undo hints 和冲突理由；导入后的回退主要依赖人工查批次。
+- 参考项目：`hashicorp/terraform` 的 plan/apply、`bytebase/bytebase` 的数据库变更预览和 `openrewrite/rewrite` 的 dry-run recipe；只应用到 DataSpec 标准库，不写源数据库。
+- 落地产物：新增 import plan 模型/API 和前端计划详情；支持保存候选选择、冲突处理、字段映射理由、预计新增/更新/跳过数量、apply result 和可撤销批次提示；CLI/MCP 可读取 plan。
+- 验收标准：同一次反向导入可先保存计划再应用；应用后能按批次看到每个字段的来源和 decision；误导入时能生成可审查的撤销建议。
+- 边界：不自动删除已有标准字段，不修改业务数据库，不承诺一键无损回滚所有人工编辑；第一版只覆盖导入批次内新增/更新的标准记录。
+
+### P6-137：`.dataspec/config.json` Schema 与编辑器提示包
+- 状态：待办。
+- 为什么做：`.dataspec/config.json` 会承载 projectId、serverUrl、defaultPaths、aiProfile、taskType、contextScope 和 lock 等配置；字段变多后，AI 和用户都需要编辑器提示与稳定校验，避免拼错配置导致任务失败。
+- 已有基础：已有业务仓库初始化、`.dataspec/config.json` 读取、doctor、AI profile 待办、标准包 lockfile 待办和版本兼容矩阵。
+- 缺口：缺少 JSON Schema、示例 fixtures、配置迁移说明和编辑器可发现入口；当前类型错误主要运行时才暴露。
+- 参考项目：`SchemaStore/schemastore` 的配置 Schema 组织、`Redocly/redocly-cli` 的配置校验和 `vitejs/vite` 的 typed config 体验；第一版只在仓库内发布 Schema。
+- 落地产物：新增 `schemas/dataspec-config.schema.json`、示例配置和 CLI `dataspec config validate`；`init` 写入 `$schema`；doctor 使用同一 Schema 输出字段级错误；README/AGENTS 片段说明配置含义。
+- 验收标准：编辑 `.dataspec/config.json` 时能获得字段提示；拼错枚举、类型或未知字段时 doctor 返回可读错误；Schema 与 CLI 解析有契约测试。
+- 边界：不马上提交到官方 SchemaStore，不支持任意插件扩展字段，不改变现有配置向后兼容行为。
+
+### P6-138：本地凭据复用与 Secret Provider 边界
+- 状态：待办。
+- 为什么做：数据库直连、API Token 和业务仓库配置都需要凭据，但个人/小团队使用时既不能把密码写入仓库，也不应该每次操作都重复输入；需要明确的本地凭据引用方式和脱敏诊断。
+- 已有基础：已有 API Token 管理、数据库连接预设、只读安全诊断、敏感信息脱敏、`.dataspec/config.json` 和前端反向导入记忆。
+- 缺口：目前主要依赖“不保存密码”和手动输入，缺少 `env:`、本地 secret 文件、系统 keyring 或命令读取的统一引用协议，也缺少 doctor 对 secret 引用可用性的检查。
+- 参考项目：`getsops/sops` 的密文配置、`dotenvx/dotenvx` 的环境变量管理和 `gitleaks/gitleaks` 的 secret 检测；只做本地安全边界，不接入企业密钥平台。
+- 落地产物：新增 secret reference 约定，如 `env:DATASPEC_DB_PASSWORD`、`file:` 或 `command:` 的最小集合；前端和 CLI 对敏感字段统一脱敏；doctor 检查引用是否存在但不输出明文；文档说明安全边界。
+- 验收标准：反向导入可以复用非明文凭据完成连接；日志、记录、AI Context、错误提示和导出包不泄漏 secret；缺失凭据时给出明确修复命令。
+- 边界：不保存真实密码到数据库，不实现团队级 vault，不在浏览器本地存储长期保存数据库密码；第一版优先服务本机 CLI 和显式前端输入。
+
+### P6-139：标准变更迁移 Recipe 与半自动代码修复建议
+- 状态：待办。
+- 为什么做：字段重命名、类型调整、枚举变更或标准废弃后，AI 不只需要知道“标准变了”，还需要可执行的迁移 recipe，才能在业务仓库里安全搜索、生成补丁或提示人工修改。
+- 已有基础：已有字段影响分析、标准变更日志、字段生命周期、标准变更发布说明、业务代码字段引用索引、API/DTO Schema 导出和 ORM/代码模型候选提取待办。
+- 缺口：缺少 machine-readable migration recipe，无法表达 rename、replaceType、enumMapping、deprecatedReplacement、riskLevel、affectedPatterns 和 verificationCommands。
+- 参考项目：`openrewrite/rewrite` 的代码迁移 recipe、`renovatebot/renovate` 的批量升级说明和 `sourcegraph/sourcegraph` 的代码检索能力；只生成建议和 dry-run，不默认改业务仓库。
+- 落地产物：新增标准变更 recipe 结构、CLI dry-run 扫描和 AI Context 迁移片段；字段变更记录可导出 recipe；前端展示影响、候选替换和验证命令。
+- 验收标准：字段 `user_id` 改名或废弃时，AI 能拿到推荐替换字段、匹配模式、示例补丁和验证命令；高风险替换需要人工确认；recipe 有 fixture 防漂移。
+- 边界：不做完整 IDE 重构引擎，不自动提交业务代码，不承诺覆盖所有语言；第一版覆盖 SQL、Java/TypeScript 常见字符串和 schema 片段。
+
+### P6-140：前端/CLI/MCP 统一任务结果协议
+- 状态：待办。
+- 为什么做：同一件事通过前端、CLI、MCP 或 API 执行后，现在结果展示字段、下一步建议、证据链接和失败状态容易不一致；AI 需要稳定读取“完成/部分完成/阻塞”和后续动作。
+- 已有基础：已有 AI 任务卡、AI 回放、执行证据包、全链路 Trace、前端统一状态、MCP/CLI 工具契约验收和 AI 可读错误码待办。
+- 缺口：缺少统一 `TaskResult` 协议，无法复用 status、summary、counts、artifacts、evidenceRefs、nextActions、retryable、blockedReason、traceId 和 suggestedCommands。
+- 参考项目：`github/gh` 的命令输出、GitHub Actions job summary、`modelcontextprotocol/servers` 的工具结果结构和 `getsentry/sentry-javascript` 的错误上下文；只统一结果表达，不引入任务调度平台。
+- 落地产物：新增 TaskResult JSON Schema/DTO、CLI/MCP 输出适配和前端结果卡片组件；SQL 校验、Context 导出、反向导入、doctor/preflight 逐步接入；文档列出字段语义。
+- 验收标准：AI 调用任一核心任务都能用同一方式判断是否成功、下一步做什么、证据在哪；前端失败卡片与 CLI JSON 的关键字段一致；兼容旧响应并有契约测试。
+- 边界：不要求所有历史接口一次性迁移，不做长任务队列，不改变现有 API 的核心业务语义；第一版先包裹高频任务结果。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -1367,9 +1428,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`reviewdog/reviewdog`](https://github.com/reviewdog/reviewdog)：基于 diff 的代码审查评论、诊断聚合和 PR 反馈参考。
 - [`pre-commit/pre-commit`](https://github.com/pre-commit/pre-commit)：本地变更钩子、按文件质量门禁和轻量开发工作流参考。
 - [`hashicorp/terraform`](https://github.com/hashicorp/terraform)：plan/apply、状态记录和 dry-run 风格的写入前演练参考。
+- [`openrewrite/rewrite`](https://github.com/openrewrite/rewrite)：代码迁移 recipe、批量修复 dry-run 和可审查补丁参考。
 - [`changesets/changesets`](https://github.com/changesets/changesets)：变更集、版本发布说明和迁移提示组织参考。
 - [`sourcegraph/sourcegraph`](https://github.com/sourcegraph/sourcegraph)：代码引用检索、搜索索引和仓库级影响分析参考。
 - [`Redocly/redocly-cli`](https://github.com/Redocly/redocly-cli)：OpenAPI lint、bundle 和契约治理参考。
+- [`SchemaStore/schemastore`](https://github.com/SchemaStore/schemastore)：JSON Schema 目录、编辑器提示和配置校验参考。
 - [`Schemathesis/schemathesis`](https://github.com/schemathesis/schemathesis)：基于 OpenAPI 的契约测试和接口行为回归参考。
 - [`sqlmesh/sqlmesh`](https://github.com/TobikoData/sqlmesh)：数据模型依赖、plan/apply 和变更影响分析参考。
 - [`microsoft/playwright`](https://github.com/microsoft/playwright)：浏览器级 E2E、trace、截图和稳定选择器参考。
@@ -1382,6 +1445,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`mswjs/msw`](https://github.com/mswjs/msw)：前端 API mock、测试夹具和无后端开发模式参考。
 - [`vitejs/vite`](https://github.com/vitejs/vite)：前端构建、代码分割和包体分析参考。
 - [`gitleaks/gitleaks`](https://github.com/gitleaks/gitleaks)：敏感信息检测、日志脱敏和 secret 防泄漏参考。
+- [`getsops/sops`](https://github.com/getsops/sops)：本地密文配置、密钥分离和配置安全边界参考。
+- [`dotenvx/dotenvx`](https://github.com/dotenvx/dotenvx)：环境变量管理、加密 env 文件和本地凭据加载参考。
 - [`microsoft/presidio`](https://github.com/microsoft/presidio)：PII 检测、匿名化和脱敏流水线参考。
 - [`faker-js/faker`](https://github.com/faker-js/faker)：合成测试数据和安全示例值生成参考。
 - [`pgvector/pgvector`](https://github.com/pgvector/pgvector)：本地或自托管向量检索索引的设计参考。
