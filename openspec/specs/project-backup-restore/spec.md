@@ -2,7 +2,6 @@
 
 ## Purpose
 DataSpec provides project backup and restore for personal or small-team migration, allowing standard assets to move between local or lightweight environments without carrying secrets or source database rows.
-
 ## Requirements
 ### Requirement: Export project backup package
 DataSpec SHALL export a project backup package containing restorable standard assets without sensitive credentials or source database rows.
@@ -73,3 +72,14 @@ The frontend SHALL provide a project-scoped backup and restore workflow for pers
 - **WHEN** no current project is selected
 - **THEN** export is disabled or shows an actionable empty state
 - **AND** restore preview can still target a new project if the package is valid
+
+### Requirement: Restore apply write idempotency
+Project restore apply SHALL use the project-scoped write guard for target project mutations.
+
+#### Scenario: Retry restore apply with same key
+- **WHEN** a caller retries the same restore apply request with the same target project and idempotency key
+- **THEN** DataSpec returns the original restore result without applying the restore twice.
+
+#### Scenario: Concurrent restore apply
+- **WHEN** a restore apply is already mutating the same target project
+- **THEN** DataSpec returns a retryable conflict diagnostic for another restore apply on that target project.

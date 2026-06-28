@@ -11,6 +11,10 @@ The system SHALL allow users to create a project-level standard snapshot for the
 - **THEN** the system stores snapshot metadata, deterministic payload JSON, and SHA-256 snapshot hash.
 - **AND** the created snapshot is associated with the project.
 
+#### Scenario: Retry snapshot creation with same key
+- **WHEN** a caller retries snapshot creation with the same project, version, and idempotency key
+- **THEN** DataSpec returns the original snapshot result without creating a duplicate snapshot row.
+
 ### Requirement: Latest snapshot metadata
 The system SHALL expose latest standard snapshot metadata for a project without requiring callers to parse payload JSON.
 

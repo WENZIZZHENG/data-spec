@@ -2,7 +2,6 @@
 
 ## Purpose
 DataSpec provides a machine-readable delivery package for AI batch SQL lint work so agents and users can review, download, replay, and continue from a stable result contract.
-
 ## Requirements
 ### Requirement: AI batch delivery package
 DataSpec SHALL provide a machine-readable delivery package for batch SQL lint work.
@@ -60,3 +59,14 @@ DataSpec Web SHALL provide a project-scoped batch run view for AI batch delivery
 #### Scenario: No project selected
 - **WHEN** no project is selected
 - **THEN** the page shows an empty state and does not call project-scoped batch APIs.
+
+### Requirement: AI batch write idempotency
+AI batch SQL lint creation SHALL support idempotency keys and project-operation locking.
+
+#### Scenario: Retry AI batch with same key
+- **WHEN** a caller retries the same batch SQL lint request with the same idempotency key
+- **THEN** DataSpec returns the original delivery package without creating another batch run record.
+
+#### Scenario: Concurrent AI batch for same project
+- **WHEN** a batch SQL lint request is already running for the project
+- **THEN** another batch request for the same project and operation receives a retryable conflict diagnostic unless it can reuse a completed idempotency result.

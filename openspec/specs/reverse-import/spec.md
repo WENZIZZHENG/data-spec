@@ -107,3 +107,14 @@ DataSpec SHALL support reverse import preview from a database schema dump withou
 - **WHEN** a caller previews a schema dump
 - **THEN** DataSpec does not write to the source database or standard field library
 - **AND** candidate import still requires the existing explicit confirmation flow.
+
+### Requirement: Reverse import confirmation write guard
+Reverse import confirmation SHALL use the project-scoped write guard when importing selected database candidates.
+
+#### Scenario: Retry candidate import with same key
+- **WHEN** a caller submits the same selected candidates with the same idempotency key
+- **THEN** DataSpec returns the original import result without creating duplicate fields or duplicate source records.
+
+#### Scenario: Concurrent candidate import
+- **WHEN** another reverse import confirmation is already running for the same project
+- **THEN** DataSpec returns a retryable conflict diagnostic instead of interleaving candidate writes.

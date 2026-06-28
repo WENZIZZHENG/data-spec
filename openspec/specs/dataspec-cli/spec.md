@@ -210,3 +210,14 @@ The DataSpec CLI SHALL export AI evidence packages for supported sources.
 - **WHEN** the evidence API returns a validation or not-found error
 - **THEN** the CLI exits with code `2`
 - **AND** prints a readable error without exposing token, password, Authorization header, or full JDBC URL.
+
+### Requirement: CLI idempotency key forwarding
+The DataSpec CLI SHALL let write commands forward an idempotency key to the backend API.
+
+#### Scenario: CLI option sets idempotency key
+- **WHEN** a user runs a backend write command with `--idempotency-key`
+- **THEN** the CLI sends the value as the `Idempotency-Key` HTTP header.
+
+#### Scenario: CLI environment key fallback
+- **WHEN** `DATASPEC_IDEMPOTENCY_KEY` is set and the command does not pass `--idempotency-key`
+- **THEN** the CLI sends the environment value as the `Idempotency-Key` HTTP header.

@@ -21,4 +21,4 @@
 - [x] 4.2 增加 CLI 测试，覆盖参数和环境变量 header 透传。
 - [x] 4.3 执行 `mvn test`、`node --test tools/dataspec-cli.test.mjs`、`npx.cmd openspec validate --all` 和 `git diff --check`。
 - [x] 4.4 完成本地结构化代码评审并修复 findings。
-- [ ] 4.5 创建本地 commit，归档 OpenSpec change 并再次验证。
+- [x] 4.5 创建本地 commit，归档 OpenSpec change 并再次验证。
