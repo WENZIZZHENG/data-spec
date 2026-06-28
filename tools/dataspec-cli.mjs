@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { inflateRawSync } from 'node:zlib'
 import { loadDataSpecConfig, resolveDefaultPaths } from './dataspec-config.mjs'
 import {
   formatWorkflowListText,
@@ -24,6 +25,16 @@ const OPENAPI_SCHEMA_PATH = path.join(DATASPEC_WEB_DIR, 'src', 'api', 'schema.ts
 const DEFAULT_INIT_PATHS = ['sql', 'db/migrations']
 const DATASPEC_AGENTS_START = '<!-- dataspec-agents:start -->'
 const DATASPEC_AGENTS_END = '<!-- dataspec-agents:end -->'
+const CONTEXT_CACHE_DIR = path.join('.dataspec', 'context')
+const CACHE_METADATA_FILE = 'cache-metadata.json'
+const DEFAULT_CONTEXT_CACHE_TTL_DAYS = 7
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+const ZIP_LOCAL_FILE_HEADER = 0x04034b50
+const ZIP_CENTRAL_DIRECTORY_HEADER = 0x02014b50
+const ZIP_END_OF_CENTRAL_DIRECTORY = 0x06054b50
+const ZIP_METHOD_STORED = 0
+const ZIP_METHOD_DEFLATED = 8
+const ZIP_FLAG_ENCRYPTED = 0x0001
 const SKIPPED_SCAN_DIRECTORIES = new Set([
   '.git',
   '.idea',
@@ -255,16 +266,18 @@ async function runExportContext(args, io, fetchFn) {
     'snapshot-id',
     'snapshotId',
     'snapshot-version',
-    'snapshotVersion'
-  ])
+    'snapshotVersion',
+    'cache-ttl-days'
+  ], ['cache'])
   const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length > 0) {
     throw new Error(`export-context 不接受位置参数: ${positional.join(', ')}`)
   }
   const projectId = parseProjectId(options.project ?? config.projectId)
   const output = options.output
-  if (!output) {
-    throw new Error('export-context 需要提供 --output <zip>')
+  const shouldCache = Boolean(options.cache)
+  if (!output && !shouldCache) {
+    throw new Error('export-context 需要提供 --output <zip> 或 --cache')
   }
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
@@ -274,9 +287,22 @@ async function runExportContext(args, io, fetchFn) {
     throw new Error(`导出 AI Context 失败，HTTP ${response.status}`)
   }
   const bytes = Buffer.from(await response.arrayBuffer())
-  await mkdir(path.dirname(output), { recursive: true })
-  await writeFile(output, bytes)
-  io.writeOut(`已导出 ${output}\n`)
+  if (output) {
+    await mkdir(path.dirname(output), { recursive: true })
+    await writeFile(output, bytes)
+    io.writeOut(`已导出 ${output}\n`)
+  }
+  if (shouldCache) {
+    const cache = await writeAiContextCache({
+      bytes,
+      rootDir: config.rootDir,
+      projectId,
+      server,
+      options,
+      ttlDays: parseCacheTtlDays(options['cache-ttl-days'])
+    })
+    io.writeOut(`已缓存 AI Context 到 ${cache.cacheDir}\n`)
+  }
   return 0
 }
 
@@ -518,6 +544,241 @@ function buildAiContextPackageUrl(server, projectId, options) {
   return `${server}/api/ai-context/package/download?${params.toString()}`
 }
 
+async function writeAiContextCache({ bytes, rootDir, projectId, server, options, ttlDays }) {
+  const cacheDir = path.resolve(rootDir, CONTEXT_CACHE_DIR)
+  ensureContextCachePath(rootDir, cacheDir)
+  const zipEntries = readZipEntries(bytes)
+  const normalizedEntries = normalizeZipEntries(zipEntries)
+  const extracted = []
+  const manifest = parseAiContextManifest(normalizedEntries)
+
+  await rm(cacheDir, { recursive: true, force: true })
+  await mkdir(cacheDir, { recursive: true })
+
+  for (const { entry, relativePath } of normalizedEntries) {
+    if (!relativePath || entry.directory) {
+      continue
+    }
+    const targetPath = resolveCacheTarget(cacheDir, relativePath)
+    await mkdir(path.dirname(targetPath), { recursive: true })
+    await writeFile(targetPath, entry.content)
+    extracted.push(toPosixPath(relativePath))
+  }
+
+  const now = new Date()
+  const metadata = sanitizeMetadata({
+    kind: 'dataspec-ai-context-cache',
+    schemaVersion: 1,
+    projectId,
+    server: safeServerForMetadata(server),
+    exportedAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + ttlDays * MS_PER_DAY).toISOString(),
+    ttlDays,
+    exportOptions: aiContextExportOptionsForMetadata(options),
+    contentHash: sha256Hex(bytes),
+    standard: manifest?.standard ?? null,
+    sourcePackage: manifest
+      ? {
+          schemaVersion: manifest.schemaVersion,
+          kind: manifest.kind,
+          generatedAt: manifest.generatedAt,
+          contextScope: manifest.contextScope
+        }
+      : null,
+    files: [...extracted, CACHE_METADATA_FILE].sort()
+  })
+  await writeFile(path.join(cacheDir, CACHE_METADATA_FILE), `${JSON.stringify(metadata, null, 2)}\n`, 'utf8')
+  return { cacheDir, metadata }
+}
+
+function readZipEntries(bytes) {
+  const buffer = Buffer.from(bytes)
+  const eocdOffset = findEndOfCentralDirectory(buffer)
+  const totalEntries = buffer.readUInt16LE(eocdOffset + 10)
+  const centralDirectoryOffset = buffer.readUInt32LE(eocdOffset + 16)
+  assertZipRange(buffer, centralDirectoryOffset, 0, '中央目录偏移')
+  const entries = []
+  let offset = centralDirectoryOffset
+  for (let index = 0; index < totalEntries; index += 1) {
+    assertZipRange(buffer, offset, 46, '中央目录条目')
+    if (buffer.readUInt32LE(offset) !== ZIP_CENTRAL_DIRECTORY_HEADER) {
+      throw new Error('AI Context zip 中央目录格式无效')
+    }
+    const flags = buffer.readUInt16LE(offset + 8)
+    const method = buffer.readUInt16LE(offset + 10)
+    const compressedSize = buffer.readUInt32LE(offset + 20)
+    const nameLength = buffer.readUInt16LE(offset + 28)
+    const extraLength = buffer.readUInt16LE(offset + 30)
+    const commentLength = buffer.readUInt16LE(offset + 32)
+    const localHeaderOffset = buffer.readUInt32LE(offset + 42)
+    assertZipRange(buffer, offset + 46, nameLength + extraLength + commentLength, '中央目录条目名称')
+    const name = buffer.toString('utf8', offset + 46, offset + 46 + nameLength)
+    if ((flags & ZIP_FLAG_ENCRYPTED) !== 0) {
+      throw new Error(`AI Context zip 包含加密条目，无法缓存: ${name}`)
+    }
+    entries.push(readZipEntryContent(buffer, { name, method, compressedSize, localHeaderOffset }))
+    offset += 46 + nameLength + extraLength + commentLength
+  }
+  return entries
+}
+
+function readZipEntryContent(buffer, entry) {
+  assertZipRange(buffer, entry.localHeaderOffset, 30, `本地文件头: ${entry.name}`)
+  if (buffer.readUInt32LE(entry.localHeaderOffset) !== ZIP_LOCAL_FILE_HEADER) {
+    throw new Error(`AI Context zip 本地文件头格式无效: ${entry.name}`)
+  }
+  const localNameLength = buffer.readUInt16LE(entry.localHeaderOffset + 26)
+  const localExtraLength = buffer.readUInt16LE(entry.localHeaderOffset + 28)
+  const dataStart = entry.localHeaderOffset + 30 + localNameLength + localExtraLength
+  assertZipRange(buffer, dataStart, entry.compressedSize, `文件内容: ${entry.name}`)
+  const compressed = buffer.subarray(dataStart, dataStart + entry.compressedSize)
+  const directory = entry.name.endsWith('/')
+  if (directory) {
+    return { name: entry.name, directory, content: Buffer.alloc(0) }
+  }
+  if (entry.method === ZIP_METHOD_STORED) {
+    return { name: entry.name, directory, content: Buffer.from(compressed) }
+  }
+  if (entry.method === ZIP_METHOD_DEFLATED) {
+    return { name: entry.name, directory, content: inflateRawSync(compressed) }
+  }
+  throw new Error(`AI Context zip 使用不支持的压缩方法 ${entry.method}: ${entry.name}`)
+}
+
+function normalizeZipEntries(entries) {
+  return entries.map((entry) => ({
+    entry,
+    relativePath: normalizeCacheEntryPath(entry.name)
+  }))
+}
+
+function findEndOfCentralDirectory(buffer) {
+  const minOffset = Math.max(0, buffer.length - 0xffff - 22)
+  for (let offset = buffer.length - 22; offset >= minOffset; offset -= 1) {
+    if (buffer.readUInt32LE(offset) === ZIP_END_OF_CENTRAL_DIRECTORY) {
+      return offset
+    }
+  }
+  throw new Error('AI Context zip 缺少中央目录结束标记')
+}
+
+function assertZipRange(buffer, offset, length, label) {
+  if (offset < 0 || length < 0 || offset + length > buffer.length) {
+    throw new Error(`AI Context zip ${label} 超出文件范围`)
+  }
+}
+
+function parseAiContextManifest(normalizedEntries) {
+  const manifestEntry = normalizedEntries.find(({ relativePath }) => relativePath === 'manifest.json')?.entry
+  if (!manifestEntry) {
+    return null
+  }
+  try {
+    return JSON.parse(manifestEntry.content.toString('utf8'))
+  } catch (error) {
+    return {
+      parseError: error.message
+    }
+  }
+}
+
+function normalizeCacheEntryPath(entryName) {
+  const normalized = entryName.replaceAll('\\', '/')
+  if (normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)) {
+    throw new Error(`AI Context zip 包含不安全的绝对路径: ${entryName}`)
+  }
+  const parts = normalized.split('/').filter(Boolean)
+  if (parts.includes('..')) {
+    throw new Error(`AI Context zip 包含越界路径: ${entryName}`)
+  }
+  const stripped = parts[0] === '.dataspec' ? parts.slice(1) : parts
+  if (stripped.length === 0) {
+    return ''
+  }
+  return path.join(...stripped)
+}
+
+function ensureContextCachePath(rootDir, cacheDir) {
+  const expected = path.resolve(rootDir, CONTEXT_CACHE_DIR)
+  if (cacheDir !== expected) {
+    throw new Error(`非法 AI Context 缓存目录: ${cacheDir}`)
+  }
+}
+
+function resolveCacheTarget(cacheDir, relativePath) {
+  const targetPath = path.resolve(cacheDir, relativePath)
+  if (!isPathInside(cacheDir, targetPath)) {
+    throw new Error(`AI Context zip 条目写入越界: ${relativePath}`)
+  }
+  return targetPath
+}
+
+function isPathInside(parentDir, targetPath) {
+  const relative = path.relative(parentDir, targetPath)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
+function aiContextExportOptionsForMetadata(options) {
+  const snapshotId = options.snapshotId ?? options['snapshot-id']
+  const snapshotVersion = options.snapshotVersion ?? options['snapshot-version']
+  return sanitizeMetadata({
+    scope: options.scope ?? null,
+    query: options.query ?? null,
+    status: options.status ?? null,
+    limit: options.limit !== undefined ? parseLimit(options.limit) : null,
+    snapshotId: snapshotId !== undefined ? parsePositiveInteger(snapshotId, 'snapshot id') : null,
+    snapshotVersion: snapshotVersion ?? null
+  })
+}
+
+function parseCacheTtlDays(value) {
+  if (value === undefined || value === null || value === '') {
+    return DEFAULT_CONTEXT_CACHE_TTL_DAYS
+  }
+  return parsePositiveInteger(value, 'cache ttl days')
+}
+
+function sha256Hex(bytes) {
+  return createHash('sha256').update(bytes).digest('hex')
+}
+
+function toPosixPath(filePath) {
+  return filePath.split(path.sep).join('/')
+}
+
+function safeServerForMetadata(server) {
+  try {
+    const url = new URL(server)
+    url.username = ''
+    url.password = ''
+    url.search = ''
+    url.hash = ''
+    return redactSecrets(url.toString().replace(/\/+$/, ''))
+  } catch (error) {
+    return redactSecrets(server)
+  }
+}
+
+function sanitizeMetadata(value) {
+  if (typeof value === 'string') {
+    return redactSecrets(value)
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeMetadata(item))
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizeMetadata(item)]))
+  }
+  return value
+}
+
+function redactSecrets(value) {
+  return String(value)
+    .replace(/jdbc:[^\s"'<>]+/gi, 'jdbc:***')
+    .replace(/((?:"|')?(?:password|pwd|token|api[_-]?token)(?:"|')?\s*[:=]\s*)(["']?)[^\s"';&,}]+\2/gi, '$1$2***$2')
+    .replace(/(bearer\s+)[A-Za-z0-9._-]+/gi, '$1***')
+}
+
 function appendOptionalParam(params, key, value) {
   if (value !== undefined && value !== null && String(value).trim() !== '') {
     params.set(key, String(value).trim())
@@ -541,6 +802,14 @@ async function buildDoctorResult({ config, options, io, fetchFn }) {
     apiDocsReachable: apiDocsResult.check.status === 'pass',
     checkDrift: Boolean(options['check-openapi']),
     runDriftCheck: io.checkOpenapiDrift
+  }))
+  checks.push(await checkContextCache({
+    config,
+    server,
+    projectId,
+    apiToken,
+    fetchFn,
+    serverReachable: apiDocsResult.check.status === 'pass'
   }))
 
   return {
@@ -651,6 +920,100 @@ async function checkOpenapiStatus({ server, apiDocsReachable, checkDrift, runDri
   } catch (error) {
     return failCheck('openapi', `OpenAPI 漂移检查失败: ${error.message}`)
   }
+}
+
+async function checkContextCache({ config, server, projectId, apiToken, fetchFn, serverReachable }) {
+  const metadataPath = path.join(config.rootDir, CONTEXT_CACHE_DIR, CACHE_METADATA_FILE)
+  const refreshCommand = 'dataspec export-context --cache'
+  let metadata
+  try {
+    metadata = JSON.parse(await readFile(metadataPath, 'utf8'))
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return warnCheck('context-cache', `未找到 AI Context 缓存；可运行 ${refreshCommand}`, {
+        cacheStatus: 'missing',
+        metadataPath
+      })
+    }
+    return warnCheck('context-cache', `AI Context 缓存不可读: ${error.message}`, {
+      cacheStatus: 'unreadable',
+      metadataPath
+    })
+  }
+
+  const cacheStatus = cacheFreshness(metadata)
+  const details = {
+    cacheStatus,
+    metadataPath,
+    projectId: metadata.projectId ?? null,
+    exportedAt: metadata.exportedAt ?? null,
+    expiresAt: metadata.expiresAt ?? null,
+    source: metadata.standard?.source ?? null,
+    specVersion: metadata.standard?.specVersion ?? null,
+    specHash: metadata.standard?.specHash ?? null
+  }
+  if (cacheStatus === 'unreadable') {
+    return warnCheck('context-cache', `AI Context 缓存 metadata 缺少有效 expiresAt，请运行 ${refreshCommand} 刷新`, details)
+  }
+
+  if (!serverReachable) {
+    if (cacheStatus === 'stale') {
+      return warnCheck('context-cache', `DataSpec 服务不可用，AI Context 缓存已过期；离线使用前建议尽快运行 ${refreshCommand}`, details)
+    }
+    return passCheck('context-cache', 'DataSpec 服务不可用，但存在未过期 AI Context 缓存，可离线只读使用', details)
+  }
+
+  if (projectId) {
+    const remote = await fetchRemoteAiContextMetadata(server, projectId, fetchFn, apiToken)
+    if (remote.status === 'ok' && standardMetadataDiffers(metadata.standard, remote.standard)) {
+      return failCheck('context-cache', `AI Context 缓存与远端标准不一致，请运行 ${refreshCommand} 刷新`, {
+        ...details,
+        cacheStatus: 'remote-different',
+        remoteStandard: remote.standard
+      })
+    }
+    if (remote.status === 'warn') {
+      return warnCheck('context-cache', `无法读取远端 AI Context metadata: ${remote.message}`, details)
+    }
+  }
+
+  if (cacheStatus === 'stale') {
+    return warnCheck('context-cache', `AI Context 缓存已过期，请运行 ${refreshCommand} 刷新`, details)
+  }
+  return passCheck('context-cache', 'AI Context 缓存可用', details)
+}
+
+function cacheFreshness(metadata) {
+  const expiresAt = Date.parse(metadata?.expiresAt ?? '')
+  if (!Number.isFinite(expiresAt)) {
+    return 'unreadable'
+  }
+  return Date.now() > expiresAt ? 'stale' : 'fresh'
+}
+
+async function fetchRemoteAiContextMetadata(server, projectId, fetchFn, apiToken) {
+  try {
+    const response = await fetchFn(buildAiContextPackageUrl(server, projectId, {}), {
+      headers: dataSpecHeaders(apiToken)
+    })
+    if (!response.ok) {
+      return { status: 'warn', message: `HTTP ${response.status}` }
+    }
+    const entries = normalizeZipEntries(readZipEntries(Buffer.from(await response.arrayBuffer())))
+    return { status: 'ok', standard: parseAiContextManifest(entries)?.standard ?? null }
+  } catch (error) {
+    return { status: 'warn', message: error.message }
+  }
+}
+
+function standardMetadataDiffers(cached, remote) {
+  if (!cached || !remote) {
+    return false
+  }
+  if (cached.specHash && remote.specHash) {
+    return cached.specHash !== remote.specHash
+  }
+  return ['specVersion', 'source'].some((key) => cached[key] && remote[key] && cached[key] !== remote[key])
 }
 
 async function runOpenapiDriftCheck(server) {
@@ -806,6 +1169,7 @@ function renderInitReadme({ projectId, server, defaultPaths }) {
 node tools/dataspec-cli.mjs doctor --format json
 node tools/dataspec-cli.mjs lint-files --format json
 node tools/dataspec-cli.mjs export-context --output dataspec-ai-context.zip
+node tools/dataspec-cli.mjs export-context --cache
 node tools/dataspec-cli.mjs export-context --scope field --query 用户手机号 --output dataspec-ai-context.zip
 \`\`\`
 
@@ -823,7 +1187,7 @@ export DATASPEC_TOKEN=ds_xxx
 
 - 修改 SQL、migration 或 ORM entity 前，先运行 \`doctor\` 确认 DataSpec 可用。
 - 未显式传路径时，\`lint-files\` 会读取 \`.dataspec/config.json\` 的 \`defaultPaths\`。
-- 需要完整上下文时，运行 \`export-context\` 并让 AI 读取导出的 \`.dataspec/\` 内容；单个建表或修 SQL 任务可加 \`--scope field --query <关键词>\` 导出按需包。
+- 需要完整上下文时，运行 \`export-context --cache\` 并让 AI 读取 \`.dataspec/context/\`；单个建表或修 SQL 任务可加 \`--scope field --query <关键词>\` 导出按需包。
 `
 }
 
@@ -839,7 +1203,7 @@ function renderAgentsFragment({ projectId, server, defaultPaths }) {
 - 如果仓库没有 \`tools/dataspec-cli.mjs\`，先替换为团队实际使用的 DataSpec CLI 路径或封装脚本。
 - 默认扫描路径：${defaultPaths.map((item) => `\`${item}\``).join(', ')}。
 - 安全模式下使用 \`DATASPEC_TOKEN\` 或 \`--dataspec-token\`，不要把明文 token 写入仓库。
-- 不确定字段命名时，先用 \`suggest-field\` 或导出的 AI Context 查找标准字段。`
+- 不确定字段命名时，先用 \`suggest-field\` 或 \`.dataspec/context/\` 中的 AI Context 查找标准字段。`
 }
 
 function formatInitText(result) {
@@ -1694,7 +2058,7 @@ Usage:
   node tools/dataspec-cli.mjs lint <path|-> [--project <id>] --format text|json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] --format json [--delivery-package <json>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>]
-  node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs export-context [--project <id>] [--output <zip>] [--cache] [--cache-ttl-days <days>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
@@ -1709,10 +2073,10 @@ Options:
   --dataspec-token 可由 .dataspec/config.json 的 apiToken 或 DATASPEC_TOKEN 环境变量提供
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
   lint-files 可通过 --delivery-package 或 --batch-package 写出 AI 批量任务交付包，stdout JSON 保持原结构
-  export-context 默认导出完整包；传 --scope/--query/--status/--limit 时导出按需包；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
+  export-context 默认导出完整包；传 --cache 会刷新 .dataspec/context/ 离线缓存；传 --scope/--query/--status/--limit 时导出按需包；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
-  doctor 默认做轻量 OpenAPI 状态检查；传 --check-openapi 时执行完整 schema 漂移检查
+  doctor 默认做轻量 OpenAPI 状态和 AI Context 缓存检查；传 --check-openapi 时执行完整 schema 漂移检查
   workflow 只输出任务计划和命令建议，不会自动执行步骤或调用外部 LLM
 `
 }

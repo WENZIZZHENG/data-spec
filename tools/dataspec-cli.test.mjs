@@ -935,6 +935,119 @@ test('export-context downloads zip bytes to output path', async () => {
     assert.equal(code, 0)
     assert.deepEqual([...await readFile(outputPath)], [1, 2, 3, 4])
     assert.match(io.stdout, /已导出/)
+    await assert.rejects(readFile(path.join(dir, '.dataspec', 'context', 'cache-metadata.json')), /ENOENT/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('export-context cache writes AI context files and redacted metadata', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-cache-'))
+  try {
+    const zip = makeZip({
+      '.dataspec/manifest.json': JSON.stringify({
+        schemaVersion: 1,
+        kind: 'dataspec-ai-context',
+        projectId: 9,
+        generatedAt: '2026-06-28T01:00:00Z',
+        standard: { specVersion: 'v1', specHash: 'hash-1', source: 'current' }
+      }),
+      '.dataspec/field-catalog.json': '{"fields":[]}',
+      '.dataspec/rules.yaml': 'rules: []\n',
+      'AGENTS.md.fragment': 'Read DataSpec context'
+    })
+    const fetchFn = async (url) => {
+      assert.match(url, /query=token%3Dabc/)
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => zip.buffer.slice(zip.byteOffset, zip.byteOffset + zip.byteLength)
+      }
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'export-context',
+      '--project',
+      '9',
+      '--server',
+      'http://token:secret@dataspec.local',
+      '--scope',
+      'field',
+      '--query',
+      'token=abc Bearer abc jdbc:postgresql://localhost/db',
+      '--cache',
+      '--cache-ttl-days',
+      '3'
+    ], io, fetchFn)
+
+    const metadataText = await readFile(path.join(dir, '.dataspec', 'context', 'cache-metadata.json'), 'utf8')
+    const metadata = JSON.parse(metadataText)
+    assert.equal(code, 0)
+    assert.equal(await readFile(path.join(dir, '.dataspec', 'context', 'field-catalog.json'), 'utf8'), '{"fields":[]}')
+    assert.equal(await readFile(path.join(dir, '.dataspec', 'context', 'AGENTS.md.fragment'), 'utf8'), 'Read DataSpec context')
+    assert.equal(metadata.projectId, 9)
+    assert.equal(metadata.standard.specHash, 'hash-1')
+    assert.equal(metadata.ttlDays, 3)
+    assert.equal(metadata.server, 'http://dataspec.local')
+    assert.match(metadataText, /token=\*\*\*/)
+    assert.doesNotMatch(metadataText, /token=abc|Bearer abc|jdbc:postgresql|token:secret/)
+    assert.match(io.stdout, /已缓存 AI Context/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('export-context can write zip output and cache together', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-cache-'))
+  try {
+    const outputPath = path.join(dir, 'context.zip')
+    const zip = makeZip({
+      '.dataspec/manifest.json': JSON.stringify({
+        standard: { specVersion: 'v1', specHash: 'hash-1', source: 'current' }
+      })
+    })
+    const fetchFn = async () => ({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => zip.buffer.slice(zip.byteOffset, zip.byteOffset + zip.byteLength)
+    })
+    const io = createIo('', dir)
+
+    const code = await runCli(['export-context', '--project', '9', '--output', outputPath, '--cache'], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal((await readFile(outputPath)).length, zip.length)
+    assert.equal(JSON.parse(await readFile(path.join(dir, '.dataspec', 'context', 'cache-metadata.json'), 'utf8')).contentHash.length, 64)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('export-context cache rejects unsafe zip paths', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-cache-'))
+  try {
+    const contextDir = path.join(dir, '.dataspec', 'context')
+    const oldMetadataPath = path.join(contextDir, 'cache-metadata.json')
+    await mkdir(contextDir, { recursive: true })
+    await writeFile(oldMetadataPath, '{"kind":"old-cache"}\n', 'utf8')
+    const zip = makeZip({
+      '.dataspec/manifest.json': JSON.stringify({ standard: { specHash: 'new' } }),
+      '../evil.txt': 'bad'
+    })
+    const fetchFn = async () => ({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => zip.buffer.slice(zip.byteOffset, zip.byteOffset + zip.byteLength)
+    })
+    const io = createIo('', dir)
+
+    const code = await runCli(['export-context', '--project', '9', '--cache'], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /越界路径/)
+    await assert.rejects(readFile(path.join(dir, 'evil.txt')), /ENOENT/)
+    assert.equal(await readFile(oldMetadataPath, 'utf8'), '{"kind":"old-cache"}\n')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -1179,7 +1292,18 @@ test('doctor prints json checks from local config and returns 0 when ready', asy
   try {
     await mkdir(path.join(dir, '.dataspec'), { recursive: true })
     await mkdir(path.join(dir, 'sql'), { recursive: true })
+    await mkdir(path.join(dir, '.dataspec', 'context'), { recursive: true })
     await writeFile(path.join(dir, 'sql', 'good.sql'), 'CREATE TABLE users (id bigint);', 'utf8')
+    await writeFile(
+      path.join(dir, '.dataspec', 'context', 'cache-metadata.json'),
+      JSON.stringify({
+        projectId: 7,
+        exportedAt: '2026-06-28T01:00:00Z',
+        expiresAt: '2999-01-01T00:00:00Z',
+        standard: { specVersion: 'v1', specHash: 'hash-1', source: 'current' }
+      }),
+      'utf8'
+    )
     await writeFile(
       path.join(dir, '.dataspec', 'config.json'),
       JSON.stringify({
@@ -1216,6 +1340,18 @@ test('doctor prints json checks from local config and returns 0 when ready', asy
           })
         }
       }
+      if (url === 'http://dataspec.local/api/ai-context/package/download?projectId=7') {
+        const zip = makeZip({
+          '.dataspec/manifest.json': JSON.stringify({
+            standard: { specVersion: 'v1', specHash: 'hash-1', source: 'current' }
+          })
+        })
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => zip.buffer.slice(zip.byteOffset, zip.byteOffset + zip.byteLength)
+        }
+      }
       throw new Error(`unexpected fetch: ${url}`)
     }
     const io = createIo('', dir)
@@ -1233,7 +1369,8 @@ test('doctor prints json checks from local config and returns 0 when ready', asy
       'auth',
       'project',
       'defaultPaths',
-      'openapi'
+      'openapi',
+      'context-cache'
     ])
     assert.equal(output.checks.every((check) => check.status === 'pass'), true)
     assert.equal(calls[0].url, 'http://dataspec.local/api-docs')
@@ -1266,6 +1403,130 @@ test('doctor returns 1 and reports failed checks when server is unreachable', as
   assert.equal(output.checks.some((check) => check.name === 'server' && check.status === 'fail'), true)
   assert.match(output.checks.find((check) => check.name === 'server').message, /connect ECONNREFUSED/)
   assert.equal(io.stderr, '')
+})
+
+test('doctor reports missing context cache as warning', async () => {
+  const fetchFn = createReadyDoctorFetch('http://dataspec.local', 7)
+  const io = createIo()
+
+  const code = await runCli([
+    'doctor',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  const cacheCheck = output.checks.find((check) => check.name === 'context-cache')
+  assert.equal(code, 0)
+  assert.equal(cacheCheck.status, 'warn')
+  assert.equal(cacheCheck.details.cacheStatus, 'missing')
+  assert.match(cacheCheck.message, /export-context --cache/)
+})
+
+test('doctor reports stale cache while offline', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-cache-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec', 'context'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'context', 'cache-metadata.json'),
+      JSON.stringify({
+        projectId: 7,
+        exportedAt: '2020-01-01T00:00:00Z',
+        expiresAt: '2020-01-02T00:00:00Z',
+        standard: { specVersion: 'v-old', specHash: 'hash-old', source: 'current' }
+      }),
+      'utf8'
+    )
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('connect ECONNREFUSED')
+    }
+
+    const code = await runCli([
+      'doctor',
+      '--project',
+      '7',
+      '--server',
+      'http://dataspec.local',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    const output = JSON.parse(io.stdout)
+    const cacheCheck = output.checks.find((check) => check.name === 'context-cache')
+    assert.equal(code, 1)
+    assert.equal(cacheCheck.status, 'warn')
+    assert.equal(cacheCheck.details.cacheStatus, 'stale')
+    assert.match(cacheCheck.message, /服务不可用/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('doctor reports remote standard difference from context cache', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-cache-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec', 'context'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'context', 'cache-metadata.json'),
+      JSON.stringify({
+        projectId: 7,
+        exportedAt: '2026-06-28T00:00:00Z',
+        expiresAt: '2999-01-01T00:00:00Z',
+        standard: { specVersion: 'v1', specHash: 'hash-old', source: 'current' }
+      }),
+      'utf8'
+    )
+    const fetchFn = async (url) => {
+      if (url === 'http://dataspec.local/api-docs') {
+        return { ok: true, status: 200, json: async () => ({ openapi: '3.0.1' }) }
+      }
+      if (url === 'http://dataspec.local/api/projects/7') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ code: 200, data: { id: 7, name: '演示项目' } })
+        }
+      }
+      if (url === 'http://dataspec.local/api/ai-context/package/download?projectId=7') {
+        const zip = makeZip({
+          '.dataspec/manifest.json': JSON.stringify({
+            standard: { specVersion: 'v2', specHash: 'hash-new', source: 'current' }
+          })
+        })
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => zip.buffer.slice(zip.byteOffset, zip.byteOffset + zip.byteLength)
+        }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'doctor',
+      '--project',
+      '7',
+      '--server',
+      'http://dataspec.local',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    const output = JSON.parse(io.stdout)
+    const cacheCheck = output.checks.find((check) => check.name === 'context-cache')
+    assert.equal(code, 1)
+    assert.equal(cacheCheck.status, 'fail')
+    assert.equal(cacheCheck.details.cacheStatus, 'remote-different')
+    assert.equal(cacheCheck.details.remoteStandard.specHash, 'hash-new')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
 
 test('doctor check-openapi reports schema drift failure', async () => {
@@ -1708,6 +1969,53 @@ function createReadyDoctorFetch(server, projectId) {
     }
     throw new Error(`unexpected fetch: ${url}`)
   }
+}
+
+function makeZip(entries) {
+  const localParts = []
+  const centralParts = []
+  let offset = 0
+  for (const [name, content] of Object.entries(entries)) {
+    const nameBuffer = Buffer.from(name, 'utf8')
+    const contentBuffer = Buffer.from(content)
+    const local = Buffer.alloc(30 + nameBuffer.length)
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)
+    local.writeUInt16LE(0, 6)
+    local.writeUInt16LE(0, 8)
+    local.writeUInt32LE(0, 10)
+    local.writeUInt32LE(0, 14)
+    local.writeUInt32LE(contentBuffer.length, 18)
+    local.writeUInt32LE(contentBuffer.length, 22)
+    local.writeUInt16LE(nameBuffer.length, 26)
+    nameBuffer.copy(local, 30)
+    localParts.push(local, contentBuffer)
+
+    const central = Buffer.alloc(46 + nameBuffer.length)
+    central.writeUInt32LE(0x02014b50, 0)
+    central.writeUInt16LE(20, 4)
+    central.writeUInt16LE(20, 6)
+    central.writeUInt16LE(0, 8)
+    central.writeUInt16LE(0, 10)
+    central.writeUInt32LE(0, 12)
+    central.writeUInt32LE(0, 16)
+    central.writeUInt32LE(contentBuffer.length, 20)
+    central.writeUInt32LE(contentBuffer.length, 24)
+    central.writeUInt16LE(nameBuffer.length, 28)
+    central.writeUInt32LE(offset, 42)
+    nameBuffer.copy(central, 46)
+    centralParts.push(central)
+    offset += local.length + contentBuffer.length
+  }
+
+  const centralDirectory = Buffer.concat(centralParts)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(Object.keys(entries).length, 8)
+  end.writeUInt16LE(Object.keys(entries).length, 10)
+  end.writeUInt32LE(centralDirectory.length, 12)
+  end.writeUInt32LE(offset, 16)
+  return Buffer.concat([...localParts, centralDirectory, end])
 }
 
 function createIo(stdin = '', cwd = process.cwd()) {
