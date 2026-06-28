@@ -493,6 +493,46 @@ export interface AiFeedbackReport {
   generatedAt?: string
 }
 
+export interface StandardCandidate {
+  id?: number
+  projectId?: number
+  candidateName?: string
+  displayName?: string
+  dataType?: string
+  comment?: string
+  sourceType?: string
+  sourceRef?: string
+  evidenceJson?: string
+  confidence?: number
+  status?: string
+  targetFieldId?: number
+  decisionReason?: string
+  decidedAt?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface StandardCandidateCreateReq {
+  projectId: number
+  candidateName: string
+  displayName?: string
+  dataType: string
+  comment?: string
+  sourceType: string
+  sourceRef?: string
+  evidenceJson?: string
+  confidence?: number
+}
+
+export interface StandardCandidateDecisionReq {
+  reason?: string
+}
+
+export interface StandardCandidateMergeReq {
+  targetFieldId: number
+  reason?: string
+}
+
 export interface R<T> {
   code?: number
   message?: string

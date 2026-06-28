@@ -25,6 +25,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '标准字段库' }
   },
   {
+    path: '/standard-candidates',
+    name: 'StandardCandidate',
+    component: () => import('@/views/StandardCandidate.vue'),
+    meta: { title: '标准候选' }
+  },
+  {
     path: '/field-quality',
     name: 'FieldQuality',
     component: () => import('@/views/FieldQuality.vue'),

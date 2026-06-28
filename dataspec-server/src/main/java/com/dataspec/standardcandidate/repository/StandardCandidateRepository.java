@@ -1,0 +1,70 @@
+package com.dataspec.standardcandidate.repository;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.dataspec.standardcandidate.entity.StandardCandidate;
+import com.dataspec.standardcandidate.mapper.StandardCandidateMapper;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * 标准候选 Repository。
+ */
+@Repository
+@RequiredArgsConstructor
+public class StandardCandidateRepository {
+
+    private static final List<String> ACTIVE_STATUSES = List.of("PENDING", "POSTPONED");
+
+    private final StandardCandidateMapper standardCandidateMapper;
+
+    public Optional<StandardCandidate> findById(Long id) {
+        return Optional.ofNullable(standardCandidateMapper.selectById(id));
+    }
+
+    public IPage<StandardCandidate> page(Long projectId, String status, String sourceType, String keyword, int current, int size) {
+        LambdaQueryWrapper<StandardCandidate> wrapper = new LambdaQueryWrapper<StandardCandidate>()
+                .eq(StandardCandidate::getProjectId, projectId)
+                .orderByDesc(StandardCandidate::getCreatedAt)
+                .orderByDesc(StandardCandidate::getId);
+        if (!isBlank(status)) {
+            wrapper.eq(StandardCandidate::getStatus, status);
+        }
+        if (!isBlank(sourceType)) {
+            wrapper.eq(StandardCandidate::getSourceType, sourceType);
+        }
+        if (!isBlank(keyword)) {
+            String pattern = keyword.trim();
+            wrapper.and(query -> query
+                    .like(StandardCandidate::getCandidateName, pattern)
+                    .or()
+                    .like(StandardCandidate::getDisplayName, pattern)
+                    .or()
+                    .like(StandardCandidate::getComment, pattern));
+        }
+        return standardCandidateMapper.selectPage(new Page<>(current, size), wrapper);
+    }
+
+    public boolean existsActiveByNameInProject(Long projectId, String candidateName) {
+        return standardCandidateMapper.exists(new LambdaQueryWrapper<StandardCandidate>()
+                .eq(StandardCandidate::getProjectId, projectId)
+                .eq(StandardCandidate::getCandidateName, candidateName)
+                .in(StandardCandidate::getStatus, ACTIVE_STATUSES));
+    }
+
+    public int insert(StandardCandidate candidate) {
+        return standardCandidateMapper.insert(candidate);
+    }
+
+    public int update(StandardCandidate candidate) {
+        return standardCandidateMapper.updateById(candidate);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+}

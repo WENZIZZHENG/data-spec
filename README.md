@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 回放与反馈、AI 批量任务交付包、API Token 安全基线与管理页、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 回放与反馈、AI 批量任务交付包、API Token 安全基线与管理页、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -20,6 +20,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 
 - 项目空间管理，创建项目时可导入内置 standards，并支持一键创建演示项目。
 - 标准字段库，支持别名、分类、代码集关联、敏感标记、状态、示例值、分组筛选、批量归组、批量维护和字段标准检索命中原因展示。
+- 标准候选 Inbox，支持手动创建候选、按状态/来源/关键词筛选、采纳为新字段、合并到已有字段、忽略或延后处理。
 - 字段质量评分，按注释、别名、示例、分类、敏感标识、代码集和废弃说明识别低质量字段。
 - 字段冲突检测，识别别名冲突、显示名重复、语义疑似重复和关键属性不一致。
 - 字段影响分析，展示字段被模板、导入来源、历史 SQL 检查、标准快照和代码集引用的范围。
@@ -181,6 +182,24 @@ curl "http://localhost:8090/api/ai-feedback/report?projectId=1"
 ```
 
 第一版是只读聚合视图，不采集点击或停留等用户行为，不读取业务数据行，不保存 token/password/完整 JDBC URL，也不会自动创建字段、别名、规则例外或标准变更。现有记录无法证明字段推荐命中率时，报告会显式标记推荐历史不足，而不是伪造统计。
+
+## 标准候选 Inbox
+
+前端“基础数据 / 标准候选”提供项目级候选采纳工作台。第一版支持手动创建候选字段，按状态、来源和关键词筛选，查看证据与置信度，并执行采纳、合并、忽略或延后。采纳会创建新的标准字段；合并只记录目标字段和决策原因，不会静默修改目标字段的别名、注释或类型。
+
+后端 API：
+
+```bash
+curl "http://localhost:8090/api/standard-candidates?projectId=1&status=PENDING&current=1&size=10"
+curl -X POST "http://localhost:8090/api/standard-candidates" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"candidateName":"mobile","displayName":"手机号","dataType":"varchar","sourceType":"MANUAL","confidence":80}'
+curl -X POST "http://localhost:8090/api/standard-candidates/1/accept" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"确认转正"}'
+```
+
+候选证据会做敏感信息脱敏，不保存 token/password/Bearer/完整 JDBC URL，不读取源数据库业务数据行。第一版不做审批流、不自动合并标准字段，也不把候选处理变成团队工单系统。
 
 ## 字段推荐与字段标准检索
 
@@ -498,7 +517,7 @@ node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dat
 npx openspec validate --all
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、筛选与批量维护、DDL 生成、AI Context、覆盖率报告、AI 回放、AI 反馈和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告、AI 回放、AI 反馈和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
 
 ## 性能基线
 
@@ -601,6 +620,7 @@ data-spec/
 - [x] 个人版字段模型：别名、数据域、分类、标签、代码集、敏感标记、状态、示例值
 - [x] 字段库分组视图与批量归组，支持按数据域、分类、标签和未分组字段筛选维护
 - [x] 字段库批量维护和单条变更回退，支持状态、分类、标签、敏感标记、代码集、别名的预览式批量更新
+- [x] 标准候选 Inbox，支持候选新建、筛选、采纳、合并、忽略、延后和决策记录
 - [x] 前端关键流程源码级冒烟门禁，覆盖路由、项目选择、SQL 校验记录、反向导入、字段库、DDL、AI Context、覆盖率、AI 回放入口和关键按钮/空状态
 - [x] 结构化命名规则导出和 `field_suffix_type` lint 规则
 - [x] SQL 粘贴校验、结构化 issue、修复建议和 `fixedSql`

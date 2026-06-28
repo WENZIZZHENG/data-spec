@@ -18,6 +18,7 @@ test('keeps critical frontend routes and navigation entries wired', () => {
 
   const criticalRoutes = [
     { path: '/fields', view: 'FieldLibrary.vue', title: '标准字段库' },
+    { path: '/standard-candidates', view: 'StandardCandidate.vue', title: '标准候选' },
     { path: '/sql-lint', view: 'SqlLint.vue', title: 'SQL 校验' },
     { path: '/generator', view: 'Generator.vue', title: '生成器' },
     { path: '/ai-export', view: 'AiExport.vue', title: 'AI 规则导出' },
@@ -108,6 +109,60 @@ test('keeps AI feedback improvement loop page wired', () => {
     'RAiFeedbackReport',
     'getAiFeedbackReport'
   ], 'ai feedback schema')
+})
+
+test('keeps standard candidate inbox workbench wired', () => {
+  const view = readSource('src/views/StandardCandidate.vue')
+  const api = readSource('src/api/standardCandidate.ts')
+  const types = readSource('src/types/index.ts')
+  const schema = readSource('src/api/schema.ts')
+
+  assertContains(view, [
+    "import { listFields } from '@/api/field'",
+    "import {",
+    "listStandardCandidates",
+    "createStandardCandidate",
+    "acceptStandardCandidate",
+    "mergeStandardCandidate",
+    "ignoreStandardCandidate",
+    "postponeStandardCandidate",
+    "projectStore.currentProjectId",
+    "createVisible.value = false",
+    "decisionVisible.value = false",
+    "mergeVisible.value = false",
+    "await createStandardCandidate({ ...createForm, projectId })",
+    "async function loadCandidates()",
+    "async function submitCreate()",
+    "async function submitDecision()",
+    "async function submitMerge()",
+    "标准候选",
+    "新建候选",
+    "暂无标准候选",
+    "请先创建并选择项目"
+  ], 'StandardCandidate.vue')
+
+  assertContains(api, [
+    "request.get<unknown, PageResult<StandardCandidate>>('/standard-candidates'",
+    "export function createStandardCandidate",
+    "export function acceptStandardCandidate",
+    "export function mergeStandardCandidate",
+    "export function ignoreStandardCandidate",
+    "export function postponeStandardCandidate"
+  ], 'standard candidate api')
+
+  assertContains(types, [
+    'export interface StandardCandidate',
+    'export interface StandardCandidateCreateReq',
+    'export interface StandardCandidateMergeReq'
+  ], 'standard candidate types')
+
+  assertContains(schema, [
+    '"/api/standard-candidates"',
+    'StandardCandidate',
+    'RPageResultStandardCandidate',
+    'pageStandardCandidates',
+    'acceptStandardCandidate'
+  ], 'standard candidate schema')
 })
 
 test('keeps global project selector backed by the project store', () => {
@@ -424,6 +479,10 @@ test('keeps critical action labels and empty states visible', () => {
     {
       path: 'src/views/AiFeedback.vue',
       snippets: ['刷新反馈', '下一步动作', '高频字段信号', '规则问题排行', 'fixedSql 机会', '标准化信号', '请先创建并选择项目']
+    },
+    {
+      path: 'src/views/StandardCandidate.vue',
+      snippets: ['新建候选', '刷新', '暂无标准候选', '采纳', '合并', '延后', '忽略', '请先创建并选择项目']
     },
     {
       path: 'src/views/ProjectBackup.vue',

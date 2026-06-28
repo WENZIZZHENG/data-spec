@@ -148,6 +148,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/standard-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["pageStandardCandidates"];
+        put?: never;
+        post: operations["createStandardCandidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-candidates/{id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["acceptStandardCandidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-candidates/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mergeStandardCandidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-candidates/{id}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ignoreStandardCandidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-candidates/{id}/postpone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["postponeStandardCandidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/enums/{id}": {
         parameters: {
             query?: never;
@@ -3631,6 +3711,78 @@ export interface components {
             error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["AiFeedbackReport"];
         };
+        StandardCandidate: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            candidateName?: string;
+            displayName?: string;
+            dataType?: string;
+            comment?: string;
+            sourceType?: string;
+            sourceRef?: string;
+            evidenceJson?: string;
+            /** Format: int32 */
+            confidence?: number;
+            status?: string;
+            /** Format: int64 */
+            targetFieldId?: number;
+            decisionReason?: string;
+            /** Format: date-time */
+            decidedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        StandardCandidateCreateReq: {
+            /** Format: int64 */
+            projectId: number;
+            candidateName: string;
+            displayName?: string;
+            dataType: string;
+            comment?: string;
+            sourceType: string;
+            sourceRef?: string;
+            evidenceJson?: string;
+            /** Format: int32 */
+            confidence?: number;
+        };
+        StandardCandidateDecisionReq: {
+            reason?: string;
+        };
+        StandardCandidateMergeReq: {
+            /** Format: int64 */
+            targetFieldId: number;
+            reason?: string;
+        };
+        PageResultStandardCandidate: {
+            records?: components["schemas"]["StandardCandidate"][];
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            current?: number;
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            pages?: number;
+        };
+        RPageResultStandardCandidate: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["PageResultStandardCandidate"];
+        };
+        RStandardCandidate: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["StandardCandidate"];
+        };
     };
     responses: never;
     parameters: never;
@@ -6193,6 +6345,161 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RAiFeedbackReport"];
+                };
+            };
+        };
+    };
+    pageStandardCandidates: {
+        parameters: {
+            query: {
+                projectId: number;
+                status?: string;
+                sourceType?: string;
+                keyword?: string;
+                current?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RPageResultStandardCandidate"];
+                };
+            };
+        };
+    };
+    createStandardCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardCandidateCreateReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardCandidate"];
+                };
+            };
+        };
+    };
+    acceptStandardCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StandardCandidateDecisionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardCandidate"];
+                };
+            };
+        };
+    };
+    mergeStandardCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardCandidateMergeReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardCandidate"];
+                };
+            };
+        };
+    };
+    ignoreStandardCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StandardCandidateDecisionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardCandidate"];
+                };
+            };
+        };
+    };
+    postponeStandardCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StandardCandidateDecisionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardCandidate"];
                 };
             };
         };
