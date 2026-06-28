@@ -7,7 +7,8 @@
 1. P6-24 项目备份、恢复与迁移包已完成第一版，下一步推进 P6-25 数据库直连只读安全诊断与最小权限指引。
 2. P6 后续继续补数据库只读安全诊断、AI 批量任务、标准候选采纳台、离线 Context、元数据适配、Prompt 评测、项目活动时间线、任务式前端导航、本地启动包、fixedSql 策略化、AI 使用画像、标准契约版本、执行证据包、统一前端状态、并发幂等保护、AI 能力清单、前端可复现链接、敏感信息脱敏、验证建议、TODO 到 OpenSpec 交接、业务术语表、自然语言标准候选、AI 引用证据、字段生命周期、变更感知扫描、健康趋势、数据库连接诊断、字段格式约束、命名保留字、反向导入映射、AI 任务重试、质量门禁、示例反例库、AI 会话启动包、AI 任务卡、数据库元数据浏览、大库扫描计划、标准合并向导、前端命令面板、交接证据看板、多项目标准复用包、AI 写入安全策略、规则调试器、元数据增量缓存、CLI/MCP 兼容握手、前端类型化 API Client、标准演练沙箱、MCP/CLI 工具契约验收、业务对象关系图、派生字段规则、fixedSql 文件补丁、标准问答入口、规则模板 diff 包、浏览器级 E2E、真实数据库集成测试、文档状态一致性、可访问性、本地数据清理和前端性能体验。
 3. 新增优化建议已补为 P6-87 到 P6-98：数据库迁移计划、业务代码字段引用、MCP prompt/resource、AI 上下文预算、本地 pre-commit/IDE 检查、标准样例生成、多源契约导入、标准证据置信度、自定义规则 SDK、本地语义检索、标准使用热区和 AI 变更迁移说明。
-4. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+4. 追加优化建议已补为 P6-99 到 P6-104：只读标准文档站、标准资产依赖图、环境配置漂移检测、数据源连接器注册、本地运行观测诊断和标准决策理由库。
+5. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -968,6 +969,66 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：标准升级后 AI 能解释本次变化并按迁移指令修 SQL、DDL 或字段引用；破坏性变更会明确标记并要求人工确认；发布说明可随备份包或执行证据包归档。
 - 边界：不做复杂发布审批，不自动修改业务仓库；第一版只生成说明和建议命令，实际改动仍走 dry-run 或人工确认。
 
+### P6-99：只读标准文档站与数据字典消费入口
+- 状态：待办。
+- 为什么做：字段标准、规则、模板和数据字典已经能在系统内维护和导出，但用户、AI agent 或业务仓库经常只需要一个只读入口来查询“当前标准是什么、哪些字段可用、有哪些示例”，不一定要进入管理页面或下载 AI Context。
+- 已有基础：已有数据字典导出、HTML/ERD、AI Context、标准快照、字段检索、标准问答入口和多项目标准复用包待办。
+- 缺口：缺少面向消费方的轻量文档站或静态包；当前导出更偏一次性文件，无法稳定提供版本、搜索、字段详情、规则说明、示例和复制链接。
+- 参考项目：`backstage/backstage` 的开发者入口组织方式、`Redocly/redocly-cli` 的契约文档化和 `facebook/docusaurus` 的静态文档站体验；只借鉴只读信息架构，不引入复杂门户权限。
+- 落地产物：新增只读标准文档导出或页面；按项目和快照生成字段目录、枚举、规则、模板、示例、来源与变更说明，支持搜索、复制字段链接和导出静态包；AI Context 可引用文档站链接或文档索引。
+- 验收标准：用户能在只读入口搜索字段、查看规则和复制标准链接；业务仓库可保存一份不含 token/password 的静态文档包；AI 能根据文档索引定位字段证据。
+- 边界：不做复杂 CMS，不开放写入能力，不替代后台字段维护页面；第一版只服务本地/小团队只读查询。
+
+### P6-100：标准资产依赖图与孤儿对象检查
+- 状态：待办。
+- 为什么做：字段、枚举、规则、模板、快照、AI Context、SQL 检查记录和导入来源已经形成一张标准资产关系网；当某个字段废弃、规则调整或模板删除时，需要知道下游依赖和孤儿对象，AI 也需要用关系图避免误删或遗漏。
+- 已有基础：已有字段影响分析、业务对象关系图、字段来源批次、标准快照、规则模板库、AI 回放、执行证据包和标准使用热区待办。
+- 缺口：当前影响分析分散在单点对象上，缺少统一 asset graph；无法稳定输出 dependsOn、referencedBy、orphaned、stale、cycleRisk 和 cleanupAction。
+- 参考项目：`datahub-project/datahub` 的元数据关系视角和 `OpenLineage/OpenLineage` 的输入输出事件模型；只借鉴关系表达和可追溯性，不建设重型数据目录平台。
+- 落地产物：新增标准资产依赖图模型或查询接口；聚合字段、枚举、规则、模板、快照、导入批次和 AI job 的轻量关系，输出节点、边、风险标签、孤儿对象和建议动作；前端可在字段详情或项目健康页展示摘要。
+- 验收标准：给定一个字段或规则，能看到主要上游来源和下游使用对象；删除或废弃前能提示孤儿模板、过期快照或高风险依赖；AI 可读取图摘要生成变更计划。
+- 边界：不扫描业务数据行，不替代企业级血缘系统，不要求一次性补齐所有历史关系；第一版优先覆盖 DataSpec 已有结构化记录。
+
+### P6-101：环境配置漂移检测与运行指纹
+- 状态：待办。
+- 为什么做：DataSpec 同时有后端配置、前端生成类型、CLI/MCP、`.dataspec/config.json`、OpenAPI schema、AI Context 缓存和数据库迁移；一旦本地环境或业务仓库缓存漂移，AI 会基于错误上下文继续执行。
+- 已有基础：已有 `dataspec doctor`、CLI/MCP 版本兼容握手、OpenAPI 防漂移、离线 Context、标准快照、本地启动包和 README 验证命令。
+- 缺口：现有诊断更偏单点连通性，缺少环境指纹和漂移对比；无法一次性说明 serverVersion、apiSchemaHash、flywayVersion、frontendSchemaHash、cliVersion、mcpVersion、contextSnapshotHash 和 configHash 是否一致。
+- 参考项目：`hashicorp/terraform` 的 plan/drift 思路和 `bufbuild/buf` 的契约 breaking 检查；只借鉴对比报告，不引入远程状态服务。
+- 落地产物：新增 `dataspec doctor --fingerprint` 或等价 API；输出本地/服务端/业务仓库的运行指纹、漂移项、严重级别、建议修复命令和可继续/应停止判断；README 和 AGENTS 片段提示 AI 开始前先读取。
+- 验收标准：前端类型未重新生成、CLI 版本过旧、Context 缓存过期、服务端迁移未完成或项目配置指向错误时能明确诊断；JSON 输出可被 AI 自动判断下一步。
+- 边界：不自动修改用户配置，不上传环境信息，不做跨机器资产管理；第一版只读取本地和当前服务可见信息。
+
+### P6-102：数据源连接器能力注册与插件化边界
+- 状态：待办。
+- 为什么做：当前数据库直连以 PostgreSQL/MySQL 为主，后续可能会接 SQLite、SQL Server、Oracle、ClickHouse 或离线 dump；如果每个方言都散落在反向导入流程里，元数据读取、只读诊断、类型映射和限制说明会越来越难维护。
+- 已有基础：已有数据库元数据适配层、直连反向导入、连接预设、只读安全诊断、多方言兼容矩阵、真实数据库集成测试和 DBeaver/SchemaCrawler 参考。
+- 缺口：缺少连接器 registry，无法稳定声明每种数据源支持哪些能力：comments、indexes、schemas、caseSensitivity、readonlyDiagnostic、typeMapping、pagination、offlineDump 和 unsupportedReasons。
+- 参考项目：`dbeaver/dbeaver` 的多数据源体验、`schemacrawler/SchemaCrawler` 的 metadata 抽取和 `sqlalchemy/sqlalchemy` 的 dialect 分层；只借鉴能力声明和适配边界，不把本项目改成通用数据库客户端。
+- 落地产物：新增 data source connector capability 模型；后端、CLI 和前端连接选择页都能读取 supportedCapabilities、defaultPort、metadataLimit、knownPitfalls 和 testProfile；新增连接器需补 fixture 和能力声明。
+- 验收标准：用户选择数据源前能看到支持范围和限制；AI 调用反向导入前能判断该方言能否读取 comment/index/schema；新增方言不会破坏 PostgreSQL/MySQL 既有行为。
+- 边界：不一次性支持所有数据库，不读取业务数据行，不做 SQL 编辑器或通用查询工具；第一版只把现有能力 registry 化。
+
+### P6-103：本地运行观测、慢请求与诊断包
+- 状态：待办。
+- 为什么做：当后端启动慢、接口超时、前端页面卡顿或 AI 批量任务失败时，用户需要一份可复制给 AI 的本地诊断摘要，而不是在日志、浏览器控制台和终端之间手工拼线索。
+- 已有基础：已有大字段库性能基线、前端性能体验指标、AI 可读错误诊断、任务重试、执行证据包、Spring Boot Actuator 可扩展空间和 README 验证入口。
+- 缺口：缺少统一 run diagnostics；后端慢请求、SQL lint 耗时、数据库 metadata 扫描耗时、前端请求耗时和最近错误没有形成脱敏摘要，也没有明确的“诊断包可安全分享”边界。
+- 参考项目：`open-telemetry/opentelemetry-collector` 的 signals 概念和 `langfuse/langfuse` 的 trace 组织方式；只做本地轻量摘要，不接入远程遥测。
+- 落地产物：新增本地诊断包命令或页面；汇总 server health、recentErrors、slowRequests、batchRunStats、frontendBuildInfo、schemaHash、redactionStatus 和 recommendedActions；所有输出经过敏感信息扫描。
+- 验收标准：用户遇到慢页面或失败任务时能导出一份 JSON/Markdown 诊断包；AI 可根据诊断包判断是服务未启动、接口慢、方言限制、契约漂移还是输入问题；包内不包含 token/password/完整 JDBC URL。
+- 边界：不上传遥测，不做生产监控平台，不长期保存详细请求体；第一版只面向本地开发和个人排障。
+
+### P6-104：标准决策理由库与字段 ADR 记录
+- 状态：待办。
+- 为什么做：AI 不只需要知道“标准字段叫什么”，还需要知道“为什么用这个字段、为什么不用另一个别名、哪些历史方案被否决”；否则同一类命名争议会在推荐、DDL 生成和 SQL 修复中反复出现。
+- 已有基础：已有字段来源、变更日志、标准快照、业务术语表、字段冲突检测、标准问答入口、面向 AI 的变更发布说明和 OpenSpec 归档。
+- 缺口：变更日志主要记录 what，来源记录主要记录 from；缺少稳定记录 why、alternatives、tradeoffs、decisionOwner、evidenceRefs 和 supersedes 的轻量决策模型。
+- 参考项目：`changesets/changesets` 的变更说明组织、`agents.md` 的 agent 指令约定和 OpenSpec proposal/archive 的决策语境；只借鉴记录结构，不引入审批流程。
+- 落地产物：新增标准决策 note 或字段 ADR；可关联字段、别名、规则、模板、分组或业务术语，记录决策背景、采用方案、拒绝方案、证据链接、适用范围和过期条件；导出到 AI Context 和标准问答证据。
+- 验收标准：AI 能回答“为什么这里用 `user_id` 而不是 `uid`”“金额单位为什么用分”“某字段为什么废弃”；字段合并或规则调整时能引用历史决策，避免重复争论。
+- 边界：不做多人审批，不要求所有历史字段补齐 ADR，不把决策理由当成不可变法规；第一版从高冲突字段和规则开始补。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -1006,6 +1067,9 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`GoogleChrome/lighthouse`](https://github.com/GoogleChrome/lighthouse)：页面性能、可访问性和最佳实践审计参考。
 - [`gitleaks/gitleaks`](https://github.com/gitleaks/gitleaks)：敏感信息检测、日志脱敏和 secret 防泄漏参考。
 - [`pgvector/pgvector`](https://github.com/pgvector/pgvector)：本地或自托管向量检索索引的设计参考。
+- [`facebook/docusaurus`](https://github.com/facebook/docusaurus)：静态文档站、版本化文档和搜索入口参考。
+- [`sqlalchemy/sqlalchemy`](https://github.com/sqlalchemy/sqlalchemy)：数据库方言分层、连接能力抽象和类型映射参考。
+- [`open-telemetry/opentelemetry-collector`](https://github.com/open-telemetry/opentelemetry-collector)：本地 traces/metrics/logs 信号组织和诊断摘要参考。
 - [Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)：AI 应用接入 resources、prompts、tools 的协议基础。
 - [`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)：MCP server 参考实现集合。
 - [`agents.md`](https://agents.md/)：面向 coding agent 的项目指令文件约定。
