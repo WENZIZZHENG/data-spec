@@ -30,4 +30,4 @@
 - [x] 5.2 执行后端、前端、CLI/MCP、OpenSpec 和 diff 验证。
 - [x] 5.3 完成结构化代码评审并修复 findings。
 - [x] 5.4 创建本地 commit。
-- [ ] 5.5 归档 OpenSpec change 并再次验证。
+- [x] 5.5 归档 OpenSpec change 并再次验证。
