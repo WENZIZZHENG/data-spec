@@ -19,7 +19,8 @@
 13. 本次最新优化建议已补为 P6-153 到 P6-158：AI Context 注入防护、标准消费端 SDK、规则依赖冲突诊断、示例契约快照、单机分发预案和字段可见性策略。
 14. 本次补充优化建议已补为 P6-159 到 P6-164：AI 任务断点续跑、标准变更影响预演、字段知识卡、规则/标准 A/B 评测、连接器能力探测和个人安全红线配置。
 15. 本次追加优化建议已补为 P6-165 到 P6-170：标准对象稳定标识、AI 输出后置校验、标准查询 DSL、MCP 资源游标分页、前端操作录制和标准维护工作量估算。
-16. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+16. 本次新增工程化优化建议已补为 P6-171 到 P6-176：数据质量测试导出、标准变更事件流、IDE 提示、跨协议 Schema 导出、指标口径映射和消费端兼容套件。
+17. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -1694,6 +1695,66 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：打开项目后能生成“本次最值得处理的 3 个维护批次”；AI 可按批次逐步执行并产出 TaskResult；完成后健康摘要和任务建议会更新。
 - 边界：不做团队工时估算，不自动修改标准，不把估算当承诺；第一版按本地项目指标给出启发式建议。
 
+### P6-171：标准规则向数据质量测试导出
+- 状态：待办。
+- 为什么做：字段标准、枚举、必填规则和命名规则已经能指导建表，但落到业务仓库后仍需要可执行的数据质量测试；AI 需要把 DataSpec 标准转成 dbt、Great Expectations 或 SQL 断言，而不是只生成说明文档。
+- 已有基础：已有规则配置、字段覆盖率、DDL 生成、执行证据包、标准消费端 SDK 待办和业务仓库迁移交付包待办。
+- 缺口：缺少 dataQualityTestSpec、testTarget、expectationSuite、dbtSchemaYaml、sqlAssertion 和 verificationResult；标准规则无法直接导出为可落地的测试工件。
+- 参考项目：`dbt-labs/dbt-core` 的 `schema.yml` tests、`great-expectations/great_expectations` 的 expectation suite 和 `TobikoData/sqlmesh` 的模型质量校验；只借鉴测试工件表达，不引入完整数据平台。
+- 落地产物：新增标准到数据质量测试的 API/CLI 导出；支持按项目、表、字段、规则生成 dbt tests、Great Expectations suite 和只读 SQL assertion 模板；交付包可附带验证命令和风险说明。
+- 验收标准：选择一个项目后能导出结构稳定的测试包；枚举值、非空、字段格式、命名和敏感字段规则能转成可执行或可人工确认的断言；导出内容不包含业务数据行或数据库密码。
+- 边界：第一版不连接生产库跑全量数据质量扫描，不承诺覆盖所有 dbt/GE 高级能力；先做确定性规则到测试工件的转换。
+
+### P6-172：标准变更事件流与本地 Webhook
+- 状态：待办。
+- 为什么做：AI、CLI、MCP 和业务仓库希望在标准变更后自动更新 Context、刷新缓存或提示重新校验；当前只能轮询活动时间线或手动导出，缺少稳定事件入口。
+- 已有基础：已有项目活动时间线、变更日志、标准快照、执行证据包、Trace ID、幂等写保护和任务状态机待办。
+- 缺口：缺少 dataspecEvent、eventType、subjectRef、projectId、snapshotHash、redactedPayload、deliveryStatus 和 replayCursor；AI 无法订阅“字段标准已变更”“规则已更新”“Starter Kit 已应用”等事件。
+- 参考项目：`cloudevents/spec` 的事件信封、`OpenLineage/OpenLineage` 的运行事件和 GitHub webhook 的本地回调模式；只借鉴事件格式与回放，不做远程消息队列。
+- 落地产物：定义 `dataspec.event.v1` 事件模型；新增只读事件列表 API、CLI `events tail/replay` 和 `.dataspec/events.json` 本地 webhook 配置；事件 payload 默认脱敏并关联标准快照。
+- 验收标准：字段、规则、反向导入、Starter Kit、Context 导出等关键动作产生可查询事件；AI 可按 cursor 增量读取；本地 webhook 失败有重试摘要但不阻断主流程。
+- 边界：不引入 Kafka/RabbitMQ 等外部依赖，不做团队通知系统；第一版面向本机自动化和 AI agent 消费。
+
+### P6-173：编辑器提示与 Code Action 轻量包
+- 状态：待办。
+- 为什么做：很多字段标准问题在开发者写 SQL、DDL、实体类或迁移脚本时就能发现；只靠前端页面或 CLI 事后检查，AI 和人类都容易等到 PR 阶段才修。
+- 已有基础：已有 CLI lint、pre-commit/IDE 保存前检查待办、前端类型化 API Client、字段检索 API、标准消费端 SDK 和 `.dataspec/config.json` Schema 待办。
+- 缺口：缺少 editorDiagnostics、completionItems、codeActions、hoverDocs 和 localCache；编辑器无法直接提示标准字段、推荐替换、字段说明和修复命令。
+- 参考项目：`microsoft/vscode-extension-samples` 的扩展示例、`sourcegraph/sourcegraph` 的代码索引体验和 `redhat-developer/vscode-java` 的诊断/Code Action 形态；只借鉴编辑器交互，不做完整 IDE 平台。
+- 落地产物：新增 VS Code 轻量模板或插件骨架，复用 CLI/API 输出 diagnostics、completion 和 code action；支持从 `.dataspec/config.json` 读取项目与 token；提供本地缓存和脱敏日志。
+- 验收标准：在 SQL/DDL 文件中能看到字段命名、枚举、敏感字段和推荐标准字段提示；一键复制或执行修复命令不泄漏 token；插件骨架有最小冒烟测试或示例工作区。
+- 边界：第一版不发布 Marketplace，不强制绑定 VS Code；其他 IDE 先通过 CLI JSON/Problem Matcher 复用。
+
+### P6-174：跨协议 Schema 导出与标准适配层
+- 状态：待办。
+- 为什么做：字段标准最终会被 API、事件、离线数据和消息系统消费；如果只能导出 DataSpec 自身 JSON，AI 在生成 OpenAPI、Protobuf、Avro 或 JSON Schema 时仍要猜类型与约束映射。
+- 已有基础：已有 Schema Registry、字段标准向 API/DTO Schema 导出待办、标准消费端 SDK、类型常量包、OpenAPI 契约和字段可见性策略待办。
+- 缺口：缺少 schemaTarget、protocolMapping、typeMapping、constraintMapping、compatibilityNotes 和 unsupportedFeatures；不同协议之间的类型、枚举、必填和注释映射不可验证。
+- 参考项目：`protocolbuffers/protobuf`、`apache/avro`、`confluentinc/schema-registry`、`json-schema-org/json-schema-spec` 和 `bufbuild/buf` 的兼容检查；只借鉴协议映射与兼容提示，不做全量代码生成平台。
+- 落地产物：新增标准对象到 JSON Schema、OpenAPI schema fragment、Protobuf message 草稿和 Avro schema 的导出 API/CLI；输出 mapping report、兼容风险和不可表达约束列表。
+- 验收标准：同一字段标准可导出多个协议的结构化草稿；枚举、必填、敏感标记、格式和注释能被保留或明确标记为降级；导出结果有 fixture 快照测试。
+- 边界：第一版不自动改业务仓库代码，不保证复杂协议特性完全等价；以“AI 可读、人工可审”的草稿和映射报告为主。
+
+### P6-175：指标口径与字段标准映射层
+- 状态：待办。
+- 为什么做：AI 生成报表 SQL 或数据产品说明时，经常把字段名、指标名和业务口径混在一起；需要把“订单金额”“支付成功率”“活跃用户数”这类指标口径映射到标准字段、过滤条件和聚合规则。
+- 已有基础：已有派生字段、单位换算与口径规则待办、业务对象关系图、字段知识卡、业务术语表、标准问答入口和数据模型契约待办。
+- 缺口：缺少 metricDefinition、measureFields、dimensionFields、filterRule、aggregationRule、timeGrain 和 ownerNotes；AI 无法区分字段标准和指标口径，也无法解释查询结果的业务边界。
+- 参考项目：`dbt-labs/metricflow` 的语义指标模型、`cube-js/cube` 的 metrics layer 和 `datahub-project/datahub` 的 glossary/metric 元数据；只借鉴指标口径表达，不做 BI 平台。
+- 落地产物：新增轻量指标口径模型/API/前端维护入口；支持把指标关联到标准字段、枚举过滤、时间粒度、聚合方式和示例 SQL；AI Context 和标准问答可按需导出指标摘要。
+- 验收标准：AI 查询“订单金额口径”或生成报表 SQL 时能引用明确 metricDefinition；口径变更可追溯到快照和决策理由；典型金额、数量、转化率指标有 fixture 覆盖。
+- 边界：不接管真实指标计算平台，不自动校验数据结果正确性；第一版只沉淀口径元数据和可解释查询建议。
+
+### P6-176：标准消费端兼容验收套件
+- 状态：待办。
+- 为什么做：DataSpec 会被前端、CLI、MCP、SDK、业务仓库和 AI 工具共同消费；仅后端测试通过不代表消费端解析稳定，需要一套可复用的兼容样例，防止字段改名或契约变更悄悄破坏外部使用。
+- 已有基础：已有 OpenAPI 防漂移、CLI/MCP 工具契约验收、示例契约快照、标准消费清单、标准消费端 SDK 和前端冒烟门禁。
+- 缺口：缺少 consumerCompatibilitySuite、goldenPayloads、minimumSupportedVersion、breakingChangeRules 和 adapterResults；每个消费端只能靠各自测试发现问题。
+- 参考项目：`Schemathesis/schemathesis` 的契约回归、`OpenAPITools/openapi-generator` 的生成兼容策略、`bufbuild/buf` 的 breaking change 检查和 `Redocly/redocly-cli` 的 OpenAPI lint；只借鉴兼容验收，不做公开认证体系。
+- 落地产物：新增标准消费端兼容套件目录和 CLI `compat check`；内置字段、规则、枚举、Context、MCP resource、CLI JSON、schema export 的 golden payload；输出 breaking/compatible/deprecated 结果。
+- 验收标准：修改核心 DTO、API 字段或导出格式时能一键检查主要消费端契约；失败结果包含破坏字段、影响入口和迁移建议；CI/本地验证入口可复用。
+- 边界：不要求所有第三方工具接入，不阻止个人本地实验性变更；第一版覆盖 DataSpec 自有消费端和示例 adapter。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -1723,6 +1784,13 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`OpenAPITools/openapi-generator`](https://github.com/OpenAPITools/openapi-generator)：契约优先、代码生成和版本兼容策略参考。
 - [`bufbuild/buf`](https://github.com/bufbuild/buf)：Protobuf schema lint、breaking change 检查和契约管理参考。
 - [`glideapps/quicktype`](https://github.com/glideapps/quicktype)：从 JSON/Schema 推导类型与结构的契约反向提取参考。
+- [`protocolbuffers/protobuf`](https://github.com/protocolbuffers/protobuf)：Protobuf 协议、消息 schema 和兼容性约束参考。
+- [`apache/avro`](https://github.com/apache/avro)：Avro schema、数据契约和跨语言序列化参考。
+- [`confluentinc/schema-registry`](https://github.com/confluentinc/schema-registry)：多协议 schema 注册、兼容检查和版本化参考。
+- [`json-schema-org/json-schema-spec`](https://github.com/json-schema-org/json-schema-spec)：JSON Schema 规范与约束表达参考。
+- [`cloudevents/spec`](https://github.com/cloudevents/spec)：事件信封、事件类型和跨系统事件元数据参考。
+- [`dbt-labs/metricflow`](https://github.com/dbt-labs/metricflow)：语义层指标定义、聚合口径和维度建模参考。
+- [`cube-js/cube`](https://github.com/cube-js/cube)：metrics layer、语义查询和指标 API 组织参考。
 - [`backstage/backstage`](https://github.com/backstage/backstage)：项目模板、开发者入口和脚手架体验参考。
 - [`renovatebot/renovate`](https://github.com/renovatebot/renovate)：依赖过期检测、批量更新和迁移提示参考。
 - [`dbeaver/dbeaver`](https://github.com/dbeaver/dbeaver)：数据库连接配置、metadata 浏览和多方言体验参考。
@@ -1739,6 +1807,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`Schemathesis/schemathesis`](https://github.com/schemathesis/schemathesis)：基于 OpenAPI 的契约测试和接口行为回归参考。
 - [`sqlmesh/sqlmesh`](https://github.com/TobikoData/sqlmesh)：数据模型依赖、plan/apply 和变更影响分析参考。
 - [`microsoft/playwright`](https://github.com/microsoft/playwright)：浏览器级 E2E、trace、截图和稳定选择器参考。
+- [`microsoft/vscode-extension-samples`](https://github.com/microsoft/vscode-extension-samples)：VS Code 扩展、诊断和 Code Action 示例参考。
+- [`redhat-developer/vscode-java`](https://github.com/redhat-developer/vscode-java)：编辑器诊断、补全和修复入口组织参考。
 - [`getsentry/sentry-javascript`](https://github.com/getsentry/sentry-javascript)：前端错误上下文、breadcrumb 和本地反馈证据采集参考。
 - [`testcontainers/testcontainers-java`](https://github.com/testcontainers/testcontainers-java)：Java 集成测试中启动真实 PostgreSQL/MySQL 容器的参考。
 - [`TanStack/query`](https://github.com/TanStack/query)：前端 server state、请求缓存、重试和错误状态收口参考。
