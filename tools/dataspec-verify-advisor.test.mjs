@@ -57,6 +57,20 @@ test('deduplicates CLI recommendations and renders readable text', () => {
   assert.match(formatValidationAdviceText(advice), /git diff --check/)
 })
 
+test('recommends TODO handoff tests for handoff tool paths', () => {
+  const advice = buildValidationAdvice([
+    'tools/dataspec-todo-openspec-handoff.mjs',
+    'tools/dataspec-todo-openspec-handoff.test.mjs'
+  ])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  assert.ok(commandIds.includes('todo-openspec-handoff-tests'))
+  assert.equal(
+    advice.commands.find((command) => command.id === 'todo-openspec-handoff-tests').command,
+    'node --test tools/dataspec-todo-openspec-handoff.test.mjs'
+  )
+})
+
 test('cli supports --changed json output with injected changed paths', async () => {
   const io = createIo()
   const code = await runAdvisorCli(['--changed', '--format', 'json'], io, {

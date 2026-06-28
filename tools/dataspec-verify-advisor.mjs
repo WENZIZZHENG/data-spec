@@ -72,6 +72,15 @@ const VALIDATION_RULES = [
     patterns: [/^tools\/dataspec-verify-advisor\.(mjs|test\.mjs)$/]
   },
   {
+    id: 'todo-openspec-handoff-tests',
+    category: 'tooling',
+    command: 'node --test tools/dataspec-todo-openspec-handoff.test.mjs',
+    cwd: '.',
+    estimatedSeconds: 5,
+    reason: 'TODO 到 OpenSpec 交接助手或草稿生成规则改动需要跑 handoff 单测。',
+    patterns: [/^tools\/dataspec-todo-openspec-handoff\.(mjs|test\.mjs)$/]
+  },
+  {
     id: 'prompt-eval-tests',
     category: 'prompt',
     command: 'node --test tools/prompt-template-eval.test.mjs',
