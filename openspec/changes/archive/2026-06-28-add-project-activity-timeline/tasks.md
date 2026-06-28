@@ -23,4 +23,4 @@
 - [x] 4.2 执行后端、前端与 OpenSpec 验证。
 - [x] 4.3 完成结构化代码评审并修复 findings。
 - [x] 4.4 创建本地 commit。
-- [ ] 4.5 归档 OpenSpec change 并再次验证。
+- [x] 4.5 归档 OpenSpec change 并再次验证。

@@ -23,3 +23,12 @@
 - 前端工作台新增时间线区域和 activity API 封装。
 - OpenAPI 类型生成产物可能随新增 API 更新。
 - 后端/前端测试覆盖活动聚合、筛选和页面耦合。
+
+## Verification Evidence
+
+- `mvn test`：281 tests, 0 failures, 0 errors。
+- `pnpm test`：72 tests, 0 failures。
+- `pnpm build`：`vue-tsc --noEmit && vite build` 通过；仅有依赖包 pure annotation 与 chunk size 警告。
+- `npx.cmd openspec validate add-project-activity-timeline`：change valid。
+- `git diff --check`：无空白错误，仅 Windows LF/CRLF 提示。
+- 结构化代码评审：发现 token 使用摘要对项目级 token 用户暴露管理元数据的风险，已收窄为仅全项目身份可见并补充测试。
