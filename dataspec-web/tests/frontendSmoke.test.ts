@@ -106,8 +106,7 @@ test('keeps AI feedback improvement loop page wired', () => {
   assertContains(schema, [
     '"/api/ai-feedback/report"',
     'AiFeedbackReport',
-    'RAiFeedbackReport',
-    'getAiFeedbackReport'
+    'RAiFeedbackReport'
   ], 'ai feedback schema')
 })
 
@@ -158,10 +157,13 @@ test('keeps standard candidate inbox workbench wired', () => {
 
   assertContains(schema, [
     '"/api/standard-candidates"',
+    '"/api/standard-candidates/{id}/accept"',
+    '"/api/standard-candidates/{id}/merge"',
+    '"/api/standard-candidates/{id}/ignore"',
+    '"/api/standard-candidates/{id}/postpone"',
     'StandardCandidate',
     'RPageResultStandardCandidate',
-    'pageStandardCandidates',
-    'acceptStandardCandidate'
+    'RStandardCandidate'
   ], 'standard candidate schema')
 })
 
@@ -189,6 +191,37 @@ test('keeps global project selector backed by the project store', () => {
     'function setCurrentProjectById(projectId: number | null)',
     'function clearCurrentProject()'
   ], 'project store')
+})
+
+test('keeps project activity timeline wired on dashboard', () => {
+  const dashboard = readSource('src/views/Dashboard.vue')
+  const api = readSource('src/api/activity.ts')
+  const types = readSource('src/types/index.ts')
+
+  assertContains(dashboard, [
+    "import { listProjectActivities } from '@/api/activity'",
+    'activityTimeline',
+    'activityActionType',
+    'async function loadActivities()',
+    'await listProjectActivities(',
+    'activityItems',
+    'activityActionOptions',
+    'goActivity(activity.detailRoute)',
+    '最近活动',
+    '暂无项目活动'
+  ], 'Dashboard.vue activity timeline')
+
+  assertContains(api, [
+    'export function listProjectActivities',
+    "`/projects/${projectId}/activities`",
+    'ProjectActivityTimeline'
+  ], 'project activity api')
+
+  assertContains(types, [
+    'export type ProjectActivityAction',
+    'export type ProjectActivityItem',
+    'export type ProjectActivityTimeline'
+  ], 'project activity types')
 })
 
 test('keeps SQL lint fixed SQL and record history flow wired', () => {

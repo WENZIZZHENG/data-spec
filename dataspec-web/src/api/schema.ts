@@ -68,70 +68,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/project-backups/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["exportProjectBackup"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/project-backups/restore/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["previewProjectBackupRestore"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/project-backups/restore/apply": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["applyProjectBackupRestore"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/project-backups/restore/records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listProjectRestoreRecords"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/fields/{id}": {
         parameters: {
             query?: never;
@@ -143,86 +79,6 @@ export interface paths {
         put: operations["update_3"];
         post?: never;
         delete: operations["delete_4"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/standard-candidates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["pageStandardCandidates"];
-        put?: never;
-        post: operations["createStandardCandidate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/standard-candidates/{id}/accept": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["acceptStandardCandidate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/standard-candidates/{id}/merge": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["mergeStandardCandidate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/standard-candidates/{id}/ignore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["ignoreStandardCandidate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/standard-candidates/{id}/postpone": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["postponeStandardCandidate"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -340,6 +196,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/standard-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["page"];
+        put?: never;
+        post: operations["create_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-candidates/{id}/postpone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["postpone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-candidates/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["merge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-candidates/{id}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ignore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-candidates/{id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rules": {
         parameters: {
             query?: never;
@@ -349,87 +285,7 @@ export interface paths {
         };
         get: operations["list_1"];
         put?: never;
-        post: operations["create_1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rule-baselines/templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listRuleBaselineTemplates"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rule-baselines/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["currentRuleBaseline"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rule-baselines/apply": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["applyRuleBaseline"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rule-baselines/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["exportRuleBaseline"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/rule-baselines/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["importRuleBaseline"];
+        post: operations["create_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -445,7 +301,39 @@ export interface paths {
         };
         get: operations["list_2"];
         put?: never;
-        post: operations["create_2"];
+        post: operations["create_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rule-baselines/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["importBaseline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rule-baselines/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["apply"];
         delete?: never;
         options?: never;
         head?: never;
@@ -462,6 +350,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reverse-import/dump/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewDump"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reverse-import/dump/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["compareDump"];
         delete?: never;
         options?: never;
         head?: never;
@@ -532,6 +452,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reverse-import/database/dump": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["exportDatabaseDump"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reverse-import/database/compare": {
         parameters: {
             query?: never;
@@ -548,6 +484,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/prompt-templates/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["evaluate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects": {
         parameters: {
             query?: never;
@@ -557,7 +509,7 @@ export interface paths {
         };
         get: operations["list_3"];
         put?: never;
-        post: operations["create_3"];
+        post: operations["create_4"];
         delete?: never;
         options?: never;
         head?: never;
@@ -590,6 +542,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["createDemoProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-backups/restore/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-backups/restore/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["applyRestore"];
         delete?: never;
         options?: never;
         head?: never;
@@ -667,25 +651,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["page"];
+        get: operations["page_1"];
         put?: never;
-        post: operations["create_4"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/fields/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["search"];
-        put?: never;
-        post?: never;
+        post: operations["create_5"];
         delete?: never;
         options?: never;
         head?: never;
@@ -763,9 +731,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_4"];
+        get: operations["list_5"];
         put?: never;
-        post: operations["create_5"];
+        post: operations["create_6"];
         delete?: never;
         options?: never;
         head?: never;
@@ -795,9 +763,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_5"];
+        get: operations["list_6"];
         put?: never;
-        post: operations["create_6"];
+        post: operations["create_7"];
         delete?: never;
         options?: never;
         head?: never;
@@ -811,9 +779,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_6"];
+        get: operations["list_7"];
         put?: never;
-        post: operations["create_7"];
+        post: operations["create_8"];
         delete?: never;
         options?: never;
         head?: never;
@@ -830,6 +798,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["reportSql"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/coverage/dump": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reportDump"];
         delete?: never;
         options?: never;
         head?: never;
@@ -878,6 +862,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["generateCreateTablePrompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-batches/sql-lint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createSqlLintBatch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -948,6 +948,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rule-baselines/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rule-baselines/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rule-baselines/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["current"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/prompt-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTemplates_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/standard-snapshots/current": {
         parameters: {
             query?: never;
@@ -956,6 +1020,54 @@ export interface paths {
             cookie?: never;
         };
         get: operations["currentSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/activities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_4"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-backups/restore/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRestoreRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-backups/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["export_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1220,6 +1332,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fields/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fields/quality": {
         parameters: {
             query?: never;
@@ -1307,7 +1435,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["page_1"];
+        get: operations["page_2"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1339,7 +1467,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_7"];
+        get: operations["list_8"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1364,70 +1492,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai-batches": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listAiBatches"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-batches/sql-lint": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["createAiBatchSqlLint"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-batches/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getAiBatchDetail"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-batches/{id}/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["downloadAiBatchPackage"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/ai-feedback/report": {
         parameters: {
             query?: never;
@@ -1435,7 +1499,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getAiFeedbackReport"];
+        get: operations["report_3"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1556,17 +1620,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_9"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-batches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-batches/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ErrorDetail: {
-            code?: string;
-            category?: string;
-            retryable?: boolean;
-            suggestedAction?: string;
-            docsRef?: string;
-        };
         TemplateReq: {
             /** Format: int64 */
             projectId: number;
@@ -1574,12 +1679,19 @@ export interface components {
             description?: string;
             tablePrefix?: string;
         };
+        ErrorDetail: {
+            code?: string;
+            category?: string;
+            retryable?: boolean;
+            suggestedAction?: string;
+            docsRef?: string;
+        };
         RTemplate: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Template"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         Template: {
             /** Format: int64 */
@@ -1611,8 +1723,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["TemplateField"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         TemplateField: {
             /** Format: int64 */
@@ -1648,8 +1760,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["RuleConfig"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RuleConfig: {
             /** Format: int64 */
@@ -1689,8 +1801,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Project"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldReq: {
             /** Format: int64 */
@@ -1755,8 +1867,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Field"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         EnumDictReq: {
             /** Format: int64 */
@@ -1785,8 +1897,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["EnumDict"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         EnumValueReq: {
             value: string;
@@ -1813,8 +1925,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["EnumValue"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         DomainReq: {
             /** Format: int64 */
@@ -1841,8 +1953,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Domain"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         PresetReq: {
             /** Format: int64 */
@@ -1879,8 +1991,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DatabaseConnectionPreset"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         ApiTokenCreateReq: {
             name?: string;
@@ -1913,8 +2025,62 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ApiTokenCreateResp"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardCandidateCreateReq: {
+            /** Format: int64 */
+            projectId: number;
+            candidateName: string;
+            displayName?: string;
+            dataType: string;
+            comment?: string;
+            sourceType: string;
+            sourceRef?: string;
+            evidenceJson?: string;
+            /** Format: int32 */
+            confidence?: number;
+        };
+        RStandardCandidate: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardCandidate"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardCandidate: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            candidateName?: string;
+            displayName?: string;
+            dataType?: string;
+            comment?: string;
+            sourceType?: string;
+            sourceRef?: string;
+            evidenceJson?: string;
+            /** Format: int32 */
+            confidence?: number;
+            status?: string;
+            /** Format: int64 */
+            targetFieldId?: number;
+            decisionReason?: string;
+            /** Format: date-time */
+            decidedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        StandardCandidateDecisionReq: {
+            reason?: string;
+        };
+        StandardCandidateMergeReq: {
+            /** Format: int64 */
+            targetFieldId: number;
+            reason?: string;
         };
         RuleExemptionReq: {
             /** Format: int64 */
@@ -1930,8 +2096,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["RuleExemption"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RuleExemption: {
             /** Format: int64 */
@@ -1951,6 +2117,66 @@ export interface components {
             updatedAt?: string;
             isDeleted?: boolean;
         };
+        RuleBaselineImportReq: {
+            /** Format: int64 */
+            projectId: number;
+            overwrite?: boolean;
+            baselinePackage: components["schemas"]["RuleBaselinePackage"];
+        };
+        RuleBaselineInfo: {
+            /** Format: int64 */
+            projectId?: number;
+            key?: string;
+            name?: string;
+            version?: string;
+            source?: string;
+            /** Format: date-time */
+            appliedAt?: string;
+            /** Format: int32 */
+            ruleCount?: number;
+        };
+        RuleBaselinePackage: {
+            /** Format: int32 */
+            schemaVersion?: number;
+            baseline?: components["schemas"]["RuleBaselineInfo"];
+            /** Format: date-time */
+            exportedAt?: string;
+            rules?: components["schemas"]["RuleBaselineRule"][];
+        };
+        RuleBaselineRule: {
+            ruleCode?: string;
+            ruleName?: string;
+            severity?: string;
+            enabled?: boolean;
+            paramsJson?: string;
+        };
+        RRuleBaselineApplyResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["RuleBaselineApplyResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RuleBaselineApplyResult: {
+            /** Format: int64 */
+            projectId?: number;
+            baseline?: components["schemas"]["RuleBaselineInfo"];
+            /** Format: int32 */
+            created?: number;
+            /** Format: int32 */
+            updated?: number;
+            /** Format: int32 */
+            skipped?: number;
+            createdRuleCodes?: string[];
+            updatedRuleCodes?: string[];
+            skippedRuleCodes?: string[];
+        };
+        RuleBaselineApplyReq: {
+            /** Format: int64 */
+            projectId: number;
+            baselineKey: string;
+            overwrite?: boolean;
+        };
         ReverseImportReq: {
             /** Format: int64 */
             projectId: number;
@@ -1962,6 +2188,16 @@ export interface components {
             nullable?: boolean;
             defaultValue?: string;
             comment?: string;
+        };
+        DialectDiagnostic: {
+            dialect?: string;
+            /** @enum {string} */
+            capability?: "DIALECT_DETECTION" | "COMMENTS" | "AUTO_INCREMENT" | "INDEXES_CONSTRAINTS" | "TYPE_MAPPING" | "SCHEMA_CATALOG" | "QUOTED_IDENTIFIER" | "FIXED_SQL" | "DDL_GENERATION" | "DATABASE_METADATA";
+            /** @enum {string} */
+            level?: "SUPPORTED" | "PARTIAL" | "UNSUPPORTED" | "INFO" | "WARNING";
+            code?: string;
+            message?: string;
+            nextAction?: string;
         };
         FieldCandidate: {
             tableName?: string;
@@ -1983,22 +2219,12 @@ export interface components {
             recommendedName?: string;
             reason?: string;
         };
-        DialectCapability: "DIALECT_DETECTION" | "COMMENTS" | "AUTO_INCREMENT" | "INDEXES_CONSTRAINTS" | "TYPE_MAPPING" | "SCHEMA_CATALOG" | "QUOTED_IDENTIFIER" | "FIXED_SQL" | "DDL_GENERATION" | "DATABASE_METADATA";
-        DialectSupportLevel: "SUPPORTED" | "PARTIAL" | "UNSUPPORTED" | "INFO" | "WARNING";
-        DialectDiagnostic: {
-            dialect?: string;
-            capability?: components["schemas"]["DialectCapability"];
-            level?: components["schemas"]["DialectSupportLevel"];
-            code?: string;
-            message?: string;
-            nextAction?: string;
-        };
         RReverseImportPreview: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ReverseImportPreview"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         ReverseImportPreview: {
             summary?: components["schemas"]["ReverseImportSummary"];
@@ -2025,88 +2251,58 @@ export interface components {
             comment?: string;
             columns?: components["schemas"]["ColumnDef"][];
         };
-        DatabaseConnectionReq: {
+        DatabaseSchemaColumn: {
+            columnName?: string;
+            dataType?: string;
+            nullable?: boolean;
+            defaultValue?: string;
+            comment?: string;
+            /** Format: int32 */
+            ordinalPosition?: number;
+        };
+        DatabaseSchemaDump: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: int64 */
+            projectId?: number;
+            databaseType?: string;
+            databaseName?: string;
+            schemaName?: string;
+            generatedAt?: string;
+            source?: components["schemas"]["DatabaseSchemaSource"];
+            tables?: components["schemas"]["DatabaseSchemaTable"][];
+            warnings?: string[];
+        };
+        DatabaseSchemaDumpReq: {
             /** Format: int64 */
             projectId: number;
-            databaseType: string;
-            host: string;
-            /** Format: int32 */
-            port?: number;
-            databaseName: string;
+            dump: components["schemas"]["DatabaseSchemaDump"];
+        };
+        DatabaseSchemaSource: {
+            sourceType?: string;
+            databaseProductName?: string;
+            databaseProductVersion?: string;
+            catalogName?: string;
             schemaName?: string;
-            username: string;
-            password?: string;
-            tableNames?: string[];
-        };
-        DatabaseConnectionResult: {
-            success?: boolean;
-            message?: string;
-            security?: components["schemas"]["DatabaseConnectionSecurityDiagnostic"];
-        };
-        DatabaseConnectionSecurityDiagnostic: {
-            databaseType?: string;
-            currentUser?: string;
-            readOnly?: boolean;
-            writeRisk?: boolean;
-            riskLevel?: string;
+            selectedTableNames?: string[];
             /** Format: int32 */
-            accessibleSchemaCount?: number;
-            /** Format: int32 */
-            accessibleTableCount?: number;
-            warnings?: string[];
-            recommendedActions?: string[];
-            recommendedSql?: string[];
+            tableCount?: number;
         };
-        RDatabaseConnectionResult: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["DatabaseConnectionResult"];
-        };
-        DatabaseTableInfo: {
+        DatabaseSchemaTable: {
             schemaName?: string;
             tableName?: string;
             tableType?: string;
             comment?: string;
-        };
-        RListDatabaseTableInfo: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["DatabaseTableInfo"][];
-        };
-        DatabaseImportReq: {
-            /** Format: int64 */
-            projectId: number;
-            candidates?: components["schemas"]["FieldCandidate"][];
-            databaseType?: string;
-            databaseName?: string;
-            schemaName?: string;
-            tableNames?: string[];
-        };
-        DatabaseImportResult: {
-            /** Format: int32 */
-            importedCount?: number;
-            /** Format: int32 */
-            skippedCount?: number;
-            importedFields?: string[];
-            skippedFields?: string[];
-        };
-        RDatabaseImportResult: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["DatabaseImportResult"];
+            columns?: components["schemas"]["DatabaseSchemaColumn"][];
+            warnings?: string[];
         };
         RReverseImportCompareResult: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ReverseImportCompareResult"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         ReverseImportCompareResult: {
             summary?: components["schemas"]["ReverseImportCompareSummary"];
@@ -2153,6 +2349,114 @@ export interface components {
             comment?: string;
             fieldDiffs?: components["schemas"]["ReverseImportFieldDiff"][];
         };
+        DatabaseConnectionReq: {
+            /** Format: int64 */
+            projectId: number;
+            databaseType: string;
+            host: string;
+            /** Format: int32 */
+            port?: number;
+            databaseName: string;
+            schemaName?: string;
+            username: string;
+            password?: string;
+            tableNames?: string[];
+        };
+        DatabaseConnectionResult: {
+            success?: boolean;
+            message?: string;
+            security?: components["schemas"]["DatabaseConnectionSecurityDiagnostic"];
+        };
+        DatabaseConnectionSecurityDiagnostic: {
+            databaseType?: string;
+            currentUser?: string;
+            readOnly?: boolean;
+            writeRisk?: boolean;
+            riskLevel?: string;
+            /** Format: int32 */
+            accessibleSchemaCount?: number;
+            /** Format: int32 */
+            accessibleTableCount?: number;
+            warnings?: string[];
+            recommendedActions?: string[];
+            recommendedSql?: string[];
+        };
+        RDatabaseConnectionResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseConnectionResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        DatabaseTableInfo: {
+            schemaName?: string;
+            tableName?: string;
+            tableType?: string;
+            comment?: string;
+        };
+        RListDatabaseTableInfo: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseTableInfo"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        DatabaseImportReq: {
+            /** Format: int64 */
+            projectId: number;
+            candidates?: components["schemas"]["FieldCandidate"][];
+            databaseType?: string;
+            databaseName?: string;
+            schemaName?: string;
+            tableNames?: string[];
+        };
+        DatabaseImportResult: {
+            /** Format: int32 */
+            importedCount?: number;
+            /** Format: int32 */
+            skippedCount?: number;
+            importedFields?: string[];
+            skippedFields?: string[];
+        };
+        RDatabaseImportResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseImportResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RDatabaseSchemaDump: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseSchemaDump"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        PromptTemplateEvalReq: {
+            templateKey: string;
+            output: string;
+        };
+        PromptTemplateEvalFailure: {
+            kind?: string;
+            marker?: string;
+            message?: string;
+        };
+        PromptTemplateEvalResult: {
+            templateKey?: string;
+            promptVersion?: string;
+            passed?: boolean;
+            failures?: components["schemas"]["PromptTemplateEvalFailure"][];
+            requiredSections?: string[];
+            requiredPhrases?: string[];
+            diff?: string;
+        };
+        RPromptTemplateEvalResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["PromptTemplateEvalResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
         StandardSnapshotCreateReq: {
             version?: string;
             name?: string;
@@ -2162,8 +2466,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["StandardSnapshotInfo"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         StandardSnapshotInfo: {
             /** Format: int64 */
@@ -2192,8 +2496,236 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DemoProjectResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        BackupProject: {
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            description?: string;
+            dbType?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        EnumDictBackup: {
+            dict?: components["schemas"]["EnumDict"];
+            values?: components["schemas"]["EnumValue"][];
+        };
+        FieldSource: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int64 */
+            fieldId?: number;
+            /** Format: int64 */
+            batchId?: number;
+            sourceType?: string;
+            schemaName?: string;
+            tableName?: string;
+            columnName?: string;
+            dataType?: string;
+            nullable?: boolean;
+            defaultValue?: string;
+            comment?: string;
+            metadataJson?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        ProjectBackupAssets: {
+            domains?: components["schemas"]["Domain"][];
+            fields?: components["schemas"]["Field"][];
+            enumDicts?: components["schemas"]["EnumDictBackup"][];
+            rules?: components["schemas"]["RuleConfig"][];
+            ruleBaseline?: components["schemas"]["RuleBaselinePackage"];
+            templates?: components["schemas"]["TemplateBackup"][];
+            snapshots?: components["schemas"]["StandardSnapshot"][];
+            reverseImportBatches?: components["schemas"]["ReverseImportBatch"][];
+            fieldSources?: components["schemas"]["FieldSource"][];
+            changeLogs?: components["schemas"]["StandardChangeLog"][];
+        };
+        ProjectBackupCounts: {
+            /** Format: int32 */
+            domains?: number;
+            /** Format: int32 */
+            fields?: number;
+            /** Format: int32 */
+            enumDicts?: number;
+            /** Format: int32 */
+            enumValues?: number;
+            /** Format: int32 */
+            rules?: number;
+            /** Format: int32 */
+            templates?: number;
+            /** Format: int32 */
+            templateFields?: number;
+            /** Format: int32 */
+            snapshots?: number;
+            /** Format: int32 */
+            reverseImportBatches?: number;
+            /** Format: int32 */
+            fieldSources?: number;
+            /** Format: int32 */
+            changeLogs?: number;
+        };
+        ProjectBackupPackage: {
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: date-time */
+            exportedAt?: string;
+            sourceProject?: components["schemas"]["BackupProject"];
+            assets?: components["schemas"]["ProjectBackupAssets"];
+            counts?: components["schemas"]["ProjectBackupCounts"];
+            sanitization?: components["schemas"]["ProjectBackupSanitization"];
+            warnings?: string[];
+            packageHash?: string;
+        };
+        ProjectBackupSanitization: {
+            safe?: boolean;
+            removedFields?: string[];
+            warnings?: string[];
+        };
+        ProjectRestoreReq: {
+            /** Format: int64 */
+            targetProjectId?: number;
+            overwrite?: boolean;
+            backupPackage: components["schemas"]["ProjectBackupPackage"];
+        };
+        ReverseImportBatch: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            sourceType?: string;
+            databaseType?: string;
+            databaseName?: string;
+            schemaName?: string;
+            tableNamesJson?: string;
+            /** Format: int32 */
+            importedCount?: number;
+            /** Format: int32 */
+            skippedCount?: number;
+            operatorName?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        StandardChangeLog: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            targetType?: string;
+            /** Format: int64 */
+            targetId?: number;
+            action?: string;
+            beforeJson?: string;
+            afterJson?: string;
+            operatorName?: string;
+            /** Format: date-time */
+            changedAt?: string;
+        };
+        StandardSnapshot: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            version?: string;
+            name?: string;
+            description?: string;
+            snapshotHash?: string;
+            payloadJson?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        TemplateBackup: {
+            template?: components["schemas"]["Template"];
+            fields?: components["schemas"]["TemplateField"][];
+        };
+        ProjectRestoreCounts: {
+            /** Format: int32 */
+            created?: number;
+            /** Format: int32 */
+            updated?: number;
+            /** Format: int32 */
+            skipped?: number;
+            /** Format: int32 */
+            conflicts?: number;
+            /** Format: int32 */
+            blocked?: number;
+            /** Format: int32 */
+            warnings?: number;
+        };
+        ProjectRestoreItem: {
+            assetType?: string;
+            key?: string;
+            action?: string;
+            reason?: string;
+        };
+        ProjectRestorePlan: {
+            dryRun?: boolean;
+            overwrite?: boolean;
+            canApply?: boolean;
+            compatibilityStatus?: string;
+            /** Format: int64 */
+            targetProjectId?: number;
+            targetProjectName?: string;
+            counts?: components["schemas"]["ProjectRestoreCounts"];
+            items?: components["schemas"]["ProjectRestoreItem"][];
+            warnings?: string[];
+        };
+        RProjectRestorePlan: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ProjectRestorePlan"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        ProjectRestoreRecord: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            packageHash?: string;
+            sourceProjectName?: string;
+            /** Format: int64 */
+            sourceProjectId?: number;
+            /** Format: int32 */
+            schemaVersion?: number;
+            dryRun?: boolean;
+            overwrite?: boolean;
+            /** Format: int32 */
+            createdCount?: number;
+            /** Format: int32 */
+            updatedCount?: number;
+            /** Format: int32 */
+            skippedCount?: number;
+            /** Format: int32 */
+            conflictCount?: number;
+            /** Format: int32 */
+            blockedCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            summaryJson?: string;
+            operatorName?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        ProjectRestoreResult: {
+            plan?: components["schemas"]["ProjectRestorePlan"];
+            record?: components["schemas"]["ProjectRestoreRecord"];
+        };
+        RProjectRestoreResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ProjectRestoreResult"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         LintRequest: {
             sql: string;
@@ -2251,16 +2783,16 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["LintResult"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RInteger: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             /** Format: int32 */
             data?: number;
+            error?: components["schemas"]["ErrorDetail"];
         };
         ExcelImportDiff: {
             field?: string;
@@ -2306,8 +2838,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ExcelImportPreview"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         ExcelImportResult: {
             /** Format: int32 */
@@ -2323,8 +2855,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ExcelImportResult"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldChangeUndoResult: {
             /** Format: int64 */
@@ -2338,8 +2870,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldChangeUndoResult"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldGroupingBatchUpdateReq: {
             /** Format: int64 */
@@ -2361,8 +2893,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldGroupingBatchUpdateResult"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldBulkUpdateReq: {
             /** Format: int64 */
@@ -2386,8 +2918,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldBulkUpdateResult"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldBulkUpdateChange: {
             attribute?: string;
@@ -2416,8 +2948,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldBulkUpdatePreview"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         SqlCoverageReq: {
             /** Format: int64 */
@@ -2480,8 +3012,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldCoverageReport"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         UnmanagedFieldRanking: {
             columnName?: string;
@@ -2500,62 +3032,186 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: string;
+            error?: components["schemas"]["ErrorDetail"];
         };
         CreateTablePromptReq: {
             /** Format: int64 */
             projectId: number;
             businessDescription?: string;
         };
+        AiBatchSqlLintItemReq: {
+            itemName?: string;
+            filePath?: string;
+            sql: string;
+        };
+        AiBatchSqlLintReq: {
+            /** Format: int64 */
+            projectId: number;
+            source?: string;
+            items?: components["schemas"]["AiBatchSqlLintItemReq"][];
+        };
+        AiBatchDeliveryPackage: {
+            packageVersion?: string;
+            batchId?: string;
+            /** Format: int64 */
+            projectId?: number;
+            batchType?: string;
+            source?: string;
+            status?: string;
+            summary?: components["schemas"]["AiBatchSummary"];
+            items?: components["schemas"]["AiBatchItemResult"][];
+            issueSummary?: components["schemas"]["AiBatchIssueSummary"];
+            fixedSqlSummary?: components["schemas"]["AiBatchFixedSqlSummary"];
+            unmanagedHints?: string[];
+            evidence?: components["schemas"]["AiBatchEvidence"][];
+            nextActions?: string[];
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        AiBatchEvidence: {
+            kind?: string;
+            name?: string;
+            value?: string;
+        };
+        AiBatchFixedSqlSummary: {
+            /** Format: int32 */
+            availableCount?: number;
+            /** Format: int32 */
+            changedCount?: number;
+        };
+        AiBatchIssueRuleSummary: {
+            ruleCode?: string;
+            ruleName?: string;
+            /** Format: int32 */
+            count?: number;
+        };
+        AiBatchIssueSummary: {
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            suggestionCount?: number;
+            byRule?: components["schemas"]["AiBatchIssueRuleSummary"][];
+        };
+        AiBatchItemResult: {
+            itemName?: string;
+            filePath?: string;
+            status?: string;
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            suggestionCount?: number;
+            /** Format: int32 */
+            suppressedCount?: number;
+            fixedSqlAvailable?: boolean;
+            fixedSql?: string;
+            fixedSqlDiff?: string;
+            issues?: components["schemas"]["LintIssue"][];
+            dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
+            /** Format: int64 */
+            sqlCheckRecordId?: number;
+            errorMessage?: string;
+        };
+        AiBatchSummary: {
+            /** Format: int32 */
+            totalItems?: number;
+            /** Format: int32 */
+            successItems?: number;
+            /** Format: int32 */
+            failedItems?: number;
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            suggestionCount?: number;
+            /** Format: int32 */
+            fixedSqlCount?: number;
+        };
+        RAiBatchDeliveryPackage: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiBatchDeliveryPackage"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
         RApiTokenInfo: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ApiTokenInfo"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RVoid: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: Record<string, never>;
+            error?: components["schemas"]["ErrorDetail"];
         };
         RListApiTokenInfo: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["ApiTokenInfo"][];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RListTemplate: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Template"][];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RListTemplateField: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["TemplateField"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        PageResultStandardCandidate: {
+            records?: components["schemas"]["StandardCandidate"][];
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            current?: number;
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            pages?: number;
+        };
+        RPageResultStandardCandidate: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["PageResultStandardCandidate"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RListRuleConfig: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["RuleConfig"][];
+            error?: components["schemas"]["ErrorDetail"];
         };
-        RuleBaselineRule: {
-            ruleCode?: string;
-            ruleName?: string;
-            severity?: string;
-            enabled?: boolean;
-            paramsJson?: string;
+        RListRuleExemption: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["RuleExemption"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RListRuleBaselineTemplate: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["RuleBaselineTemplate"][];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RuleBaselineTemplate: {
             key?: string;
@@ -2566,109 +3222,107 @@ export interface components {
             ruleCount?: number;
             rules?: components["schemas"]["RuleBaselineRule"][];
         };
-        RuleBaselineInfo: {
-            /** Format: int64 */
-            projectId?: number;
-            key?: string;
-            name?: string;
-            version?: string;
-            source?: string;
-            /** Format: date-time */
-            appliedAt?: string;
-            /** Format: int32 */
-            ruleCount?: number;
-        };
-        RuleBaselinePackage: {
-            /** Format: int32 */
-            schemaVersion?: number;
-            baseline?: components["schemas"]["RuleBaselineInfo"];
-            /** Format: date-time */
-            exportedAt?: string;
-            rules?: components["schemas"]["RuleBaselineRule"][];
-        };
-        RuleBaselineApplyReq: {
-            /** Format: int64 */
-            projectId: number;
-            baselineKey: string;
-            overwrite?: boolean;
-        };
-        RuleBaselineImportReq: {
-            /** Format: int64 */
-            projectId: number;
-            overwrite?: boolean;
-            baselinePackage: components["schemas"]["RuleBaselinePackage"];
-        };
-        RuleBaselineApplyResult: {
-            /** Format: int64 */
-            projectId?: number;
-            baseline?: components["schemas"]["RuleBaselineInfo"];
-            /** Format: int32 */
-            created?: number;
-            /** Format: int32 */
-            updated?: number;
-            /** Format: int32 */
-            skipped?: number;
-            createdRuleCodes?: string[];
-            updatedRuleCodes?: string[];
-            skippedRuleCodes?: string[];
-        };
-        RListRuleBaselineTemplate: {
+        RRuleBaselinePackage: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            data?: components["schemas"]["RuleBaselinePackage"];
             error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["RuleBaselineTemplate"][];
         };
         RRuleBaselineInfo: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["RuleBaselineInfo"];
+            error?: components["schemas"]["ErrorDetail"];
         };
-        RRuleBaselinePackage: {
+        PromptTemplateDefinition: {
+            templateKey?: string;
+            promptVersion?: string;
+            scenario?: string;
+            title?: string;
+            outputFormat?: string;
+            requiredSections?: string[];
+            requiredPhrases?: string[];
+            changeLog?: string[];
+        };
+        RListPromptTemplateDefinition: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            data?: components["schemas"]["PromptTemplateDefinition"][];
             error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["RuleBaselinePackage"];
-        };
-        RRuleBaselineApplyResult: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["RuleBaselineApplyResult"];
-        };
-        RListRuleExemption: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["RuleExemption"][];
         };
         RListProject: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Project"][];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RListStandardSnapshotInfo: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["StandardSnapshotInfo"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        ProjectActivityAction: {
+            actionType?: string;
+            label?: string;
+        };
+        ProjectActivityItem: {
+            id?: string;
+            actionType?: string;
+            title?: string;
+            description?: string;
+            /** Format: date-time */
+            occurredAt?: string;
+            actor?: string;
+            source?: string;
+            severity?: string;
+            detailRoute?: string;
+            metadata?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        ProjectActivityTimeline: {
+            /** Format: int64 */
+            projectId?: number;
+            availableActionTypes?: components["schemas"]["ProjectActivityAction"][];
+            activities?: components["schemas"]["ProjectActivityItem"][];
+            /** Format: date-time */
+            generatedAt?: string;
+        };
+        RProjectActivityTimeline: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ProjectActivityTimeline"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RListProjectRestoreRecord: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ProjectRestoreRecord"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RProjectBackupPackage: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ProjectBackupPackage"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RListMapStringString: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: {
                 [key: string]: string;
             }[];
+            error?: components["schemas"]["ErrorDetail"];
         };
         PageResultSqlCheckRecord: {
             records?: components["schemas"]["SqlCheckRecord"][];
@@ -2685,8 +3339,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["PageResultSqlCheckRecord"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         SqlCheckRecord: {
             /** Format: int64 */
@@ -2716,8 +3370,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["RecordDetail"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RecordDetail: {
             record?: components["schemas"]["SqlCheckRecord"];
@@ -2728,10 +3382,10 @@ export interface components {
             recordedStandard?: components["schemas"]["StandardSnapshotInfo"];
             currentStandard?: components["schemas"]["StandardSnapshotInfo"];
             status?: string;
-            summary?: components["schemas"]["SqlCheckReplaySummary"];
+            summary?: components["schemas"]["Summary"];
             nextActions?: string[];
         };
-        SqlCheckReplaySummary: {
+        Summary: {
             sameAsCurrent?: boolean;
             /** Format: int32 */
             fieldCount?: number;
@@ -2751,8 +3405,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DdlGenerateResult"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         PageResultField: {
             records?: components["schemas"]["Field"][];
@@ -2769,29 +3423,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["PageResultField"];
-        };
-        FieldSource: {
-            /** Format: int64 */
-            id?: number;
-            /** Format: int64 */
-            projectId?: number;
-            /** Format: int64 */
-            fieldId?: number;
-            /** Format: int64 */
-            batchId?: number;
-            sourceType?: string;
-            schemaName?: string;
-            tableName?: string;
-            columnName?: string;
-            dataType?: string;
-            nullable?: boolean;
-            defaultValue?: string;
-            comment?: string;
-            metadataJson?: string;
-            /** Format: date-time */
-            createdAt?: string;
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldSourceDetail: {
             source?: components["schemas"]["FieldSource"];
@@ -2801,26 +3434,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldSourceDetail"][];
-        };
-        ReverseImportBatch: {
-            /** Format: int64 */
-            id?: number;
-            /** Format: int64 */
-            projectId?: number;
-            sourceType?: string;
-            databaseType?: string;
-            databaseName?: string;
-            schemaName?: string;
-            tableNamesJson?: string;
-            /** Format: int32 */
-            importedCount?: number;
-            /** Format: int32 */
-            skippedCount?: number;
-            operatorName?: string;
-            /** Format: date-time */
-            createdAt?: string;
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldEditWarning: {
             attribute?: string;
@@ -2875,8 +3490,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldImpactReport"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldSuggestion: {
             field?: components["schemas"]["Field"];
@@ -2886,18 +3501,12 @@ export interface components {
             recommendedName?: string;
             existing?: boolean;
         };
-        FieldSearchReq: {
-            /** Format: int64 */
-            projectId?: number;
-            query?: string;
-            category?: string;
-            tag?: string;
-            status?: string;
-            sensitive?: boolean;
-            /** Format: int64 */
-            sourceBatchId?: number;
+        RListFieldSuggestion: {
             /** Format: int32 */
-            limit?: number;
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldSuggestion"][];
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldSearchItem: {
             field?: components["schemas"]["Field"];
@@ -2905,6 +3514,14 @@ export interface components {
             score?: number;
             matchReasons?: string[];
             recommendedUse?: string;
+            nextActions?: string[];
+        };
+        FieldSearchResult: {
+            /** Format: int64 */
+            projectId?: number;
+            query?: string;
+            summary?: components["schemas"]["FieldSearchSummary"];
+            items?: components["schemas"]["FieldSearchItem"][];
             nextActions?: string[];
         };
         FieldSearchSummary: {
@@ -2916,31 +3533,16 @@ export interface components {
             returnedCount?: number;
             truncated?: boolean;
             appliedFilters?: {
-                [key: string]: unknown;
+                [key: string]: Record<string, never>;
             };
             hints?: string[];
-        };
-        FieldSearchResult: {
-            /** Format: int64 */
-            projectId?: number;
-            query?: string;
-            summary?: components["schemas"]["FieldSearchSummary"];
-            items?: components["schemas"]["FieldSearchItem"][];
-            nextActions?: string[];
-        };
-        RListFieldSuggestion: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["FieldSuggestion"][];
         };
         RFieldSearchResult: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldSearchResult"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldQualityIssue: {
             code?: string;
@@ -2996,8 +3598,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldQualityReport"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldGroupItem: {
             groupType?: string;
@@ -3021,8 +3623,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldGroupSummary"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         FieldConflictField: {
             /** Format: int64 */
@@ -3078,43 +3680,43 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["FieldConflictReport"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RListField: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Field"][];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RListEnumDict: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["EnumDict"][];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RListEnumValue: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["EnumValue"][];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RListDomain: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["Domain"][];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RListDatabaseConnectionPreset: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DatabaseConnectionPreset"][];
+            error?: components["schemas"]["ErrorDetail"];
         };
         DashboardSummary: {
             /** Format: int32 */
@@ -3150,8 +3752,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["DashboardSummary"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         RecentSqlCheck: {
             /** Format: int64 */
@@ -3182,211 +3784,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["PageResultStandardChangeLog"];
-        };
-        StandardChangeLog: {
-            /** Format: int64 */
-            id?: number;
-            /** Format: int64 */
-            projectId?: number;
-            targetType?: string;
-            /** Format: int64 */
-            targetId?: number;
-            action?: string;
-            beforeJson?: string;
-            afterJson?: string;
-            operatorName?: string;
-            /** Format: date-time */
-            changedAt?: string;
-        };
-        BackupProject: {
-            /** Format: int64 */
-            id?: number;
-            name?: string;
-            description?: string;
-            dbType?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            /** Format: date-time */
-            updatedAt?: string;
-        };
-        EnumDictBackup: {
-            dict?: components["schemas"]["EnumDict"];
-            values?: components["schemas"]["EnumValue"][];
-        };
-        TemplateBackup: {
-            template?: components["schemas"]["Template"];
-            fields?: components["schemas"]["TemplateField"][];
-        };
-        StandardSnapshot: {
-            /** Format: int64 */
-            id?: number;
-            /** Format: int64 */
-            projectId?: number;
-            version?: string;
-            name?: string;
-            description?: string;
-            snapshotHash?: string;
-            payloadJson?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            /** Format: date-time */
-            updatedAt?: string;
-            isDeleted?: boolean;
-        };
-        ProjectBackupAssets: {
-            domains?: components["schemas"]["Domain"][];
-            fields?: components["schemas"]["Field"][];
-            enumDicts?: components["schemas"]["EnumDictBackup"][];
-            rules?: components["schemas"]["RuleConfig"][];
-            ruleBaseline?: components["schemas"]["RuleBaselinePackage"];
-            templates?: components["schemas"]["TemplateBackup"][];
-            snapshots?: components["schemas"]["StandardSnapshot"][];
-            reverseImportBatches?: components["schemas"]["ReverseImportBatch"][];
-            fieldSources?: components["schemas"]["FieldSource"][];
-            changeLogs?: components["schemas"]["StandardChangeLog"][];
-        };
-        ProjectBackupCounts: {
-            /** Format: int32 */
-            domains?: number;
-            /** Format: int32 */
-            fields?: number;
-            /** Format: int32 */
-            enumDicts?: number;
-            /** Format: int32 */
-            enumValues?: number;
-            /** Format: int32 */
-            rules?: number;
-            /** Format: int32 */
-            templates?: number;
-            /** Format: int32 */
-            templateFields?: number;
-            /** Format: int32 */
-            snapshots?: number;
-            /** Format: int32 */
-            reverseImportBatches?: number;
-            /** Format: int32 */
-            fieldSources?: number;
-            /** Format: int32 */
-            changeLogs?: number;
-        };
-        ProjectBackupSanitization: {
-            safe?: boolean;
-            removedFields?: string[];
-            warnings?: string[];
-        };
-        ProjectBackupPackage: {
-            /** Format: int32 */
-            schemaVersion?: number;
-            /** Format: date-time */
-            exportedAt?: string;
-            sourceProject?: components["schemas"]["BackupProject"];
-            assets?: components["schemas"]["ProjectBackupAssets"];
-            counts?: components["schemas"]["ProjectBackupCounts"];
-            sanitization?: components["schemas"]["ProjectBackupSanitization"];
-            warnings?: string[];
-            packageHash?: string;
-        };
-        ProjectRestoreReq: {
-            /** Format: int64 */
-            targetProjectId?: number | null;
-            overwrite?: boolean;
-            backupPackage: components["schemas"]["ProjectBackupPackage"];
-        };
-        ProjectRestoreCounts: {
-            /** Format: int32 */
-            created?: number;
-            /** Format: int32 */
-            updated?: number;
-            /** Format: int32 */
-            skipped?: number;
-            /** Format: int32 */
-            conflicts?: number;
-            /** Format: int32 */
-            blocked?: number;
-            /** Format: int32 */
-            warnings?: number;
-        };
-        ProjectRestoreItem: {
-            assetType?: string;
-            key?: string;
-            action?: string;
-            reason?: string;
-        };
-        ProjectRestorePlan: {
-            dryRun?: boolean;
-            overwrite?: boolean;
-            canApply?: boolean;
-            compatibilityStatus?: string;
-            /** Format: int64 */
-            targetProjectId?: number;
-            targetProjectName?: string;
-            counts?: components["schemas"]["ProjectRestoreCounts"];
-            items?: components["schemas"]["ProjectRestoreItem"][];
-            warnings?: string[];
-        };
-        ProjectRestoreRecord: {
-            /** Format: int64 */
-            id?: number;
-            /** Format: int64 */
-            projectId?: number;
-            packageHash?: string;
-            sourceProjectName?: string;
-            /** Format: int64 */
-            sourceProjectId?: number;
-            /** Format: int32 */
-            schemaVersion?: number;
-            dryRun?: boolean;
-            overwrite?: boolean;
-            /** Format: int32 */
-            createdCount?: number;
-            /** Format: int32 */
-            updatedCount?: number;
-            /** Format: int32 */
-            skippedCount?: number;
-            /** Format: int32 */
-            conflictCount?: number;
-            /** Format: int32 */
-            blockedCount?: number;
-            /** Format: int32 */
-            warningCount?: number;
-            summaryJson?: string;
-            operatorName?: string;
-            /** Format: date-time */
-            createdAt?: string;
-        };
-        ProjectRestoreResult: {
-            plan?: components["schemas"]["ProjectRestorePlan"];
-            record?: components["schemas"]["ProjectRestoreRecord"];
-        };
-        RProjectBackupPackage: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
             error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["ProjectBackupPackage"];
-        };
-        RProjectRestorePlan: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["ProjectRestorePlan"];
-        };
-        RProjectRestoreResult: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["ProjectRestoreResult"];
-        };
-        RListProjectRestoreRecord: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["ProjectRestoreRecord"][];
         };
         AuthMe: {
             operatorName?: string;
@@ -3397,8 +3796,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["AuthMe"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         AiJobRecordListItem: {
             /** Format: int64 */
@@ -3436,8 +3835,8 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["PageResultAiJobRecordListItem"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         AiJobRecord: {
             /** Format: int64 */
@@ -3476,135 +3875,80 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["AiJobRecordDetail"];
+            error?: components["schemas"]["ErrorDetail"];
         };
-        AiBatchSqlLintItemReq: {
-            itemName?: string;
-            filePath?: string;
-            sql: string;
+        AiFeedbackAction: {
+            title?: string;
+            description?: string;
+            priority?: string;
+            targetRoute?: string;
         };
-        AiBatchSqlLintReq: {
+        AiFeedbackEvidence: {
+            sourceKind?: string;
             /** Format: int64 */
-            projectId: number;
-            source?: string;
-            items?: components["schemas"]["AiBatchSqlLintItemReq"][];
+            sourceId?: number;
+            description?: string;
         };
-        AiBatchSummary: {
-            /** Format: int32 */
-            totalItems?: number;
-            /** Format: int32 */
-            successItems?: number;
-            /** Format: int32 */
-            failedItems?: number;
-            /** Format: int32 */
-            errorCount?: number;
-            /** Format: int32 */
-            warningCount?: number;
-            /** Format: int32 */
-            suggestionCount?: number;
-            /** Format: int32 */
-            fixedSqlCount?: number;
+        AiFeedbackReport: {
+            /** Format: int64 */
+            projectId?: number;
+            summary?: components["schemas"]["AiFeedbackSummary"];
+            fieldSignals?: components["schemas"]["AiFeedbackSignal"][];
+            ruleSignals?: components["schemas"]["AiFeedbackSignal"][];
+            fixedSqlSignals?: components["schemas"]["AiFeedbackSignal"][];
+            unmanagedSignals?: components["schemas"]["AiFeedbackSignal"][];
+            nextActions?: components["schemas"]["AiFeedbackAction"][];
+            sampleSize?: components["schemas"]["AiFeedbackSampleSize"];
+            /** Format: date-time */
+            generatedAt?: string;
         };
-        AiBatchIssueRuleSummary: {
-            ruleCode?: string;
-            ruleName?: string;
+        AiFeedbackSampleSize: {
+            /** Format: int32 */
+            aiJobRecords?: number;
+            /** Format: int32 */
+            sqlCheckRecords?: number;
+            /** Format: int32 */
+            ruleExemptions?: number;
+            /** Format: int32 */
+            fieldSources?: number;
+            /** Format: int32 */
+            fields?: number;
+        };
+        AiFeedbackSignal: {
+            signalType?: string;
+            title?: string;
             /** Format: int32 */
             count?: number;
+            severity?: string;
+            evidence?: components["schemas"]["AiFeedbackEvidence"][];
+            suggestedAction?: string;
+            targetRoute?: string;
         };
-        AiBatchIssueSummary: {
+        AiFeedbackSummary: {
             /** Format: int32 */
-            errorCount?: number;
+            aiJobCount?: number;
             /** Format: int32 */
-            warningCount?: number;
+            sqlCheckCount?: number;
             /** Format: int32 */
-            suggestionCount?: number;
-            byRule?: components["schemas"]["AiBatchIssueRuleSummary"][];
+            ruleExemptionCount?: number;
+            /** Format: int32 */
+            fieldSourceCount?: number;
+            /** Format: int32 */
+            fieldSignalCount?: number;
+            /** Format: int32 */
+            ruleSignalCount?: number;
+            /** Format: int32 */
+            fixedSqlAvailableCount?: number;
+            insufficientSuggestionHistory?: boolean;
+            recommendationHistoryNote?: string;
         };
-        AiBatchFixedSqlSummary: {
-            /** Format: int32 */
-            availableCount?: number;
-            /** Format: int32 */
-            changedCount?: number;
-        };
-        AiBatchEvidence: {
-            kind?: string;
-            name?: string;
-            value?: string;
-        };
-        AiBatchItemResult: {
-            itemName?: string;
-            filePath?: string;
-            status?: string;
-            /** Format: int32 */
-            errorCount?: number;
-            /** Format: int32 */
-            warningCount?: number;
-            /** Format: int32 */
-            suggestionCount?: number;
-            /** Format: int32 */
-            suppressedCount?: number;
-            fixedSqlAvailable?: boolean;
-            fixedSql?: string;
-            fixedSqlDiff?: string;
-            issues?: components["schemas"]["LintIssue"][];
-            dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
-            /** Format: int64 */
-            sqlCheckRecordId?: number;
-            errorMessage?: string;
-        };
-        AiBatchDeliveryPackage: {
-            packageVersion?: string;
-            batchId?: string;
-            /** Format: int64 */
-            projectId?: number;
-            batchType?: string;
-            source?: string;
-            status?: string;
-            summary?: components["schemas"]["AiBatchSummary"];
-            items?: components["schemas"]["AiBatchItemResult"][];
-            issueSummary?: components["schemas"]["AiBatchIssueSummary"];
-            fixedSqlSummary?: components["schemas"]["AiBatchFixedSqlSummary"];
-            unmanagedHints?: string[];
-            evidence?: components["schemas"]["AiBatchEvidence"][];
-            nextActions?: string[];
-            /** Format: date-time */
-            createdAt?: string;
-        };
-        RAiBatchDeliveryPackage: {
+        RAiFeedbackReport: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            data?: components["schemas"]["AiFeedbackReport"];
             error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["AiBatchDeliveryPackage"];
-        };
-        AiBatchRun: {
-            /** Format: int64 */
-            id?: number;
-            /** Format: int64 */
-            projectId?: number;
-            batchType?: string;
-            source?: string;
-            status?: string;
-            summaryJson?: string;
-            payloadJson?: string;
-            operatorName?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            /** Format: date-time */
-            updatedAt?: string;
-            isDeleted?: boolean;
-        };
-        AiBatchRunDetail: {
-            run?: components["schemas"]["AiBatchRun"];
-            deliveryPackage?: components["schemas"]["AiBatchDeliveryPackage"];
-        };
-        RAiBatchRunDetail: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["AiBatchRunDetail"];
         };
         AiBatchRunListItem: {
             /** Format: int64 */
@@ -3636,152 +3980,36 @@ export interface components {
             /** Format: int32 */
             code?: number;
             message?: string;
-            error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["PageResultAiBatchRunListItem"];
-        };
-        AiFeedbackEvidence: {
-            sourceKind?: string;
-            /** Format: int64 */
-            sourceId?: number;
-            description?: string;
-        };
-        AiFeedbackSignal: {
-            signalType?: string;
-            title?: string;
-            /** Format: int32 */
-            count?: number;
-            severity?: string;
-            evidence?: components["schemas"]["AiFeedbackEvidence"][];
-            suggestedAction?: string;
-            targetRoute?: string;
-        };
-        AiFeedbackAction: {
-            title?: string;
-            description?: string;
-            priority?: string;
-            targetRoute?: string;
-        };
-        AiFeedbackSummary: {
-            /** Format: int32 */
-            aiJobCount?: number;
-            /** Format: int32 */
-            sqlCheckCount?: number;
-            /** Format: int32 */
-            ruleExemptionCount?: number;
-            /** Format: int32 */
-            fieldSourceCount?: number;
-            /** Format: int32 */
-            fieldSignalCount?: number;
-            /** Format: int32 */
-            ruleSignalCount?: number;
-            /** Format: int32 */
-            fixedSqlAvailableCount?: number;
-            insufficientSuggestionHistory?: boolean;
-            recommendationHistoryNote?: string;
-        };
-        AiFeedbackSampleSize: {
-            /** Format: int32 */
-            aiJobRecords?: number;
-            /** Format: int32 */
-            sqlCheckRecords?: number;
-            /** Format: int32 */
-            ruleExemptions?: number;
-            /** Format: int32 */
-            fieldSources?: number;
-            /** Format: int32 */
-            fields?: number;
-        };
-        AiFeedbackReport: {
-            /** Format: int64 */
-            projectId?: number;
-            summary?: components["schemas"]["AiFeedbackSummary"];
-            fieldSignals?: components["schemas"]["AiFeedbackSignal"][];
-            ruleSignals?: components["schemas"]["AiFeedbackSignal"][];
-            fixedSqlSignals?: components["schemas"]["AiFeedbackSignal"][];
-            unmanagedSignals?: components["schemas"]["AiFeedbackSignal"][];
-            nextActions?: components["schemas"]["AiFeedbackAction"][];
-            sampleSize?: components["schemas"]["AiFeedbackSampleSize"];
-            /** Format: date-time */
-            generatedAt?: string;
-        };
-        RAiFeedbackReport: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
             error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["AiFeedbackReport"];
         };
-        StandardCandidate: {
+        AiBatchRun: {
             /** Format: int64 */
             id?: number;
             /** Format: int64 */
             projectId?: number;
-            candidateName?: string;
-            displayName?: string;
-            dataType?: string;
-            comment?: string;
-            sourceType?: string;
-            sourceRef?: string;
-            evidenceJson?: string;
-            /** Format: int32 */
-            confidence?: number;
+            batchType?: string;
+            source?: string;
             status?: string;
-            /** Format: int64 */
-            targetFieldId?: number;
-            decisionReason?: string;
-            /** Format: date-time */
-            decidedAt?: string;
+            summaryJson?: string;
+            payloadJson?: string;
+            operatorName?: string;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
             isDeleted?: boolean;
         };
-        StandardCandidateCreateReq: {
-            /** Format: int64 */
-            projectId: number;
-            candidateName: string;
-            displayName?: string;
-            dataType: string;
-            comment?: string;
-            sourceType: string;
-            sourceRef?: string;
-            evidenceJson?: string;
-            /** Format: int32 */
-            confidence?: number;
+        AiBatchRunDetail: {
+            run?: components["schemas"]["AiBatchRun"];
+            deliveryPackage?: components["schemas"]["AiBatchDeliveryPackage"];
         };
-        StandardCandidateDecisionReq: {
-            reason?: string;
-        };
-        StandardCandidateMergeReq: {
-            /** Format: int64 */
-            targetFieldId: number;
-            reason?: string;
-        };
-        PageResultStandardCandidate: {
-            records?: components["schemas"]["StandardCandidate"][];
-            /** Format: int64 */
-            total?: number;
-            /** Format: int64 */
-            current?: number;
-            /** Format: int64 */
-            size?: number;
-            /** Format: int64 */
-            pages?: number;
-        };
-        RPageResultStandardCandidate: {
+        RAiBatchRunDetail: {
             /** Format: int32 */
             code?: number;
             message?: string;
+            data?: components["schemas"]["AiBatchRunDetail"];
             error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["PageResultStandardCandidate"];
-        };
-        RStandardCandidate: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            error?: components["schemas"]["ErrorDetail"];
-            data?: components["schemas"]["StandardCandidate"];
         };
     };
     responses: never;
@@ -4516,6 +4744,161 @@ export interface operations {
             };
         };
     };
+    page: {
+        parameters: {
+            query: {
+                projectId: number;
+                status?: string;
+                sourceType?: string;
+                keyword?: string;
+                current?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RPageResultStandardCandidate"];
+                };
+            };
+        };
+    };
+    create_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardCandidateCreateReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardCandidate"];
+                };
+            };
+        };
+    };
+    postpone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StandardCandidateDecisionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardCandidate"];
+                };
+            };
+        };
+    };
+    merge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardCandidateMergeReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardCandidate"];
+                };
+            };
+        };
+    };
+    ignore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StandardCandidateDecisionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardCandidate"];
+                };
+            };
+        };
+    };
+    accept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StandardCandidateDecisionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardCandidate"];
+                };
+            };
+        };
+    };
     list_1: {
         parameters: {
             query: {
@@ -4538,7 +4921,7 @@ export interface operations {
             };
         };
     };
-    create_1: {
+    create_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -4558,118 +4941,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RRuleConfig"];
-                };
-            };
-        };
-    };
-    listRuleBaselineTemplates: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RListRuleBaselineTemplate"];
-                };
-            };
-        };
-    };
-    currentRuleBaseline: {
-        parameters: {
-            query: {
-                projectId: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RRuleBaselineInfo"];
-                };
-            };
-        };
-    };
-    applyRuleBaseline: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RuleBaselineApplyReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RRuleBaselineApplyResult"];
-                };
-            };
-        };
-    };
-    exportRuleBaseline: {
-        parameters: {
-            query: {
-                projectId: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RRuleBaselinePackage"];
-                };
-            };
-        };
-    };
-    importRuleBaseline: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RuleBaselineImportReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RRuleBaselineApplyResult"];
                 };
             };
         };
@@ -4696,7 +4967,7 @@ export interface operations {
             };
         };
     };
-    create_2: {
+    create_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -4716,6 +4987,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RRuleExemption"];
+                };
+            };
+        };
+    };
+    importBaseline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleBaselineImportReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRuleBaselineApplyResult"];
+                };
+            };
+        };
+    };
+    apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleBaselineApplyReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRuleBaselineApplyResult"];
                 };
             };
         };
@@ -4740,6 +5059,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RReverseImportPreview"];
+                };
+            };
+        };
+    };
+    previewDump: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseSchemaDumpReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RReverseImportPreview"];
+                };
+            };
+        };
+    };
+    compareDump: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseSchemaDumpReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RReverseImportCompareResult"];
                 };
             };
         };
@@ -4840,6 +5207,30 @@ export interface operations {
             };
         };
     };
+    exportDatabaseDump: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseConnectionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDatabaseSchemaDump"];
+                };
+            };
+        };
+    };
     compareDatabase: {
         parameters: {
             query?: never;
@@ -4864,6 +5255,30 @@ export interface operations {
             };
         };
     };
+    evaluate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromptTemplateEvalReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RPromptTemplateEvalResult"];
+                };
+            };
+        };
+    };
     list_3: {
         parameters: {
             query?: never;
@@ -4884,7 +5299,7 @@ export interface operations {
             };
         };
     };
-    create_3: {
+    create_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -4972,6 +5387,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RDemoProjectResult"];
+                };
+            };
+        };
+    };
+    previewRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRestoreReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RProjectRestorePlan"];
+                };
+            };
+        };
+    };
+    applyRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRestoreReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RProjectRestoreResult"];
                 };
             };
         };
@@ -5087,7 +5550,7 @@ export interface operations {
             };
         };
     };
-    page: {
+    page_1: {
         parameters: {
             query: {
                 projectId: number;
@@ -5111,7 +5574,7 @@ export interface operations {
             };
         };
     };
-    create_4: {
+    create_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -5231,7 +5694,7 @@ export interface operations {
             };
         };
     };
-    list_4: {
+    list_5: {
         parameters: {
             query: {
                 projectId: number;
@@ -5253,7 +5716,7 @@ export interface operations {
             };
         };
     };
-    create_5: {
+    create_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -5325,7 +5788,7 @@ export interface operations {
             };
         };
     };
-    list_5: {
+    list_6: {
         parameters: {
             query: {
                 projectId: number;
@@ -5347,7 +5810,7 @@ export interface operations {
             };
         };
     };
-    create_6: {
+    create_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -5371,7 +5834,7 @@ export interface operations {
             };
         };
     };
-    list_6: {
+    list_7: {
         parameters: {
             query: {
                 projectId: number;
@@ -5393,7 +5856,7 @@ export interface operations {
             };
         };
     };
-    create_7: {
+    create_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -5427,6 +5890,30 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SqlCoverageReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldCoverageReport"];
+                };
+            };
+        };
+    };
+    reportDump: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseSchemaDumpReq"];
             };
         };
         responses: {
@@ -5509,6 +5996,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RString"];
+                };
+            };
+        };
+    };
+    createSqlLintBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiBatchSqlLintReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiBatchDeliveryPackage"];
                 };
             };
         };
@@ -5625,6 +6136,90 @@ export interface operations {
             };
         };
     };
+    listTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListRuleBaselineTemplate"];
+                };
+            };
+        };
+    };
+    export: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRuleBaselinePackage"];
+                };
+            };
+        };
+    };
+    current: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRuleBaselineInfo"];
+                };
+            };
+        };
+    };
+    listTemplates_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListPromptTemplateDefinition"];
+                };
+            };
+        };
+    };
     currentSnapshot: {
         parameters: {
             query?: never;
@@ -5643,6 +6238,75 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RStandardSnapshotInfo"];
+                };
+            };
+        };
+    };
+    list_4: {
+        parameters: {
+            query?: {
+                actionType?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                projectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RProjectActivityTimeline"];
+                };
+            };
+        };
+    };
+    listRestoreRecords: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListProjectRestoreRecord"];
+                };
+            };
+        };
+    };
+    export_1: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RProjectBackupPackage"];
                 };
             };
         };
@@ -6142,7 +6806,7 @@ export interface operations {
             };
         };
     };
-    page_1: {
+    page_2: {
         parameters: {
             query: {
                 projectId: number;
@@ -6188,7 +6852,7 @@ export interface operations {
             };
         };
     };
-    list_7: {
+    list_8: {
         parameters: {
             query: {
                 projectId: number;
@@ -6235,99 +6899,7 @@ export interface operations {
             };
         };
     };
-    listAiBatches: {
-        parameters: {
-            query: {
-                projectId: number;
-                current?: number;
-                size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RPageResultAiBatchRunListItem"];
-                };
-            };
-        };
-    };
-    createAiBatchSqlLint: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AiBatchSqlLintReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RAiBatchDeliveryPackage"];
-                };
-            };
-        };
-    };
-    getAiBatchDetail: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RAiBatchRunDetail"];
-                };
-            };
-        };
-    };
-    downloadAiBatchPackage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AiBatchDeliveryPackage"];
-                };
-            };
-        };
-    };
-    getAiFeedbackReport: {
+    report_3: {
         parameters: {
             query: {
                 projectId: number;
@@ -6345,161 +6917,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RAiFeedbackReport"];
-                };
-            };
-        };
-    };
-    pageStandardCandidates: {
-        parameters: {
-            query: {
-                projectId: number;
-                status?: string;
-                sourceType?: string;
-                keyword?: string;
-                current?: number;
-                size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RPageResultStandardCandidate"];
-                };
-            };
-        };
-    };
-    createStandardCandidate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StandardCandidateCreateReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RStandardCandidate"];
-                };
-            };
-        };
-    };
-    acceptStandardCandidate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["StandardCandidateDecisionReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RStandardCandidate"];
-                };
-            };
-        };
-    };
-    mergeStandardCandidate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StandardCandidateMergeReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RStandardCandidate"];
-                };
-            };
-        };
-    };
-    ignoreStandardCandidate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["StandardCandidateDecisionReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RStandardCandidate"];
-                };
-            };
-        };
-    };
-    postponeStandardCandidate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["StandardCandidateDecisionReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RStandardCandidate"];
                 };
             };
         };
@@ -6692,10 +7109,12 @@ export interface operations {
             };
         };
     };
-    exportProjectBackup: {
+    list_9: {
         parameters: {
             query: {
                 projectId: number;
+                current?: number;
+                size?: number;
             };
             header?: never;
             path?: never;
@@ -6709,66 +7128,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RProjectBackupPackage"];
+                    "*/*": components["schemas"]["RPageResultAiBatchRunListItem"];
                 };
             };
         };
     };
-    previewProjectBackupRestore: {
+    detail_1: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProjectRestoreReq"];
+            path: {
+                id: number;
             };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RProjectRestorePlan"];
-                };
-            };
-        };
-    };
-    applyProjectBackupRestore: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProjectRestoreReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RProjectRestoreResult"];
-                };
-            };
-        };
-    };
-    listProjectRestoreRecords: {
-        parameters: {
-            query: {
-                projectId: number;
-            };
-            header?: never;
-            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -6779,7 +7150,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RListProjectRestoreRecord"];
+                    "*/*": components["schemas"]["RAiBatchRunDetail"];
+                };
+            };
+        };
+    };
+    download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
                 };
             };
         };

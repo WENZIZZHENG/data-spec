@@ -9,7 +9,16 @@ export type DemoProjectResult = Schemas['DemoProjectResult']
 export type Field = Schemas['Field']
 export type FieldReq = Schemas['FieldReq']
 export type FieldSuggestion = Schemas['FieldSuggestion']
-export type FieldSearchReq = Schemas['FieldSearchReq']
+export interface FieldSearchReq {
+  projectId?: number
+  query?: string
+  category?: string
+  tag?: string
+  status?: string
+  sensitive?: boolean
+  sourceBatchId?: number
+  limit?: number
+}
 export type FieldSearchItem = Schemas['FieldSearchItem']
 export type FieldSearchSummary = Schemas['FieldSearchSummary']
 export type FieldSearchResult = Schemas['FieldSearchResult']
@@ -615,6 +624,13 @@ export interface DashboardSummary {
   recentChecks?: RecentSqlCheck[]
   trend?: IssueTrendPoint[]
 }
+
+export type ProjectActivitySeverity = 'INFO' | 'WARNING' | 'ERROR' | string
+export type ProjectActivityAction = Schemas['ProjectActivityAction']
+export type ProjectActivityItem = Omit<Schemas['ProjectActivityItem'], 'metadata'> & {
+  metadata?: Record<string, unknown>
+}
+export type ProjectActivityTimeline = Schemas['ProjectActivityTimeline']
 
 export interface ReverseImportSummary {
   tableCount?: number

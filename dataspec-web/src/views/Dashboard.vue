@@ -5,7 +5,7 @@
         <h2>工作台</h2>
         <p class="page-subtitle">{{ projectStore.currentProjectName || '未选择项目' }}</p>
       </div>
-      <el-button :disabled="!hasProject" :loading="loading" @click="loadSummary">
+      <el-button :disabled="!hasProject" :loading="loading || activityLoading" @click="loadDashboard">
         <el-icon><Refresh /></el-icon>
         刷新
       </el-button>
@@ -84,6 +84,70 @@
             <el-table-column prop="issueCount" label="问题数" width="100" />
           </el-table>
         </section>
+
+        <section class="panel">
+          <div class="section-header">
+            <h3>最近活动</h3>
+            <div class="activity-actions">
+              <el-select
+                v-model="activityActionType"
+                clearable
+                placeholder="全部活动"
+                size="small"
+                class="activity-filter"
+              >
+                <el-option
+                  v-for="action in activityActionOptions"
+                  :key="action.actionType"
+                  :label="action.label || action.actionType"
+                  :value="action.actionType"
+                />
+              </el-select>
+              <el-button text type="primary" :loading="activityLoading" @click="loadActivities">
+                <el-icon><Refresh /></el-icon>
+                刷新
+              </el-button>
+            </div>
+          </div>
+
+          <div v-loading="activityLoading" class="activity-body">
+            <el-timeline v-if="activityItems.length" class="activity-timeline">
+              <el-timeline-item
+                v-for="activity in activityItems"
+                :key="activity.id"
+                :timestamp="formatDate(activity.occurredAt)"
+                :type="activityTimelineType(activity.severity)"
+                placement="top"
+              >
+                <div class="activity-item">
+                  <div class="activity-title-row">
+                    <span class="activity-title">{{ activity.title || '--' }}</span>
+                    <el-tag :type="severityTagType(activity.severity)" size="small" effect="plain">
+                      {{ severityLabel(activity.severity) }}
+                    </el-tag>
+                  </div>
+                  <p class="activity-description">{{ activity.description || '--' }}</p>
+                  <div class="activity-meta">
+                    <span>{{ activity.source || '未知来源' }}</span>
+                    <span>{{ activity.actor || '未知操作者' }}</span>
+                  </div>
+                  <el-button
+                    v-if="activity.detailRoute"
+                    text
+                    type="primary"
+                    size="small"
+                    class="activity-link"
+                    @click="goActivity(activity.detailRoute)"
+                  >
+                    <el-icon><ArrowRight /></el-icon>
+                    查看
+                  </el-button>
+                </div>
+              </el-timeline-item>
+            </el-timeline>
+            <el-empty v-else description="暂无项目活动" />
+          </div>
+        </section>
       </div>
     </template>
   </div>
@@ -92,17 +156,21 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Refresh } from '@element-plus/icons-vue'
+import { ArrowRight, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { listProjectActivities } from '@/api/activity'
 import { getDashboardSummary } from '@/api/dashboard'
 import { useProjectStore } from '@/stores/project'
-import type { DashboardSummary, IssueTrendPoint } from '@/types'
+import type { DashboardSummary, IssueTrendPoint, ProjectActivityTimeline } from '@/types'
 
 const projectStore = useProjectStore()
 const router = useRouter()
 const loading = ref(false)
+const activityLoading = ref(false)
 const demoLoading = ref(false)
 const summary = ref<DashboardSummary | null>(null)
+const activityTimeline = ref<ProjectActivityTimeline | null>(null)
+const activityActionType = ref<string>('')
 
 const hasProject = computed(() => projectStore.currentProjectId !== null)
 const metrics = computed(() => [
@@ -124,20 +192,33 @@ const trendItems = computed(() =>
     width: `${Math.max(6, ((item.issueCount ?? 0) / maxTrendIssueCount.value) * 100)}%`
   }))
 )
+const activityActionOptions = computed(() => activityTimeline.value?.availableActionTypes ?? [])
+const activityItems = computed(() => activityTimeline.value?.activities ?? [])
 
 onMounted(async () => {
   if (!projectStore.currentProjectId && projectStore.projects.length === 0) {
     await projectStore.loadProjects()
   }
-  await loadSummary()
+  await loadDashboard()
 })
 
 watch(
   () => projectStore.currentProjectId,
   () => {
-    loadSummary()
+    loadDashboard()
   }
 )
+
+watch(
+  () => activityActionType.value,
+  () => {
+    loadActivities()
+  }
+)
+
+async function loadDashboard() {
+  await Promise.all([loadSummary(), loadActivities()])
+}
 
 async function loadSummary() {
   if (!projectStore.currentProjectId) {
@@ -152,10 +233,27 @@ async function loadSummary() {
   }
 }
 
+async function loadActivities() {
+  if (!projectStore.currentProjectId) {
+    activityTimeline.value = null
+    return
+  }
+  activityLoading.value = true
+  try {
+    activityTimeline.value = await listProjectActivities(
+      projectStore.currentProjectId,
+      activityActionType.value || undefined,
+      20
+    )
+  } finally {
+    activityLoading.value = false
+  }
+}
+
 async function handleCreateDemoProject() {
   const result = await ensureDemoProject()
   ElMessage.success(result.created ? '演示项目已创建' : '已切换到演示项目')
-  await loadSummary()
+  await loadDashboard()
 }
 
 async function openDemoSqlLint() {
@@ -192,6 +290,43 @@ function formatDate(value?: string) {
     return '--'
   }
   return value.replace('T', ' ').slice(0, 16)
+}
+
+function goActivity(route?: string) {
+  if (!route) {
+    return
+  }
+  router.push(route)
+}
+
+function severityLabel(value?: string) {
+  if (value === 'ERROR') {
+    return '错误'
+  }
+  if (value === 'WARNING') {
+    return '警告'
+  }
+  return '信息'
+}
+
+function severityTagType(value?: string) {
+  if (value === 'ERROR') {
+    return 'danger'
+  }
+  if (value === 'WARNING') {
+    return 'warning'
+  }
+  return 'info'
+}
+
+function activityTimelineType(value?: string) {
+  if (value === 'ERROR') {
+    return 'danger'
+  }
+  if (value === 'WARNING') {
+    return 'warning'
+  }
+  return 'primary'
 }
 </script>
 
@@ -280,6 +415,64 @@ function formatDate(value?: string) {
   margin-top: 14px;
 }
 
+.activity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.activity-filter {
+  width: 160px;
+}
+
+.activity-body {
+  min-height: 120px;
+  margin-top: 14px;
+}
+
+.activity-timeline {
+  padding-left: 4px;
+}
+
+.activity-item {
+  position: relative;
+  padding-right: 72px;
+}
+
+.activity-title-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.activity-title {
+  color: #111827;
+  font-weight: 600;
+}
+
+.activity-description {
+  margin: 6px 0;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.activity-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.activity-link {
+  position: absolute;
+  top: -2px;
+  right: 0;
+}
+
 .trend-list {
   display: flex;
   flex-direction: column;
@@ -336,6 +529,23 @@ function formatDate(value?: string) {
 
   .trend-count {
     text-align: left;
+  }
+
+  .activity-actions {
+    justify-content: flex-start;
+  }
+
+  .activity-filter {
+    width: 100%;
+  }
+
+  .activity-item {
+    padding-right: 0;
+  }
+
+  .activity-link {
+    position: static;
+    margin-top: 8px;
   }
 }
 </style>

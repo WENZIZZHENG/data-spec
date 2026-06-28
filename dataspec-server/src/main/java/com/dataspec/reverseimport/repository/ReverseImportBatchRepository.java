@@ -33,4 +33,14 @@ public class ReverseImportBatchRepository {
                         .orderByDesc(ReverseImportBatch::getCreatedAt)
                         .orderByDesc(ReverseImportBatch::getId));
     }
+
+    public List<ReverseImportBatch> findRecentByProjectId(Long projectId, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 500));
+        return reverseImportBatchMapper.selectList(
+                new LambdaQueryWrapper<ReverseImportBatch>()
+                        .eq(ReverseImportBatch::getProjectId, projectId)
+                        .orderByDesc(ReverseImportBatch::getCreatedAt)
+                        .orderByDesc(ReverseImportBatch::getId)
+                        .last("LIMIT " + safeLimit));
+    }
 }

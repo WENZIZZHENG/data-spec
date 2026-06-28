@@ -372,7 +372,7 @@ async function loadRecords() {
 }
 
 function selectedTargetProjectId() {
-  return targetMode.value === 'current' ? projectStore.currentProjectId : null
+  return targetMode.value === 'current' ? (projectStore.currentProjectId ?? undefined) : undefined
 }
 
 function parseBackupPackage(): ProjectBackupPackage | null {

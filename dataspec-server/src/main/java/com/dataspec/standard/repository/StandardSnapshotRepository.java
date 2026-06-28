@@ -56,4 +56,13 @@ public class StandardSnapshotRepository {
                 .orderByDesc(StandardSnapshot::getCreatedAt)
                 .orderByDesc(StandardSnapshot::getId));
     }
+
+    public List<StandardSnapshot> findRecentByProjectId(Long projectId, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 500));
+        return standardSnapshotMapper.selectList(new LambdaQueryWrapper<StandardSnapshot>()
+                .eq(StandardSnapshot::getProjectId, projectId)
+                .orderByDesc(StandardSnapshot::getCreatedAt)
+                .orderByDesc(StandardSnapshot::getId)
+                .last("LIMIT " + safeLimit));
+    }
 }
