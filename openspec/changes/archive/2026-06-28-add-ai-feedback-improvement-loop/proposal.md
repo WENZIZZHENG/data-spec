@@ -23,3 +23,12 @@
 - 前端：新增 API wrapper、类型、反馈页面、导航入口和展示工具测试。
 - OpenAPI/类型：同步或手工补齐 `schema.ts` 和 `types/index.ts`。
 - 测试：新增后端聚合单测、前端 utility/smoke 测试，接入 `mvn test`、`pnpm test`、`pnpm build` 和 OpenSpec validate。
+
+## Verification Evidence
+
+- `mvn test`：通过，254 tests, 0 failures, 0 errors。
+- `pnpm test`：通过，67 tests, 0 failures。
+- `pnpm build`：通过，存在 `@vueuse/core` pure annotation 与 chunk size 既有 warning。
+- `npx.cmd openspec validate add-ai-feedback-improvement-loop`：通过。
+- `git diff --check`：通过，仅有 CRLF 换行提示。
+- 本地结构化代码评审：未使用子 agent；已修复短字段名误报和聚合证据 `sourceId` 缺失两个 findings。
