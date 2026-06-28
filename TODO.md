@@ -11,7 +11,8 @@
 5. 本轮新增 AI 使用优化建议已补为 P6-105 到 P6-110：AI 一页式工作台、表级约束与索引标准、枚举生命周期、业务仓库迁移交付包、AI 能力边界模拟和文档反向提取候选。
 6. 本次追加优化建议已补为 P6-111 到 P6-116：标准候选来源管道、候选批量决策、采纳前质量门禁、AI 任务推荐队列、跨来源证据视图和前端端到端引导。
 7. 继续追加优化建议已补为 P6-117 到 P6-122：统一变更 Diff、全链路 Trace、版本兼容降级、AI 场景样例、数据模型契约和前端反馈转任务。
-8. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+8. 最新追加优化建议已补为 P6-123 到 P6-128：标准向 API/DTO Schema 导出、ORM/代码模型候选提取、前端组件状态样例库、规则变异回归、Context 增量更新包和前端包体性能预算。
+9. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -1212,6 +1213,66 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：在 SQL 校验失败、反向导入异常或字段库筛选异常时，可一键生成可复制的修复任务；生成内容不包含 token、密码、完整 JDBC URL 或业务数据行；AI 能直接基于任务继续排查。
 - 边界：不自动提交 GitHub issue，不上传截图或日志，不替代用户说明；第一版只在本地浏览器和当前项目内生成证据。
 
+### P6-123：字段标准向 API/DTO Schema 导出
+- 状态：待办。
+- 为什么做：DataSpec 已能从数据库、文档和契约反向提取标准，但 AI 在写接口、DTO、前端类型或校验逻辑时，还需要把字段标准正向导出成可复用的 JSON Schema、OpenAPI components 或 TypeScript 类型片段。
+- 已有基础：已有标准契约 registry 待办、OpenAPI 类型生成、多源契约反向导入、字段格式约束、枚举生命周期、AI Context 和数据字典导出。
+- 缺口：标准字段、枚举、格式、敏感标识和生命周期状态缺少面向 API/DTO 的导出适配；AI 只能读字段目录后自行拼 schema，容易丢失 required、format、enum、deprecated 和 example 约束。
+- 参考项目：`OpenAPITools/openapi-generator` 的组件生成、`glideapps/quicktype` 的类型推导和 `Redocly/redocly-cli` 的 OpenAPI bundle/lint；只借鉴导出结构，不把 DataSpec 改成通用 API 网关。
+- 落地产物：新增 schema fragment 导出 API/CLI/MCP；按项目、分组、字段集合或表模板导出 JSON Schema、OpenAPI components、TypeScript interface 片段和字段到 schema 的映射证据。
+- 验收标准：AI 可直接把导出的 schema 片段用于接口 DTO、表单校验或契约文档；导出结果包含字段来源、枚举值、format、deprecated/replacement 和敏感字段提示；契约有 fixture 防漂移。
+- 边界：不自动修改业务仓库，不覆盖业务项目已有 OpenAPI 文件，不保证所有后端框架类型系统完整映射；第一版只导出可审阅片段。
+
+### P6-124：ORM/代码模型反向提取标准候选
+- 状态：待办。
+- 为什么做：很多项目的真实字段定义存在于 Prisma schema、TypeORM Entity、JPA 注解、MyBatis 映射或前端类型里；只靠数据库直连会漏掉尚未落库的模型、DTO 命名和业务注释。
+- 已有基础：已有业务仓库初始化、defaultPaths、业务代码字段引用索引、多源契约反向导入、标准候选 Inbox、字段推荐和字段来源追踪。
+- 缺口：当前代码扫描更偏引用和风险分析，缺少从 ORM/代码模型抽取 candidateFields、candidateEnums、tableName、columnName、comment、validationHints 和 sourceRange 的导入链路。
+- 参考项目：`prisma/prisma` 的 schema introspection、`typeorm/typeorm` 的实体元数据和 `mybatis/mybatis-3` 的映射文件结构；只处理本地源码，不执行应用代码。
+- 落地产物：新增代码模型候选提取器；支持 dry-run 扫描配置路径，输出候选字段、表关系、枚举、注释、来源文件位置、置信度和冲突原因，并可进入候选 Inbox。
+- 验收标准：给定包含 Prisma/TypeORM/JPA/MyBatis 的业务仓库，能提取稳定候选并保留文件行号证据；重复扫描不会刷出重复候选；敏感源码片段不进入长期记录。
+- 边界：不解析所有语言和框架，不执行业务代码，不自动采纳候选；第一版优先覆盖结构清晰的 schema/entity/mapper 文件。
+
+### P6-125：前端组件状态样例库与视觉回归预备
+- 状态：待办。
+- 为什么做：页面越来越多后，空状态、加载中、错误、无项目、无权限、长文本和大表格状态容易各写各的；AI 修改前端时也缺少可查看的组件状态样例，容易破坏已打磨过的交互。
+- 已有基础：已有前端源码级 smoke、浏览器级 E2E 待办、统一前端状态待办、前端任务式导航、可访问性待办和 Element Plus 组件体系。
+- 缺口：缺少 Storybook 或等价本地组件状态目录；核心页面组件没有固定样例数据和截图边界，无法为后续视觉回归或设计检查提供稳定基线。
+- 参考项目：`storybookjs/storybook` 的组件状态组织、`microsoft/playwright` 的截图/trace 和 `dequelabs/axe-core` 的可访问性检查；只做本地开发辅助，不引入复杂设计系统。
+- 落地产物：为核心前端组件建立状态样例库，覆盖项目选择、任务入口、空状态、错误提示、diff、表格分页、详情弹窗和 Monaco 结果面板；保留可选截图验证入口。
+- 验收标准：开发者和 AI 能在本地打开样例查看组件各种状态；新增核心组件时有最小样例；后续可平滑接入视觉回归和 a11y 检查。
+- 边界：不重做 UI 体系，不追求像素级全站回归，不把普通开发构建强制依赖 Storybook；第一版只覆盖高频组件。
+
+### P6-126：SQL 规则变异回归与误报召回基线
+- 状态：待办。
+- 为什么做：规则、fixedSql 和多方言解析会持续增强，只靠少量 good/bad fixture 容易漏掉边界；需要能系统性生成近似变体，验证规则不误杀、不漏报、不生成危险修复。
+- 已有基础：已有 lint 规则测试、golden fixtures、SQL/DDL 多方言矩阵、规则调试器待办、fixedSql diff、示例反例库和标准变更演练沙箱。
+- 缺口：缺少 mutation/variant corpus，把表名大小写、注释位置、schema 前缀、quoted identifier、默认值、枚举 literal 和方言差异组合成可重复回归样例。
+- 参考项目：`sqlfluff/sqlfluff` 的规则 fixture 组织、`eslint/eslint` 的规则测试元数据和 `stryker-mutator/stryker-js` 的变异测试思路；只借鉴变体生成与召回统计，不要求完整 mutation testing 平台。
+- 落地产物：新增 SQL rule variant generator 或 fixture 目录；为关键规则输出 falsePositive、falseNegative、unsafeFix 和 dialectCompatibility 指标，并接入可选验证命令。
+- 验收标准：修改命名、COMMENT、枚举、fixedSql 或方言规则后，能看到误报/漏报基线变化；失败样例可升格为 golden fixture；默认 `mvn test` 保持轻量，可选命令跑扩展语料。
+- 边界：不追求穷尽 SQL 语法，不默认调用外部 LLM 造样例，不让慢速变异测试阻塞每次小改动。
+
+### P6-127：AI Context 增量更新包与差分同步
+- 状态：待办。
+- 为什么做：标准字段、规则、模板和证据越来越多后，每次都导出完整 AI Context 会浪费上下文；AI 更需要知道“自上次快照后哪些标准变了、哪些包需要重新读取、哪些旧上下文还能继续用”。
+- 已有基础：已有标准快照、离线 AI Context 缓存、标准变更发布说明、版本兼容矩阵、环境指纹、字段生命周期和 Context 预算裁剪待办。
+- 缺口：Context 导出缺少 delta manifest；无法按 fromSnapshot/toSnapshot 输出新增、修改、废弃、删除、规则变更、模板变更和兼容提示，也不能告诉 AI 旧包是否可增量补读。
+- 参考项目：`changesets/changesets` 的变更集说明、`OpenLineage/OpenLineage` 的事件模型和 `bufbuild/buf` 的 breaking change 检查；只做标准上下文差分，不做远程同步服务。
+- 落地产物：新增 Context delta API/CLI/MCP；输入基准快照或缓存 manifest，输出 changedArtifacts、breakingChanges、deprecatedFields、requiredRefresh、patchPackage 和 suggestedPrompt。
+- 验收标准：AI 能基于上一份 Context 只读取增量包；破坏性标准变更会明确要求重新导出完整包或停止确认；增量包含版本、hash 和回退说明。
+- 边界：不长期托管 Context 包，不自动推送到业务仓库，不保证跨大版本无限兼容；第一版只覆盖当前项目内快照差异。
+
+### P6-128：前端包体性能预算与路由懒加载
+- 状态：待办。
+- 为什么做：功能页面持续增加后，Monaco、Element Plus、图表和大页面逻辑可能让首屏变慢；个人工具也需要保持打开即用，AI browser automation 也依赖稳定加载。
+- 已有基础：已有前端性能体验指标、浏览器级 E2E 待办、源码级 smoke、Vite 构建、Monaco Editor、AI 回放和多页面路由。
+- 缺口：缺少 bundle budget、chunk 分析、重型页面懒加载策略和构建后性能摘要；当前 `pnpm build` 只验证能否构建，不约束包体变化和首屏依赖。
+- 参考项目：`vitejs/vite` 的构建分析能力、`GoogleChrome/lighthouse` 的性能预算和 `TanStack/query` 的请求缓存思路；只做本地预算与懒加载，不接入外部性能平台。
+- 落地产物：新增前端包体报告和预算阈值；对 Monaco/图表/大页面启用路由级懒加载或动态导入；README 说明如何查看构建体积和常见优化路径。
+- 验收标准：新增重型页面时能看到 chunk 变化；首屏不强制加载 SQL 编辑器等非当前页面资源；预算超标时给出可读提示和候选优化项。
+- 边界：不追求极限性能分数，不为了包体牺牲核心交互，不把所有页面一次性重写为复杂异步组件。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
@@ -1250,11 +1311,16 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`TanStack/query`](https://github.com/TanStack/query)：前端 server state、请求缓存、重试和错误状态收口参考。
 - [`dequelabs/axe-core`](https://github.com/dequelabs/axe-core)：前端可访问性自动检查规则参考。
 - [`GoogleChrome/lighthouse`](https://github.com/GoogleChrome/lighthouse)：页面性能、可访问性和最佳实践审计参考。
+- [`storybookjs/storybook`](https://github.com/storybookjs/storybook)：前端组件状态样例库、交互文档和视觉回归预备参考。
+- [`vitejs/vite`](https://github.com/vitejs/vite)：前端构建、代码分割和包体分析参考。
 - [`gitleaks/gitleaks`](https://github.com/gitleaks/gitleaks)：敏感信息检测、日志脱敏和 secret 防泄漏参考。
 - [`pgvector/pgvector`](https://github.com/pgvector/pgvector)：本地或自托管向量检索索引的设计参考。
 - [`facebook/docusaurus`](https://github.com/facebook/docusaurus)：静态文档站、版本化文档和搜索入口参考。
 - [`sqlalchemy/sqlalchemy`](https://github.com/sqlalchemy/sqlalchemy)：数据库方言分层、连接能力抽象和类型映射参考。
 - [`open-telemetry/opentelemetry-collector`](https://github.com/open-telemetry/opentelemetry-collector)：本地 traces/metrics/logs 信号组织和诊断摘要参考。
+- [`typeorm/typeorm`](https://github.com/typeorm/typeorm)：ORM 实体元数据、装饰器映射和代码模型反向提取参考。
+- [`mybatis/mybatis-3`](https://github.com/mybatis/mybatis-3)：XML/注解映射、SQL 片段和 Java 项目字段来源提取参考。
+- [`stryker-mutator/stryker-js`](https://github.com/stryker-mutator/stryker-js)：变异测试、回归召回和质量指标组织参考。
 - [Model Context Protocol 规范](https://modelcontextprotocol.io/specification/2025-06-18)：AI 应用接入 resources、prompts、tools 的协议基础。
 - [`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)：MCP server 参考实现集合。
 - [`agents.md`](https://agents.md/)：面向 coding agent 的项目指令文件约定。
