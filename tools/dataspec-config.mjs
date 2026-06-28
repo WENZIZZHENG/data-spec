@@ -53,6 +53,8 @@ function emptyConfig(startDir) {
     projectId: undefined,
     server: undefined,
     apiToken: undefined,
+    aiProfile: undefined,
+    taskType: undefined,
     defaultPaths: []
   }
 }
@@ -68,6 +70,8 @@ function normalizeDataSpecConfig(rawConfig, configPath) {
     projectId: normalizeProjectId(rawConfig.projectId),
     server: normalizeServer(rawConfig.server),
     apiToken: normalizeApiToken(rawConfig.apiToken),
+    aiProfile: normalizeOptionalString(rawConfig.aiProfile, 'aiProfile', configPath),
+    taskType: normalizeOptionalString(rawConfig.taskType, 'taskType', configPath),
     defaultPaths: normalizeDefaultPaths(rawConfig.defaultPaths, configPath)
   }
 }
@@ -103,6 +107,17 @@ function normalizeApiToken(value) {
   }
   const token = value.trim()
   return token || undefined
+}
+
+function normalizeOptionalString(value, fieldName, configPath) {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+  if (typeof value !== 'string') {
+    throw new Error(`DataSpec 配置 ${fieldName} 必须是字符串: ${configPath}`)
+  }
+  const normalized = value.trim()
+  return normalized || undefined
 }
 
 function normalizeDefaultPaths(value, configPath) {

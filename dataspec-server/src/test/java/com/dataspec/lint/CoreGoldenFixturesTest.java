@@ -157,7 +157,8 @@ class CoreGoldenFixturesTest {
                 new NoopCheckRecordService(),
                 new NoopAiJobRecordService(),
                 mock(RuleExemptionService.class),
-                new PromptTemplateRegistry());
+                new PromptTemplateRegistry(),
+                null);
     }
 
     private List<LintRule> commonRules() {

@@ -70,6 +70,43 @@ test('lint returns 0 when server reports no errors', async () => {
   assert.equal(JSON.parse(io.stdout).warningCount, 1)
 })
 
+test('lint uses configured aiProfile and lets explicit task type override config', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-profile-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({
+        projectId: 7,
+        server: 'http://dataspec.local',
+        aiProfile: 'sql-fix'
+      }),
+      'utf8'
+    )
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ code: 200, data: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] } })
+      }
+    }
+    const io = createIo('CREATE TABLE users (id bigint);', dir)
+
+    const code = await runCli(['lint', '-', '--task-type', 'PR_REVIEW', '--format', 'json'], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      sql: 'CREATE TABLE users (id bigint);',
+      projectId: 7,
+      taskType: 'PR_REVIEW'
+    })
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('lint text output prints dialect diagnostics summary', async () => {
   const io = createIo('CREATE TABLE `user_order` (id bigint);')
   const fetchFn = async () => ({
@@ -1093,6 +1130,126 @@ test('export-context passes scoped AI context options', async () => {
   }
 })
 
+test('export-context forwards profile defaults when no explicit scope is provided', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    const outputPath = path.join(dir, 'dataspec-ai-context.zip')
+    const fetchFn = async (url) => {
+      assert.equal(
+        url,
+        'http://localhost:8090/api/ai-context/package/download?projectId=9&profileId=minimal-context'
+      )
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => Uint8Array.from([9, 9]).buffer
+      }
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'export-context',
+      '--project',
+      '9',
+      '--profile',
+      'minimal-context',
+      '--output',
+      outputPath
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.deepEqual([...await readFile(outputPath)], [9, 9])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('profile list prints machine-readable profile catalog', async () => {
+  const calls = []
+  const fetchFn = async (url) => {
+    calls.push(url)
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          projectId: 7,
+          defaultProfileId: 'create-table',
+          selectedProfileId: 'sql-fix',
+          profiles: [
+            {
+              profileId: 'sql-fix',
+              taskType: 'SQL_FIX',
+              contextScope: { scope: 'field', status: 'enabled', limit: 60 },
+              fixedSqlPolicy: { mode: 'DRY_RUN', maxRiskLevel: 'LOW' },
+              outputFormat: { format: 'json+diff' },
+              recommendedCommands: ['dataspec lint <file.sql> --profile sql-fix --format json']
+            }
+          ],
+          diagnostics: [],
+          supportedTaskTypes: ['SQL_FIX']
+        }
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'profile',
+    'list',
+    '--project',
+    '7',
+    '--profile',
+    'sql-fix',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(calls[0], 'http://dataspec.local/api/ai-profiles?projectId=7&profile=sql-fix')
+  assert.equal(output.profiles[0].profileId, 'sql-fix')
+  assert.equal(output.profiles[0].fixedSqlPolicy.mode, 'DRY_RUN')
+})
+
+test('profile show returns 2 for unknown profile with supported values', async () => {
+  const fetchFn = async (url) => {
+    assert.equal(url, 'http://dataspec.local/api/ai-profiles/missing?projectId=7')
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          requestedProfile: 'missing',
+          profile: null,
+          supportedProfileIds: ['create-table', 'sql-fix'],
+          supportedTaskTypes: ['CREATE_TABLE', 'SQL_FIX'],
+          diagnostics: [{ code: 'UNKNOWN_AI_PROFILE', status: 'fail' }]
+        }
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'profile',
+    'show',
+    'missing',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /未知 AI profile/)
+  assert.match(io.stderr, /create-table/)
+})
+
 test('export-context passes snapshot options without secrets', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {
@@ -1369,6 +1526,7 @@ test('doctor prints json checks from local config and returns 0 when ready', asy
       'auth',
       'project',
       'defaultPaths',
+      'ai-profile',
       'openapi',
       'context-cache'
     ])
@@ -1376,6 +1534,111 @@ test('doctor prints json checks from local config and returns 0 when ready', asy
     assert.equal(calls[0].url, 'http://dataspec.local/api-docs')
     assert.equal(calls[1].options.headers.Authorization, 'Bearer ds_config_token')
     assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('doctor validates configured ai profile through remote profile api', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-profile-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({
+        projectId: 7,
+        server: 'http://dataspec.local',
+        aiProfile: 'sql-fix'
+      }),
+      'utf8'
+    )
+    const fetchFn = async (url) => {
+      if (url === 'http://dataspec.local/api-docs') {
+        return { ok: true, status: 200, json: async () => ({ openapi: '3.0.1' }) }
+      }
+      if (url === 'http://dataspec.local/api/projects/7') {
+        return { ok: true, status: 200, json: async () => ({ code: 200, data: { id: 7, name: '演示项目' } }) }
+      }
+      if (url === 'http://dataspec.local/api/ai-profiles/sql-fix?projectId=7') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: {
+              profile: {
+                profileId: 'sql-fix',
+                taskType: 'SQL_FIX',
+                recommendedCommands: ['dataspec lint <file.sql> --profile sql-fix --format json']
+              },
+              diagnostics: [{ code: 'PROFILE_READY', status: 'pass' }]
+            }
+          })
+        }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli(['doctor', '--format', 'json'], io, fetchFn)
+
+    const output = JSON.parse(io.stdout)
+    const profileCheck = output.checks.find((check) => check.name === 'ai-profile')
+    assert.equal(code, 0)
+    assert.equal(profileCheck.status, 'pass')
+    assert.equal(profileCheck.details.profileId, 'sql-fix')
+    assert.equal(profileCheck.details.taskType, 'SQL_FIX')
+    assert.match(profileCheck.details.recommendedCommand, /dataspec lint/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('doctor reports unknown configured ai profile with supported values', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-profile-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({
+        projectId: 7,
+        server: 'http://dataspec.local',
+        aiProfile: 'missing'
+      }),
+      'utf8'
+    )
+    const fetchFn = async (url) => {
+      if (url === 'http://dataspec.local/api-docs') {
+        return { ok: true, status: 200, json: async () => ({ openapi: '3.0.1' }) }
+      }
+      if (url === 'http://dataspec.local/api/projects/7') {
+        return { ok: true, status: 200, json: async () => ({ code: 200, data: { id: 7, name: '演示项目' } }) }
+      }
+      if (url === 'http://dataspec.local/api/ai-profiles/missing?projectId=7') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: {
+              profile: null,
+              supportedProfileIds: ['create-table', 'sql-fix'],
+              supportedTaskTypes: ['CREATE_TABLE', 'SQL_FIX']
+            }
+          })
+        }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli(['doctor', '--format', 'json'], io, fetchFn)
+
+    const output = JSON.parse(io.stdout)
+    const profileCheck = output.checks.find((check) => check.name === 'ai-profile')
+    assert.equal(code, 1)
+    assert.equal(profileCheck.status, 'fail')
+    assert.deepEqual(profileCheck.details.supportedProfileIds, ['create-table', 'sql-fix'])
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

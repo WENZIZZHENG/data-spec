@@ -91,6 +91,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'AI 规则导出' }
   },
   {
+    path: '/ai-profiles',
+    name: 'AiProfile',
+    component: () => import('@/views/AiProfile.vue'),
+    meta: { title: 'AI 任务模式' }
+  },
+  {
     path: '/ai-replay',
     name: 'AiReplay',
     component: () => import('@/views/AiReplay.vue'),

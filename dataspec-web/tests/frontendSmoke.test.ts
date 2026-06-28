@@ -22,6 +22,7 @@ test('keeps critical frontend routes and navigation entries wired', () => {
     { path: '/sql-lint', view: 'SqlLint.vue', title: 'SQL 校验' },
     { path: '/generator', view: 'Generator.vue', title: '生成器' },
     { path: '/ai-export', view: 'AiExport.vue', title: 'AI 规则导出' },
+    { path: '/ai-profiles', view: 'AiProfile.vue', title: 'AI 任务模式' },
     { path: '/ai-replay', view: 'AiReplay.vue', title: 'AI 回放' },
     { path: '/ai-batches', view: 'AiBatch.vue', title: 'AI 批量任务' },
     { path: '/ai-feedback', view: 'AiFeedback.vue', title: 'AI 反馈' },
@@ -108,6 +109,62 @@ test('keeps AI feedback improvement loop page wired', () => {
     'AiFeedbackReport',
     'RAiFeedbackReport'
   ], 'ai feedback schema')
+})
+
+test('keeps AI profile review and selection flow wired', () => {
+  const view = readSource('src/views/AiProfile.vue')
+  const api = readSource('src/api/aiProfile.ts')
+  const types = readSource('src/types/index.ts')
+  const schema = readSource('src/api/schema.ts')
+  const selection = readSource('src/utils/aiProfileSelection.ts')
+
+  assertContains(view, [
+    "import { listAiProfiles } from '@/api/aiProfile'",
+    'projectStore.currentProjectId',
+    'readSelectedAiProfile(projectId)',
+    'resolveSelectedAiProfile',
+    'saveSelectedAiProfile(projectId, selectedProfileId.value)',
+    'selectedProfile?.fixedSqlPolicy?.mode',
+    'selectedProfile.recommendedCommands',
+    'copyFirstCommand',
+    'AI 任务模式',
+    '当前选择只作为 AI/CLI/MCP 默认建议',
+    '可用模式',
+    '推荐命令'
+  ], 'AiProfile.vue')
+
+  assertContains(api, [
+    "request.get<unknown, AiTaskProfileCatalog>('/ai-profiles'",
+    'export function getAiProfile(profileOrTaskType: string',
+    '`/ai-profiles/${encodeURIComponent(profileOrTaskType)}`'
+  ], 'AI profile api')
+
+  assertContains(types, [
+    "export type AiTaskContextScope = Schemas['AiTaskContextScope']",
+    "export type AiTaskRuleset = Schemas['AiTaskRuleset']",
+    "export type AiTaskOutputFormat = Schemas['AiTaskOutputFormat']",
+    "export type AiProfileDiagnostic = Schemas['AiProfileDiagnostic']",
+    "export type AiTaskProfile = Schemas['AiTaskProfile']",
+    "export type AiTaskProfileCatalog = Schemas['AiTaskProfileCatalog']",
+    "export type AiTaskProfileDetail = Schemas['AiTaskProfileDetail']"
+  ], 'AI profile types')
+
+  assertContains(schema, [
+    '"/api/ai-profiles"',
+    '"/api/ai-profiles/{profileOrTaskType}"',
+    'listAiTaskProfiles',
+    'getAiTaskProfile',
+    'AiTaskProfileCatalog',
+    'RAiTaskProfileDetail'
+  ], 'AI profile schema')
+
+  assertContains(selection, [
+    'aiProfileStorageKey',
+    'readSelectedAiProfile',
+    'saveSelectedAiProfile',
+    'resolveSelectedAiProfile',
+    'dataspec.aiProfile'
+  ], 'AI profile selection utility')
 })
 
 test('keeps standard candidate inbox workbench wired', () => {
@@ -268,12 +325,18 @@ test('keeps SQL lint fixed SQL and record history flow wired', () => {
   const api = readSource('src/api/lint.ts')
 
   assertContains(view, [
+    "import { listAiProfiles } from '@/api/aiProfile'",
     "import { getLintRecord, lintSql, listLintRecords } from '@/api/lint'",
     'projectId: projectStore.currentProjectId ?? undefined',
-    'fixPolicy: currentFixPolicy.value',
+    'request.profileId = selectedProfileId.value',
+    'request.fixPolicy = currentFixPolicy.value',
+    'profileFixPolicyActive',
     'fixPolicyMode',
     'fixMaxRiskLevel',
     'includeFixExplanations',
+    'AI 模式',
+    'profile 策略',
+    '手动策略',
     '修复模式',
     '最高风险',
     '修复策略',
@@ -543,7 +606,7 @@ test('keeps critical action labels and empty states visible', () => {
   const pageExpectations = [
     {
       path: 'src/views/SqlLint.vue',
-      snippets: ['执行校验', '最近检查记录', '方言诊断', '修复模式', '修复策略', '最高风险', '请输入 SQL 并点击执行校验', '暂无检查记录', '已复制修正 SQL']
+      snippets: ['执行校验', '最近检查记录', '方言诊断', 'AI 模式', '修复模式', '修复策略', '最高风险', '请输入 SQL 并点击执行校验', '暂无检查记录', '已复制修正 SQL']
     },
     {
       path: 'src/views/ReverseImport.vue',
@@ -572,6 +635,10 @@ test('keeps critical action labels and empty states visible', () => {
     {
       path: 'src/views/AiFeedback.vue',
       snippets: ['刷新反馈', '下一步动作', '高频字段信号', '规则问题排行', 'fixedSql 机会', '标准化信号', '请先创建并选择项目']
+    },
+    {
+      path: 'src/views/AiProfile.vue',
+      snippets: ['AI 任务模式', '当前模式', '可用模式', '模式详情', '推荐命令', '请选择项目后查看 AI 任务模式']
     },
     {
       path: 'src/views/StandardCandidate.vue',

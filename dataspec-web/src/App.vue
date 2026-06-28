@@ -93,6 +93,10 @@
             <el-icon><Cpu /></el-icon>
             <span>AI 规则导出</span>
           </el-menu-item>
+          <el-menu-item index="/ai-profiles">
+            <el-icon><Operation /></el-icon>
+            <span>AI 任务模式</span>
+          </el-menu-item>
           <el-menu-item index="/ai-replay">
             <el-icon><Clock /></el-icon>
             <span>AI 回放</span>

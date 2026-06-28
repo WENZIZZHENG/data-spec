@@ -33,11 +33,13 @@ public class AiContextController {
                                           @RequestParam(required = false) String query,
                                           @RequestParam(required = false) String status,
                                           @RequestParam(required = false) Integer limit,
+                                          @RequestParam(required = false) String profileId,
+                                          @RequestParam(required = false) String taskType,
                                           @RequestParam(required = false) Long snapshotId,
                                           @RequestParam(required = false) String snapshotVersion) {
         return R.ok(aiContextExportService.generateDatabaseRules(
                 projectId,
-                scopeOptions(scope, query, status, limit),
+                scopeOptions(scope, query, status, limit, profileId, taskType),
                 snapshotId,
                 snapshotVersion));
     }
@@ -50,11 +52,13 @@ public class AiContextController {
                                                         @RequestParam(required = false) String query,
                                                         @RequestParam(required = false) String status,
                                                         @RequestParam(required = false) Integer limit,
+                                                        @RequestParam(required = false) String profileId,
+                                                        @RequestParam(required = false) String taskType,
                                                         @RequestParam(required = false) Long snapshotId,
                                                         @RequestParam(required = false) String snapshotVersion) {
         String content = aiContextExportService.generateDatabaseRules(
                 projectId,
-                scopeOptions(scope, query, status, limit),
+                scopeOptions(scope, query, status, limit, profileId, taskType),
                 snapshotId,
                 snapshotVersion);
         return ResponseEntity.ok()
@@ -71,11 +75,13 @@ public class AiContextController {
                                          @RequestParam(required = false) String query,
                                          @RequestParam(required = false) String status,
                                          @RequestParam(required = false) Integer limit,
+                                         @RequestParam(required = false) String profileId,
+                                         @RequestParam(required = false) String taskType,
                                          @RequestParam(required = false) Long snapshotId,
                                          @RequestParam(required = false) String snapshotVersion) {
         return R.ok(aiContextExportService.generateFieldCatalogJson(
                 projectId,
-                scopeOptions(scope, query, status, limit),
+                scopeOptions(scope, query, status, limit, profileId, taskType),
                 snapshotId,
                 snapshotVersion));
     }
@@ -88,11 +94,13 @@ public class AiContextController {
                                                        @RequestParam(required = false) String query,
                                                        @RequestParam(required = false) String status,
                                                        @RequestParam(required = false) Integer limit,
+                                                       @RequestParam(required = false) String profileId,
+                                                       @RequestParam(required = false) String taskType,
                                                        @RequestParam(required = false) Long snapshotId,
                                                        @RequestParam(required = false) String snapshotVersion) {
         String content = aiContextExportService.generateFieldCatalogJson(
                 projectId,
-                scopeOptions(scope, query, status, limit),
+                scopeOptions(scope, query, status, limit, profileId, taskType),
                 snapshotId,
                 snapshotVersion);
         return ResponseEntity.ok()
@@ -145,11 +153,13 @@ public class AiContextController {
                                                            @RequestParam(required = false) String query,
                                                            @RequestParam(required = false) String status,
                                                            @RequestParam(required = false) Integer limit,
+                                                           @RequestParam(required = false) String profileId,
+                                                           @RequestParam(required = false) String taskType,
                                                            @RequestParam(required = false) Long snapshotId,
                                                            @RequestParam(required = false) String snapshotVersion) {
         byte[] content = aiContextExportService.generateAiContextPackage(
                 projectId,
-                scopeOptions(scope, query, status, limit),
+                scopeOptions(scope, query, status, limit, profileId, taskType),
                 snapshotId,
                 snapshotVersion);
         return ResponseEntity.ok()
@@ -168,7 +178,8 @@ public class AiContextController {
             @NotBlank(message = "SQL 不能为空") String sql
     ) {}
 
-    private AiContextScopeOptions scopeOptions(String scope, String query, String status, Integer limit) {
-        return new AiContextScopeOptions(scope, query, status, limit);
+    private AiContextScopeOptions scopeOptions(String scope, String query, String status, Integer limit,
+                                               String profileId, String taskType) {
+        return new AiContextScopeOptions(scope, query, status, limit, profileId, taskType);
     }
 }

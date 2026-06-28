@@ -12,13 +12,17 @@ public record AiContextScopeOptions(
         String scope,
         String query,
         String status,
-        Integer limit
+        Integer limit,
+        String profileId,
+        String taskType,
+        boolean scopeExplicit
 ) {
     private static final String DEFAULT_SCOPE = "all";
     private static final Set<String> SUPPORTED_SCOPES = Set.of("all", "field", "domain", "tag", "table", "changed");
     private static final int MAX_LIMIT = 500;
 
     public AiContextScopeOptions {
+        scopeExplicit = scopeExplicit && normalizeText(scope) != null;
         scope = normalizeScope(scope);
         query = normalizeText(query);
         status = normalizeText(status);
@@ -26,10 +30,20 @@ public record AiContextScopeOptions(
             status = status.toLowerCase(Locale.ROOT);
         }
         limit = normalizeLimit(limit);
+        profileId = normalizeText(profileId);
+        taskType = normalizeText(taskType);
+    }
+
+    public AiContextScopeOptions(String scope, String query, String status, Integer limit) {
+        this(scope, query, status, limit, null, null, scope != null && !scope.isBlank());
+    }
+
+    public AiContextScopeOptions(String scope, String query, String status, Integer limit, String profileId, String taskType) {
+        this(scope, query, status, limit, profileId, taskType, scope != null && !scope.isBlank());
     }
 
     public static AiContextScopeOptions full() {
-        return new AiContextScopeOptions(null, null, null, null);
+        return new AiContextScopeOptions(null, null, null, null, null, null, false);
     }
 
     public boolean scoped() {

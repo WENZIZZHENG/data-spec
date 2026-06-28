@@ -35,6 +35,13 @@ const RESOURCE_DEFS = {
     localContent(projectId) {
       return JSON.stringify(workflowRecipesResourcePayload(projectId), null, 2)
     }
+  },
+  'ai-task-profiles': {
+    name: 'DataSpec AI Task Profiles',
+    description: '当前项目的 AI 任务模式，说明上下文范围、fixedSql 策略、输出格式和推荐命令。',
+    path: '/api/ai-profiles',
+    mimeType: 'application/json',
+    profileResource: true
   }
 }
 
@@ -56,10 +63,11 @@ const PROMPTS = {
     buildText(args, projectId) {
       return [
         '你是 DataSpec 数据建模助手。请先读取并遵守以下 MCP resources：',
+        `- dataspec://project/${projectId}/ai-task-profiles`,
         `- dataspec://project/${projectId}/field-catalog`,
         `- dataspec://project/${projectId}/database-rules`,
         '',
-        '根据字段目录优先复用标准字段，生成 PostgreSQL DDL。要求表名和列名使用 snake_case，并为表和字段补充 COMMENT ON 语句。',
+        '先根据 AI task profile 选择 context scope、fixedSql 策略和输出格式；再根据字段目录优先复用标准字段，生成 PostgreSQL DDL。要求表名和列名使用 snake_case，并为表和字段补充 COMMENT ON 语句。',
         args.businessDescription ? `业务描述：${args.businessDescription}` : '业务描述：请根据用户后续输入补全。'
       ].join('\n')
     }
@@ -80,7 +88,8 @@ const PROMPTS = {
     ],
     buildText(args, projectId) {
       return [
-        '请按 DataSpec 标准评审 SQL。优先读取字段目录和数据库规则，并在需要机器校验时调用 MCP tool `lint_sql`。',
+        '请按 DataSpec 标准评审 SQL。先读取 AI task profile，再读取字段目录和数据库规则，并在需要机器校验时调用 MCP tool `lint_sql`。',
+        `AI profile：dataspec://project/${projectId}/ai-task-profiles`,
         `字段目录：dataspec://project/${projectId}/field-catalog`,
         `数据库规则：dataspec://project/${projectId}/database-rules`,
         args.sql ? `\n待评审 SQL：\n\`\`\`sql\n${args.sql}\n\`\`\`` : ''
@@ -103,7 +112,8 @@ const PROMPTS = {
     ],
     buildText(args, projectId) {
       return [
-        '请把业务需求拆成字段设计建议。先读取 DataSpec 字段目录，优先复用已有标准字段；缺口字段请说明建议字段名、类型、注释和是否应纳入标准字段库。',
+        '请把业务需求拆成字段设计建议。先读取 AI task profile 和 DataSpec 字段目录，优先复用已有标准字段；缺口字段请说明建议字段名、类型、注释和是否应纳入标准字段库。',
+        `AI profile：dataspec://project/${projectId}/ai-task-profiles`,
         `字段目录：dataspec://project/${projectId}/field-catalog`,
         args.businessDescription ? `业务需求：${args.businessDescription}` : '业务需求：请根据用户后续输入补全。'
       ].join('\n')
@@ -129,6 +139,7 @@ export function createMcpHandler(config, fetchFn = globalThis.fetch) {
   const server = normalizeServer(config.server)
   const defaultProjectId = parseProjectId(config.projectId)
   const apiToken = normalizeApiToken(config.apiToken)
+  const defaultProfileSelection = resolveProfileSelection(config)
 
   return async function handleMessage(message) {
     const id = message?.id
@@ -142,6 +153,7 @@ export function createMcpHandler(config, fetchFn = globalThis.fetch) {
       const result = await dispatch(message.method, message.params ?? {}, {
         server,
         defaultProjectId,
+        defaultProfileSelection,
         apiToken,
         fetchFn
       })
@@ -157,12 +169,17 @@ export function createMcpHandler(config, fetchFn = globalThis.fetch) {
  * 可由显式参数提供，也可由业务仓库 `.dataspec/config.json` 提供。
  */
 export function parseServerArgs(argv, startDir = process.cwd(), env = process.env) {
-  const { options } = parseArgs(argv, ['project', 'server', 'dataspec-token'])
+  const { options } = parseArgs(argv, ['project', 'server', 'dataspec-token', 'profile', 'task-type', 'taskType'])
   const config = loadDataSpecConfig(startDir)
+  const profileSelection = resolveProfileSelection({
+    profileId: options.profile,
+    taskType: options.taskType ?? options['task-type']
+  }, config)
   return {
     projectId: parseProjectId(options.project ?? config.projectId),
     server: normalizeServer(options.server ?? config.server),
-    apiToken: normalizeApiToken(options['dataspec-token'] ?? env.DATASPEC_TOKEN ?? config.apiToken)
+    apiToken: normalizeApiToken(options['dataspec-token'] ?? env.DATASPEC_TOKEN ?? config.apiToken),
+    ...profileSelection
   }
 }
 
@@ -228,7 +245,9 @@ async function readResource(params, context) {
   }
   const text = typeof def.localContent === 'function'
     ? def.localContent(projectId)
-    : await fetchAiContextText(context, def.path, projectId)
+    : def.profileResource
+      ? JSON.stringify(await fetchProfileResource(context, projectId), null, 2)
+      : await fetchAiContextText(context, def.path, projectId)
   return {
     contents: [
       {
@@ -288,6 +307,14 @@ function listTools() {
             projectId: {
               type: 'integer',
               description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            profileId: {
+              type: 'string',
+              description: '可选 AI profile id，未提供时使用 MCP Server 启动配置。'
+            },
+            taskType: {
+              type: 'string',
+              description: '可选 AI task type，未提供时使用 MCP Server 启动配置。'
             }
           },
           required: ['sql']
@@ -318,6 +345,14 @@ function listTools() {
             limit: {
               type: 'integer',
               description: '可选返回字段上限。'
+            },
+            profileId: {
+              type: 'string',
+              description: '可选 AI profile id，用于服务端默认裁剪范围。'
+            },
+            taskType: {
+              type: 'string',
+              description: '可选 AI task type，用于服务端默认裁剪范围。'
             }
           }
         }
@@ -347,6 +382,14 @@ function listTools() {
             limit: {
               type: 'integer',
               description: '可选返回字段上限，默认 20。'
+            },
+            profileId: {
+              type: 'string',
+              description: '可选 AI profile id，用于服务端默认裁剪范围。'
+            },
+            taskType: {
+              type: 'string',
+              description: '可选 AI task type，用于服务端默认裁剪范围。'
             }
           },
           required: ['query']
@@ -474,7 +517,7 @@ async function callLintSql(args, context) {
   const response = await context.fetchFn(`${context.server}/api/lint`, {
     method: 'POST',
     headers: dataSpecHeaders(context.apiToken, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ sql, projectId })
+    body: JSON.stringify({ sql, projectId, ...resolveProfileSelection(args, context.defaultProfileSelection) })
   })
   const result = await readDataSpecJson(response)
   return toolJsonResult(result)
@@ -482,7 +525,7 @@ async function callLintSql(args, context) {
 
 async function callGetFieldCatalog(args, context) {
   const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
-  const text = await fetchAiContextText(context, RESOURCE_DEFS['field-catalog'].path, projectId, scopedCatalogParams(args))
+  const text = await fetchAiContextText(context, RESOURCE_DEFS['field-catalog'].path, projectId, scopedCatalogParams(args, context))
   const structured = parseJsonOrFallback(text)
   return toolJsonResult(structured)
 }
@@ -498,7 +541,7 @@ async function callSearchFieldCatalog(args, context) {
     scope: args.scope ?? 'field',
     limit: args.limit ?? 20
   }
-  const text = await fetchAiContextText(context, RESOURCE_DEFS['field-catalog'].path, projectId, scopedCatalogParams(scopedArgs))
+  const text = await fetchAiContextText(context, RESOURCE_DEFS['field-catalog'].path, projectId, scopedCatalogParams(scopedArgs, context))
   return toolJsonResult(parseJsonOrFallback(text))
 }
 
@@ -551,6 +594,8 @@ async function callGenerateTableDdl(args, context) {
 async function fetchAiContextText(context, path, projectId, extraParams = {}) {
   const params = new URLSearchParams()
   params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'profileId', extraParams.profileId)
+  appendOptionalParam(params, 'taskType', extraParams.taskType)
   appendOptionalParam(params, 'scope', extraParams.scope)
   appendOptionalParam(params, 'query', extraParams.query)
   appendOptionalParam(params, 'status', extraParams.status)
@@ -560,8 +605,19 @@ async function fetchAiContextText(context, path, projectId, extraParams = {}) {
   return await readDataSpecJson(response)
 }
 
-function scopedCatalogParams(args) {
+async function fetchProfileResource(context, projectId) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'profile', context.defaultProfileSelection.profileId ?? context.defaultProfileSelection.taskType)
+  const response = await context.fetchFn(`${context.server}/api/ai-profiles?${params.toString()}`, {
+    headers: dataSpecHeaders(context.apiToken)
+  })
+  return await readDataSpecJson(response)
+}
+
+function scopedCatalogParams(args, context) {
   return {
+    ...resolveProfileSelection(args, context.defaultProfileSelection),
     scope: normalizeOptionalText(args.scope),
     query: normalizeOptionalText(args.query),
     status: normalizeOptionalText(args.status),
@@ -583,6 +639,29 @@ function normalizeOptionalText(value) {
   }
   const normalized = String(value).trim()
   return normalized === '' ? undefined : normalized
+}
+
+function resolveProfileSelection(input = {}, fallback = {}) {
+  const explicitProfile = normalizeOptionalText(input.profileId ?? input.aiProfile)
+  const explicitTaskType = normalizeOptionalText(input.taskType)
+  if (explicitProfile || explicitTaskType) {
+    return profileSelection(explicitProfile, explicitTaskType)
+  }
+  return profileSelection(
+    normalizeOptionalText(fallback.profileId ?? fallback.aiProfile),
+    normalizeOptionalText(fallback.taskType)
+  )
+}
+
+function profileSelection(profileId, taskType) {
+  const selection = {}
+  if (profileId) {
+    selection.profileId = profileId
+  }
+  if (taskType) {
+    selection.taskType = taskType
+  }
+  return selection
 }
 
 async function readDataSpecJson(response) {

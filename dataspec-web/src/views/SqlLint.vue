@@ -8,9 +8,38 @@
       </el-button>
     </div>
     <div class="fix-policy-toolbar">
+      <div class="policy-control profile-control">
+        <span class="policy-label">AI 模式</span>
+        <el-select
+          v-model="selectedProfileId"
+          :loading="profileLoading"
+          size="small"
+          class="profile-select"
+          clearable
+          placeholder="默认模式"
+          @change="handleProfileChange"
+        >
+          <el-option
+            v-for="profile in aiProfiles"
+            :key="profile.profileId"
+            :label="profile.displayName || profile.profileId"
+            :value="profile.profileId"
+          />
+        </el-select>
+        <el-tag v-if="selectedAiProfile?.taskType" size="small" type="info">
+          {{ selectedAiProfile.taskType }}
+        </el-tag>
+      </div>
+      <el-switch
+        v-model="useProfileFixPolicy"
+        size="small"
+        :disabled="!selectedProfileId"
+        active-text="profile 策略"
+        inactive-text="手动策略"
+      />
       <div class="policy-control">
         <span class="policy-label">修复模式</span>
-        <el-radio-group v-model="fixPolicyMode" size="small">
+        <el-radio-group v-model="fixPolicyMode" size="small" :disabled="profileFixPolicyActive">
           <el-radio-button label="GENERATE">生成</el-radio-button>
           <el-radio-button label="DRY_RUN">dry-run</el-radio-button>
           <el-radio-button label="DISABLED">关闭</el-radio-button>
@@ -18,13 +47,24 @@
       </div>
       <div class="policy-control">
         <span class="policy-label">最高风险</span>
-        <el-select v-model="fixMaxRiskLevel" size="small" class="risk-select">
+        <el-select
+          v-model="fixMaxRiskLevel"
+          size="small"
+          class="risk-select"
+          :disabled="profileFixPolicyActive"
+        >
           <el-option label="低" value="LOW" />
           <el-option label="中" value="MEDIUM" />
           <el-option label="高" value="HIGH" />
         </el-select>
       </div>
-      <el-switch v-model="includeFixExplanations" size="small" active-text="解释" inactive-text="简略" />
+      <el-switch
+        v-model="includeFixExplanations"
+        size="small"
+        :disabled="profileFixPolicyActive"
+        active-text="解释"
+        inactive-text="简略"
+      />
     </div>
 
     <div class="lint-content">
@@ -358,8 +398,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as monaco from 'monaco-editor'
+import { listAiProfiles } from '@/api/aiProfile'
 import { getLintRecord, lintSql, listLintRecords } from '@/api/lint'
 import { useProjectStore } from '@/stores/project'
+import {
+  readSelectedAiProfile,
+  resolveSelectedAiProfile,
+  saveSelectedAiProfile
+} from '@/utils/aiProfileSelection'
 import {
   diagnosticLevelLabel,
   diagnosticSummaryTagType,
@@ -367,9 +413,11 @@ import {
   dialectSummary
 } from '@/utils/dialectDiagnostics'
 import type {
+  AiTaskProfile,
   FixChange,
   FixPolicy,
   LintIssue,
+  LintRequest,
   LintResult,
   RecordDetail,
   SqlCheckRecord,
@@ -389,6 +437,10 @@ const loadingRecordId = ref<number | null>(null)
 const activeRecord = ref<RecordDetail | null>(null)
 const recordDialogVisible = ref(false)
 const historyActiveNames = ref<string[]>([])
+const profileLoading = ref(false)
+const aiProfiles = ref<AiTaskProfile[]>([])
+const selectedProfileId = ref('')
+const useProfileFixPolicy = ref(true)
 const fixPolicyMode = ref<NonNullable<FixPolicy['mode']>>('GENERATE')
 const fixMaxRiskLevel = ref<NonNullable<FixPolicy['maxRiskLevel']>>('MEDIUM')
 const includeFixExplanations = ref(true)
@@ -430,6 +482,10 @@ const currentFixPolicy = computed<FixPolicy>(() => ({
   maxRiskLevel: fixMaxRiskLevel.value,
   includeExplanations: includeFixExplanations.value
 }))
+const selectedAiProfile = computed(() =>
+  aiProfiles.value.find((profile) => profile.profileId === selectedProfileId.value) ?? null
+)
+const profileFixPolicyActive = computed(() => Boolean(selectedProfileId.value && useProfileFixPolicy.value))
 const fixChanges = computed<FixChange[]>(() => lintResult.value?.fixChanges ?? [])
 const hasFixPlan = computed(() => Boolean(
   lintResult.value?.fixSummary ||
@@ -457,8 +513,12 @@ onMounted(() => {
   }
   if (projectStore.currentProjectId) {
     void loadRecords()
+    void loadAiProfiles()
   } else if (!projectStore.loading && projectStore.projects.length === 0) {
-    void projectStore.loadProjects().then(() => loadRecords())
+    void projectStore.loadProjects().then(() => {
+      void loadRecords()
+      void loadAiProfiles()
+    })
   }
 })
 
@@ -471,6 +531,7 @@ watch(
   () => {
     recordCurrent.value = 1
     void loadRecords()
+    void loadAiProfiles()
   }
 )
 
@@ -492,11 +553,17 @@ async function handleLint() {
 
   linting.value = true
   try {
-    lintResult.value = await lintSql({
+    const request: LintRequest = {
       sql,
-      projectId: projectStore.currentProjectId ?? undefined,
-      fixPolicy: currentFixPolicy.value
-    })
+      projectId: projectStore.currentProjectId ?? undefined
+    }
+    if (selectedProfileId.value) {
+      request.profileId = selectedProfileId.value
+    }
+    if (!profileFixPolicyActive.value) {
+      request.fixPolicy = currentFixPolicy.value
+    }
+    lintResult.value = await lintSql(request)
     recordCurrent.value = 1
     await loadRecords()
   } finally {
@@ -521,6 +588,57 @@ async function loadRecords() {
     recordSize.value = page.size ?? recordSize.value
   } finally {
     recordLoading.value = false
+  }
+}
+
+async function loadAiProfiles() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    aiProfiles.value = []
+    selectedProfileId.value = ''
+    return
+  }
+
+  profileLoading.value = true
+  try {
+    const storedProfile = readSelectedAiProfile(projectId)
+    const catalog = await listAiProfiles(projectId, storedProfile || undefined)
+    aiProfiles.value = catalog.profiles ?? []
+    selectedProfileId.value = resolveSelectedAiProfile(storedProfile, catalog.selectedProfileId || catalog.defaultProfileId)
+    if (selectedProfileId.value) {
+      saveSelectedAiProfile(projectId, selectedProfileId.value)
+    }
+    applyProfileFixPolicy(selectedAiProfile.value)
+  } finally {
+    profileLoading.value = false
+  }
+}
+
+function handleProfileChange(value?: string) {
+  const profileId = value || ''
+  selectedProfileId.value = profileId
+  saveSelectedAiProfile(projectStore.currentProjectId, profileId)
+  if (!profileId) {
+    useProfileFixPolicy.value = false
+    return
+  }
+  useProfileFixPolicy.value = true
+  applyProfileFixPolicy(selectedAiProfile.value)
+}
+
+function applyProfileFixPolicy(profile: AiTaskProfile | null) {
+  const policy = profile?.fixedSqlPolicy
+  if (!policy) {
+    return
+  }
+  if (policy.mode) {
+    fixPolicyMode.value = policy.mode
+  }
+  if (policy.maxRiskLevel) {
+    fixMaxRiskLevel.value = policy.maxRiskLevel
+  }
+  if (typeof policy.includeExplanations === 'boolean') {
+    includeFixExplanations.value = policy.includeExplanations
   }
 }
 
@@ -841,9 +959,17 @@ function buildDiffLines(originalLines: string[], fixedLines: string[]) {
   gap: 8px;
 }
 
+.profile-control {
+  min-width: 300px;
+}
+
 .policy-label {
   color: #606266;
   font-size: 13px;
+}
+
+.profile-select {
+  width: 190px;
 }
 
 .risk-select {

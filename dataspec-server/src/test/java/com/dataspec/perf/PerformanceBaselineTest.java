@@ -143,7 +143,8 @@ class PerformanceBaselineTest {
                 sqlCheckRecordService,
                 aiJobRecordService,
                 ruleExemptionService,
-                new PromptTemplateRegistry()
+                new PromptTemplateRegistry(),
+                null
         );
         return new AiContextExportService(
                 ruleConfigService,
@@ -155,7 +156,8 @@ class PerformanceBaselineTest {
                 aiJobRecordService,
                 ruleExemptionService,
                 ruleBaselineService,
-                new PromptTemplateRegistry()
+                new PromptTemplateRegistry(),
+                null
         );
     }
 

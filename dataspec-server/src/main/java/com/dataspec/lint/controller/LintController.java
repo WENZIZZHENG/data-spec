@@ -35,7 +35,7 @@ public class LintController {
      */
     @PostMapping
     public R<LintResult> lint(@Valid @RequestBody LintRequest req) {
-        LintResult result = sqlLintService.lint(req.sql(), req.projectId(), req.fixPolicy());
+        LintResult result = sqlLintService.lint(req.sql(), req.projectId(), req.fixPolicy(), req.profileId(), req.taskType());
         return R.ok(result);
     }
 
@@ -73,6 +73,8 @@ public class LintController {
     public record LintRequest(
             @NotBlank(message = "SQL 不能为空") String sql,
             Long projectId,
+            String profileId,
+            String taskType,
             FixPolicy fixPolicy
     ) {}
 

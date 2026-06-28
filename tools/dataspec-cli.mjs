@@ -89,6 +89,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'doctor') {
       return await runDoctor(rest, io, fetchFn)
     }
+    if (command === 'profile' || command === 'profiles') {
+      return await runProfile(rest, io, fetchFn)
+    }
     if (command === 'workflow' || command === 'workflows') {
       return runWorkflow(rest, io)
     }
@@ -100,7 +103,7 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
 }
 
 async function runLint(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'dataspec-token'])
+  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'dataspec-token', 'profile', 'task-type', 'taskType'])
   const config = loadDataSpecConfig(cliCwd(io))
   const sqlPath = positional[0]
   if (!sqlPath) {
@@ -116,12 +119,13 @@ async function runLint(args, io, fetchFn) {
   }
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
+  const profileSelection = resolveProfileSelection(options, config)
   const sql = sqlPath === '-' ? await io.readStdin() : await readFile(sqlPath, 'utf8')
 
   const response = await fetchFn(`${server}/api/lint`, {
     method: 'POST',
     headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ sql, projectId })
+    body: JSON.stringify({ sql, projectId, ...profileSelection })
   })
   const payload = await readJsonResponse(response)
   const result = unwrapResponse(payload)
@@ -183,7 +187,17 @@ function runWorkflow(args, io) {
 }
 
 async function runLintFiles(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'dataspec-token', 'delivery-package', 'batch-package'])
+  const { positional, options } = parseArgs(args, [
+    'project',
+    'format',
+    'server',
+    'dataspec-token',
+    'delivery-package',
+    'batch-package',
+    'profile',
+    'task-type',
+    'taskType'
+  ])
   const config = loadDataSpecConfig(cliCwd(io))
   const inputPaths = positional.length > 0 ? positional : resolveDefaultPaths(config)
   if (inputPaths.length === 0) {
@@ -197,7 +211,7 @@ async function runLintFiles(args, io, fetchFn) {
   const deliveryPackagePath = resolveDeliveryPackagePath(options)
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
-  const output = await lintSqlFiles(inputPaths, projectId, server, fetchFn, apiToken)
+  const output = await lintSqlFiles(inputPaths, projectId, server, fetchFn, apiToken, resolveProfileSelection(options, config))
   if (deliveryPackagePath) {
     await writeDeliveryPackage(deliveryPackagePath, buildLintFilesDeliveryPackage(output, projectId))
   }
@@ -267,7 +281,10 @@ async function runExportContext(args, io, fetchFn) {
     'snapshotId',
     'snapshot-version',
     'snapshotVersion',
-    'cache-ttl-days'
+    'cache-ttl-days',
+    'profile',
+    'task-type',
+    'taskType'
   ], ['cache'])
   const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length > 0) {
@@ -281,7 +298,8 @@ async function runExportContext(args, io, fetchFn) {
   }
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
-  const url = buildAiContextPackageUrl(server, projectId, options)
+  const exportOptions = { ...options, ...resolveProfileSelection(options, config) }
+  const url = buildAiContextPackageUrl(server, projectId, exportOptions)
   const response = await fetchFn(url, { headers: dataSpecHeaders(apiToken) })
   if (!response.ok) {
     throw new Error(`导出 AI Context 失败，HTTP ${response.status}`)
@@ -298,7 +316,7 @@ async function runExportContext(args, io, fetchFn) {
       rootDir: config.rootDir,
       projectId,
       server,
-      options,
+      options: exportOptions,
       ttlDays: parseCacheTtlDays(options['cache-ttl-days'])
     })
     io.writeOut(`已缓存 AI Context 到 ${cache.cacheDir}\n`)
@@ -410,7 +428,7 @@ async function runGenerateDdl(args, io, fetchFn) {
 async function runDoctor(args, io, fetchFn) {
   const { positional, options } = parseArgs(
     args,
-    ['project', 'format', 'server', 'dataspec-token'],
+    ['project', 'format', 'server', 'dataspec-token', 'profile', 'task-type', 'taskType'],
     ['check-openapi']
   )
   if (positional.length > 0) {
@@ -428,6 +446,84 @@ async function runDoctor(args, io, fetchFn) {
     io.writeOut(formatDoctorText(result))
   }
   return result.ok ? 0 : 1
+}
+
+async function runProfile(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (!subcommand || subcommand === 'list' || subcommand.startsWith('--')) {
+    const { positional, options } = parseArgs(subcommand === 'list' ? rest : args, [
+      'project',
+      'format',
+      'server',
+      'dataspec-token',
+      'profile',
+      'task-type',
+      'taskType'
+    ])
+    if (positional.length > 0) {
+      throw new Error(`profile list 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const projectId = parseProjectId(options.project ?? config.projectId)
+    const format = options.format ?? 'json'
+    if (!['json', 'text'].includes(format)) {
+      throw new Error('profile list 仅支持 --format text|json')
+    }
+    const server = normalizeServer(options.server ?? config.server)
+    const apiToken = resolveDataSpecToken(options, config)
+    const catalog = await fetchProfileCatalog({
+      server,
+      projectId,
+      apiToken,
+      fetchFn,
+      selection: resolveProfileSelection(options, config)
+    })
+    if (format === 'json') {
+      io.writeOut(`${JSON.stringify(catalog, null, 2)}\n`)
+    } else {
+      io.writeOut(formatProfileCatalogText(catalog))
+    }
+    return 0
+  }
+
+  if (subcommand === 'show') {
+    const { positional, options } = parseArgs(rest, [
+      'project',
+      'format',
+      'server',
+      'dataspec-token',
+      'profile',
+      'task-type',
+      'taskType'
+    ])
+    const config = loadDataSpecConfig(cliCwd(io))
+    const selection = resolveProfileSelection(options, config)
+    const profileKey = positional[0] ?? selection.profileId ?? selection.taskType
+    if (!profileKey) {
+      throw new Error('profile show 需要提供 profile id、taskType 或配置 aiProfile/taskType')
+    }
+    if (positional.length > 1) {
+      throw new Error(`profile show 只接受一个 profile 或 taskType，收到: ${positional.slice(1).join(', ')}`)
+    }
+    const projectId = parseProjectId(options.project ?? config.projectId)
+    const format = options.format ?? 'json'
+    if (!['json', 'text'].includes(format)) {
+      throw new Error('profile show 仅支持 --format text|json')
+    }
+    const server = normalizeServer(options.server ?? config.server)
+    const apiToken = resolveDataSpecToken(options, config)
+    const detail = await fetchProfileDetail({ server, projectId, apiToken, fetchFn, profileKey })
+    if (!detail.profile) {
+      throw new Error(`未知 AI profile 或 taskType: ${profileKey}。支持的 profile: ${(detail.supportedProfileIds ?? []).join(', ')}`)
+    }
+    if (format === 'json') {
+      io.writeOut(`${JSON.stringify(detail, null, 2)}\n`)
+    } else {
+      io.writeOut(formatProfileDetailText(detail))
+    }
+    return 0
+  }
+  throw new Error(`未知 profile 子命令: ${subcommand}。支持: list, show`)
 }
 
 async function runInit(args, io, fetchFn) {
@@ -530,6 +626,8 @@ function parseArgs(args, allowedOptions, flagOptions = [], repeatableOptions = [
 function buildAiContextPackageUrl(server, projectId, options) {
   const params = new URLSearchParams()
   params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'profileId', options.profileId)
+  appendOptionalParam(params, 'taskType', options.taskType)
   appendOptionalParam(params, 'scope', options.scope)
   appendOptionalParam(params, 'query', options.query)
   appendOptionalParam(params, 'status', options.status)
@@ -726,6 +824,8 @@ function aiContextExportOptionsForMetadata(options) {
     query: options.query ?? null,
     status: options.status ?? null,
     limit: options.limit !== undefined ? parseLimit(options.limit) : null,
+    profileId: options.profileId ?? null,
+    taskType: options.taskType ?? null,
     snapshotId: snapshotId !== undefined ? parsePositiveInteger(snapshotId, 'snapshot id') : null,
     snapshotVersion: snapshotVersion ?? null
   })
@@ -797,6 +897,15 @@ async function buildDoctorResult({ config, options, io, fetchFn }) {
   checks.push(await checkAuth(server, fetchFn, apiToken))
   checks.push(await checkProject(server, fetchFn, projectId, apiToken))
   checks.push(await checkDefaultPaths(config))
+  checks.push(await checkAiProfile({
+    config,
+    options,
+    server,
+    projectId,
+    apiToken,
+    fetchFn,
+    serverReachable: apiDocsResult.check.status === 'pass'
+  }))
   checks.push(await checkOpenapiStatus({
     server,
     apiDocsReachable: apiDocsResult.check.status === 'pass',
@@ -898,6 +1007,87 @@ async function checkDefaultPaths(config) {
     })
   }
   return passCheck('defaultPaths', `defaultPaths 可访问: ${paths.join(', ')}`, { paths })
+}
+
+async function checkAiProfile({ config, options, server, projectId, apiToken, fetchFn, serverReachable }) {
+  const selection = resolveProfileSelection(options, config)
+  const profileKey = selection.profileId ?? selection.taskType
+  const details = {
+    profileId: selection.profileId ?? null,
+    taskType: selection.taskType ?? null,
+    source: profileKey ? 'config-or-options' : 'service-default'
+  }
+  if (!profileKey) {
+    return passCheck('ai-profile', '未配置 AI profile；将使用服务端默认 create-table', details)
+  }
+  if (!serverReachable) {
+    return warnCheck('ai-profile', '本地 AI profile 配置形状有效，但 DataSpec 服务不可用，无法远端校验', {
+      ...details,
+      remoteStatus: 'unavailable'
+    })
+  }
+  try {
+    const detail = await fetchProfileDetail({ server, projectId, apiToken, fetchFn, profileKey })
+    if (!detail.profile) {
+      return failCheck('ai-profile', `未知 AI profile 或 taskType: ${profileKey}`, {
+        ...details,
+        supportedProfileIds: detail.supportedProfileIds ?? [],
+        supportedTaskTypes: detail.supportedTaskTypes ?? []
+      })
+    }
+    return passCheck('ai-profile', `AI profile 可用: ${detail.profile.profileId}`, {
+      ...details,
+      profileId: detail.profile.profileId,
+      taskType: detail.profile.taskType,
+      recommendedCommand: detail.profile.recommendedCommands?.[0] ?? null,
+      diagnostics: detail.diagnostics ?? []
+    })
+  } catch (error) {
+    return failCheck('ai-profile', `AI profile 远端校验失败: ${error.message}`, details)
+  }
+}
+
+async function fetchProfileCatalog({ server, projectId, apiToken, fetchFn, selection = {} }) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'profile', selection.profileId ?? selection.taskType)
+  const response = await fetchFn(`${server}/api/ai-profiles?${params.toString()}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  return unwrapResponse(await readJsonResponse(response))
+}
+
+async function fetchProfileDetail({ server, projectId, apiToken, fetchFn, profileKey }) {
+  const params = new URLSearchParams()
+  appendOptionalParam(params, 'projectId', projectId)
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  const response = await fetchFn(`${server}/api/ai-profiles/${encodeURIComponent(profileKey)}${suffix}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  return unwrapResponse(await readJsonResponse(response))
+}
+
+function resolveProfileSelection(options = {}, config = {}) {
+  const explicitProfile = normalizeOptionalCliText(options.profile)
+  const explicitTaskType = normalizeOptionalCliText(options.taskType ?? options['task-type'])
+  if (explicitProfile || explicitTaskType) {
+    return {
+      profileId: explicitProfile,
+      taskType: explicitTaskType
+    }
+  }
+  return {
+    profileId: normalizeOptionalCliText(config.aiProfile),
+    taskType: normalizeOptionalCliText(config.taskType)
+  }
+}
+
+function normalizeOptionalCliText(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+  const normalized = String(value).trim()
+  return normalized || undefined
 }
 
 async function checkOpenapiStatus({ server, apiDocsReachable, checkDrift, runDriftCheck = runOpenapiDriftCheck }) {
@@ -1056,6 +1246,74 @@ function formatDoctorText(result) {
   }
   lines.push('', result.ok ? '结果: 可用' : '结果: 存在需要处理的问题', '')
   return lines.join('\n')
+}
+
+function formatProfileCatalogText(catalog) {
+  const lines = [
+    'DataSpec AI Profiles',
+    `projectId: ${catalog.projectId ?? '未配置'}`,
+    `selected: ${catalog.selectedProfileId ?? catalog.defaultProfileId ?? '未配置'}`,
+    ''
+  ]
+  for (const profile of catalog.profiles ?? []) {
+    lines.push(`- ${profile.profileId} (${profile.taskType}) ${profile.displayName ?? ''}`.trim())
+    if (profile.description) {
+      lines.push(`  ${profile.description}`)
+    }
+    if (profile.contextScope) {
+      lines.push(`  context: ${formatProfileScope(profile.contextScope)}`)
+    }
+    if (profile.fixedSqlPolicy) {
+      lines.push(`  fixedSql: ${profile.fixedSqlPolicy.mode ?? 'DEFAULT'} / ${profile.fixedSqlPolicy.maxRiskLevel ?? 'DEFAULT'}`)
+    }
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+function formatProfileDetailText(detail) {
+  const profile = detail.profile
+  const lines = [
+    'DataSpec AI Profile',
+    `projectId: ${detail.projectId ?? '未配置'}`,
+    `profile: ${profile.profileId}`,
+    `taskType: ${profile.taskType}`,
+    `name: ${profile.displayName ?? ''}`,
+    ''
+  ]
+  if (profile.description) {
+    lines.push(profile.description, '')
+  }
+  lines.push(`context: ${formatProfileScope(profile.contextScope ?? {})}`)
+  if (profile.fixedSqlPolicy) {
+    lines.push(`fixedSql: ${profile.fixedSqlPolicy.mode ?? 'DEFAULT'} / ${profile.fixedSqlPolicy.maxRiskLevel ?? 'DEFAULT'}`)
+  }
+  if (profile.outputFormat) {
+    lines.push(`output: ${profile.outputFormat.format ?? 'json'}`)
+  }
+  if ((profile.recommendedCommands ?? []).length > 0) {
+    lines.push('', 'recommended commands:')
+    for (const command of profile.recommendedCommands) {
+      lines.push(`  - ${command}`)
+    }
+  }
+  if ((detail.diagnostics ?? []).length > 0) {
+    lines.push('', 'diagnostics:')
+    for (const diagnostic of detail.diagnostics) {
+      lines.push(`  - [${diagnostic.status}] ${diagnostic.code}: ${diagnostic.message}`)
+    }
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+function formatProfileScope(scope) {
+  return [
+    scope.scope ? `scope=${scope.scope}` : null,
+    scope.query ? `query=${scope.query}` : null,
+    scope.status ? `status=${scope.status}` : null,
+    scope.limit ? `limit=${scope.limit}` : null
+  ].filter(Boolean).join(', ') || 'default'
 }
 
 function resolveInitDefaultPaths(rawValue, existingPaths = []) {
@@ -1282,7 +1540,7 @@ function parseOptionalBoolean(value, label) {
   throw new Error(`无效 ${label}: ${value}`)
 }
 
-async function lintSqlFiles(paths, projectId, server, fetchFn, apiToken) {
+async function lintSqlFiles(paths, projectId, server, fetchFn, apiToken, profileSelection = {}) {
   const files = await collectSqlFiles(paths)
   const results = []
 
@@ -1291,7 +1549,7 @@ async function lintSqlFiles(paths, projectId, server, fetchFn, apiToken) {
     const response = await fetchFn(`${server}/api/lint`, {
       method: 'POST',
       headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ sql, projectId })
+      body: JSON.stringify({ sql, projectId, ...profileSelection })
     })
     const payload = await readJsonResponse(response)
     results.push({
@@ -2055,25 +2313,28 @@ function helpText() {
   return `DataSpec CLI
 
 Usage:
-  node tools/dataspec-cli.mjs lint <path|-> [--project <id>] --format text|json [--server <url>] [--dataspec-token <token>]
-  node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] --format json [--delivery-package <json>] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs lint <path|-> [--project <id>] [--profile <id>|--task-type <type>] --format text|json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] [--profile <id>|--task-type <type>] --format json [--delivery-package <json>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>]
-  node tools/dataspec-cli.mjs export-context [--project <id>] [--output <zip>] [--cache] [--cache-ttl-days <days>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs export-context [--project <id>] [--profile <id>|--task-type <type>] [--output <zip>] [--cache] [--cache-ttl-days <days>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
-  node tools/dataspec-cli.mjs doctor [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
+  node tools/dataspec-cli.mjs doctor [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
+  node tools/dataspec-cli.mjs profile list [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs profile show <id|taskType> [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs workflow list [--format text|json]
   node tools/dataspec-cli.mjs workflow show <id> [--format text|json]
 
 Options:
   --project 可由 .dataspec/config.json 的 projectId 提供
   --server  可由 .dataspec/config.json 的 server 提供
+  --profile/--task-type 可由 .dataspec/config.json 的 aiProfile/taskType 提供，显式参数优先
   --dataspec-token 可由 .dataspec/config.json 的 apiToken 或 DATASPEC_TOKEN 环境变量提供
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
   lint-files 可通过 --delivery-package 或 --batch-package 写出 AI 批量任务交付包，stdout JSON 保持原结构
-  export-context 默认导出完整包；传 --cache 会刷新 .dataspec/context/ 离线缓存；传 --scope/--query/--status/--limit 时导出按需包；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
+  export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   doctor 默认做轻量 OpenAPI 状态和 AI Context 缓存检查；传 --check-openapi 时执行完整 schema 漂移检查

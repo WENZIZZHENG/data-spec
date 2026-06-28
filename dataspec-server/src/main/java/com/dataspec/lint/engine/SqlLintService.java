@@ -2,6 +2,7 @@ package com.dataspec.lint.engine;
 
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.service.AiJobRecordService;
+import com.dataspec.aiprofile.service.AiTaskProfileService;
 import com.dataspec.dialect.service.SqlDialectCompatibilityService;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.*;
@@ -35,6 +36,7 @@ public class SqlLintService {
     private final AiJobRecordService aiJobRecordService;
     private final RuleExemptionService ruleExemptionService;
     private final PromptTemplateRegistry promptTemplateRegistry;
+    private final AiTaskProfileService aiTaskProfileService;
     private final SqlIssueSourceSpanResolver sourceSpanResolver = new SqlIssueSourceSpanResolver();
     private final SqlDiffGenerator sqlDiffGenerator = new SqlDiffGenerator();
     private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
@@ -57,11 +59,19 @@ public class SqlLintService {
      * 校验 SQL（指定项目和 fixedSql 策略，根据项目规则配置过滤）
      */
     public LintResult lint(String sql, Long projectId, FixPolicy fixPolicy) {
+        return lint(sql, projectId, fixPolicy, null, null);
+    }
+
+    /**
+     * 校验 SQL（指定项目、fixedSql 策略和可选 AI profile）
+     */
+    public LintResult lint(String sql, Long projectId, FixPolicy fixPolicy, String profileId, String taskType) {
+        FixPolicy effectiveFixPolicy = fixPolicy != null ? fixPolicy : profileFixPolicy(profileId, taskType);
         // 1. 解析 SQL
         List<TableDef> tables = sqlParserService.parse(sql);
         if (tables.isEmpty()) {
             LintResult emptyResult = LintResult.of(tables, List.of());
-            applyFixedSqlPlan(emptyResult, fixedSqlGenerator.generatePlan(emptyResult, fixPolicy), sql);
+            applyFixedSqlPlan(emptyResult, fixedSqlGenerator.generatePlan(emptyResult, effectiveFixPolicy), sql);
             emptyResult.setDialectDiagnostics(dialectCompatibilityService.diagnoseSql(sql));
             // 无可解析表时仍落库一条记录,用于命中率统计与审计
             try {
@@ -144,7 +154,7 @@ public class SqlLintService {
 
         LintResult result = LintResult.of(tables, issues);
         // 基于确定性修复建议和请求级策略重建修正 SQL/计划
-        applyFixedSqlPlan(result, fixedSqlGenerator.generatePlan(result, fixPolicy), sql);
+        applyFixedSqlPlan(result, fixedSqlGenerator.generatePlan(result, effectiveFixPolicy), sql);
         result.setDialectDiagnostics(dialectCompatibilityService.diagnoseSql(sql, result.getFixedSql() != null));
 
         // 落库检查记录(失败不阻断主流程,仅记录日志)
@@ -168,6 +178,14 @@ public class SqlLintService {
         result.setFixNextActions(plan.getFixNextActions());
         result.setFixedSql(plan.getFixedSql());
         result.setFixedSqlDiff(sqlDiffGenerator.generate(sql, plan.getFixedSql()));
+    }
+
+    private FixPolicy profileFixPolicy(String profileId, String taskType) {
+        String profile = profileId != null && !profileId.isBlank() ? profileId : taskType;
+        if (profile == null || profile.isBlank() || aiTaskProfileService == null) {
+            return null;
+        }
+        return aiTaskProfileService.resolveFixedSqlPolicy(profile);
     }
 
     private void recordAiReplayJob(Long projectId, String sql, LintResult result, SqlCheckRecord record) {

@@ -43,7 +43,8 @@ test('resources list and read use configured project', async () => {
     'dataspec://project/7/field-catalog',
     'dataspec://project/7/database-rules',
     'dataspec://project/7/rules-yaml',
-    'dataspec://project/7/workflow-recipes'
+    'dataspec://project/7/workflow-recipes',
+    'dataspec://project/7/ai-task-profiles'
   ])
 
   const read = await handler({
@@ -82,6 +83,38 @@ test('workflow recipes resource is served locally without external service', asy
   assert.ok(payload.recipes[0].steps.some((step) => step.command.includes('export-context')))
 })
 
+test('ai task profiles resource is read from backend with configured profile', async () => {
+  const calls = []
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local',
+    aiProfile: 'sql-fix'
+  }, async (url) => {
+    calls.push(url)
+    return jsonResponse({
+      code: 200,
+      data: {
+        selectedProfileId: 'sql-fix',
+        profiles: [{ profileId: 'sql-fix', taskType: 'SQL_FIX' }],
+        diagnostics: [{ code: 'PROFILE_READY', status: 'pass' }]
+      }
+    })
+  })
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 32,
+    method: 'resources/read',
+    params: { uri: 'dataspec://project/7/ai-task-profiles' }
+  })
+
+  const payload = JSON.parse(read.result.contents[0].text)
+  assert.equal(calls[0], 'http://dataspec.local/api/ai-profiles?projectId=7&profile=sql-fix')
+  assert.equal(read.result.contents[0].mimeType, 'application/json')
+  assert.equal(payload.selectedProfileId, 'sql-fix')
+  assert.equal(payload.profiles[0].taskType, 'SQL_FIX')
+})
+
 test('prompts list and get return DataSpec workflow guidance', async () => {
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
 
@@ -104,6 +137,7 @@ test('prompts list and get return DataSpec workflow guidance', async () => {
 
   assert.match(prompt.result.messages[0].content.text, /用户订单表/)
   assert.match(prompt.result.messages[0].content.text, /DataSpec/)
+  assert.match(prompt.result.messages[0].content.text, /ai-task-profiles/)
 })
 
 test('lint_sql tool returns structured lint result and json text content', async () => {
@@ -139,6 +173,37 @@ test('lint_sql tool returns structured lint result and json text content', async
   assert.equal(response.result.structuredContent.errorCount, 1)
   assert.equal(JSON.parse(response.result.content[0].text).issues[0].ruleCode, 'table_naming_snake_case')
   assert.equal(response.result.isError, false)
+})
+
+test('lint_sql tool forwards configured and explicit profile hints', async () => {
+  const calls = []
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local',
+    aiProfile: 'sql-fix'
+  }, async (url, options) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] }
+    })
+  })
+
+  await handler({
+    jsonrpc: '2.0',
+    id: 61,
+    method: 'tools/call',
+    params: {
+      name: 'lint_sql',
+      arguments: { sql: 'CREATE TABLE users (id bigint);', taskType: 'PR_REVIEW' }
+    }
+  })
+
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    sql: 'CREATE TABLE users (id bigint);',
+    projectId: 7,
+    taskType: 'PR_REVIEW'
+  })
 })
 
 test('get_field_catalog tool parses json catalog when possible', async () => {
@@ -185,6 +250,32 @@ test('get_field_catalog tool passes scoped options', async () => {
   })
 
   assert.equal(response.result.structuredContent.contextScope.scope, 'domain')
+})
+
+test('get_field_catalog tool forwards configured profile and explicit scope together', async () => {
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local',
+    aiProfile: 'minimal-context'
+  }, async (url) => {
+    assert.equal(
+      url,
+      'http://dataspec.local/api/ai-context/field-catalog?projectId=7&profileId=minimal-context&scope=field&limit=5'
+    )
+    return jsonResponse({ code: 200, data: '{"fields":[]}' })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 62,
+    method: 'tools/call',
+    params: {
+      name: 'get_field_catalog',
+      arguments: { scope: 'field', limit: 5 }
+    }
+  })
+
+  assert.deepEqual(response.result.structuredContent.fields, [])
 })
 
 test('search_field_catalog tool reads scoped field catalog', async () => {
@@ -449,6 +540,39 @@ test('parseServerArgs reads local config defaults and keeps explicit overrides',
       projectId: 8,
       server: 'http://override.local',
       apiToken: 'ds_arg_token'
+    })
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('parseServerArgs reads and overrides local profile defaults', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-mcp-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({
+        projectId: 7,
+        server: 'http://dataspec.local',
+        aiProfile: 'sql-fix',
+        taskType: 'SQL_FIX'
+      }),
+      'utf8'
+    )
+
+    assert.deepEqual(parseServerArgs([], dir), {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      apiToken: undefined,
+      profileId: 'sql-fix',
+      taskType: 'SQL_FIX'
+    })
+    assert.deepEqual(parseServerArgs(['--task-type', 'PR_REVIEW'], dir), {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      apiToken: undefined,
+      taskType: 'PR_REVIEW'
     })
   } finally {
     await rm(dir, { recursive: true, force: true })

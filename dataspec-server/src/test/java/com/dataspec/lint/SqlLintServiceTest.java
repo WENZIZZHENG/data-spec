@@ -5,6 +5,10 @@ import com.dataspec.aireplay.entity.AiJobRecord;
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.model.AiJobRecordDetail;
 import com.dataspec.aireplay.service.AiJobRecordService;
+import com.dataspec.aiprofile.model.AiTaskProfile;
+import com.dataspec.aiprofile.model.AiTaskProfileCatalog;
+import com.dataspec.aiprofile.model.AiTaskProfileDetail;
+import com.dataspec.aiprofile.service.AiTaskProfileService;
 import com.dataspec.lint.engine.FixedSqlGenerator;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.engine.SqlParserService;
@@ -31,6 +35,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -82,7 +87,8 @@ class SqlLintServiceTest {
                 recordService,
                 new NoopAiJobRecordService(),
                 new NoopRuleExemptionService(),
-                new PromptTemplateRegistry()
+                new PromptTemplateRegistry(),
+                null
         );
 
         // 验收示例:含 create_time 且缺 created_at 等必备列
@@ -121,7 +127,8 @@ class SqlLintServiceTest {
                 recordService,
                 new NoopAiJobRecordService(),
                 new NoopRuleExemptionService(),
-                new PromptTemplateRegistry()
+                new PromptTemplateRegistry(),
+                null
         );
 
         LintResult result = service.lint("""
@@ -168,6 +175,53 @@ class SqlLintServiceTest {
     }
 
     @Test
+    void lintUsesProfileFixedSqlPolicyWhenRequestPolicyIsMissing() {
+        RecordingCheckRecordService recordService = new RecordingCheckRecordService();
+        SqlLintService service = newService(
+                recordService,
+                new NoopAiJobRecordService(),
+                new StaticAiTaskProfileService(FixPolicy.builder()
+                        .mode(FixMode.DISABLED)
+                        .build())
+        );
+
+        LintResult result = service.lint("""
+                CREATE TABLE UserOrder (
+                    id bigserial PRIMARY KEY
+                );
+                """, 1L, null, "sql-fix", null);
+
+        assertNull(result.getFixedSql(), "profile 默认 DISABLED 时不应生成 fixedSql");
+        assertEquals(FixMode.DISABLED, result.getFixPolicy().getMode());
+        assertEquals(FixChangeStatus.SKIPPED, result.getIssues().get(0).getFixStatus());
+    }
+
+    @Test
+    void lintExplicitFixPolicyWinsOverProfileDefault() {
+        RecordingCheckRecordService recordService = new RecordingCheckRecordService();
+        SqlLintService service = newService(
+                recordService,
+                new NoopAiJobRecordService(),
+                new StaticAiTaskProfileService(FixPolicy.builder()
+                        .mode(FixMode.DISABLED)
+                        .build())
+        );
+
+        LintResult result = service.lint("""
+                CREATE TABLE UserOrder (
+                    id bigserial PRIMARY KEY
+                );
+                """, 1L, FixPolicy.builder()
+                .mode(FixMode.GENERATE)
+                .maxRiskLevel(FixRiskLevel.LOW)
+                .build(), "sql-fix", null);
+
+        assertNotNull(result.getFixedSql(), "显式 GENERATE 应覆盖 profile 默认 DISABLED");
+        assertEquals(FixMode.GENERATE, result.getFixPolicy().getMode());
+        assertEquals(FixChangeStatus.APPLIED, result.getIssues().get(0).getFixStatus());
+    }
+
+    @Test
     void lintFillsSourceLocationForTableAndColumnIssues() {
         RecordingCheckRecordService recordService = new RecordingCheckRecordService();
         SqlLintService service = new SqlLintService(
@@ -182,7 +236,8 @@ class SqlLintServiceTest {
                 recordService,
                 new NoopAiJobRecordService(),
                 new NoopRuleExemptionService(),
-                new PromptTemplateRegistry()
+                new PromptTemplateRegistry(),
+                null
         );
 
         LintResult result = service.lint("""
@@ -298,7 +353,8 @@ class SqlLintServiceTest {
                 recordService,
                 new NoopAiJobRecordService(),
                 new NoopRuleExemptionService(),
-                new PromptTemplateRegistry()
+                new PromptTemplateRegistry(),
+                null
         );
 
         LintResult result = service.lint("CREATE TABLE users (id bigint);", null);
@@ -315,6 +371,11 @@ class SqlLintServiceTest {
     }
 
     private SqlLintService newService(SqlCheckRecordService recordService, AiJobRecordService aiJobRecordService) {
+        return newService(recordService, aiJobRecordService, null);
+    }
+
+    private SqlLintService newService(SqlCheckRecordService recordService, AiJobRecordService aiJobRecordService,
+                                      AiTaskProfileService aiTaskProfileService) {
         return new SqlLintService(
                 new SqlParserService(),
                 new EmptyRuleConfigService(),
@@ -324,7 +385,8 @@ class SqlLintServiceTest {
                 recordService,
                 aiJobRecordService,
                 new NoopRuleExemptionService(),
-                new PromptTemplateRegistry()
+                new PromptTemplateRegistry(),
+                aiTaskProfileService
         );
     }
 
@@ -370,7 +432,8 @@ class SqlLintServiceTest {
                 recordService,
                 new NoopAiJobRecordService(),
                 new StaticRuleExemptionService(List.of(exemption)),
-                new PromptTemplateRegistry()
+                new PromptTemplateRegistry(),
+                null
         );
 
         LintResult result = service.lint("""
@@ -564,6 +627,34 @@ class SqlLintServiceTest {
                             issue.setSuppressionReason(exemption.getReason());
                         });
             }
+        }
+    }
+
+    private static class StaticAiTaskProfileService implements AiTaskProfileService {
+        private final FixPolicy policy;
+
+        private StaticAiTaskProfileService(FixPolicy policy) {
+            this.policy = policy;
+        }
+
+        @Override
+        public AiTaskProfileCatalog listProfiles(Long projectId, String selectedProfile) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AiTaskProfileDetail getProfile(Long projectId, String profileOrTaskType) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Optional<AiTaskProfile> findProfile(String profileOrTaskType) {
+            return Optional.empty();
+        }
+
+        @Override
+        public FixPolicy resolveFixedSqlPolicy(String profileOrTaskType) {
+            return policy;
         }
     }
 }

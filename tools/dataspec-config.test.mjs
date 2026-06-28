@@ -21,6 +21,8 @@ test('loads nearest .dataspec config from parent directory', async () => {
         projectId: 7,
         server: 'http://dataspec.local/',
         apiToken: 'ds_test_token',
+        aiProfile: 'sql-fix',
+        taskType: 'SQL_FIX',
         defaultPaths: ['sql', 'db/migrations']
       }),
       'utf8'
@@ -35,6 +37,8 @@ test('loads nearest .dataspec config from parent directory', async () => {
     assert.equal(config.projectId, 7)
     assert.equal(config.server, 'http://dataspec.local')
     assert.equal(config.apiToken, 'ds_test_token')
+    assert.equal(config.aiProfile, 'sql-fix')
+    assert.equal(config.taskType, 'SQL_FIX')
     assert.deepEqual(config.defaultPaths, ['sql', 'db/migrations'])
     assert.deepEqual(resolveDefaultPaths(config), [
       path.join(dir, 'sql'),
@@ -55,7 +59,25 @@ test('returns empty config when .dataspec config is absent', async () => {
     assert.equal(config.projectId, undefined)
     assert.equal(config.server, undefined)
     assert.equal(config.apiToken, undefined)
+    assert.equal(config.aiProfile, undefined)
+    assert.equal(config.taskType, undefined)
     assert.deepEqual(config.defaultPaths, [])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('rejects non-string AI profile defaults', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-config-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({ projectId: 7, aiProfile: 123, taskType: true }),
+      'utf8'
+    )
+
+    assert.throws(() => loadDataSpecConfig(dir), /aiProfile 必须是字符串/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

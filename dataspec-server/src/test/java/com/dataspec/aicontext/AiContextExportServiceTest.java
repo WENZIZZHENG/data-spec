@@ -7,6 +7,9 @@ import com.dataspec.aireplay.entity.AiJobRecord;
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.model.AiJobRecordDetail;
 import com.dataspec.aireplay.service.AiJobRecordService;
+import com.dataspec.aiprofile.model.AiTaskContextScope;
+import com.dataspec.aiprofile.model.AiTaskProfile;
+import com.dataspec.aiprofile.service.AiTaskProfileService;
 import com.dataspec.enumdict.service.EnumDictService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
@@ -35,6 +38,7 @@ import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.zip.ZipInputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -377,6 +381,37 @@ class AiContextExportServiceTest {
     }
 
     @Test
+    void generateAiContextPackage_profileSuppliesScopeDefaultsAndManifestMetadata() throws Exception {
+        AiTaskProfileService profileService = mock(AiTaskProfileService.class);
+        when(profileService.findProfile("minimal-context")).thenReturn(Optional.of(AiTaskProfile.builder()
+                .profileId("minimal-context")
+                .taskType("MINIMAL_CONTEXT")
+                .contextScope(AiTaskContextScope.builder()
+                        .scope("field")
+                        .status("enabled")
+                        .limit(1)
+                        .build())
+                .build()));
+        AiContextExportService service = createService(profileService);
+        AiContextScopeOptions options = new AiContextScopeOptions(null, null, null, null, "minimal-context", null);
+
+        String catalogJson = service.generateFieldCatalogJson(PROJECT_ID, options);
+        var catalog = new ObjectMapper().readTree(catalogJson);
+        assertEquals("field", catalog.path("contextScope").path("scope").asText());
+        assertEquals("minimal-context", catalog.path("contextScope").path("profileId").asText());
+        assertEquals("MINIMAL_CONTEXT", catalog.path("contextScope").path("taskType").asText());
+        assertEquals("enabled", catalog.path("contextScope").path("status").asText());
+        assertEquals(1, catalog.path("contextScope").path("limit").asInt());
+        assertEquals(1, catalog.path("contextScope").path("returnedFieldCount").asInt());
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(PROJECT_ID, options));
+        var manifest = new ObjectMapper().readTree(entries.get(".dataspec/manifest.json"));
+        assertEquals("minimal-context", manifest.path("contextScope").path("profileId").asText());
+        assertEquals("MINIMAL_CONTEXT", manifest.path("contextScope").path("taskType").asText());
+        assertTrue(manifest.path("commands").path("exportContext").asText().contains("--profile minimal-context"));
+    }
+
+    @Test
     void generateCreateTablePrompt_containsBusinessContextAndStandards() {
         AiContextExportService service = createService();
 
@@ -466,6 +501,17 @@ class AiContextExportServiceTest {
         return createService(standardSnapshotService, aiJobRecordService);
     }
 
+    private AiContextExportService createService(AiTaskProfileService aiTaskProfileService) {
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
+        return createService(
+                standardSnapshotService,
+                new NoopAiJobRecordService(),
+                List.of(sampleField()),
+                mock(RuleExemptionService.class),
+                aiTaskProfileService);
+    }
+
     private AiContextExportService createService(StandardSnapshotService standardSnapshotService) {
         return createService(standardSnapshotService, new NoopAiJobRecordService());
     }
@@ -482,13 +528,22 @@ class AiContextExportServiceTest {
                 standardSnapshotService,
                 aiJobRecordService,
                 fields,
-                mock(RuleExemptionService.class));
+                mock(RuleExemptionService.class),
+                null);
     }
 
     private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
                                                  AiJobRecordService aiJobRecordService,
                                                  List<Field> fields,
                                                  RuleExemptionService ruleExemptionService) {
+        return createService(standardSnapshotService, aiJobRecordService, fields, ruleExemptionService, null);
+    }
+
+    private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
+                                                 AiJobRecordService aiJobRecordService,
+                                                 List<Field> fields,
+                                                 RuleExemptionService ruleExemptionService,
+                                                 AiTaskProfileService aiTaskProfileService) {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
         FieldService fieldService = mock(FieldService.class);
@@ -518,7 +573,8 @@ class AiContextExportServiceTest {
                 sqlCheckRecordService,
                 aiJobRecordService,
                 ruleExemptionService,
-                new PromptTemplateRegistry()
+                new PromptTemplateRegistry(),
+                null
         );
         return new AiContextExportService(
                 ruleConfigService,
@@ -530,7 +586,8 @@ class AiContextExportServiceTest {
                 aiJobRecordService,
                 ruleExemptionService,
                 ruleBaselineService,
-                new PromptTemplateRegistry()
+                new PromptTemplateRegistry(),
+                aiTaskProfileService
         );
     }
 

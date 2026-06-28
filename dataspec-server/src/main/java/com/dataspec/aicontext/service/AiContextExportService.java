@@ -3,6 +3,9 @@ package com.dataspec.aicontext.service;
 import com.dataspec.aicontext.model.AiContextScopeOptions;
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.service.AiJobRecordService;
+import com.dataspec.aiprofile.model.AiTaskContextScope;
+import com.dataspec.aiprofile.model.AiTaskProfile;
+import com.dataspec.aiprofile.service.AiTaskProfileService;
 import com.dataspec.common.perf.PerformanceProbe;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldGroupItem;
@@ -97,6 +100,7 @@ public class AiContextExportService {
     private final RuleExemptionService ruleExemptionService;
     private final RuleBaselineService ruleBaselineService;
     private final PromptTemplateRegistry promptTemplateRegistry;
+    private final AiTaskProfileService aiTaskProfileService;
 
     /**
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
@@ -1056,9 +1060,9 @@ public class AiContextExportService {
     }
 
     private ScopedFields buildScopedFields(Long projectId, AiContextScopeOptions rawOptions) {
-        AiContextScopeOptions options = rawOptions == null ? AiContextScopeOptions.full() : rawOptions;
-        List<Field> allFields = fieldService.listByProject(projectId);
         List<String> warnings = new ArrayList<>();
+        AiContextScopeOptions options = resolveProfileScopeOptions(rawOptions, warnings);
+        List<Field> allFields = fieldService.listByProject(projectId);
         String effectiveScope = options.scopeSupported() ? options.scope() : "all";
         if (!options.scopeSupported()) {
             warnings.add("未知 scope=" + options.scope() + "，已按完整字段文本匹配处理。");
@@ -1108,6 +1112,8 @@ public class AiContextExportService {
                 options.query(),
                 options.status(),
                 options.limit(),
+                options.profileId(),
+                options.taskType(),
                 allFields.size(),
                 matchedCount,
                 returnedFields.size(),
@@ -1115,6 +1121,50 @@ public class AiContextExportService {
                 groupSummary
         );
         return new ScopedFields(List.copyOf(returnedFields), summary);
+    }
+
+    private AiContextScopeOptions resolveProfileScopeOptions(AiContextScopeOptions rawOptions, List<String> warnings) {
+        AiContextScopeOptions options = rawOptions == null ? AiContextScopeOptions.full() : rawOptions;
+        String requestedProfile = options.profileId() != null ? options.profileId() : options.taskType();
+        if (requestedProfile == null) {
+            return options;
+        }
+        if (aiTaskProfileService == null) {
+            warnings.add("已请求 AI profile=" + requestedProfile + "，但当前服务未启用 profile registry，已按显式 scope 参数处理。");
+            return options;
+        }
+        return aiTaskProfileService.findProfile(requestedProfile)
+                .map(profile -> mergeProfileScope(options, profile))
+                .orElseGet(() -> {
+                    warnings.add("未知 AI profile 或 taskType=" + requestedProfile + "，已按显式 scope 参数处理。");
+                    return options;
+                });
+    }
+
+    private AiContextScopeOptions mergeProfileScope(AiContextScopeOptions options, AiTaskProfile profile) {
+        AiTaskContextScope defaults = profile.getContextScope();
+        if (defaults == null) {
+            return options;
+        }
+        // profile 只是默认建议，显式 scope/query/status/limit 仍保持优先。
+        String effectiveScope = options.scopeExplicit() ? options.scope() : firstText(defaults.getScope(), options.scope());
+        String effectiveQuery = options.query() != null ? options.query() : defaults.getQuery();
+        String effectiveStatus = options.status() != null ? options.status() : defaults.getStatus();
+        Integer effectiveLimit = options.limit() != null ? options.limit() : defaults.getLimit();
+        String profileId = options.profileId() != null ? options.profileId() : profile.getProfileId();
+        String taskType = options.taskType() != null ? options.taskType() : profile.getTaskType();
+        return new AiContextScopeOptions(
+                effectiveScope,
+                effectiveQuery,
+                effectiveStatus,
+                effectiveLimit,
+                profileId,
+                taskType,
+                options.scopeExplicit());
+    }
+
+    private String firstText(String preferred, String fallback) {
+        return preferred == null || preferred.isBlank() ? fallback : preferred;
     }
 
     private boolean includeByTextScope(Field field, String scope, String query, List<String> reasons) {
@@ -1200,6 +1250,12 @@ public class AiContextExportService {
         }
         md.append("## 上下文裁剪\n\n");
         md.append("- scope: ").append(scopeSummary.scope()).append("\n");
+        if (scopeSummary.profileId() != null) {
+            md.append("- profileId: ").append(scopeSummary.profileId()).append("\n");
+        }
+        if (scopeSummary.taskType() != null) {
+            md.append("- taskType: ").append(scopeSummary.taskType()).append("\n");
+        }
         md.append("- query: ").append(valueOrDash(scopeSummary.query())).append("\n");
         md.append("- status: ").append(valueOrDash(scopeSummary.status())).append("\n");
         md.append("- fields: ")
@@ -1229,6 +1285,12 @@ public class AiContextExportService {
         }
         if (summary.limit() != null) {
             node.put("limit", summary.limit());
+        }
+        if (summary.profileId() != null) {
+            node.put("profileId", summary.profileId());
+        }
+        if (summary.taskType() != null) {
+            node.put("taskType", summary.taskType());
         }
         node.put("totalFieldCount", summary.totalFieldCount());
         node.put("matchedFieldCount", summary.matchedFieldCount());
@@ -1268,6 +1330,11 @@ public class AiContextExportService {
                 .append(projectId)
                 .append(" --output dataspec-ai-context.zip");
         if (scopeSummary.includeMetadata()) {
+            if (scopeSummary.profileId() != null) {
+                command.append(" --profile ").append(scopeSummary.profileId());
+            } else if (scopeSummary.taskType() != null) {
+                command.append(" --task-type ").append(scopeSummary.taskType());
+            }
             command.append(" --scope ").append(scopeSummary.scope());
             if (scopeSummary.query() != null) {
                 command.append(" --query \"").append(scopeSummary.query()).append("\"");
@@ -1318,6 +1385,8 @@ public class AiContextExportService {
                         "query": { "type": "string" },
                         "status": { "type": "string" },
                         "limit": { "type": "integer" },
+                        "profileId": { "type": "string" },
+                        "taskType": { "type": "string" },
                         "totalFieldCount": { "type": "integer" },
                         "matchedFieldCount": { "type": "integer" },
                         "returnedFieldCount": { "type": "integer" },
@@ -1683,6 +1752,8 @@ public class AiContextExportService {
             String query,
             String status,
             Integer limit,
+            String profileId,
+            String taskType,
             int totalFieldCount,
             int matchedFieldCount,
             int returnedFieldCount,
@@ -1690,7 +1761,7 @@ public class AiContextExportService {
             FieldGroupSummary groupSummary
     ) {
         static ScopeSummary full() {
-            return new ScopeSummary(false, "all", null, null, null, 0, 0, 0, List.of(), null);
+            return new ScopeSummary(false, "all", null, null, null, null, null, 0, 0, 0, List.of(), null);
         }
     }
 }

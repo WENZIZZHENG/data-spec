@@ -1124,6 +1124,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAiTaskProfiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-profiles/{profileOrTaskType}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAiTaskProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/import-export/fields/export": {
         parameters: {
             query?: never;
@@ -2720,6 +2752,77 @@ export interface components {
             plan?: components["schemas"]["ProjectRestorePlan"];
             record?: components["schemas"]["ProjectRestoreRecord"];
         };
+        AiTaskContextScope: {
+            scope?: string;
+            query?: string;
+            status?: string;
+            /** Format: int32 */
+            limit?: number;
+        };
+        AiTaskRuleset: {
+            strictness?: string;
+            requiredRuleCodes?: string[];
+            optionalRuleCodes?: string[];
+        };
+        AiTaskOutputFormat: {
+            format?: string;
+            schemaRef?: string;
+            includeEvidence?: boolean;
+            includeNextActions?: boolean;
+        };
+        AiProfileDiagnostic: {
+            code?: string;
+            status?: string;
+            message?: string;
+            nextAction?: string;
+        };
+        AiTaskProfile: {
+            profileId?: string;
+            taskType?: string;
+            displayName?: string;
+            description?: string;
+            contextScope?: components["schemas"]["AiTaskContextScope"];
+            ruleset?: components["schemas"]["AiTaskRuleset"];
+            fixedSqlPolicy?: components["schemas"]["FixPolicy"];
+            outputFormat?: components["schemas"]["AiTaskOutputFormat"];
+            /** Format: int32 */
+            maxContextFields?: number;
+            recommendedCommands?: string[];
+            nextActions?: string[];
+            defaultProfile?: boolean;
+        };
+        AiTaskProfileCatalog: {
+            /** Format: int64 */
+            projectId?: number;
+            defaultProfileId?: string;
+            selectedProfileId?: string;
+            profiles?: components["schemas"]["AiTaskProfile"][];
+            diagnostics?: components["schemas"]["AiProfileDiagnostic"][];
+            supportedTaskTypes?: string[];
+        };
+        AiTaskProfileDetail: {
+            /** Format: int64 */
+            projectId?: number;
+            requestedProfile?: string;
+            profile?: components["schemas"]["AiTaskProfile"];
+            diagnostics?: components["schemas"]["AiProfileDiagnostic"][];
+            supportedProfileIds?: string[];
+            supportedTaskTypes?: string[];
+        };
+        RAiTaskProfileCatalog: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiTaskProfileCatalog"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RAiTaskProfileDetail: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiTaskProfileDetail"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
         RProjectRestoreResult: {
             /** Format: int32 */
             code?: number;
@@ -2731,6 +2834,8 @@ export interface components {
             sql: string;
             /** Format: int64 */
             projectId?: number;
+            profileId?: string;
+            taskType?: string;
             fixPolicy?: components["schemas"]["FixPolicy"];
         };
         FixPolicy: {
@@ -6429,6 +6534,53 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RRecordDetail"];
+                };
+            };
+        };
+    };
+    listAiTaskProfiles: {
+        parameters: {
+            query?: {
+                projectId?: number;
+                profile?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiTaskProfileCatalog"];
+                };
+            };
+        };
+    };
+    getAiTaskProfile: {
+        parameters: {
+            query?: {
+                projectId?: number;
+            };
+            header?: never;
+            path: {
+                profileOrTaskType: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiTaskProfileDetail"];
                 };
             };
         };
