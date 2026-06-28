@@ -98,6 +98,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'contract' || command === 'contracts') {
       return await runContract(rest, io, fetchFn)
     }
+    if (command === 'capability' || command === 'capabilities') {
+      return await runCapability(rest, io, fetchFn)
+    }
     if (command === 'workflow' || command === 'workflows') {
       return runWorkflow(rest, io)
     }
@@ -634,6 +637,88 @@ async function runContract(args, io, fetchFn) {
   }
 
   throw new Error(`未知 contract 子命令: ${subcommand}。支持: list, show, check`)
+}
+
+async function runCapability(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (!subcommand || subcommand === 'list' || subcommand.startsWith('--')) {
+    const { positional, options } = parseArgs(subcommand === 'list' ? rest : args, [
+      'project',
+      'format',
+      'server',
+      'dataspec-token'
+    ])
+    if (positional.length > 0) {
+      throw new Error(`capability list 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (!['json', 'text'].includes(format)) {
+      throw new Error('capability list 仅支持 --format text|json')
+    }
+    const catalog = await fetchCapabilityCatalog({
+      server: normalizeServer(options.server ?? config.server),
+      projectId: optionalProjectId(options.project ?? config.projectId),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn
+    })
+    io.writeOut(format === 'json'
+      ? `${JSON.stringify(catalog, null, 2)}\n`
+      : formatCapabilityCatalogText(catalog))
+    return 0
+  }
+
+  if (subcommand === 'show') {
+    const { positional, options } = parseArgs(rest, ['project', 'format', 'server', 'dataspec-token'])
+    const capabilityId = positional[0]
+    if (!capabilityId) {
+      throw new Error('capability show 需要提供 capability id')
+    }
+    if (positional.length > 1) {
+      throw new Error(`capability show 只接受一个 capability id，收到: ${positional.slice(1).join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (!['json', 'text'].includes(format)) {
+      throw new Error('capability show 仅支持 --format text|json')
+    }
+    const capability = await fetchCapabilityDetail({
+      server: normalizeServer(options.server ?? config.server),
+      projectId: optionalProjectId(options.project ?? config.projectId),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      capabilityId
+    })
+    io.writeOut(format === 'json'
+      ? `${JSON.stringify(capability, null, 2)}\n`
+      : formatCapabilityDetailText(capability))
+    return 0
+  }
+
+  if (subcommand === 'check') {
+    const { positional, options } = parseArgs(rest, ['project', 'format', 'server', 'dataspec-token'])
+    if (positional.length > 0) {
+      throw new Error(`capability check 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (!['json', 'text'].includes(format)) {
+      throw new Error('capability check 仅支持 --format text|json')
+    }
+    const catalog = await fetchCapabilityCatalog({
+      server: normalizeServer(options.server ?? config.server),
+      projectId: optionalProjectId(options.project ?? config.projectId),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn
+    })
+    const result = checkCapabilityCatalog(catalog)
+    io.writeOut(format === 'json'
+      ? `${JSON.stringify(result, null, 2)}\n`
+      : formatCapabilityCheckText(result))
+    return result.ok ? 0 : 2
+  }
+
+  throw new Error(`未知 capability 子命令: ${subcommand}。支持: list, show, check`)
 }
 
 async function runEvidence(args, io, fetchFn) {
@@ -1250,6 +1335,34 @@ async function fetchContractDetail({ server, apiToken, fetchFn, contractId }) {
   return unwrapResponse(await readJsonResponse(response))
 }
 
+async function fetchCapabilityCatalog({ server, projectId, apiToken, fetchFn }) {
+  try {
+    const params = new URLSearchParams()
+    appendOptionalParam(params, 'projectId', projectId)
+    const suffix = params.toString() ? `?${params.toString()}` : ''
+    const response = await fetchFn(`${server}/api/capabilities${suffix}`, {
+      headers: dataSpecHeaders(apiToken)
+    })
+    return unwrapResponse(await readJsonResponse(response))
+  } catch (error) {
+    throw normalizeCapabilityFetchError(error)
+  }
+}
+
+async function fetchCapabilityDetail({ server, projectId, apiToken, fetchFn, capabilityId }) {
+  try {
+    const params = new URLSearchParams()
+    appendOptionalParam(params, 'projectId', projectId)
+    const suffix = params.toString() ? `?${params.toString()}` : ''
+    const response = await fetchFn(`${server}/api/capabilities/${encodeURIComponent(capabilityId)}${suffix}`, {
+      headers: dataSpecHeaders(apiToken)
+    })
+    return unwrapResponse(await readJsonResponse(response))
+  } catch (error) {
+    throw normalizeCapabilityFetchError(error, { capabilityId })
+  }
+}
+
 async function fetchEvidencePackage({ server, apiToken, fetchFn, req }) {
   const response = await fetchFn(`${server}/api/evidence-packages`, {
     method: 'POST',
@@ -1358,6 +1471,99 @@ function checkContractRegistry(catalog) {
 
 function contractDiagnostic(status, code, message) {
   return { status, code, message }
+}
+
+const REQUIRED_CAPABILITY_IDS = [
+  'capability-catalog',
+  'doctor',
+  'export-ai-context',
+  'lint-sql',
+  'search-fields',
+  'suggest-fields',
+  'generate-ddl',
+  'reverse-import',
+  'coverage-report',
+  'schema-registry',
+  'export-evidence-package',
+  'workflow-recipes',
+  'ai-task-profiles',
+  'domain-starter-kits'
+]
+
+function checkCapabilityCatalog(catalog) {
+  const diagnostics = []
+  if (catalog?.kind !== 'dataspec-ai-capability-catalog') {
+    diagnostics.push(capabilityDiagnostic('fail', 'INVALID_KIND', 'catalog kind 必须是 dataspec-ai-capability-catalog'))
+  }
+  if (!Number.isInteger(catalog?.schemaVersion)) {
+    diagnostics.push(capabilityDiagnostic('fail', 'MISSING_SCHEMA_VERSION', 'catalog 缺少整数 schemaVersion'))
+  }
+  if (!catalog?.catalogVersion) {
+    diagnostics.push(capabilityDiagnostic('fail', 'MISSING_CATALOG_VERSION', 'catalog 缺少 catalogVersion'))
+  }
+  const capabilities = Array.isArray(catalog?.capabilities) ? catalog.capabilities : []
+  const byId = new Map(capabilities.map((capability) => [capability.id, capability]))
+  for (const capabilityId of REQUIRED_CAPABILITY_IDS) {
+    const capability = byId.get(capabilityId)
+    if (!capability) {
+      diagnostics.push(capabilityDiagnostic('fail', 'MISSING_CAPABILITY', `缺少核心 capability: ${capabilityId}`))
+      continue
+    }
+    if (!capability.summary) {
+      diagnostics.push(capabilityDiagnostic('fail', 'MISSING_SUMMARY', `${capabilityId} 缺少 summary`))
+    }
+    if (!capability.writeRisk) {
+      diagnostics.push(capabilityDiagnostic('fail', 'MISSING_WRITE_RISK', `${capabilityId} 缺少 writeRisk`))
+    }
+    if (!Array.isArray(capability.preflightChecks)) {
+      diagnostics.push(capabilityDiagnostic('fail', 'INVALID_PREFLIGHT_CHECKS', `${capabilityId} preflightChecks 必须是数组`))
+    }
+    if (!Array.isArray(capability.nextActions)) {
+      diagnostics.push(capabilityDiagnostic('fail', 'INVALID_NEXT_ACTIONS', `${capabilityId} nextActions 必须是数组`))
+    }
+  }
+  if (diagnostics.length === 0) {
+    diagnostics.push(capabilityDiagnostic('pass', 'CAPABILITY_CATALOG_READY', 'capability catalog 可用于 AI/CLI/MCP 能力发现'))
+  }
+  return {
+    kind: 'dataspec-capability-check',
+    schemaVersion: 1,
+    ok: diagnostics.every((item) => item.status !== 'fail'),
+    catalogVersion: catalog?.catalogVersion ?? null,
+    capabilityCount: capabilities.length,
+    diagnostics
+  }
+}
+
+function capabilityDiagnostic(status, code, message) {
+  return { status, code, message }
+}
+
+function normalizeCapabilityFetchError(error, options = {}) {
+  if (error instanceof DataSpecCliError) {
+    if (options.capabilityId && error.diagnostic?.httpStatus === 404) {
+      return new DataSpecCliError(error.message, {
+        ...error.diagnostic,
+        code: 'CAPABILITY_NOT_FOUND',
+        category: 'PARAMETER',
+        retryable: false,
+        suggestedAction: `运行 dataspec capability list --format json 查看可用能力，再重试 capability show ${options.capabilityId}。`,
+        docsRef: 'README.md#ai-能力清单'
+      })
+    }
+    return error
+  }
+  return new DataSpecCliError(
+    `读取 capability catalog 失败: ${error?.message ?? 'DataSpec 服务不可用'}`,
+    {
+      code: 'DATASPEC_SERVER_UNAVAILABLE',
+      category: 'NETWORK',
+      retryable: true,
+      suggestedAction: '先运行 dataspec doctor --format json 检查服务、server URL、token 和项目配置。',
+      docsRef: 'README.md#cli',
+      httpStatus: null
+    }
+  )
 }
 
 function resolveProfileSelection(options = {}, config = {}) {
@@ -1673,6 +1879,85 @@ function formatContractCheckText(result) {
   }
   lines.push('', result.ok ? '结果: 可用' : '结果: 契约 registry 不可用', '')
   return lines.join('\n')
+}
+
+function formatCapabilityCatalogText(catalog) {
+  const lines = [
+    'DataSpec AI Capability Catalog',
+    `kind: ${catalog.kind ?? '-'}`,
+    `schemaVersion: ${catalog.schemaVersion ?? '-'}`,
+    `catalogVersion: ${catalog.catalogVersion ?? '-'}`,
+    `projectId: ${catalog.projectId ?? '-'}`,
+    ''
+  ]
+  for (const capability of catalog.capabilities ?? []) {
+    lines.push(`- ${capability.id} [${capability.writeRisk ?? '-'}] ${capability.title ?? ''}`.trim())
+    if (capability.summary) {
+      lines.push(`  ${capability.summary}`)
+    }
+    const surfaces = [
+      ...(capability.apiEndpoints ?? []).slice(0, 2),
+      ...(capability.cliCommands ?? []).slice(0, 1),
+      ...(capability.mcpResources ?? []).slice(0, 1),
+      ...(capability.mcpTools ?? []).slice(0, 1)
+    ]
+    if (surfaces.length > 0) {
+      lines.push(`  surfaces: ${surfaces.join(' | ')}`)
+    }
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+function formatCapabilityDetailText(capability) {
+  const lines = [
+    'DataSpec AI Capability',
+    `id: ${capability.id}`,
+    `category: ${capability.category ?? '-'}`,
+    `status: ${capability.status ?? '-'}`,
+    `stability: ${capability.stability ?? '-'}`,
+    `requiresProject: ${Boolean(capability.requiresProject)}`,
+    `writeRisk: ${capability.writeRisk ?? '-'}`,
+    ''
+  ]
+  if (capability.summary) {
+    lines.push(capability.summary, '')
+  }
+  appendTextList(lines, 'api endpoints', capability.apiEndpoints)
+  appendTextList(lines, 'cli commands', capability.cliCommands)
+  appendTextList(lines, 'mcp resources', capability.mcpResources)
+  appendTextList(lines, 'mcp tools', capability.mcpTools)
+  appendTextList(lines, 'preflight checks', capability.preflightChecks)
+  appendTextList(lines, 'next actions', capability.nextActions)
+  if (capability.docsRef) {
+    lines.push('', `docs: ${capability.docsRef}`)
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+function formatCapabilityCheckText(result) {
+  const lines = [
+    'DataSpec Capability Check',
+    `catalogVersion: ${result.catalogVersion ?? '-'}`,
+    `capabilityCount: ${result.capabilityCount ?? 0}`,
+    ''
+  ]
+  for (const diagnostic of result.diagnostics ?? []) {
+    lines.push(`[${diagnostic.status.toUpperCase()}] ${diagnostic.code}: ${diagnostic.message}`)
+  }
+  lines.push('', result.ok ? '结果: 可用' : '结果: capability catalog 不可用', '')
+  return lines.join('\n')
+}
+
+function appendTextList(lines, title, values = []) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return
+  }
+  lines.push(title + ':')
+  for (const value of values) {
+    lines.push(`  - ${value}`)
+  }
 }
 
 function resolveInitDefaultPaths(rawValue, existingPaths = []) {
@@ -2720,6 +3005,9 @@ Usage:
   node tools/dataspec-cli.mjs contract list [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract show <contractId> [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract check [--format text|json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs capability list [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs capability show <capabilityId> [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs capability check [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs profile list [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs profile show <id|taskType> [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs workflow list [--format text|json]
@@ -2739,6 +3027,7 @@ Options:
   doctor 默认做轻量 OpenAPI 状态和 AI Context 缓存检查；传 --check-openapi 时执行完整 schema 漂移检查
   evidence export 生成只读 AI 执行证据包；zip 输出必须显式指定 --output，证据包不是审批、审计或写入权限
   contract 用于读取和检查 AI 可消费输出契约 registry，不代表权限或发布审批
+  capability 用于读取和检查 AI 可用能力清单，只描述入口和前置检查，不会自动执行能力
   workflow 只输出任务计划和命令建议，不会自动执行步骤或调用外部 LLM
 `
 }

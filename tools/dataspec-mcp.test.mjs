@@ -40,6 +40,7 @@ test('resources list and read use configured project', async () => {
 
   const listed = await handler({ jsonrpc: '2.0', id: 2, method: 'resources/list' })
   assert.deepEqual(listed.result.resources.map((resource) => resource.uri), [
+    'dataspec://project/7/capability-catalog',
     'dataspec://project/7/field-catalog',
     'dataspec://project/7/database-rules',
     'dataspec://project/7/rules-yaml',
@@ -59,6 +60,82 @@ test('resources list and read use configured project', async () => {
   assert.equal(read.result.contents[0].uri, 'dataspec://project/7/field-catalog')
   assert.equal(read.result.contents[0].mimeType, 'application/json')
   assert.equal(read.result.contents[0].text, '{"fields":[]}')
+})
+
+test('capability catalog resource is read from backend with project diagnostics and structured content', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    calls.push(url)
+    return jsonResponse({
+      code: 200,
+      data: {
+        kind: 'dataspec-ai-capability-catalog',
+        schemaVersion: 1,
+        catalogVersion: '2026.06.28',
+        projectId: 7,
+        capabilities: [{ id: 'lint-sql', writeRisk: 'WRITES_DATASPEC_RECORD' }],
+        diagnostics: [{ code: 'CATALOG_READY', status: 'pass' }]
+      }
+    })
+  })
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 34,
+    method: 'resources/read',
+    params: { uri: 'dataspec://project/7/capability-catalog' }
+  })
+
+  const payload = JSON.parse(read.result.contents[0].text)
+  assert.equal(calls[0], 'http://dataspec.local/api/capabilities?projectId=7')
+  assert.equal(read.result.contents[0].mimeType, 'application/json')
+  assert.equal(payload.kind, 'dataspec-ai-capability-catalog')
+  assert.equal(read.result.structuredContent.capabilities[0].id, 'lint-sql')
+})
+
+test('global capability catalog resource omits project query', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    calls.push(url)
+    return jsonResponse({
+      code: 200,
+      data: {
+        kind: 'dataspec-ai-capability-catalog',
+        schemaVersion: 1,
+        catalogVersion: '2026.06.28',
+        projectId: null,
+        capabilities: [],
+        diagnostics: [{ code: 'MISSING_PROJECT', status: 'warn' }]
+      }
+    })
+  })
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 35,
+    method: 'resources/read',
+    params: { uri: 'dataspec://capability-catalog' }
+  })
+
+  assert.equal(calls[0], 'http://dataspec.local/api/capabilities')
+  assert.equal(read.result.structuredContent.diagnostics[0].code, 'MISSING_PROJECT')
+})
+
+test('capability catalog resource failure returns AI-readable DataSpec error', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async () => {
+    throw new Error('ECONNREFUSED')
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 36,
+    method: 'resources/read',
+    params: { uri: 'dataspec://project/7/capability-catalog' }
+  })
+
+  assert.equal(response.error.code, -32000)
+  assert.equal(response.error.data.dataspecError.code, 'DATASPEC_SERVER_UNAVAILABLE')
+  assert.match(response.error.data.dataspecError.suggestedAction, /doctor/)
 })
 
 test('workflow recipes resource is served locally without external service', async () => {
@@ -169,6 +246,7 @@ test('prompts list and get return DataSpec workflow guidance', async () => {
   assert.match(prompt.result.messages[0].content.text, /DataSpec/)
   assert.match(prompt.result.messages[0].content.text, /ai-task-profiles/)
   assert.match(prompt.result.messages[0].content.text, /schema-registry/)
+  assert.match(prompt.result.messages[0].content.text, /capability-catalog/)
   assert.match(prompt.result.messages[0].content.text, /export_evidence_package/)
 })
 

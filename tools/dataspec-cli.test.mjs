@@ -1050,6 +1050,7 @@ test('export-context cache writes AI context files and redacted metadata', async
         generatedAt: '2026-06-28T01:00:00Z',
         standard: { specVersion: 'v1', specHash: 'hash-1', source: 'current' }
       }),
+      '.dataspec/capabilities.json': '{"kind":"dataspec-ai-capability-catalog","capabilities":[]}',
       '.dataspec/field-catalog.json': '{"fields":[]}',
       '.dataspec/rules.yaml': 'rules: []\n',
       'AGENTS.md.fragment': 'Read DataSpec context'
@@ -1085,6 +1086,10 @@ test('export-context cache writes AI context files and redacted metadata', async
     assert.equal(await readFile(path.join(dir, '.dataspec', 'context', 'field-catalog.json'), 'utf8'), '{"fields":[]}')
     assert.equal(await readFile(path.join(dir, '.dataspec', 'context', 'AGENTS.md.fragment'), 'utf8'), 'Read DataSpec context')
     assert.equal(metadata.projectId, 9)
+    assert.equal(
+      await readFile(path.join(dir, '.dataspec', 'context', 'capabilities.json'), 'utf8'),
+      '{"kind":"dataspec-ai-capability-catalog","capabilities":[]}'
+    )
     assert.equal(metadata.standard.specHash, 'hash-1')
     assert.equal(metadata.ttlDays, 3)
     assert.equal(metadata.server, 'http://dataspec.local')
@@ -1412,6 +1417,147 @@ test('contract check reports missing registry invariants', async () => {
   assert.equal(code, 2)
   assert.equal(output.ok, false)
   assert.match(JSON.stringify(output.diagnostics), /lint-result/)
+})
+
+test('capability list prints machine-readable catalog with project diagnostics', async () => {
+  const calls = []
+  const fetchFn = async (url) => {
+    calls.push(url)
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: capabilityCatalogFixture()
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'capability',
+    'list',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(calls[0], 'http://dataspec.local/api/capabilities?projectId=7')
+  assert.equal(output.kind, 'dataspec-ai-capability-catalog')
+  assert.equal(output.projectId, 7)
+  assert.equal(output.capabilities[0].id, 'capability-catalog')
+})
+
+test('capability show prints capability detail', async () => {
+  const fetchFn = async (url) => {
+    assert.equal(url, 'http://dataspec.local/api/capabilities/lint-sql?projectId=7')
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: capabilityCatalogFixture().capabilities.find((item) => item.id === 'lint-sql')
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'capabilities',
+    'show',
+    'lint-sql',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(output.id, 'lint-sql')
+  assert.equal(output.writeRisk, 'WRITES_DATASPEC_RECORD')
+  assert.match(output.cliCommands[0], /dataspec lint/)
+})
+
+test('capability show normalizes unknown id as parameter diagnostic', async () => {
+  const fetchFn = async () => ({
+    ok: false,
+    status: 404,
+    json: async () => ({
+      code: 404,
+      message: '未知 DataSpec capability: missing。请先读取 /api/capabilities 获取可用能力。'
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'capability',
+    'show',
+    'missing',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+  const diagnosticLine = io.stderr.split(/\r?\n/).find((line) => line.startsWith('DataSpecError: '))
+  const diagnostic = JSON.parse(diagnosticLine.replace('DataSpecError: ', ''))
+
+  assert.equal(code, 2)
+  assert.equal(diagnostic.code, 'CAPABILITY_NOT_FOUND')
+  assert.equal(diagnostic.category, 'PARAMETER')
+  assert.equal(diagnostic.retryable, false)
+  assert.match(diagnostic.suggestedAction, /capability list/)
+})
+
+test('capability check reports missing core capability ids', async () => {
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 200,
+      data: {
+        ...capabilityCatalogFixture(),
+        capabilities: capabilityCatalogFixture().capabilities.filter((item) => item.id !== 'lint-sql')
+      }
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'capability',
+    'check',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 2)
+  assert.equal(output.ok, false)
+  assert.match(JSON.stringify(output.diagnostics), /lint-sql/)
+})
+
+test('capability list prints DataSpecError when server is unavailable', async () => {
+  const fetchFn = async () => {
+    throw new Error('ECONNREFUSED')
+  }
+  const io = createIo()
+
+  const code = await runCli(['capability', 'list', '--server', 'http://dataspec.local', '--format', 'json'], io, fetchFn)
+  const diagnosticLine = io.stderr.split(/\r?\n/).find((line) => line.startsWith('DataSpecError: '))
+  const diagnostic = JSON.parse(diagnosticLine.replace('DataSpecError: ', ''))
+
+  assert.equal(code, 2)
+  assert.equal(diagnostic.code, 'DATASPEC_SERVER_UNAVAILABLE')
+  assert.match(diagnostic.suggestedAction, /doctor/)
 })
 
 test('evidence export prints machine-readable package json', async () => {
@@ -2581,6 +2727,62 @@ function contractCatalogFixture() {
       docsRef: `docs/ai-contracts.md#${contractId}`
     })),
     requiredContractIds: ids
+  }
+}
+
+function capabilityCatalogFixture() {
+  const ids = [
+    'capability-catalog',
+    'doctor',
+    'export-ai-context',
+    'lint-sql',
+    'search-fields',
+    'suggest-fields',
+    'generate-ddl',
+    'reverse-import',
+    'coverage-report',
+    'schema-registry',
+    'export-evidence-package',
+    'workflow-recipes',
+    'ai-task-profiles',
+    'domain-starter-kits'
+  ]
+  return {
+    kind: 'dataspec-ai-capability-catalog',
+    schemaVersion: 1,
+    catalogVersion: '2026.06.28',
+    generatedAt: '2026-06-28T00:00:00',
+    projectId: 7,
+    capabilities: ids.map((id) => ({
+      id,
+      category: id === 'lint-sql' ? 'sql' : 'discovery',
+      title: id,
+      summary: `${id} summary`,
+      status: 'AVAILABLE',
+      stability: 'stable-ai',
+      requiresProject: !['capability-catalog', 'doctor', 'schema-registry', 'workflow-recipes'].includes(id),
+      writeRisk: id === 'lint-sql' ? 'WRITES_DATASPEC_RECORD' : 'READ_ONLY',
+      requiredInputs: id === 'lint-sql' ? ['projectId', 'sql'] : [],
+      optionalInputs: [],
+      outputContracts: id === 'lint-sql' ? ['lint-result'] : ['ai-capability-catalog'],
+      apiEndpoints: id === 'lint-sql' ? ['POST /api/lint'] : ['GET /api/capabilities'],
+      cliCommands: id === 'lint-sql'
+        ? ['dataspec lint <file.sql> --project <id> --format json']
+        : ['dataspec capability list --format json'],
+      mcpResources: id === 'capability-catalog' ? ['dataspec://project/<id>/capability-catalog'] : [],
+      mcpTools: id === 'lint-sql' ? ['lint_sql'] : [],
+      frontendRoutes: [],
+      contractIds: [],
+      workflowIds: [],
+      profileIds: [],
+      examples: [],
+      preflightChecks: ['dataspec doctor --format json'],
+      nextActions: ['read catalog'],
+      docsRef: 'README.md#ai-能力清单'
+    })),
+    requiredCapabilityIds: ids,
+    recommendedFirstActions: ['run doctor'],
+    diagnostics: [{ code: 'CATALOG_READY', status: 'pass', message: 'ready', nextAction: 'continue' }]
   }
 }
 

@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、统一前端数据状态、项目活动时间线、领域 Starter Kit、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 执行证据包、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、统一前端数据状态、项目活动时间线、领域 Starter Kit、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 执行证据包、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -53,6 +53,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 ### AI 与自动化
 
 - AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、规则、项目规则例外、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包，也支持按历史标准快照导出可复现上下文，并可写入业务仓库 `.dataspec/context/` 离线缓存。来自 Starter Kit 的字段会在字段目录中暴露 kit key/version 来源，方便 AI 判断领域模板出处。
+- AI 能力清单，提供只读 `/api/capabilities` 和 `/api/capabilities/{id}`，稳定描述 API/CLI/MCP/前端入口、输入输出契约、preflightChecks、writeRisk、示例和 nextActions；能力清单不会执行任务，也不替代鉴权或 dry-run。
 - AI Context manifest、字段目录和规则文件携带标准快照版本、hash 与来源 `source=current|snapshot|unversioned`；`rules.yaml` 还会标明当前规则基线 key/name/version/source/appliedAt；未创建快照时标记为 `unversioned`。
 - AI 任务模式，内置 `create-table`、`sql-fix`、`reverse-import`、`pr-review`、`minimal-context`，用于给 AI/CLI/MCP 提供上下文范围、fixedSql 策略、输出格式和推荐命令的默认建议。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
@@ -64,8 +65,8 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 字段推荐与字段标准检索 API/CLI/MCP。
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
-- CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、workflow recipes、单文件 lint、批量 `lint-files`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、历史快照 Context 导出、字段推荐、字段标准检索和 DDL 生成。
-- MCP Server 暴露 DataSpec resources、workflow recipes、prompts、核心 tools 和 evidence package 导出 tool。
+- CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、capability catalog、workflow recipes、单文件 lint、批量 `lint-files`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、历史快照 Context 导出、字段推荐、字段标准检索和 DDL 生成。
+- MCP Server 暴露 DataSpec resources、capability catalog、workflow recipes、prompts、核心 tools 和 evidence package 导出 tool。
 - GitHub Actions 示例支持 SQL 批量校验、PR diff inline 评论和 fallback 汇总评论。
 - 本地 Docker Compose 一键启动和 demo smoke 验证，适合个人试用、演示和 AI agent 启动前检查。
 
@@ -165,7 +166,7 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1&scope
 curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1&snapshotId=42" -o dataspec-ai-context-snapshot-42.zip
 ```
 
-解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/workflows.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前读取字段标准和规则。
+解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/schema-registry.json`、`.dataspec/capabilities.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/workflows.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前先读取能力清单、字段标准、契约和规则。
 
 导出包的 `.dataspec/manifest.json`、`.dataspec/field-catalog.json` 和 `.dataspec/rules.yaml` 会包含 `specVersion` / `specHash` / `source` 元数据。若项目尚未创建标准快照，版本显示为 `unversioned`，不阻断导出；创建快照后，后续 SQL 检查记录和 DDL 生成结果会记录当前快照 ID、版本和 hash。需要复现历史任务时，可传 `snapshotId` 或 `snapshotVersion` 从已保存 payload 导出历史字段目录、规则和 zip 包；CLI 等价命令为 `node tools/dataspec-cli.mjs export-context --project 1 --snapshot-id 42 --output dataspec-ai-context-snapshot-42.zip`。
 
@@ -179,7 +180,22 @@ node tools/dataspec-cli.mjs export-context --project 1 --scope field --query "�
 node tools/dataspec-cli.mjs export-context --project 1 --output dataspec-ai-context.zip --cache
 ```
 
-缓存目录固定为 `.dataspec/context/`，会包含 `manifest.json`、`field-catalog.json`、`rules.yaml`、`prompts.md`、`AGENTS.md.fragment` 和 `cache-metadata.json` 等文件。`cache-metadata.json` 记录 projectId、server、导出参数、exportedAt、expiresAt、contentHash 和标准版本/hash/source，并会脱敏 token/password/Bearer/完整 JDBC URL。`doctor` 会报告 `context-cache` 检查项：无缓存、已过期、服务不可用但可离线读取，或远端标准 hash 与缓存不一致。离线缓存不写入 DataSpec 服务端状态，也不缓存数据库密码或业务数据行。
+缓存目录固定为 `.dataspec/context/`，会包含 `manifest.json`、`capabilities.json`、`field-catalog.json`、`rules.yaml`、`prompts.md`、`AGENTS.md.fragment` 和 `cache-metadata.json` 等文件。`cache-metadata.json` 记录 projectId、server、导出参数、exportedAt、expiresAt、contentHash 和标准版本/hash/source，并会脱敏 token/password/Bearer/完整 JDBC URL。`doctor` 会报告 `context-cache` 检查项：无缓存、已过期、服务不可用但可离线读取，或远端标准 hash 与缓存不一致。离线缓存不写入 DataSpec 服务端状态，也不缓存数据库密码或业务数据行。
+
+## AI 能力清单
+
+能力清单是 AI agent 的只读自描述入口，用来回答“当前 DataSpec 能做什么、走哪个 API/CLI/MCP、需要哪些前置检查、是否有写入风险”。它不会执行 lint、导出 Context、连接数据库或写入标准；真实权限仍由 API Token、项目边界、具体 API 和 dry-run/人工确认负责。
+
+```bash
+curl "http://localhost:8090/api/capabilities?projectId=1"
+curl "http://localhost:8090/api/capabilities/lint-sql?projectId=1"
+
+node tools/dataspec-cli.mjs capability list --project 1 --format json
+node tools/dataspec-cli.mjs capability show lint-sql --project 1 --format json
+node tools/dataspec-cli.mjs capability check --project 1 --format json
+```
+
+第一版内置 `capability-catalog`、`doctor`、`export-ai-context`、`lint-sql`、`search-fields`、`suggest-fields`、`generate-ddl`、`reverse-import`、`coverage-report`、`schema-registry`、`export-evidence-package`、`workflow-recipes`、`ai-task-profiles` 和 `domain-starter-kits`。写入型能力会标记 `writeRisk` 和 `preflightChecks`，AI 应先运行 `doctor` 或读取相关 workflow/profile，再执行实际工具。
 
 ## AI 任务模式
 
@@ -582,11 +598,16 @@ node tools/dataspec-cli.mjs workflow list --format json
 # 查看某个 recipe 的输入、前置检查、步骤、产物和失败恢复建议
 node tools/dataspec-cli.mjs workflow show create-table --format json
 
+# 列出、查看和检查 AI 能力清单
+node tools/dataspec-cli.mjs capability list --project 1 --format json
+node tools/dataspec-cli.mjs capability show lint-sql --project 1 --format json
+node tools/dataspec-cli.mjs capability check --project 1 --format json
+
 # 指定后端地址
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --server http://localhost:8090
 ```
 
-`doctor` 会检查配置文件、DataSpec 服务、API token 身份、项目可访问性、`defaultPaths`、`aiProfile/taskType`、OpenAPI 状态和 `.dataspec/context/` AI Context 缓存；默认只做轻量 OpenAPI 检查，传 `--check-openapi` 时会复用前端契约校验逻辑做完整 schema 漂移检查。`profile` 只读取和诊断任务模式；`--profile/--task-type` 可用于 `lint`、`lint-files`、`export-context` 和 `doctor`，并且显式命令行参数优先于 `.dataspec/config.json`。`workflow` 只输出任务计划和命令建议，第一版包含 `create-table`、`review-pr-sql`、`reverse-import-standards` 和 `export-min-context`，不会自动执行步骤或调用外部 LLM。`lint`、`lint-files` 和 `review-pr` 支持 `--idempotency-key`，也可用 `DATASPEC_IDEMPOTENCY_KEY` 兜底传递 `Idempotency-Key` header；多文件 lint 会按文件路径派生子 key，避免同一 key 误复用到不同 SQL 文件。后端当前使用单机内存缓存和项目级 operation lock，适合个人/小团队重复点击和 AI 自动重试保护，不等同于分布式队列或服务重启后的持久幂等。`evidence export` 只读取服务端 evidence package API；JSON 会写 stdout 或 `--output` 文件，zip 必须显式提供 `--output`，且拒绝写出当前工作目录之外的路径。`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。默认输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取；传 `--delivery-package <json>` 或 `--batch-package <json>` 时，会额外写出 `ai-batch-delivery@1` 交付包，包含 batchId、summary、items、issueSummary、fixedSqlSummary、evidence 和 nextActions，并对 token、password、Bearer、完整 JDBC URL 做脱敏。`review-pr` 会在批量 lint 后读取 PR diff，把能映射到新增/修改行的 SQL 问题发布为 GitHub inline review comment；无法映射的问题会保留在包含 `<!-- dataspec-sql-review -->` marker 的汇总评论中，并统计 fallback reason。重复运行会通过 `dataspec-inline-review` marker 跳过已发布的相同行规则评论；`--format json` 会输出 `summary`、`inline` 和 `files[]`，评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
+`doctor` 会检查配置文件、DataSpec 服务、API token 身份、项目可访问性、`defaultPaths`、`aiProfile/taskType`、OpenAPI 状态和 `.dataspec/context/` AI Context 缓存；默认只做轻量 OpenAPI 检查，传 `--check-openapi` 时会复用前端契约校验逻辑做完整 schema 漂移检查。`capability` 只读取能力目录，`check` 会校验核心 capability 是否存在，不会执行这些能力；服务不可达时会输出 DataSpecError 并建议先运行 doctor。`profile` 只读取和诊断任务模式；`--profile/--task-type` 可用于 `lint`、`lint-files`、`export-context` 和 `doctor`，并且显式命令行参数优先于 `.dataspec/config.json`。`workflow` 只输出任务计划和命令建议，第一版包含 `create-table`、`review-pr-sql`、`reverse-import-standards` 和 `export-min-context`，不会自动执行步骤或调用外部 LLM。`lint`、`lint-files` 和 `review-pr` 支持 `--idempotency-key`，也可用 `DATASPEC_IDEMPOTENCY_KEY` 兜底传递 `Idempotency-Key` header；多文件 lint 会按文件路径派生子 key，避免同一 key 误复用到不同 SQL 文件。后端当前使用单机内存缓存和项目级 operation lock，适合个人/小团队重复点击和 AI 自动重试保护，不等同于分布式队列或服务重启后的持久幂等。`evidence export` 只读取服务端 evidence package API；JSON 会写 stdout 或 `--output` 文件，zip 必须显式提供 `--output`，且拒绝写出当前工作目录之外的路径。`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。默认输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取；传 `--delivery-package <json>` 或 `--batch-package <json>` 时，会额外写出 `ai-batch-delivery@1` 交付包，包含 batchId、summary、items、issueSummary、fixedSqlSummary、evidence 和 nextActions，并对 token、password、Bearer、完整 JDBC URL 做脱敏。`review-pr` 会在批量 lint 后读取 PR diff，把能映射到新增/修改行的 SQL 问题发布为 GitHub inline review comment；无法映射的问题会保留在包含 `<!-- dataspec-sql-review -->` marker 的汇总评论中，并统计 fallback reason。重复运行会通过 `dataspec-inline-review` marker 跳过已发布的相同行规则评论；`--format json` 会输出 `summary`、`inline` 和 `files[]`，评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
 
 ## MCP Server
 
@@ -601,8 +622,8 @@ node tools/dataspec-mcp.mjs
 
 可在 MCP client 中按本地 stdio server 配置。当前暴露能力：
 
-- resources：`field-catalog`、`database-rules`、`rules-yaml`、`workflow-recipes`、`ai-task-profiles`、`schema-registry`，URI 形如 `dataspec://project/1/field-catalog`。
-- prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`，并提示 agent 先读取 schema registry 和 profile resource，再选择稳定字段名、兼容策略、上下文范围、fixedSql 模式和输出格式。
+- resources：`capability-catalog`、`field-catalog`、`database-rules`、`rules-yaml`、`workflow-recipes`、`ai-task-profiles`、`schema-registry`，URI 形如 `dataspec://project/1/capability-catalog`；也支持只读全局能力清单 `dataspec://capability-catalog`。
+- prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`，并提示 agent 先读取 capability catalog、schema registry 和 profile resource，再选择稳定字段名、兼容策略、上下文范围、fixedSql 模式和输出格式。
 - tools：`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`search_fields`、`generate_table_ddl`、`export_evidence_package`；`lint_sql`、`get_field_catalog` 和 `search_field_catalog` 可接收 `profileId/taskType` hint，显式工具参数仍优先于默认 profile；`get_field_catalog` 可传 `scope/query/status/limit`，`search_field_catalog` 默认按当前关键词读取较小字段目录，`search_fields` 调用 `/api/fields/search` 并返回字段、分数、命中原因和下一步建议；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功；`export_evidence_package` 返回 `structuredContent` 与可解析 JSON text，用于交付前导出只读证据包。
 
 ## AI 输出契约

@@ -10,6 +10,7 @@ import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.aiprofile.model.AiTaskContextScope;
 import com.dataspec.aiprofile.model.AiTaskProfile;
 import com.dataspec.aiprofile.service.AiTaskProfileService;
+import com.dataspec.capability.service.impl.AiCapabilityCatalogServiceImpl;
 import com.dataspec.contract.service.impl.SchemaRegistryServiceImpl;
 import com.dataspec.enumdict.service.EnumDictService;
 import com.dataspec.field.entity.Field;
@@ -31,6 +32,7 @@ import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.dto.StandardSnapshotPayload;
 import com.dataspec.standard.service.StandardSnapshotService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -64,6 +66,7 @@ class AiContextExportServiceTest {
         assertTrue(entries.containsKey(".dataspec/field-catalog.json"));
         assertTrue(entries.containsKey(".dataspec/field-catalog.schema.json"));
         assertTrue(entries.containsKey(".dataspec/schema-registry.json"));
+        assertTrue(entries.containsKey(".dataspec/capabilities.json"));
         assertTrue(entries.containsKey(".dataspec/manifest.json"));
         assertTrue(entries.containsKey(".dataspec/README.md"));
         assertTrue(entries.containsKey(".dataspec/rules.yaml"));
@@ -91,10 +94,12 @@ class AiContextExportServiceTest {
         assertTrue(entries.get(".dataspec/workflows.md").contains("export-min-context"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/manifest.json"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/schema-registry.json"));
+        assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/capabilities.json"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/workflows.md"));
         assertTrue(entries.get(".dataspec/README.md").contains("dataspec lint"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/field-catalog.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/schema-registry.json"));
+        assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/capabilities.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/manifest.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains("dataspec lint <path|-> --project 1 --format json"));
         assertTrue(entries.get(".dataspec/examples/good.sql").contains("CREATE TABLE users"));
@@ -108,12 +113,14 @@ class AiContextExportServiceTest {
         assertFalse(manifest.path("generatedAt").asText().isBlank());
         assertTrue(manifest.path("files").isArray());
         assertTrue(manifest.path("files").toString().contains(".dataspec/schema-registry.json"));
+        assertTrue(manifest.path("files").toString().contains(".dataspec/capabilities.json"));
         assertTrue(manifest.path("files").toString().contains(".dataspec/workflows.md"));
         assertEquals(1, manifest.path("contracts").path("schemaVersion").asInt());
         assertEquals("2026.06.28", manifest.path("contracts").path("registryVersion").asText());
         assertEquals(".dataspec/schema-registry.json", manifest.path("contracts").path("file").asText());
         assertTrue(manifest.path("contracts").path("contractIds").toString().contains("field"));
         assertTrue(manifest.path("commands").path("contractList").asText().contains("contract list"));
+        assertTrue(manifest.path("commands").path("capabilityList").asText().contains("capability list"));
         assertTrue(manifest.path("commands").path("lint").asText().contains("--project 1"));
         assertTrue(manifest.path("commands").path("workflowList").asText().contains("workflow list"));
 
@@ -122,6 +129,14 @@ class AiContextExportServiceTest {
         assertEquals("2026.06.28", registry.path("registryVersion").asText());
         assertTrue(registry.path("contracts").toString().contains("lint-result"));
         assertTrue(registry.path("compatibilityPolicy").path("breakingChangePolicy").asText().contains("schemaVersion"));
+
+        var capabilities = new ObjectMapper().readTree(entries.get(".dataspec/capabilities.json"));
+        assertEquals("dataspec-ai-capability-catalog", capabilities.path("kind").asText());
+        assertEquals(PROJECT_ID.longValue(), capabilities.path("projectId").asLong());
+        assertTrue(capabilities.path("capabilities").toString().contains("lint-sql"));
+        assertTrue(capabilities.path("capabilities").toString().contains("export-ai-context"));
+        assertFalse(entries.get(".dataspec/capabilities.json").contains("Authorization"));
+        assertFalse(entries.get(".dataspec/capabilities.json").contains("jdbc:postgresql://"));
 
         var catalog = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.json"));
         assertEquals("v2026.06.24", catalog.path("standard").path("specVersion").asText());
@@ -164,6 +179,7 @@ class AiContextExportServiceTest {
         assertEquals("hash123", manifest.path("standard").path("specHash").asText());
         assertTrue(manifest.path("files").toString().contains(".dataspec/field-catalog.json"));
         assertTrue(manifest.path("files").toString().contains(".dataspec/schema-registry.json"));
+        assertTrue(manifest.path("files").toString().contains(".dataspec/capabilities.json"));
         assertTrue(manifest.path("files").toString().contains(".dataspec/workflows.md"));
 
         var catalog = mapper.readTree(entries.get(".dataspec/field-catalog.json"));
@@ -581,7 +597,7 @@ class AiContextExportServiceTest {
         FieldService fieldService = mock(FieldService.class);
         EnumDictService enumDictService = mock(EnumDictService.class);
         SqlCheckRecordService sqlCheckRecordService = mock(SqlCheckRecordService.class);
-        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
         when(ruleConfigService.listByProject(PROJECT_ID)).thenReturn(List.of());
         when(ruleConfigService.listEnabledByProject(PROJECT_ID)).thenReturn(List.of());
@@ -620,7 +636,8 @@ class AiContextExportServiceTest {
                 ruleBaselineService,
                 new PromptTemplateRegistry(),
                 aiTaskProfileService,
-                new SchemaRegistryServiceImpl()
+                new SchemaRegistryServiceImpl(),
+                new AiCapabilityCatalogServiceImpl()
         );
     }
 

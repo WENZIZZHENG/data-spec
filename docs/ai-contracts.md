@@ -1,6 +1,6 @@
 # AI 输出契约
 
-本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、AI Context、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索和 DDL 预览的自动化使用场景。
+本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、AI Context、AI capability catalog、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索和 DDL 预览的自动化使用场景。
 
 ## 兼容策略
 
@@ -45,6 +45,58 @@ Contract summary 稳定字段：
 Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`enum-dict`、`rule-config`、`template`、`standard-snapshot`、`lint-result`、`ai-evidence-package`、`ai-context-manifest`、`ai-context-field-catalog` 和 `ai-task-profile`。
 
 `contract check` 的成功只说明 registry 结构对 AI 可用；它不会验证当前项目业务标准是否完整，也不会授权任何写入动作。
+
+## AI Capability Catalog
+
+Capability catalog 是 DataSpec 面向 AI agent 的只读能力目录，不是任务编排、鉴权、审批或 dry-run 机制。AI 可以先读取它，再决定使用 doctor、Context、lint、字段检索、DDL、反向导入或证据包等具体入口。
+
+稳定入口：
+
+- API `GET /api/capabilities`: 返回能力清单，可带 `projectId` 获取项目级诊断。
+- API `GET /api/capabilities/{id}`: 返回单个能力条目。
+- CLI `capability list|show|check`: 读取 catalog 并做轻量 invariants 检查。
+- MCP `capability-catalog` resource: URI 形如 `dataspec://project/{projectId}/capability-catalog`，也支持全局只读 `dataspec://capability-catalog`。
+- AI Context `.dataspec/capabilities.json`: 离线包内的 capability catalog。
+
+Catalog 稳定字段：
+
+- `kind`: 固定为 `dataspec-ai-capability-catalog`。
+- `schemaVersion`: catalog 文档结构版本，当前为整数。
+- `catalogVersion`: 当前内置 catalog 版本。
+- `generatedAt`
+- `projectId`
+- `capabilities[]`
+- `requiredCapabilityIds[]`
+- `recommendedFirstActions[]`
+- `diagnostics[]`
+
+Capability entry 稳定字段：
+
+- `id`
+- `category`
+- `title`
+- `summary`
+- `status`
+- `stability`
+- `requiresProject`
+- `writeRisk`
+- `requiredInputs[]`
+- `optionalInputs[]`
+- `outputContracts[]`
+- `apiEndpoints[]`
+- `cliCommands[]`
+- `mcpResources[]`
+- `mcpTools[]`
+- `frontendRoutes[]`
+- `contractIds[]`
+- `workflowIds[]`
+- `profileIds[]`
+- `examples[]`
+- `preflightChecks[]`
+- `nextActions[]`
+- `docsRef`
+
+`capability check` 的成功只说明 catalog 结构和核心能力条目存在；它不会执行这些能力，也不会验证当前项目标准质量。
 
 ### field
 
@@ -106,8 +158,9 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 稳定字段：
 
-- `.dataspec/manifest.json`: `kind`、`schemaVersion`、`projectId`、`standard.specVersion`、`standard.specHash`、`generatedAt`、`files[]`、`contextScope.profileId`、`contextScope.taskType`、`contracts.schemaVersion`、`contracts.registryVersion`、`contracts.file`、`contracts.contractIds[]`、`commands.lint`、`commands.exportContext`、`commands.workflowList`、`commands.contractList`。
+- `.dataspec/manifest.json`: `kind`、`schemaVersion`、`projectId`、`standard.specVersion`、`standard.specHash`、`generatedAt`、`files[]`、`contextScope.profileId`、`contextScope.taskType`、`contracts.schemaVersion`、`contracts.registryVersion`、`contracts.file`、`contracts.contractIds[]`、`commands.lint`、`commands.exportContext`、`commands.workflowList`、`commands.contractList`、`commands.capabilityList`。
 - `.dataspec/schema-registry.json`: Schema Registry catalog，稳定字段遵循上方 Schema Registry 契约。
+- `.dataspec/capabilities.json`: AI Capability Catalog，稳定字段遵循上方 Capability Catalog 契约。
 - `.dataspec/field-catalog.json`: `projectId`、`standard.specVersion`、`standard.specHash`、`contextScope`、`fields[]`、`enums[]`。
 - `fields[]`: `name`、`dataType`、`nullable`、`sensitive`、`status`、`comment`、`displayName`、`category`、`tags`、`codeSetId`、`example`、`aliases[]`、`matchReasons[]`。
 - `.dataspec/rules.yaml`: `standard`、`naming`、`rules`、`rule_exemptions`。
@@ -188,10 +241,12 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - CLI `lint`、`lint-files`、`suggest-field`、`search-fields`、`generate-ddl` 透传后端稳定字段。
 - CLI `profile list/show` 输出 AI Task Profiles 稳定字段；未知 profile 或 taskType 返回参数错误退出码。
 - CLI `contract list/show/check` 输出 Schema Registry 稳定字段；`check` 失败时退出码为 `2`，并返回 `diagnostics[]`。
+- CLI `capability list/show/check` 输出 AI Capability Catalog 稳定字段；`check` 失败时退出码为 `2`，并返回 `diagnostics[]`。
 - CLI `workflow list/show` 输出 `kind`、`schemaVersion`、`recipes[]`、`recipe`；recipe 保留 `id`、`title`、`goal`、`requiredInputs`、`prechecks`、`steps`、`expectedArtifacts`、`failureHandling`、`nextActions`。
 - CLI `evidence export` 输出 `AiEvidencePackage` JSON 或 zip；失败时返回参数错误退出码并输出脱敏错误。
 - MCP resources/tools 返回 `structuredContent` 和 `content[].text`；`content[].text` 应保持可解析 JSON 或明确文本 fallback。
 - MCP `ai-task-profiles` resource 输出 `AiTaskProfileCatalog` 兼容结构。
+- MCP `capability-catalog` resource 输出 AI Capability Catalog，并为该 resource 返回 `structuredContent` 和可解析 JSON text。
 - MCP `schema-registry` resource 输出 Schema Registry catalog。
 - MCP `workflow-recipes` resource 输出 `kind`、`schemaVersion`、`projectId`、`recipes[]`。
 - MCP `search_fields` tool 返回字段检索稳定字段，`content[].text` 保持可解析 JSON。

@@ -6,6 +6,7 @@ import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.aiprofile.model.AiTaskContextScope;
 import com.dataspec.aiprofile.model.AiTaskProfile;
 import com.dataspec.aiprofile.service.AiTaskProfileService;
+import com.dataspec.capability.service.AiCapabilityCatalogService;
 import com.dataspec.common.perf.PerformanceProbe;
 import com.dataspec.contract.service.SchemaRegistryService;
 import com.dataspec.field.entity.Field;
@@ -105,6 +106,7 @@ public class AiContextExportService {
     private final PromptTemplateRegistry promptTemplateRegistry;
     private final AiTaskProfileService aiTaskProfileService;
     private final SchemaRegistryService schemaRegistryService;
+    private final AiCapabilityCatalogService capabilityCatalogService;
 
     /**
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
@@ -823,6 +825,7 @@ public class AiContextExportService {
                         addTextEntry(zip, ".dataspec/field-catalog.json", generateFieldCatalogJson(projectId, snapshot, scopedFields));
                         addTextEntry(zip, ".dataspec/field-catalog.schema.json", generateFieldCatalogSchemaJson());
                         addTextEntry(zip, SchemaRegistryService.REGISTRY_FILE, generateSchemaRegistryJson());
+                        addTextEntry(zip, ".dataspec/capabilities.json", generateCapabilitiesJson(projectId));
                         addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId, snapshot, scopedFields.summary()));
                         addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId, scopedFields.summary()));
                         addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(projectId, snapshot));
@@ -862,6 +865,7 @@ public class AiContextExportService {
                         addTextEntry(zip, ".dataspec/field-catalog.json", generateFieldCatalogJson(projectId, snapshotPayload));
                         addTextEntry(zip, ".dataspec/field-catalog.schema.json", generateFieldCatalogSchemaJson());
                         addTextEntry(zip, SchemaRegistryService.REGISTRY_FILE, generateSchemaRegistryJson());
+                        addTextEntry(zip, ".dataspec/capabilities.json", generateCapabilitiesJson(projectId));
                         addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId, snapshotPayload.standard(), scopeSummary));
                         addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId, scopeSummary));
                         addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(snapshotPayload));
@@ -910,6 +914,7 @@ public class AiContextExportService {
             files.add(".dataspec/field-catalog.json");
             files.add(".dataspec/field-catalog.schema.json");
             files.add(SchemaRegistryService.REGISTRY_FILE);
+            files.add(".dataspec/capabilities.json");
             files.add(".dataspec/rules.yaml");
             files.add(".dataspec/prompts.md");
             files.add(".dataspec/workflows.md");
@@ -921,6 +926,7 @@ public class AiContextExportService {
             commands.put("lint", "dataspec lint <path|-> --project " + projectId + " --format json");
             commands.put("exportContext", exportContextCommand(projectId, scopeSummary));
             commands.put("contractList", "dataspec contract list --project " + projectId + " --format json");
+            commands.put("capabilityList", "dataspec capability list --project " + projectId + " --format json");
             commands.put("workflowList", "dataspec workflow list --format json");
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
         } catch (Exception e) {
@@ -937,6 +943,14 @@ public class AiContextExportService {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(schemaRegistryService.getCatalog());
         } catch (Exception e) {
             throw new RuntimeException("生成 " + SchemaRegistryService.REGISTRY_FILE + " 失败", e);
+        }
+    }
+
+    private String generateCapabilitiesJson(Long projectId) {
+        try {
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(capabilityCatalogService.getCatalog(projectId));
+        } catch (Exception e) {
+            throw new RuntimeException("生成 .dataspec/capabilities.json 失败", e);
         }
     }
 
@@ -984,6 +998,7 @@ public class AiContextExportService {
                 - `.dataspec/field-catalog.json`：标准字段目录，包含字段名、类型、别名、敏感标记、状态、代码集和示例值。
                 - `.dataspec/field-catalog.schema.json`：字段目录 JSON Schema。
                 - `.dataspec/schema-registry.json`：AI 可消费输出契约 registry，包含契约版本、稳定字段、JSON Schema 和兼容策略。
+                - `.dataspec/capabilities.json`：DataSpec 面向 AI 的能力清单，说明 API/CLI/MCP/前端入口、前置检查、writeRisk 和下一步建议。
                 - `.dataspec/rules.yaml`：结构化命名规则和项目规则配置。
                 - `.dataspec/prompts.md`：建表和 SQL Review 的 AI prompt 模板。
                 - `.dataspec/workflows.md`：常见 AI/DataSpec 任务 recipe，说明输入、步骤、命令、产物和失败恢复。
@@ -993,8 +1008,9 @@ public class AiContextExportService {
 
                 ## 使用约定
 
-                - 创建或修改 SQL、migration、ORM entity 前，先读取 `.dataspec/manifest.json`、字段目录、schema registry 和规则文件。
+                - 创建或修改 SQL、migration、ORM entity 前，先读取 `.dataspec/manifest.json` 和 `.dataspec/capabilities.json`，再读取字段目录、schema registry 和规则文件。
                 - 需要稳定字段名或兼容策略时，读取 `.dataspec/schema-registry.json`，不要依赖未列入 stableFields 的内部字段。
+                - 需要选择 API、CLI 或 MCP 入口时，优先读取 `.dataspec/capabilities.json` 的 writeRisk、preflightChecks 和 nextActions。
                 - 不确定任务步骤时，先读取 `.dataspec/workflows.md`，选择合适 recipe 后再显式执行其中的命令。
                 - 检查 SQL 时运行：
 
@@ -1613,6 +1629,7 @@ public class AiContextExportService {
                 在创建或修改数据库 schema、SQL migration、ORM entity 或数据字典前，必须先阅读:
 
                 - `.dataspec/manifest.json`
+                - `.dataspec/capabilities.json`
                 - `.dataspec/DATABASE_RULES.md`
                 - `.dataspec/field-catalog.json`
                 - `.dataspec/schema-registry.json`
@@ -1620,6 +1637,7 @@ public class AiContextExportService {
 
                 工作要求:
                 - 先检查 `.dataspec/manifest.json` 的 `standard.specVersion` 和 `standard.specHash`，在输出说明中标明使用的标准版本。
+                - 先读取 `.dataspec/capabilities.json`，确认当前任务应使用的 API、CLI、MCP resource/tool、preflightChecks 和 writeRisk。
                 - 需要稳定输出字段或兼容策略时，读取 `.dataspec/schema-registry.json`，并以 stableFields/schemaVersion 为准。
                 - 优先使用 `.dataspec/field-catalog.json` 中已有标准字段。
                 - 新增表必须符合 `.dataspec/DATABASE_RULES.md` 的命名、类型、注释和公共字段规则。

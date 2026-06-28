@@ -1604,6 +1604,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["catalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/capabilities/{capabilityId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["capability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/me": {
         parameters: {
             query?: never;
@@ -4410,6 +4442,72 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["PageResultStandardChangeLog"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        AiCapabilityCatalog: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            catalogVersion?: string;
+            /** Format: date-time */
+            generatedAt?: string;
+            /** Format: int64 */
+            projectId?: number;
+            capabilities?: components["schemas"]["AiCapabilityEntry"][];
+            requiredCapabilityIds?: string[];
+            recommendedFirstActions?: string[];
+            diagnostics?: components["schemas"]["AiCapabilityDiagnostic"][];
+        };
+        AiCapabilityDiagnostic: {
+            code?: string;
+            status?: string;
+            message?: string;
+            nextAction?: string;
+        };
+        AiCapabilityEntry: {
+            id?: string;
+            category?: string;
+            title?: string;
+            summary?: string;
+            status?: string;
+            stability?: string;
+            requiresProject?: boolean;
+            writeRisk?: string;
+            requiredInputs?: string[];
+            optionalInputs?: string[];
+            outputContracts?: string[];
+            apiEndpoints?: string[];
+            cliCommands?: string[];
+            mcpResources?: string[];
+            mcpTools?: string[];
+            frontendRoutes?: string[];
+            contractIds?: string[];
+            workflowIds?: string[];
+            profileIds?: string[];
+            examples?: components["schemas"]["AiCapabilityExample"][];
+            preflightChecks?: string[];
+            nextActions?: string[];
+            docsRef?: string;
+        };
+        AiCapabilityExample: {
+            title?: string;
+            surface?: string;
+            command?: string;
+            request?: string;
+            description?: string;
+        };
+        RAiCapabilityCatalog: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiCapabilityCatalog"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RAiCapabilityEntry: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiCapabilityEntry"];
             error?: components["schemas"]["ErrorDetail"];
         };
         AuthMe: {
@@ -7765,6 +7863,52 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RPageResultStandardChangeLog"];
+                };
+            };
+        };
+    };
+    catalog: {
+        parameters: {
+            query?: {
+                projectId?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiCapabilityCatalog"];
+                };
+            };
+        };
+    };
+    capability: {
+        parameters: {
+            query?: {
+                projectId?: number;
+            };
+            header?: never;
+            path: {
+                capabilityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiCapabilityEntry"];
                 };
             };
         };

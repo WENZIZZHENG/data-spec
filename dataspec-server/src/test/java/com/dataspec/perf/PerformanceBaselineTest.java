@@ -2,6 +2,7 @@ package com.dataspec.perf;
 
 import com.dataspec.aicontext.service.AiContextExportService;
 import com.dataspec.aireplay.service.AiJobRecordService;
+import com.dataspec.capability.service.impl.AiCapabilityCatalogServiceImpl;
 import com.dataspec.common.perf.PerformanceProbe;
 import com.dataspec.contract.service.impl.SchemaRegistryServiceImpl;
 import com.dataspec.enumdict.service.EnumDictService;
@@ -31,6 +32,7 @@ import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -124,7 +126,7 @@ class PerformanceBaselineTest {
         AiJobRecordService aiJobRecordService = mock(AiJobRecordService.class);
         RuleExemptionService ruleExemptionService = mock(RuleExemptionService.class);
         RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
-        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
         when(ruleConfigService.listByProject(PROJECT_ID)).thenReturn(List.of());
         when(ruleConfigService.listEnabledByProject(PROJECT_ID)).thenReturn(List.of());
@@ -159,7 +161,8 @@ class PerformanceBaselineTest {
                 ruleBaselineService,
                 new PromptTemplateRegistry(),
                 null,
-                new SchemaRegistryServiceImpl()
+                new SchemaRegistryServiceImpl(),
+                new AiCapabilityCatalogServiceImpl()
         );
     }
 

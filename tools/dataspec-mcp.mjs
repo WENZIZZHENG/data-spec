@@ -11,6 +11,13 @@ const SERVER_VERSION = '0.1.0'
 const EVIDENCE_SOURCE_TYPES = ['AI_JOB', 'SQL_CHECK', 'COVERAGE_REPORT', 'AI_BATCH_RUN']
 
 const RESOURCE_DEFS = {
+  'capability-catalog': {
+    name: 'DataSpec AI Capability Catalog',
+    description: '只读自描述能力清单，说明 DataSpec 可供 AI 使用的 API、CLI、MCP 入口、前置检查和 writeRisk。',
+    path: '/api/capabilities',
+    mimeType: 'application/json',
+    capabilityResource: true
+  },
   'field-catalog': {
     name: 'DataSpec Field Catalog',
     description: '当前项目的标准字段目录，供 AI 生成或评审 SQL 时引用。',
@@ -71,12 +78,13 @@ const PROMPTS = {
     buildText(args, projectId) {
       return [
         '你是 DataSpec 数据建模助手。请先读取并遵守以下 MCP resources：',
+        `- dataspec://project/${projectId}/capability-catalog`,
         `- dataspec://project/${projectId}/schema-registry`,
         `- dataspec://project/${projectId}/ai-task-profiles`,
         `- dataspec://project/${projectId}/field-catalog`,
         `- dataspec://project/${projectId}/database-rules`,
         '',
-        '先根据 schema registry 确认稳定字段和兼容策略，再根据 AI task profile 选择 context scope、fixedSql 策略和输出格式；再根据字段目录优先复用标准字段，生成 PostgreSQL DDL。要求表名和列名使用 snake_case，并为表和字段补充 COMMENT ON 语句。',
+        '先根据 capability catalog 确认可用入口、preflightChecks 和 writeRisk；再根据 schema registry 确认稳定字段和兼容策略，根据 AI task profile 选择 context scope、fixedSql 策略和输出格式；再根据字段目录优先复用标准字段，生成 PostgreSQL DDL。要求表名和列名使用 snake_case，并为表和字段补充 COMMENT ON 语句。',
         '交付前请调用 MCP tool `export_evidence_package` 导出 evidence package，作为本次建模依据、输出和下一步建议的只读交接物。',
         args.businessDescription ? `业务描述：${args.businessDescription}` : '业务描述：请根据用户后续输入补全。'
       ].join('\n')
@@ -98,8 +106,9 @@ const PROMPTS = {
     ],
     buildText(args, projectId) {
       return [
-        '请按 DataSpec 标准评审 SQL。先读取 schema registry 和 AI task profile，再读取字段目录和数据库规则，并在需要机器校验时调用 MCP tool `lint_sql`。',
+        '请按 DataSpec 标准评审 SQL。先读取 capability catalog、schema registry 和 AI task profile，再读取字段目录和数据库规则，并在需要机器校验时调用 MCP tool `lint_sql`。',
         '完成修复或评审交付前，请调用 MCP tool `export_evidence_package` 导出 evidence package，便于用户和下游 AI 复盘。',
+        `能力清单：dataspec://project/${projectId}/capability-catalog`,
         `契约 registry：dataspec://project/${projectId}/schema-registry`,
         `AI profile：dataspec://project/${projectId}/ai-task-profiles`,
         `字段目录：dataspec://project/${projectId}/field-catalog`,
@@ -124,8 +133,9 @@ const PROMPTS = {
     ],
     buildText(args, projectId) {
       return [
-        '请把业务需求拆成字段设计建议。先读取 schema registry、AI task profile 和 DataSpec 字段目录，优先复用已有标准字段；缺口字段请说明建议字段名、类型、注释和是否应纳入标准字段库。',
+        '请把业务需求拆成字段设计建议。先读取 capability catalog、schema registry、AI task profile 和 DataSpec 字段目录，优先复用已有标准字段；缺口字段请说明建议字段名、类型、注释和是否应纳入标准字段库。',
         '完成字段设计建议前，请调用 MCP tool `export_evidence_package` 导出 evidence package，记录使用的标准、候选依据和后续动作。',
+        `能力清单：dataspec://project/${projectId}/capability-catalog`,
         `契约 registry：dataspec://project/${projectId}/schema-registry`,
         `AI profile：dataspec://project/${projectId}/ai-task-profiles`,
         `字段目录：dataspec://project/${projectId}/field-catalog`,
@@ -257,14 +267,17 @@ async function readResource(params, context) {
   if (!def) {
     throw new JsonRpcError(-32602, `未知 resource: ${uri}`)
   }
+  let structuredContent
   const text = typeof def.localContent === 'function'
     ? def.localContent(projectId)
     : def.profileResource
       ? JSON.stringify(await fetchProfileResource(context, projectId), null, 2)
       : def.contractResource
         ? JSON.stringify(await fetchContractResource(context), null, 2)
-        : await fetchAiContextText(context, def.path, projectId)
-  return {
+        : def.capabilityResource
+          ? JSON.stringify(structuredContent = await fetchCapabilityResource(context, projectId), null, 2)
+          : await fetchAiContextText(context, def.path, projectId)
+  const result = {
     contents: [
       {
         uri,
@@ -273,6 +286,10 @@ async function readResource(params, context) {
       }
     ]
   }
+  if (structuredContent !== undefined) {
+    result.structuredContent = structuredContent
+  }
+  return result
 }
 
 function listPrompts() {
@@ -740,6 +757,32 @@ async function fetchContractResource(context) {
   return await readDataSpecJson(response)
 }
 
+async function fetchCapabilityResource(context, projectId) {
+  try {
+    const params = new URLSearchParams()
+    appendOptionalParam(params, 'projectId', projectId)
+    const suffix = params.toString() ? `?${params.toString()}` : ''
+    const response = await context.fetchFn(`${context.server}/api/capabilities${suffix}`, {
+      headers: dataSpecHeaders(context.apiToken)
+    })
+    return await readDataSpecJson(response)
+  } catch (error) {
+    if (error instanceof JsonRpcError) {
+      throw error
+    }
+    throw new JsonRpcError(-32000, `读取 capability catalog 失败: ${error?.message ?? 'DataSpec 服务不可用'}`, {
+      dataspecError: {
+        code: 'DATASPEC_SERVER_UNAVAILABLE',
+        category: 'NETWORK',
+        retryable: true,
+        suggestedAction: '先运行 dataspec doctor --format json 检查服务、server URL、token 和项目配置。',
+        docsRef: 'README.md#cli',
+        httpStatus: null
+      }
+    })
+  }
+}
+
 function scopedCatalogParams(args, context) {
   return {
     ...resolveProfileSelection(args, context.defaultProfileSelection),
@@ -882,6 +925,12 @@ function parseJsonOrFallback(text) {
 }
 
 function parseResourceUri(uri) {
+  if (uri === 'dataspec://capability-catalog') {
+    return {
+      projectId: undefined,
+      resourceKey: 'capability-catalog'
+    }
+  }
   const match = /^dataspec:\/\/project\/(\d+)\/([a-z-]+)$/.exec(uri)
   if (!match) {
     throw new JsonRpcError(-32602, `无效 resource uri: ${uri}`)
