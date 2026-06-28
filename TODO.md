@@ -10,7 +10,8 @@
 4. 追加优化建议已补为 P6-99 到 P6-104：只读标准文档站、标准资产依赖图、环境配置漂移检测、数据源连接器注册、本地运行观测诊断和标准决策理由库。
 5. 本轮新增 AI 使用优化建议已补为 P6-105 到 P6-110：AI 一页式工作台、表级约束与索引标准、枚举生命周期、业务仓库迁移交付包、AI 能力边界模拟和文档反向提取候选。
 6. 本次追加优化建议已补为 P6-111 到 P6-116：标准候选来源管道、候选批量决策、采纳前质量门禁、AI 任务推荐队列、跨来源证据视图和前端端到端引导。
-7. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+7. 继续追加优化建议已补为 P6-117 到 P6-122：统一变更 Diff、全链路 Trace、版本兼容降级、AI 场景样例、数据模型契约和前端反馈转任务。
+8. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -1151,12 +1152,73 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：空项目能按引导创建演示数据并完成一次 SQL 检查和 Context 导出；已有项目能跳过已完成步骤；失败时给出页面跳转、命令和 AI 可读错误。
 - 边界：不重做所有页面 UI，不替代 README，不自动连接外部数据库；第一版优先覆盖本地演示和个人项目闭环。
 
+### P6-117：统一变更 Diff 与预览组件
+- 状态：待办。
+- 为什么做：fixedSql、反向导入 compare、标准快照 diff、规则模板 diff、Prompt 评测 diff 和迁移交付包都会展示“改了什么”；如果每个页面各自实现，AI 和用户会看到不一致的风险等级、证据和应用边界。
+- 已有基础：已有 fixedSql diff、数据库二次比对、标准快照、规则模板 diff 包、Prompt 模板评测待办、业务仓库迁移交付包和执行证据包。
+- 缺口：缺少统一 change preview 数据结构和前端展示组件；不同来源的 before/after、riskLevel、evidenceRefs、applyMode、rollbackHint 无法复用，也难以导出给 AI。
+- 参考项目：`reviewdog/reviewdog` 的诊断聚合、`changesets/changesets` 的变更说明和 `hashicorp/terraform` 的 plan 预览；只借鉴差异表达，不自动应用高风险改动。
+- 落地产物：新增统一 diff DTO 和前端组件；支持文本 diff、结构化字段 diff、规则 diff、标准快照 diff 和 prompt 输出 diff；每条变更可携带 riskLevel、sourceRef、recommendedAction、applyable、rollbackHint 和 copyableEvidence。
+- 验收标准：SQL 修复、反向导入差异和标准快照差异能用同一套组件展示；AI 可读取统一 JSON 判断是否可 dry-run、可应用或需人工确认；导出内容不包含密码、token 或业务数据行。
+- 边界：不做像素级可视化大改，不替代各业务页面的提交逻辑；第一版只统一预览和证据表达。
+
+### P6-118：全链路 Trace ID 与 AI 操作关联
+- 状态：待办。
+- 为什么做：AI 通过前端、CLI、MCP 或 API 执行任务后，相关记录可能散落在 AI job、SQL 检查记录、候选、导入批次、后端日志和诊断包里；缺少 trace ID 时，很难复盘一次操作的完整路径。
+- 已有基础：已有 AI 回放、检查记录、导入批次、AI 批量任务、执行证据包、本地诊断包待办、OpenTelemetry/Trace 参考和统一 API wrapper。
+- 缺口：当前记录多按各自 id 查询，缺少 correlationId/requestId 贯穿请求入口、服务处理、任务记录、证据包和前端错误状态。
+- 参考项目：`open-telemetry/opentelemetry-collector` 的 trace/span 组织和 `langfuse/langfuse` 的 AI trace 视角；只做本地轻量关联，不接入远程遥测。
+- 落地产物：新增 `traceId` 或 `correlationId` 约定；前端、CLI、MCP 请求自动带入并在响应、AI job、lint record、import batch、candidate decision 和 evidence bundle 中记录；诊断包可按 trace 汇总。
+- 验收标准：一次 SQL 校验、反向导入或候选采纳能通过一个 trace ID 找到输入、输出、标准版本、错误、耗时和后续建议；日志和导出内容经过敏感信息脱敏。
+- 边界：不做分布式追踪平台，不上传遥测，不长期保存详细请求体；第一版只覆盖 DataSpec 内部链路。
+
+### P6-119：版本兼容矩阵与降级策略
+- 状态：待办。
+- 为什么做：DataSpec 的后端、前端生成类型、CLI、MCP、AI Context 缓存、标准快照和业务仓库 `.dataspec/config.json` 会独立变化；AI 如果拿旧上下文调用新接口，可能产生难以定位的失败。
+- 已有基础：已有 OpenAPI 防漂移、CLI/MCP 兼容握手、离线 Context 缓存、`dataspec doctor`、标准快照、能力清单和环境指纹待办。
+- 缺口：缺少机器可读 compatibility matrix，无法稳定说明 serverVersion、apiSchemaVersion、cliVersion、mcpVersion、contextVersion、snapshotVersion 和 configVersion 的兼容关系与降级动作。
+- 参考项目：`bufbuild/buf` 的 breaking change 检查、`OpenAPITools/openapi-generator` 的契约生成和 `hashicorp/terraform` 的版本约束提示；只借鉴兼容性表达，不做远程升级服务。
+- 落地产物：新增版本兼容 manifest；`doctor`、CLI、MCP 和前端启动时可读取 min/max compatible version、breakingChanges、deprecatedFields、fallbackCommands、mustRegenerateContext 和 stopReasons。
+- 验收标准：当前端 schema.ts 过旧、CLI 版本过旧、AI Context 缓存与服务端不兼容或后端 API breaking 时，能给出明确继续/停止判断和修复命令；AI 可解析 JSON 后自动选择安全降级。
+- 边界：不承诺长期 LTS，不自动升级依赖，不强制联网检查版本；第一版只管理本地仓库和当前服务可见版本。
+
+### P6-120：AI 场景样例库与端到端回放脚本
+- 状态：待办。
+- 为什么做：Prompt 评测能约束单个模板，但 AI 实际使用 DataSpec 是连续任务：选项目、查标准、生成 SQL、校验、修复、导出证据；缺少场景级样例会让整体行为退化不易发现。
+- 已有基础：已有演示项目、workflow recipes、AI 回放、Prompt 模板评测待办、golden fixtures、浏览器级 E2E 待办和前端上手演练待办。
+- 缺口：缺少 scenario dataset，无法定义一次 AI 任务的输入上下文、期望调用顺序、关键输出断言、允许差异和失败诊断。
+- 参考项目：`promptfoo/promptfoo` 的样例评测、`langfuse/langfuse` 的 datasets/trace 思路和 `microsoft/playwright` 的 trace 产物；只做本地回放，不默认调用外部 LLM。
+- 落地产物：新增 `examples/ai-scenarios` 或等价目录；每个场景包含 project seed、input task、expected tools、expected artifacts、contract assertions、redaction checks 和 replay command；CLI 提供 dry-run 回放入口。
+- 验收标准：建订单表、修复 bad SQL、反向导入候选、导出最小 Context 等场景可一键回放；输出不符合 JSON/Markdown/字段引用约束时验证失败；失败报告能指向具体步骤。
+- 边界：不评价外部模型智能水平，不保存真实业务数据，不让回放脚本执行高风险写入；第一版以本地确定性断言为主。
+
+### P6-121：DataSpec 自身数据模型契约快照
+- 状态：待办。
+- 为什么做：项目已经有 Flyway 迁移和 OpenAPI 契约，但 DataSpec 自身的表、字段、索引和 JSON payload 约束也在持续扩展；如果迁移或实体变更没有契约快照，老库升级、AI 回放和备份恢复都可能出现隐性不兼容。
+- 已有基础：已有 Flyway、数据库 schema dump、OpenAPI 类型契约、备份恢复迁移包、标准快照、执行证据包和文档状态一致性待办。
+- 缺口：缺少 DataSpec 内部 schema contract，不容易对比当前数据库、迁移脚本、实体模型和文档之间是否一致，也无法标记破坏性数据模型变化。
+- 参考项目：`ariga/atlas` 的 schema-as-code、`liquibase/liquibase` 的数据库变更日志和 `prisma/prisma` 的 introspection 思路；只借鉴契约快照，不引入重型 ORM 或迁移平台。
+- 落地产物：新增内部数据模型契约快照；记录 tables、columns、indexes、foreignKeys、jsonFields、requiredConstraints、migrationVersion、breakingChangeHints 和 restoreCompatibility；验证命令可比较 Flyway 结果与快照。
+- 验收标准：修改后端表结构或重要 JSON 字段时，必须更新契约快照并通过校验；备份恢复和 AI 回放能知道目标库是否满足最低数据模型版本。
+- 边界：不替代 Flyway，不自动生成所有迁移，不要求一次性补全历史数据库；第一版优先覆盖核心表和 AI/反向导入相关 payload。
+
+### P6-122：前端问题反馈转任务与证据采集
+- 状态：待办。
+- 为什么做：个人使用时发现页面空状态、接口失败、校验异常或体验卡点，通常需要手工截屏、复制 URL、复制项目 ID 和日志；如果能一键生成反馈任务，AI 后续修复会更快。
+- 已有基础：已有前端统一状态待办、命令面板、AI 任务推荐队列、诊断包、浏览器级 E2E、执行证据包和 TODO 到 OpenSpec 交接。
+- 缺口：前端缺少轻量 feedback-to-task 入口，无法把 route、projectId、traceId、requestError、currentFilters、recentActions、screenshotHint 和 userNote 组织成可复现任务。
+- 参考项目：`getsentry/sentry-javascript` 的前端错误上下文、`microsoft/playwright` 的 trace 截图和 `github/gh` 的 issue/PR 任务描述体验；只借鉴上下文采集和任务模板，不接入远程 SaaS。
+- 落地产物：新增前端“反馈/生成任务”入口或错误页动作；导出脱敏 JSON/Markdown，包含复现步骤、页面状态、接口错误、traceId、相关记录 id、建议验证命令和 OpenSpec/TODO 草稿。
+- 验收标准：在 SQL 校验失败、反向导入异常或字段库筛选异常时，可一键生成可复制的修复任务；生成内容不包含 token、密码、完整 JDBC URL 或业务数据行；AI 能直接基于任务继续排查。
+- 边界：不自动提交 GitHub issue，不上传截图或日志，不替代用户说明；第一版只在本地浏览器和当前项目内生成证据。
+
 ## 参考项目索引
 
 - [`sqlfluff/sqlfluff`](https://github.com/sqlfluff/sqlfluff)：模块化、可配置、多方言 SQL linter。
 - [`eslint/eslint`](https://github.com/eslint/eslint)：可插拔规则、fixture 测试和规则元数据设计参考。
 - [`ariga/atlas`](https://github.com/ariga/atlas)：schema-as-code、schema lint 和迁移规划。
 - [`ariga/atlas-action`](https://github.com/ariga/atlas-action)：数据库 schema 变更的 GitHub Actions lint 入口。
+- [`liquibase/liquibase`](https://github.com/liquibase/liquibase)：数据库变更日志、schema contract 和迁移可追溯性参考。
 - [`bytebase/bytebase`](https://github.com/bytebase/bytebase)：数据库 DevOps 工作台、SQL Review、数据库 CI/CD。
 - [`bytebase/example-gitops-github-flow`](https://github.com/bytebase/example-gitops-github-flow)：Bytebase + GitHub Flow 数据库发布示例。
 - [`k1LoW/tbls`](https://github.com/k1Low/tbls)：CI-friendly 数据库文档生成工具。
@@ -1183,6 +1245,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - [`Schemathesis/schemathesis`](https://github.com/schemathesis/schemathesis)：基于 OpenAPI 的契约测试和接口行为回归参考。
 - [`sqlmesh/sqlmesh`](https://github.com/TobikoData/sqlmesh)：数据模型依赖、plan/apply 和变更影响分析参考。
 - [`microsoft/playwright`](https://github.com/microsoft/playwright)：浏览器级 E2E、trace、截图和稳定选择器参考。
+- [`getsentry/sentry-javascript`](https://github.com/getsentry/sentry-javascript)：前端错误上下文、breadcrumb 和本地反馈证据采集参考。
 - [`testcontainers/testcontainers-java`](https://github.com/testcontainers/testcontainers-java)：Java 集成测试中启动真实 PostgreSQL/MySQL 容器的参考。
 - [`TanStack/query`](https://github.com/TanStack/query)：前端 server state、请求缓存、重试和错误状态收口参考。
 - [`dequelabs/axe-core`](https://github.com/dequelabs/axe-core)：前端可访问性自动检查规则参考。
