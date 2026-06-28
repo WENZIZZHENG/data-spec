@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadDataSpecConfig, resolveDefaultPaths } from './dataspec-config.mjs'
@@ -171,7 +172,7 @@ function runWorkflow(args, io) {
 }
 
 async function runLintFiles(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'dataspec-token'])
+  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'dataspec-token', 'delivery-package', 'batch-package'])
   const config = loadDataSpecConfig(cliCwd(io))
   const inputPaths = positional.length > 0 ? positional : resolveDefaultPaths(config)
   if (inputPaths.length === 0) {
@@ -182,9 +183,13 @@ async function runLintFiles(args, io, fetchFn) {
   if (format !== 'json') {
     throw new Error('当前仅支持 --format json')
   }
+  const deliveryPackagePath = resolveDeliveryPackagePath(options)
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
   const output = await lintSqlFiles(inputPaths, projectId, server, fetchFn, apiToken)
+  if (deliveryPackagePath) {
+    await writeDeliveryPackage(deliveryPackagePath, buildLintFilesDeliveryPackage(output, projectId))
+  }
   io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
   return output.summary.failedFiles > 0 ? 1 : 0
 }
@@ -996,6 +1001,147 @@ function summarizeLintResults(results) {
   })
 }
 
+function resolveDeliveryPackagePath(options) {
+  if (options['delivery-package'] && options['batch-package']) {
+    throw new Error('请只使用 --delivery-package 或 --batch-package 之一')
+  }
+  return options['delivery-package'] ?? options['batch-package']
+}
+
+async function writeDeliveryPackage(outputPath, deliveryPackage) {
+  await mkdir(path.dirname(path.resolve(outputPath)), { recursive: true })
+  await writeFile(outputPath, `${JSON.stringify(deliveryPackage, null, 2)}\n`, 'utf8')
+}
+
+function buildLintFilesDeliveryPackage(lintOutput, projectId) {
+  const items = (lintOutput.files ?? []).map((file) => toDeliveryPackageItem(file))
+  const summary = buildDeliverySummary(items)
+  return {
+    packageVersion: 'ai-batch-delivery@1',
+    batchId: buildLocalBatchId(projectId, items, summary),
+    projectId,
+    batchType: 'SQL_LINT',
+    source: 'cli',
+    status: 'SUCCESS',
+    summary,
+    items,
+    issueSummary: buildDeliveryIssueSummary(items),
+    fixedSqlSummary: buildDeliveryFixedSqlSummary(items),
+    unmanagedHints: [],
+    evidence: [
+      { kind: 'batchType', name: '任务类型', value: 'SQL_LINT' },
+      { kind: 'source', name: '任务来源', value: 'cli' },
+      { kind: 'summary', name: 'SQL 文件数量', value: String(summary.totalItems) }
+    ],
+    nextActions: buildDeliveryNextActions(summary),
+    createdAt: new Date().toISOString()
+  }
+}
+
+function toDeliveryPackageItem(file) {
+  const result = file.result ?? {}
+  return {
+    itemName: path.basename(file.path ?? ''),
+    filePath: sanitizeSecretText(file.path),
+    status: 'SUCCESS',
+    errorCount: Number(result.errorCount ?? 0),
+    warningCount: Number(result.warningCount ?? 0),
+    suggestionCount: Number(result.suggestionCount ?? 0),
+    suppressedCount: Number(result.suppressedCount ?? 0),
+    fixedSqlAvailable: Boolean(result.fixedSql),
+    fixedSql: sanitizeSecretText(result.fixedSql),
+    fixedSqlDiff: sanitizeSecretText(result.fixedSqlDiff),
+    issues: sanitizeSecretValue(result.issues ?? []),
+    dialectDiagnostics: sanitizeSecretValue(result.dialectDiagnostics ?? []),
+    sqlCheckRecordId: result.sqlCheckRecordId ?? null,
+    errorMessage: sanitizeSecretText(result.errorMessage)
+  }
+}
+
+function buildDeliverySummary(items) {
+  const failedItems = items.filter((item) => item.status === 'FAILED').length
+  return {
+    totalItems: items.length,
+    successItems: items.length - failedItems,
+    failedItems,
+    errorCount: items.reduce((sum, item) => sum + Number(item.errorCount ?? 0), 0),
+    warningCount: items.reduce((sum, item) => sum + Number(item.warningCount ?? 0), 0),
+    suggestionCount: items.reduce((sum, item) => sum + Number(item.suggestionCount ?? 0), 0),
+    fixedSqlCount: items.filter((item) => item.fixedSqlAvailable).length
+  }
+}
+
+function buildDeliveryIssueSummary(items) {
+  const byRule = new Map()
+  for (const item of items) {
+    for (const issue of Array.isArray(item.issues) ? item.issues : []) {
+      const key = issue.ruleCode || 'unknown'
+      const current = byRule.get(key) ?? { ruleCode: issue.ruleCode, ruleName: issue.ruleName, count: 0 }
+      current.count += 1
+      byRule.set(key, current)
+    }
+  }
+  return {
+    errorCount: items.reduce((sum, item) => sum + Number(item.errorCount ?? 0), 0),
+    warningCount: items.reduce((sum, item) => sum + Number(item.warningCount ?? 0), 0),
+    suggestionCount: items.reduce((sum, item) => sum + Number(item.suggestionCount ?? 0), 0),
+    byRule: [...byRule.values()].sort((left, right) => right.count - left.count)
+  }
+}
+
+function buildDeliveryFixedSqlSummary(items) {
+  return {
+    availableCount: items.filter((item) => item.fixedSqlAvailable).length,
+    changedCount: items.filter((item) => item.fixedSqlAvailable && item.fixedSqlDiff).length
+  }
+}
+
+function buildDeliveryNextActions(summary) {
+  const actions = []
+  if (summary.failedItems > 0) {
+    actions.push('查看失败项 errorMessage，修正输入后缩小范围重试')
+  }
+  if (summary.errorCount > 0) {
+    actions.push('优先修复 ERROR 级 SQL 标准问题')
+  }
+  if (summary.fixedSqlCount > 0) {
+    actions.push('人工确认 fixedSql 后再应用到业务仓库')
+  }
+  return actions.length > 0 ? actions : ['无需处理']
+}
+
+function buildLocalBatchId(projectId, items, summary) {
+  const hash = createHash('sha256')
+    .update(JSON.stringify({ projectId, files: items.map((item) => item.filePath), summary }))
+    .digest('hex')
+    .slice(0, 12)
+  return `local-${hash}`
+}
+
+function sanitizeSecretValue(value) {
+  if (typeof value === 'string') {
+    return sanitizeSecretText(value)
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeSecretValue(item))
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizeSecretValue(item)]))
+  }
+  return value
+}
+
+function sanitizeSecretText(value) {
+  if (value === undefined || value === null) {
+    return value
+  }
+  return String(value)
+    .replace(/jdbc:[^\s"'<>]+/gi, 'jdbc:***')
+    .replace(/\b(password|pwd)\s*=\s*(['"]?)[^\s"';&]+\2/gi, '$1=***')
+    .replace(/\b(token|api[_-]?token)\s*=\s*(['"]?)[^\s"';&]+\2/gi, '$1=***')
+    .replace(/\b(bearer\s+)[A-Za-z0-9._-]+/gi, '$1***')
+}
+
 function formatLintText(result) {
   const lines = [
     'DataSpec Lint',
@@ -1546,7 +1692,7 @@ function helpText() {
 
 Usage:
   node tools/dataspec-cli.mjs lint <path|-> [--project <id>] --format text|json [--server <url>] [--dataspec-token <token>]
-  node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] --format json [--delivery-package <json>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs export-context [--project <id>] --output <zip> [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
@@ -1562,6 +1708,7 @@ Options:
   --server  可由 .dataspec/config.json 的 server 提供
   --dataspec-token 可由 .dataspec/config.json 的 apiToken 或 DATASPEC_TOKEN 环境变量提供
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
+  lint-files 可通过 --delivery-package 或 --batch-package 写出 AI 批量任务交付包，stdout JSON 保持原结构
   export-context 默认导出完整包；传 --scope/--query/--status/--limit 时导出按需包；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token

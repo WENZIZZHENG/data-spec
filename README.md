@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、项目备份恢复、AI Context、API Token 安全基线与管理页、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 批量任务交付包、API Token 安全基线与管理页、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -52,10 +52,11 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI Context manifest、字段目录和规则文件携带标准快照版本、hash 与来源 `source=current|snapshot|unversioned`；`rules.yaml` 还会标明当前规则基线 key/name/version/source/appliedAt；未创建快照时标记为 `unversioned`。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - AI 回放记录，支持查看 Prompt、SQL 检查修正和 DDL 预览的输入输出、promptVersion 与标准快照。
+- AI 批量任务，支持后端保存 SQL lint batch run、前端查看最近任务/分项结果/下一步动作并下载 JSON 交付包。
 - 字段推荐与字段标准检索 API/CLI/MCP。
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
-- CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、workflow recipes、单文件 lint、批量 `lint-files`、PR inline/汇总评论式 `review-pr`、AI Context 导出、历史快照 Context 导出、字段推荐、字段标准检索和 DDL 生成。
+- CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、workflow recipes、单文件 lint、批量 `lint-files`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、历史快照 Context 导出、字段推荐、字段标准检索和 DDL 生成。
 - MCP Server 暴露 DataSpec resources、workflow recipes、prompts 和核心 tools。
 - GitHub Actions 示例支持 SQL 批量校验、PR diff inline 评论和 fallback 汇总评论。
 
@@ -368,6 +369,9 @@ cat examples/good-example.sql | node tools/dataspec-cli.mjs lint - --project 1 -
 # 批量校验 SQL 文件或目录，发现任一 ERROR 时退出码为 1
 node tools/dataspec-cli.mjs lint-files examples --project 1 --format json
 
+# 批量校验并写出 AI 可交付 JSON 包，stdout 仍保持原 summary/files 结构
+node tools/dataspec-cli.mjs lint-files examples --project 1 --format json --delivery-package dataspec-ai-batch.json
+
 # 未传路径时，lint-files 会使用 config.json 的 defaultPaths
 node tools/dataspec-cli.mjs lint-files --format json
 
@@ -412,7 +416,7 @@ node tools/dataspec-cli.mjs workflow show create-table --format json
 node tools/dataspec-cli.mjs lint examples/bad-example.sql --project 1 --format json --server http://localhost:8090
 ```
 
-`doctor` 会检查配置文件、DataSpec 服务、API token 身份、项目可访问性、`defaultPaths` 和 OpenAPI 状态；默认只做轻量 OpenAPI 检查，传 `--check-openapi` 时会复用前端契约校验逻辑做完整 schema 漂移检查。`workflow` 只输出任务计划和命令建议，第一版包含 `create-table`、`review-pr-sql`、`reverse-import-standards` 和 `export-min-context`，不会自动执行步骤或调用外部 LLM。`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取。`review-pr` 会在批量 lint 后读取 PR diff，把能映射到新增/修改行的 SQL 问题发布为 GitHub inline review comment；无法映射的问题会保留在包含 `<!-- dataspec-sql-review -->` marker 的汇总评论中，并统计 fallback reason。重复运行会通过 `dataspec-inline-review` marker 跳过已发布的相同行规则评论；`--format json` 会输出 `summary`、`inline` 和 `files[]`，评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
+`doctor` 会检查配置文件、DataSpec 服务、API token 身份、项目可访问性、`defaultPaths` 和 OpenAPI 状态；默认只做轻量 OpenAPI 检查，传 `--check-openapi` 时会复用前端契约校验逻辑做完整 schema 漂移检查。`workflow` 只输出任务计划和命令建议，第一版包含 `create-table`、`review-pr-sql`、`reverse-import-standards` 和 `export-min-context`，不会自动执行步骤或调用外部 LLM。`lint-files` 会递归扫描传入目录下的 `.sql` 文件，并跳过 `.git`、`node_modules`、`dist`、`build`、`target` 等常见缓存/构建目录。默认输出 JSON 包含 `summary` 和 `files[]`，适合 CI 或 AI agent 读取；传 `--delivery-package <json>` 或 `--batch-package <json>` 时，会额外写出 `ai-batch-delivery@1` 交付包，包含 batchId、summary、items、issueSummary、fixedSqlSummary、evidence 和 nextActions，并对 token、password、Bearer、完整 JDBC URL 做脱敏。`review-pr` 会在批量 lint 后读取 PR diff，把能映射到新增/修改行的 SQL 问题发布为 GitHub inline review comment；无法映射的问题会保留在包含 `<!-- dataspec-sql-review -->` marker 的汇总评论中，并统计 fallback reason。重复运行会通过 `dataspec-inline-review` marker 跳过已发布的相同行规则评论；`--format json` 会输出 `summary`、`inline` 和 `files[]`，评论成功后仍会按 ERROR 情况返回 0 或 1。GitHub Actions 示例见 `.github/workflows/dataspec-sql-lint.yml.example`；复制到业务仓库后改名为 `.github/workflows/dataspec-sql-lint.yml` 并按实际方式启动 DataSpec 后端即可启用。
 
 ## MCP Server
 
@@ -536,6 +540,7 @@ data-spec/
 |------|------|------|
 | project | /api/projects | 项目空间管理 |
 | aireplay | /api/ai-jobs | AI 生成与修复回放 |
+| aibatch | /api/ai-batches | AI 批量任务交付包 |
 | coverage | /api/coverage | 字段覆盖率报告 |
 | field | /api/fields | 标准字段库 CRUD |
 | domain | /api/domains | 数据域管理 |
@@ -603,6 +608,7 @@ data-spec/
 - [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
 - [x] AI 建表 Prompt 和 SQL 修正 Prompt 生成
 - [x] AI 回放记录，支持查看 Prompt、lint/fixedSql、DDL 预览的输入输出和标准快照
+- [x] AI 批量任务交付包，支持后端保存 SQL lint batch run、CLI 写出同构 package、前端查看详情并下载 JSON
 - [x] Markdown/HTML 数据字典增强和 Mermaid ERD 输出
 - [x] Excel `.xlsx` 字段/代码集导入导出与 dry-run 明细预览
 - [x] 项目备份恢复，支持项目标准资产 JSON 导出、恢复 dry-run、冲突预览、确认恢复和恢复摘要记录
@@ -615,7 +621,7 @@ data-spec/
 - [x] 数据库直连导入来源与批次追踪，字段库可查看来源摘要
 - [x] 前端反向导入高频流程记忆，按项目恢复非敏感连接信息、表选择、筛选状态和字段库关键词跳转
 - [x] 数据库直连非敏感连接预设，支持项目级保存、选择复用和表选择恢复，不持久化用户名、密码、token 或 JDBC URL
-- [x] DataSpec CLI：`doctor`、`workflow list/show`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置、按需/历史快照 Context 导出和 PR diff inline/fallback SQL Review
+- [x] DataSpec CLI：`doctor`、`workflow list/show`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置、AI batch delivery package 文件输出、按需/历史快照 Context 导出和 PR diff inline/fallback SQL Review
 - [x] DataSpec MCP Server：resources、`workflow-recipes`、prompts、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`generate_table_ddl`，支持 `.dataspec/config.json` 默认项目配置
 - [x] GitHub Actions 示例和 PR inline/fallback 评论式 SQL Review
 

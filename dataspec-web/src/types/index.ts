@@ -340,6 +340,104 @@ export interface AiJobRecordDetail {
   replayCommand?: string
 }
 
+export interface AiBatchSummary {
+  totalItems?: number
+  successItems?: number
+  failedItems?: number
+  errorCount?: number
+  warningCount?: number
+  suggestionCount?: number
+  fixedSqlCount?: number
+}
+
+export interface AiBatchIssueRuleSummary {
+  ruleCode?: string
+  ruleName?: string
+  count?: number
+}
+
+export interface AiBatchIssueSummary {
+  errorCount?: number
+  warningCount?: number
+  suggestionCount?: number
+  byRule?: AiBatchIssueRuleSummary[]
+}
+
+export interface AiBatchFixedSqlSummary {
+  availableCount?: number
+  changedCount?: number
+}
+
+export interface AiBatchEvidence {
+  kind?: string
+  name?: string
+  value?: string
+}
+
+export interface AiBatchItemResult {
+  itemName?: string
+  filePath?: string
+  status?: string
+  errorCount?: number
+  warningCount?: number
+  suggestionCount?: number
+  suppressedCount?: number
+  fixedSqlAvailable?: boolean
+  fixedSql?: string | null
+  fixedSqlDiff?: string | null
+  issues?: LintIssue[]
+  dialectDiagnostics?: DialectDiagnostic[]
+  sqlCheckRecordId?: number | null
+  errorMessage?: string | null
+}
+
+export interface AiBatchDeliveryPackage {
+  packageVersion?: string
+  batchId?: string
+  projectId?: number
+  batchType?: string
+  source?: string
+  status?: string
+  summary?: AiBatchSummary
+  items?: AiBatchItemResult[]
+  issueSummary?: AiBatchIssueSummary
+  fixedSqlSummary?: AiBatchFixedSqlSummary
+  unmanagedHints?: string[]
+  evidence?: AiBatchEvidence[]
+  nextActions?: string[]
+  createdAt?: string
+}
+
+export interface AiBatchRun {
+  id?: number
+  projectId?: number
+  batchType?: string
+  source?: string
+  status?: string
+  summaryJson?: string
+  payloadJson?: string
+  operatorName?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface AiBatchRunListItem {
+  id?: number
+  projectId?: number
+  batchType?: string
+  source?: string
+  status?: string
+  summary?: AiBatchSummary
+  operatorName?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface AiBatchRunDetail {
+  run?: AiBatchRun
+  deliveryPackage?: AiBatchDeliveryPackage
+}
+
 export interface R<T> {
   code?: number
   message?: string

@@ -22,6 +22,7 @@ test('keeps critical frontend routes and navigation entries wired', () => {
     { path: '/generator', view: 'Generator.vue', title: '生成器' },
     { path: '/ai-export', view: 'AiExport.vue', title: 'AI 规则导出' },
     { path: '/ai-replay', view: 'AiReplay.vue', title: 'AI 回放' },
+    { path: '/ai-batches', view: 'AiBatch.vue', title: 'AI 批量任务' },
     { path: '/project-backup', view: 'ProjectBackup.vue', title: '项目备份' },
     { path: '/reverse-import', view: 'ReverseImport.vue', title: '反向导入' },
     { path: '/field-coverage', view: 'FieldCoverage.vue', title: '覆盖率报告' }
@@ -35,6 +36,37 @@ test('keeps critical frontend routes and navigation entries wired', () => {
     ], `router ${route.path}`)
     assertContains(app, [`index="${route.path}"`, route.title], `app navigation ${route.path}`)
   }
+})
+
+test('keeps AI batch delivery package page wired', () => {
+  const view = readSource('src/views/AiBatch.vue')
+  const api = readSource('src/api/aiBatch.ts')
+  const types = readSource('src/types/index.ts')
+
+  assertContains(view, [
+    "import { downloadAiBatchPackage, getAiBatchDetail, listAiBatches } from '@/api/aiBatch'",
+    'projectStore.currentProjectId',
+    'async function loadBatches()',
+    'await listAiBatches(projectId, current.value, size.value)',
+    'async function openDetail(id?: number)',
+    'activeDetail.value = await getAiBatchDetail(id)',
+    'async function handleDownload(id?: number)',
+    'downloadAiBatchPackage(id)',
+    'AI 批量任务',
+    '暂无 AI 批量任务'
+  ], 'AiBatch.vue')
+
+  assertContains(api, [
+    "request.get<unknown, PageResult<AiBatchRunListItem>>('/ai-batches'",
+    'export function getAiBatchDetail(id: number)',
+    'export function downloadAiBatchPackage(id: number)'
+  ], 'ai batch api')
+
+  assertContains(types, [
+    'export interface AiBatchDeliveryPackage',
+    'export interface AiBatchRunListItem',
+    'export interface AiBatchRunDetail'
+  ], 'ai batch types')
 })
 
 test('keeps global project selector backed by the project store', () => {

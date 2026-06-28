@@ -409,6 +409,88 @@ test('lint-files returns 0 when no sql file has errors', async () => {
   }
 })
 
+test('lint-files writes AI batch delivery package without changing json stdout', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    const sqlPath = path.join(dir, 'bad.sql')
+    const packagePath = path.join(dir, 'out', 'ai-batch.json')
+    await writeFile(sqlPath, 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    const fetchFn = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          errorCount: 1,
+          warningCount: 0,
+          suggestionCount: 0,
+          fixedSql: "CREATE TABLE user_order (id bigint); -- password='quoted-secret' token=ds_secret jdbc:postgresql://localhost/db",
+          fixedSqlDiff: '--- before\n+++ after\n',
+          issues: [{ ruleCode: 'table_naming_snake_case', ruleName: '表名 snake_case', message: 'Bearer abc' }]
+        }
+      })
+    })
+    const io = createIo()
+
+    const code = await runCli([
+      'lint-files',
+      sqlPath,
+      '--project',
+      '7',
+      '--format',
+      'json',
+      '--delivery-package',
+      packagePath
+    ], io, fetchFn)
+
+    const stdout = JSON.parse(io.stdout)
+    const pkg = JSON.parse(await readFile(packagePath, 'utf8'))
+    assert.equal(code, 1)
+    assert.deepEqual(Object.keys(stdout).sort(), ['files', 'summary'])
+    assert.equal(pkg.packageVersion, 'ai-batch-delivery@1')
+    assert.equal(pkg.projectId, 7)
+    assert.equal(pkg.batchType, 'SQL_LINT')
+    assert.equal(pkg.source, 'cli')
+    assert.equal(pkg.summary.totalItems, 1)
+    assert.equal(pkg.issueSummary.errorCount, 1)
+    assert.equal(pkg.items[0].fixedSqlAvailable, true)
+    assert.doesNotMatch(JSON.stringify(pkg), /quoted-secret|ds_secret|Bearer abc|jdbc:postgresql:\/\/localhost\/db/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('lint-files rejects duplicate delivery package options before server calls', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
+  try {
+    const sqlPath = path.join(dir, 'bad.sql')
+    await writeFile(sqlPath, 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    let called = false
+    const fetchFn = async () => {
+      called = true
+      throw new Error('fetch should not be called')
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'lint-files',
+      sqlPath,
+      '--project',
+      '7',
+      '--delivery-package',
+      path.join(dir, 'ai-batch.json'),
+      '--batch-package',
+      path.join(dir, 'batch.json')
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /请只使用 --delivery-package 或 --batch-package 之一/)
+    assert.equal(called, false)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('lint-files uses default paths from local config when paths are omitted', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {

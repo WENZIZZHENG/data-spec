@@ -91,6 +91,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'AI 回放' }
   },
   {
+    path: '/ai-batches',
+    name: 'AiBatch',
+    component: () => import('@/views/AiBatch.vue'),
+    meta: { title: 'AI 批量任务' }
+  },
+  {
     path: '/import-export',
     name: 'ImportExport',
     component: () => import('@/views/ImportExport.vue'),

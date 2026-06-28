@@ -93,6 +93,10 @@
             <el-icon><Clock /></el-icon>
             <span>AI 回放</span>
           </el-menu-item>
+          <el-menu-item index="/ai-batches">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>AI 批量任务</span>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 数据管理 -->

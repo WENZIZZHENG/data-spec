@@ -1284,6 +1284,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAiBatches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-batches/sql-lint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createAiBatchSqlLint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-batches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAiBatchDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-batches/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadAiBatchPackage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-context/rules-yaml": {
         parameters: {
             query?: never;
@@ -3318,6 +3382,166 @@ export interface components {
             message?: string;
             error?: components["schemas"]["ErrorDetail"];
             data?: components["schemas"]["AiJobRecordDetail"];
+        };
+        AiBatchSqlLintItemReq: {
+            itemName?: string;
+            filePath?: string;
+            sql: string;
+        };
+        AiBatchSqlLintReq: {
+            /** Format: int64 */
+            projectId: number;
+            source?: string;
+            items?: components["schemas"]["AiBatchSqlLintItemReq"][];
+        };
+        AiBatchSummary: {
+            /** Format: int32 */
+            totalItems?: number;
+            /** Format: int32 */
+            successItems?: number;
+            /** Format: int32 */
+            failedItems?: number;
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            suggestionCount?: number;
+            /** Format: int32 */
+            fixedSqlCount?: number;
+        };
+        AiBatchIssueRuleSummary: {
+            ruleCode?: string;
+            ruleName?: string;
+            /** Format: int32 */
+            count?: number;
+        };
+        AiBatchIssueSummary: {
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            suggestionCount?: number;
+            byRule?: components["schemas"]["AiBatchIssueRuleSummary"][];
+        };
+        AiBatchFixedSqlSummary: {
+            /** Format: int32 */
+            availableCount?: number;
+            /** Format: int32 */
+            changedCount?: number;
+        };
+        AiBatchEvidence: {
+            kind?: string;
+            name?: string;
+            value?: string;
+        };
+        AiBatchItemResult: {
+            itemName?: string;
+            filePath?: string;
+            status?: string;
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            suggestionCount?: number;
+            /** Format: int32 */
+            suppressedCount?: number;
+            fixedSqlAvailable?: boolean;
+            fixedSql?: string;
+            fixedSqlDiff?: string;
+            issues?: components["schemas"]["LintIssue"][];
+            dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
+            /** Format: int64 */
+            sqlCheckRecordId?: number;
+            errorMessage?: string;
+        };
+        AiBatchDeliveryPackage: {
+            packageVersion?: string;
+            batchId?: string;
+            /** Format: int64 */
+            projectId?: number;
+            batchType?: string;
+            source?: string;
+            status?: string;
+            summary?: components["schemas"]["AiBatchSummary"];
+            items?: components["schemas"]["AiBatchItemResult"][];
+            issueSummary?: components["schemas"]["AiBatchIssueSummary"];
+            fixedSqlSummary?: components["schemas"]["AiBatchFixedSqlSummary"];
+            unmanagedHints?: string[];
+            evidence?: components["schemas"]["AiBatchEvidence"][];
+            nextActions?: string[];
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        RAiBatchDeliveryPackage: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["AiBatchDeliveryPackage"];
+        };
+        AiBatchRun: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            batchType?: string;
+            source?: string;
+            status?: string;
+            summaryJson?: string;
+            payloadJson?: string;
+            operatorName?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        AiBatchRunDetail: {
+            run?: components["schemas"]["AiBatchRun"];
+            deliveryPackage?: components["schemas"]["AiBatchDeliveryPackage"];
+        };
+        RAiBatchRunDetail: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["AiBatchRunDetail"];
+        };
+        AiBatchRunListItem: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            batchType?: string;
+            source?: string;
+            status?: string;
+            summary?: components["schemas"]["AiBatchSummary"];
+            operatorName?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        PageResultAiBatchRunListItem: {
+            records?: components["schemas"]["AiBatchRunListItem"][];
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            current?: number;
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            pages?: number;
+        };
+        RPageResultAiBatchRunListItem: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["PageResultAiBatchRunListItem"];
         };
     };
     responses: never;
@@ -5767,6 +5991,98 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RAiJobRecordDetail"];
+                };
+            };
+        };
+    };
+    listAiBatches: {
+        parameters: {
+            query: {
+                projectId: number;
+                current?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RPageResultAiBatchRunListItem"];
+                };
+            };
+        };
+    };
+    createAiBatchSqlLint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiBatchSqlLintReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiBatchDeliveryPackage"];
+                };
+            };
+        };
+    };
+    getAiBatchDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiBatchRunDetail"];
+                };
+            };
+        };
+    };
+    downloadAiBatchPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiBatchDeliveryPackage"];
                 };
             };
         };
