@@ -25,3 +25,13 @@
 - 前端：更新反向导入与覆盖率报告页面，展示连接安全等级、当前用户、可访问范围和推荐动作。
 - OpenAPI/类型：新增连接安全诊断相关 schema 字段，前端 API wrapper 与类型同步。
 - 测试：补后端 service 单测和前端 smoke/utility 测试；验证命令继续接入 `mvn test`、`pnpm test`、`pnpm build` 和 OpenSpec validate。
+
+## Verification Evidence
+
+- `mvn test`（`dataspec-server`）：245 tests, 0 failures, 0 errors。
+- `pnpm test`（`dataspec-web`）：59 tests, 0 failures。
+- `pnpm build`（`dataspec-web`）：通过；保留既有 VueUse pure annotation 与 chunk size warning。
+- `npx.cmd openspec validate add-database-readonly-security-diagnostics`：valid。
+- `git diff --check`：通过，仅有仓库既有 LF/CRLF 提示。
+- 本地结构化代码评审：发现并修复 MySQL 只读 grants 未标 SAFE、覆盖率页切项目未清理旧诊断两个问题；修复后重新跑目标测试、前端测试、前端 build、后端全量测试和 OpenSpec validate。
+- 实现提交：`c16b920 feat: 增加数据库只读安全诊断`。
