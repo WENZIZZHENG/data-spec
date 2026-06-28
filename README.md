@@ -62,6 +62,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、workflow recipes、单文件 lint、批量 `lint-files`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、历史快照 Context 导出、字段推荐、字段标准检索和 DDL 生成。
 - MCP Server 暴露 DataSpec resources、workflow recipes、prompts 和核心 tools。
 - GitHub Actions 示例支持 SQL 批量校验、PR diff inline 评论和 fallback 汇总评论。
+- 本地 Docker Compose 一键启动和 demo smoke 验证，适合个人试用、演示和 AI agent 启动前检查。
 
 ## 快速启动
 
@@ -71,8 +72,45 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - Maven 3.9+
 - Node.js 18+ / pnpm 8+
 - PostgreSQL 17+
+- Docker Compose（可选，用于一键本地体验）
 
-### 1. 数据库
+### 1. 一键本地启动（推荐体验）
+
+适合新机器、演示环境或让 AI agent 先验证项目可用性：
+
+```bash
+docker compose -f docker-compose.local.yml up
+```
+
+Compose 会启动 PostgreSQL、后端和前端；本地默认端口分别为 `5432`、`8090`、`5173`，后端会通过 Flyway 自动迁移本地 PostgreSQL。默认数据库账号只用于个人本地开发，不是生产部署方案。
+
+启动后可运行 smoke 验证：
+
+```bash
+node tools/dataspec-local-smoke.mjs
+node tools/dataspec-local-smoke.mjs --json
+```
+
+smoke 会等待前端和 `/api-docs` 可访问，创建或复用演示项目，并检查工作台 summary 与 SQL lint 链路。安全模式开启时可传 `--token <token>` 或设置 `DATASPEC_TOKEN`；如只是检查服务可达，可加 `--skip-demo`。
+
+端口冲突时可覆盖对外端口：
+
+```powershell
+$env:DATASPEC_DB_PORT="15432"
+$env:DATASPEC_SERVER_PORT="18090"
+$env:DATASPEC_WEB_PORT="15173"
+docker compose -f docker-compose.local.yml up
+node tools/dataspec-local-smoke.mjs --server http://localhost:18090 --web http://localhost:15173
+```
+
+停止和清理：
+
+```bash
+docker compose -f docker-compose.local.yml down
+docker compose -f docker-compose.local.yml down -v  # 同时删除本地演示数据库和依赖缓存 volume
+```
+
+### 2. 手动开发启动：数据库
 
 ```bash
 # 创建数据库，后端启动时会由 Flyway 自动执行迁移脚本
@@ -82,7 +120,7 @@ psql -U postgres -c "CREATE DATABASE dataspec;"
 迁移脚本位于 `dataspec-server/src/main/resources/db/migration/`，后端启动会按版本顺序自动执行全部 `V*.sql`。
 `dataspec-server/src/main/resources/db/schema.sql` 仅保留兼容说明，不再作为直接建表入口；如需手动初始化，请按版本号顺序执行迁移目录下的脚本。
 
-### 2. 后端
+### 3. 手动开发启动：后端
 
 ```bash
 cd dataspec-server
@@ -92,7 +130,7 @@ mvn spring-boot:run
 
 后端启动在 http://localhost:8090，API 文档：http://localhost:8090/swagger-ui.html
 
-### 3. 前端
+### 4. 手动开发启动：前端
 
 ```bash
 cd dataspec-web
@@ -102,7 +140,7 @@ pnpm dev
 
 前端启动在 http://localhost:5173
 
-### 4. 首次体验
+### 5. 首次体验
 
 打开前端后进入“工作台”，点击“创建演示项目”即可生成 `DataSpec 演示项目`。演示项目会自动包含内置字段、个人默认规则基线、订单表模板和示例 SQL，可继续完成：
 
@@ -557,11 +595,17 @@ pnpm check:api -- --source ./api-docs.json
 cd ..
 node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs
 
+# 本地启动包与 smoke 脚本契约测试
+node --test tools/dataspec-local-smoke.test.mjs
+
+# 已安装 Docker 时，可验证 Compose 配置解析
+docker compose -f docker-compose.local.yml config
+
 # OpenSpec 主规格与 active change 验证
 npx openspec validate --all
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、Prompt 模板 registry/eval、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、Prompt golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告、AI 回放、AI 反馈和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约和 Prompt fixture 脚本，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容、Prompt golden marker，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、Prompt 模板 registry/eval、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、Prompt golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告、AI 回放、AI 反馈和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约、Prompt fixture 脚本和本地 smoke 脚本，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容、Prompt golden marker、API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传，以及本地启动包的参数解析、输出结构、敏感信息脱敏和 compose/Vite 代理契约。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
 
 ## 性能基线
 
@@ -703,6 +747,7 @@ data-spec/
 - [x] DataSpec CLI：`doctor`、`workflow list/show`、`lint`、`lint-files`、`review-pr`、`export-context`、`suggest-field`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置、AI batch delivery package 文件输出、按需/历史快照 Context 导出和 PR diff inline/fallback SQL Review
 - [x] DataSpec MCP Server：resources、`workflow-recipes`、prompts、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`generate_table_ddl`，支持 `.dataspec/config.json` 默认项目配置
 - [x] GitHub Actions 示例和 PR inline/fallback 评论式 SQL Review
+- [x] 本地 Docker Compose 一键启动包和 demo smoke 验证，支持 PostgreSQL/后端/前端联动、端口覆盖、依赖缓存、text/json 输出和敏感信息脱敏
 
 ## 暂缓探索
 

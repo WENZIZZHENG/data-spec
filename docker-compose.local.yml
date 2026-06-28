@@ -1,0 +1,67 @@
+name: dataspec-local
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${DATASPEC_DB_NAME:-dataspec}
+      POSTGRES_USER: ${DATASPEC_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATASPEC_DB_PASSWORD:-postgres}
+    ports:
+      - "${DATASPEC_DB_PORT:-5432}:5432"
+    volumes:
+      - dataspec-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DATASPEC_DB_USER:-postgres} -d ${DATASPEC_DB_NAME:-dataspec}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  server:
+    image: maven:3.9.9-eclipse-temurin-21
+    working_dir: /workspace/dataspec-server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8090
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DATASPEC_DB_NAME:-dataspec}
+      SPRING_DATASOURCE_USERNAME: ${DATASPEC_DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DATASPEC_DB_PASSWORD:-postgres}
+      SPRING_FLYWAY_ENABLED: "true"
+      DATASPEC_SECURITY_ENABLED: "false"
+    ports:
+      - "${DATASPEC_SERVER_PORT:-8090}:8090"
+    volumes:
+      - .:/workspace
+      - dataspec-maven-cache:/root/.m2
+    command: mvn spring-boot:run
+
+  web:
+    image: node:22-bookworm
+    working_dir: /workspace/dataspec-web
+    depends_on:
+      - server
+    environment:
+      VITE_PROXY_TARGET: http://server:8090
+    ports:
+      - "${DATASPEC_WEB_PORT:-5173}:5173"
+    volumes:
+      - .:/workspace
+      - dataspec-pnpm-store:/pnpm/store
+      - dataspec-web-node-modules:/workspace/dataspec-web/node_modules
+    command: >
+      sh -lc "corepack enable &&
+      pnpm config set store-dir /pnpm/store &&
+      pnpm install --frozen-lockfile &&
+      pnpm dev --host 0.0.0.0 --port 5173"
+
+volumes:
+  dataspec-postgres-data:
+  dataspec-maven-cache:
+  dataspec-pnpm-store:
+  dataspec-web-node-modules:
