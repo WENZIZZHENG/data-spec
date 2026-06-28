@@ -26,3 +26,13 @@ AI agent 常见工作不是校验一条 SQL，而是批量扫描业务仓库、�
 - CLI：增强 `lint-files` 输出，可生成本地 JSON 交付包或透传后端 batch API。
 - 前端：新增 API wrapper、类型和批量结果页或现有页面入口，展示最近任务与详情。
 - 测试：新增后端 service/controller 单测、CLI JSON/文件输出测试、前端 utility/smoke 测试；验证接入 `mvn test`、`pnpm test`、`pnpm build`、`node --test` 和 OpenSpec validate。
+
+## Verification Evidence
+
+- `mvn test`（`dataspec-server`）：251 tests, 0 failures, 0 errors。
+- `node --test tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs`：59 tests, 0 failures。
+- `pnpm test`（`dataspec-web`）：63 tests, 0 failures。
+- `pnpm build`（`dataspec-web`）：通过；仅有依赖 `@vueuse/core` pure annotation 和 chunk size 警告。
+- `npx.cmd openspec validate add-ai-batch-delivery-package`：valid。
+- `git diff --check`：通过；仅有 Windows CRLF 替换提示。
+- 本地结构化代码评审：已修复 V15 时间列与 `LocalDateTime` 映射风格不一致、CLI 互斥参数晚校验导致潜在副作用两个 findings；未使用子 agent。
