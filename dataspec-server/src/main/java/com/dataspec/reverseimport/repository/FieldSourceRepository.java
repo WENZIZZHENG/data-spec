@@ -30,6 +30,14 @@ public class FieldSourceRepository {
                         .orderByDesc(FieldSource::getId));
     }
 
+    public List<FieldSource> findByProjectId(Long projectId) {
+        return fieldSourceMapper.selectList(
+                new LambdaQueryWrapper<FieldSource>()
+                        .eq(FieldSource::getProjectId, projectId)
+                        .orderByDesc(FieldSource::getCreatedAt)
+                        .orderByDesc(FieldSource::getId));
+    }
+
     public List<Long> findFieldIdsByProjectAndBatch(Long projectId, Long batchId) {
         return fieldSourceMapper.selectList(
                         new LambdaQueryWrapper<FieldSource>()

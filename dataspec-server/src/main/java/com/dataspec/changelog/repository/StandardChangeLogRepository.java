@@ -8,6 +8,7 @@ import com.dataspec.changelog.mapper.StandardChangeLogMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -38,5 +39,13 @@ public class StandardChangeLogRepository {
 
     public Optional<StandardChangeLog> findById(Long id) {
         return Optional.ofNullable(standardChangeLogMapper.selectById(id));
+    }
+
+    public List<StandardChangeLog> findByProjectId(Long projectId, int limit) {
+        return standardChangeLogMapper.selectList(new LambdaQueryWrapper<StandardChangeLog>()
+                .eq(StandardChangeLog::getProjectId, projectId)
+                .orderByDesc(StandardChangeLog::getChangedAt)
+                .orderByDesc(StandardChangeLog::getId)
+                .last("limit " + Math.max(1, limit)));
     }
 }

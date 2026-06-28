@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、AI Context、API Token 安全基线与管理页、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供 SQL 校验、DDL 生成、数据字典、Excel 导入导出、项目备份恢复、AI Context、API Token 安全基线与管理页、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -26,6 +26,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 数据域、枚举字典、表模板、规则配置、规则基线套件和规则例外管理。
 - 标准快照，支持为当前项目字段、枚举和规则生成版本号、内容 hash 和可追溯 payload。
 - Excel `.xlsx` 模板下载、字段/代码集导出、导入预览和确认导入。
+- 项目备份恢复，支持导出项目标准资产 JSON 包、恢复 dry-run、冲突预览、确认恢复和恢复摘要记录。
 - 标准变更日志，记录字段、代码集、规则的新增、修改、删除、启停 before/after 和操作者；字段库可基于最近字段变更执行确认回退。
 
 ### SQL 规范闭环
@@ -275,6 +276,22 @@ curl "http://localhost:8090/api/fields/1/impact?projectId=1"
 - HTML 数据字典支持浏览器离线打开；Mermaid ERD/关系图可展示字段、数据域、代码集和模板之间的关系。
 - Excel 导入导出支持 `.xlsx` 模板下载、字段/代码集导出、导入预览、新增/更新/冲突统计、行级 dry-run 明细、字段级 before/after diff 和确认导入。
 
+前端“数据管理 / 项目备份”可导出当前项目备份 JSON，也可以粘贴或上传备份包先执行恢复 dry-run。备份包包含项目元数据、数据域、标准字段、枚举、规则、规则基线、表模板、标准快照、反向导入来源摘要和必要变更日志摘要；导出与恢复流程会明确排除 password、API token、token hash、完整 JDBC URL 和源数据库业务数据行。
+
+恢复默认写入新项目；也可选择恢复到当前项目。`overwrite=false` 时已有同名/同编码资产会跳过或标记冲突，显式开启覆盖后才更新支持覆盖的资产。确认恢复后会写入恢复摘要记录，记录 packageHash、来源项目、目标项目、覆盖模式、计数、warning 和操作者，但不保存完整备份包。
+
+后端 API：
+
+```bash
+curl "http://localhost:8090/api/project-backups/export?projectId=1"
+curl -X POST "http://localhost:8090/api/project-backups/restore/preview" \
+  -H "Content-Type: application/json" \
+  -d '{"overwrite":false,"backupPackage":{"schemaVersion":1,"assets":{},"packageHash":"..."}}'
+curl "http://localhost:8090/api/project-backups/restore/records?projectId=1"
+```
+
+第一版面向个人/小团队迁移标准资产，不做源数据库物理备份、不保存数据库密码或 API token、不自动删除目标项目已有资产，也不做定时备份或远程对象存储。
+
 ## 工作台与变更记录
 
 个人工作台提供项目级摘要：标准字段数、代码集数、规则数、禁用词数、SQL 检查数、字段命中率、最近检查和问题趋势。
@@ -464,7 +481,7 @@ node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dat
 npx openspec validate --all
 ```
 
-后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、筛选与批量维护、DDL 生成、AI Context、覆盖率报告和 AI 回放的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
+后端 `mvn test` 已包含核心 fixture/golden 回归测试、AI contract fixtures、AI 可读错误诊断和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、反向导入 metadata 预览摘要、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览稳定字段，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、SQL 校验 fixedSql/记录、数据库反向导入、字段库检索命中原因、筛选与批量维护、DDL 生成、AI Context、覆盖率报告、AI 回放和项目备份恢复的核心页面/API 耦合，以及关键按钮和空状态文案；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约，包括 workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容，以及 API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
 
 ## 性能基线
 
@@ -498,6 +515,7 @@ data-spec/
 │       ├── dashboard/        # 个人工作台
 │       ├── generator/        # Markdown 数据字典与 DDL 生成
 │       ├── importexport/     # 导入导出
+│       ├── projectbackup/    # 项目备份恢复
 │       ├── changelog/        # 标准变更日志
 │       ├── standard/         # 标准版本快照
 │       ├── dbpreset/         # 数据库直连非敏感连接预设
@@ -533,6 +551,7 @@ data-spec/
 | generator | /api/generator | Markdown 数据字典与 DDL 生成 |
 | aicontext | /api/ai-context | AI 规则导出 |
 | importexport | /api/import-export | 字段导入导出 |
+| projectbackup | /api/project-backups | 项目备份、恢复 dry-run 和恢复摘要 |
 | changelog | /api/change-logs | 标准变更日志 |
 | standard-snapshots | /api/projects/{projectId}/standard-snapshots | 标准版本快照 |
 | dbpreset | /api/database-connection-presets | 数据库直连非敏感连接预设 |
@@ -586,6 +605,7 @@ data-spec/
 - [x] AI 回放记录，支持查看 Prompt、lint/fixedSql、DDL 预览的输入输出和标准快照
 - [x] Markdown/HTML 数据字典增强和 Mermaid ERD 输出
 - [x] Excel `.xlsx` 字段/代码集导入导出与 dry-run 明细预览
+- [x] 项目备份恢复，支持项目标准资产 JSON 导出、恢复 dry-run、冲突预览、确认恢复和恢复摘要记录
 - [x] 标准变更日志和操作者记录
 - [x] 个人/小团队 API Token 安全基线、管理页面、项目边界和 CLI/MCP token 透传
 - [x] 个人工作台和字段命中率报告

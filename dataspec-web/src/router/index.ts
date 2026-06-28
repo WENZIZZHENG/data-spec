@@ -97,6 +97,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '导入导出' }
   },
   {
+    path: '/project-backup',
+    name: 'ProjectBackup',
+    component: () => import('@/views/ProjectBackup.vue'),
+    meta: { title: '项目备份' }
+  },
+  {
     path: '/reverse-import',
     name: 'ReverseImport',
     component: () => import('@/views/ReverseImport.vue'),

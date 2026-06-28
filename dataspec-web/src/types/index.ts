@@ -74,6 +74,17 @@ export interface FieldChangeUndoResult {
 }
 
 export type StandardChangeLog = Schemas['StandardChangeLog']
+export type BackupProject = Schemas['BackupProject']
+export type ProjectBackupAssets = Schemas['ProjectBackupAssets']
+export type ProjectBackupCounts = Schemas['ProjectBackupCounts']
+export type ProjectBackupSanitization = Schemas['ProjectBackupSanitization']
+export type ProjectBackupPackage = Schemas['ProjectBackupPackage']
+export type ProjectRestoreReq = Schemas['ProjectRestoreReq']
+export type ProjectRestoreCounts = Schemas['ProjectRestoreCounts']
+export type ProjectRestoreItem = Schemas['ProjectRestoreItem']
+export type ProjectRestorePlan = Schemas['ProjectRestorePlan']
+export type ProjectRestoreRecord = Schemas['ProjectRestoreRecord']
+export type ProjectRestoreResult = Schemas['ProjectRestoreResult']
 
 export type FieldQualitySeverity = 'ERROR' | 'WARNING' | 'SUGGESTION'
 export type FieldQualityLevel = 'GOOD' | 'WARNING' | 'POOR'

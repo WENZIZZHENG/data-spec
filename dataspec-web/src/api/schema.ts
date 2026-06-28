@@ -68,6 +68,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/project-backups/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportProjectBackup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-backups/restore/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewProjectBackupRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-backups/restore/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["applyProjectBackupRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/project-backups/restore/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProjectRestoreRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fields/{id}": {
         parameters: {
             query?: never;
@@ -2961,6 +3025,194 @@ export interface components {
             /** Format: date-time */
             changedAt?: string;
         };
+        BackupProject: {
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            description?: string;
+            dbType?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        EnumDictBackup: {
+            dict?: components["schemas"]["EnumDict"];
+            values?: components["schemas"]["EnumValue"][];
+        };
+        TemplateBackup: {
+            template?: components["schemas"]["Template"];
+            fields?: components["schemas"]["TemplateField"][];
+        };
+        StandardSnapshot: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            version?: string;
+            name?: string;
+            description?: string;
+            snapshotHash?: string;
+            payloadJson?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        ProjectBackupAssets: {
+            domains?: components["schemas"]["Domain"][];
+            fields?: components["schemas"]["Field"][];
+            enumDicts?: components["schemas"]["EnumDictBackup"][];
+            rules?: components["schemas"]["RuleConfig"][];
+            ruleBaseline?: components["schemas"]["RuleBaselinePackage"];
+            templates?: components["schemas"]["TemplateBackup"][];
+            snapshots?: components["schemas"]["StandardSnapshot"][];
+            reverseImportBatches?: components["schemas"]["ReverseImportBatch"][];
+            fieldSources?: components["schemas"]["FieldSource"][];
+            changeLogs?: components["schemas"]["StandardChangeLog"][];
+        };
+        ProjectBackupCounts: {
+            /** Format: int32 */
+            domains?: number;
+            /** Format: int32 */
+            fields?: number;
+            /** Format: int32 */
+            enumDicts?: number;
+            /** Format: int32 */
+            enumValues?: number;
+            /** Format: int32 */
+            rules?: number;
+            /** Format: int32 */
+            templates?: number;
+            /** Format: int32 */
+            templateFields?: number;
+            /** Format: int32 */
+            snapshots?: number;
+            /** Format: int32 */
+            reverseImportBatches?: number;
+            /** Format: int32 */
+            fieldSources?: number;
+            /** Format: int32 */
+            changeLogs?: number;
+        };
+        ProjectBackupSanitization: {
+            safe?: boolean;
+            removedFields?: string[];
+            warnings?: string[];
+        };
+        ProjectBackupPackage: {
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: date-time */
+            exportedAt?: string;
+            sourceProject?: components["schemas"]["BackupProject"];
+            assets?: components["schemas"]["ProjectBackupAssets"];
+            counts?: components["schemas"]["ProjectBackupCounts"];
+            sanitization?: components["schemas"]["ProjectBackupSanitization"];
+            warnings?: string[];
+            packageHash?: string;
+        };
+        ProjectRestoreReq: {
+            /** Format: int64 */
+            targetProjectId?: number | null;
+            overwrite?: boolean;
+            backupPackage: components["schemas"]["ProjectBackupPackage"];
+        };
+        ProjectRestoreCounts: {
+            /** Format: int32 */
+            created?: number;
+            /** Format: int32 */
+            updated?: number;
+            /** Format: int32 */
+            skipped?: number;
+            /** Format: int32 */
+            conflicts?: number;
+            /** Format: int32 */
+            blocked?: number;
+            /** Format: int32 */
+            warnings?: number;
+        };
+        ProjectRestoreItem: {
+            assetType?: string;
+            key?: string;
+            action?: string;
+            reason?: string;
+        };
+        ProjectRestorePlan: {
+            dryRun?: boolean;
+            overwrite?: boolean;
+            canApply?: boolean;
+            compatibilityStatus?: string;
+            /** Format: int64 */
+            targetProjectId?: number;
+            targetProjectName?: string;
+            counts?: components["schemas"]["ProjectRestoreCounts"];
+            items?: components["schemas"]["ProjectRestoreItem"][];
+            warnings?: string[];
+        };
+        ProjectRestoreRecord: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            packageHash?: string;
+            sourceProjectName?: string;
+            /** Format: int64 */
+            sourceProjectId?: number;
+            /** Format: int32 */
+            schemaVersion?: number;
+            dryRun?: boolean;
+            overwrite?: boolean;
+            /** Format: int32 */
+            createdCount?: number;
+            /** Format: int32 */
+            updatedCount?: number;
+            /** Format: int32 */
+            skippedCount?: number;
+            /** Format: int32 */
+            conflictCount?: number;
+            /** Format: int32 */
+            blockedCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            summaryJson?: string;
+            operatorName?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        ProjectRestoreResult: {
+            plan?: components["schemas"]["ProjectRestorePlan"];
+            record?: components["schemas"]["ProjectRestoreRecord"];
+        };
+        RProjectBackupPackage: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["ProjectBackupPackage"];
+        };
+        RProjectRestorePlan: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["ProjectRestorePlan"];
+        };
+        RProjectRestoreResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["ProjectRestoreResult"];
+        };
+        RListProjectRestoreRecord: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            error?: components["schemas"]["ErrorDetail"];
+            data?: components["schemas"]["ProjectRestoreRecord"][];
+        };
         AuthMe: {
             operatorName?: string;
             allProjects?: boolean;
@@ -5688,6 +5940,98 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    exportProjectBackup: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RProjectBackupPackage"];
+                };
+            };
+        };
+    };
+    previewProjectBackupRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRestoreReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RProjectRestorePlan"];
+                };
+            };
+        };
+    };
+    applyProjectBackupRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRestoreReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RProjectRestoreResult"];
+                };
+            };
+        };
+    };
+    listProjectRestoreRecords: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListProjectRestoreRecord"];
                 };
             };
         };

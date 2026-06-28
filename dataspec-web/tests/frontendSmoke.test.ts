@@ -22,6 +22,7 @@ test('keeps critical frontend routes and navigation entries wired', () => {
     { path: '/generator', view: 'Generator.vue', title: '生成器' },
     { path: '/ai-export', view: 'AiExport.vue', title: 'AI 规则导出' },
     { path: '/ai-replay', view: 'AiReplay.vue', title: 'AI 回放' },
+    { path: '/project-backup', view: 'ProjectBackup.vue', title: '项目备份' },
     { path: '/reverse-import', view: 'ReverseImport.vue', title: '反向导入' },
     { path: '/field-coverage', view: 'FieldCoverage.vue', title: '覆盖率报告' }
   ]
@@ -227,6 +228,55 @@ test('keeps rule baseline suite workflow wired on rule config page', () => {
   ], 'rule baseline api')
 })
 
+test('keeps project backup export and restore workflow wired', () => {
+  const view = readSource('src/views/ProjectBackup.vue')
+  const api = readSource('src/api/projectBackup.ts')
+  const types = readSource('src/types/index.ts')
+  const schema = readSource('src/api/schema.ts')
+
+  assertContains(view, [
+    '导出备份 JSON',
+    '粘贴备份 JSON',
+    '预览恢复',
+    '确认恢复',
+    '恢复到新项目',
+    '恢复到当前项目',
+    'password/token/source rows',
+    '未选择项目，导出已禁用；仍可在下方恢复到新项目。',
+    '最近恢复记录',
+    'exportProjectBackup(projectId)',
+    'previewProjectBackupRestore({',
+    'applyProjectBackupRestore({',
+    'listProjectRestoreRecords(projectId)'
+  ], 'ProjectBackup.vue')
+
+  assertContains(api, [
+    "request.get<unknown, ProjectBackupPackage>('/project-backups/export'",
+    "request.post<unknown, ProjectRestorePlan>('/project-backups/restore/preview'",
+    "request.post<unknown, ProjectRestoreResult>('/project-backups/restore/apply'",
+    "request.get<unknown, ProjectRestoreRecord[]>('/project-backups/restore/records'"
+  ], 'project backup api')
+
+  assertContains(types, [
+    "export type ProjectBackupPackage = Schemas['ProjectBackupPackage']",
+    "export type ProjectRestoreReq = Schemas['ProjectRestoreReq']",
+    "export type ProjectRestorePlan = Schemas['ProjectRestorePlan']",
+    "export type ProjectRestoreRecord = Schemas['ProjectRestoreRecord']",
+    "export type ProjectRestoreResult = Schemas['ProjectRestoreResult']"
+  ], 'project backup types')
+
+  assertContains(schema, [
+    '"/api/project-backups/export"',
+    '"/api/project-backups/restore/preview"',
+    '"/api/project-backups/restore/apply"',
+    '"/api/project-backups/restore/records"',
+    'ProjectBackupPackage',
+    'ProjectRestorePlan',
+    'ProjectRestoreResult',
+    'RListProjectRestoreRecord'
+  ], 'project backup schema')
+})
+
 test('keeps coverage and AI replay supporting flows wired', () => {
   const coverage = readSource('src/views/FieldCoverage.vue')
   const coverageApi = readSource('src/api/coverage.ts')
@@ -289,6 +339,10 @@ test('keeps critical action labels and empty states visible', () => {
     {
       path: 'src/views/AiReplay.vue',
       snippets: ['刷新记录', '暂无 AI 回放记录', '复制命令', '复制 JSON', '已复制']
+    },
+    {
+      path: 'src/views/ProjectBackup.vue',
+      snippets: ['导出备份 JSON', '预览恢复', '确认恢复', 'password/token/source rows', '暂无恢复记录']
     }
   ]
 
