@@ -6,6 +6,7 @@ import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.service.EnumDictService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.idempotency.WriteGuardService;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.security.context.ProjectAccessGuard;
@@ -18,6 +19,7 @@ import com.dataspec.standard.service.StandardSnapshotService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -43,9 +45,22 @@ public class StandardSnapshotServiceImpl implements StandardSnapshotService {
     private final EnumDictService enumDictService;
     private final RuleConfigService ruleConfigService;
     private final ObjectMapper objectMapper;
+    private WriteGuardService writeGuardService = new WriteGuardService();
 
     @Override
     public StandardSnapshotInfo createSnapshot(Long projectId, StandardSnapshotCreateReq req) {
+        return createSnapshot(projectId, req, null);
+    }
+
+    @Override
+    public StandardSnapshotInfo createSnapshot(Long projectId, StandardSnapshotCreateReq req, String idempotencyKey) {
+        requireProject(projectId);
+        ProjectAccessGuard.requireProjectAccess(projectId);
+        return writeGuardService.execute(projectId, "standard-snapshot:create", idempotencyKey,
+                () -> createSnapshotInternal(projectId, req));
+    }
+
+    private StandardSnapshotInfo createSnapshotInternal(Long projectId, StandardSnapshotCreateReq req) {
         requireProject(projectId);
         ProjectAccessGuard.requireProjectAccess(projectId);
         if (req == null) {
@@ -66,6 +81,11 @@ public class StandardSnapshotServiceImpl implements StandardSnapshotService {
         snapshot.setSnapshotHash(sha256(payloadJson));
         standardSnapshotRepository.save(snapshot);
         return toInfo(snapshot).withSource("current");
+    }
+
+    @Autowired
+    void setWriteGuardService(WriteGuardService writeGuardService) {
+        this.writeGuardService = writeGuardService;
     }
 
     @Override

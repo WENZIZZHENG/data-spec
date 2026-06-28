@@ -148,6 +148,43 @@ class ProjectBackupServiceImplTest {
     }
 
     @Test
+    void applyRestore_reusesResultForSameIdempotencyKey() {
+        Fixture fixture = new Fixture();
+        fixture.withSourceProject();
+        Domain sourceDomain = domain("order", 1L);
+        when(fixture.domainRepository.findByProjectId(1L)).thenReturn(List.of(sourceDomain));
+        when(fixture.fieldRepository.findAllByProjectId(1L)).thenReturn(List.of());
+        fixture.withEmptyRemainingAssets();
+        when(fixture.projectRepository.existsByName("源项目")).thenReturn(false);
+        when(fixture.projectService.create(any(Project.class), eq(false))).thenAnswer(invocation -> {
+            Project project = invocation.getArgument(0);
+            project.setId(2L);
+            return project;
+        });
+        when(fixture.domainRepository.findByProjectId(2L)).thenReturn(List.of());
+        when(fixture.fieldRepository.findAllByProjectId(2L)).thenReturn(List.of());
+        when(fixture.enumDictRepository.findDictsByProjectId(2L)).thenReturn(List.of());
+        when(fixture.ruleConfigRepository.findByProjectId(2L)).thenReturn(List.of());
+        when(fixture.templateRepository.findByProjectId(2L)).thenReturn(List.of());
+        when(fixture.standardSnapshotRepository.findByProjectId(2L)).thenReturn(List.of());
+        when(fixture.domainRepository.insert(any(Domain.class))).thenAnswer(invocation -> {
+            Domain domain = invocation.getArgument(0);
+            domain.setId(20L);
+            return 1;
+        });
+        ProjectBackupPackage exported = fixture.service().exportPackage(1L);
+        ProjectBackupServiceImpl service = fixture.service();
+        ProjectRestoreReq req = new ProjectRestoreReq(null, false, exported);
+
+        var first = service.applyRestore(req, "retry-restore-1");
+        var second = service.applyRestore(req, "retry-restore-1");
+
+        assertEquals(first, second);
+        verify(fixture.domainRepository, times(1)).insert(any(Domain.class));
+        verify(fixture.restoreRecordRepository, times(1)).insert(any());
+    }
+
+    @Test
     void applyRestore_withOverwriteUpdatesExistingField() {
         Fixture fixture = new Fixture();
         fixture.withSourceProject();

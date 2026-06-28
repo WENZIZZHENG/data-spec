@@ -24,7 +24,10 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AiBatchServiceImplTest {
@@ -76,6 +79,35 @@ class AiBatchServiceImplTest {
         assertThat(updated.getSummaryJson()).contains("\"totalItems\":2");
         assertThat(updated.getPayloadJson()).contains("\"batchId\":\"server-42\"");
         assertThat(updated.getPayloadJson()).doesNotContain("quoted-secret", "ds_secret", "Bearer abc", "jdbc:postgresql://localhost/db");
+    }
+
+    @Test
+    void createSqlLintBatch_reusesDeliveryPackageForSameIdempotencyKey() {
+        SqlLintService sqlLintService = mock(SqlLintService.class);
+        AiBatchRunRepository repository = mock(AiBatchRunRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        when(repository.insert(any(AiBatchRun.class))).thenAnswer(invocation -> {
+            AiBatchRun run = invocation.getArgument(0);
+            run.setId(42L);
+            run.setCreatedAt(LocalDateTime.of(2026, 6, 28, 10, 30));
+            return 1;
+        });
+        when(repository.update(any(AiBatchRun.class))).thenReturn(1);
+        when(sqlLintService.lint("CREATE TABLE users(id bigint);", 1L)).thenReturn(LintResult.of(List.of(), List.of()));
+        AiBatchServiceImpl service = new AiBatchServiceImpl(repository, sqlLintService, objectMapper);
+        AiBatchSqlLintReq req = new AiBatchSqlLintReq(
+                1L,
+                "cli",
+                List.of(new AiBatchSqlLintItemReq("users.sql", "sql/users.sql", "CREATE TABLE users(id bigint);"))
+        );
+
+        AiBatchDeliveryPackage first = service.createSqlLintBatch(req, "retry-batch-1");
+        AiBatchDeliveryPackage second = service.createSqlLintBatch(req, "retry-batch-1");
+
+        assertThat(second).isSameAs(first);
+        verify(repository, times(1)).insert(any(AiBatchRun.class));
+        verify(repository, times(1)).update(any(AiBatchRun.class));
+        verify(sqlLintService, times(1)).lint("CREATE TABLE users(id bigint);", 1L);
     }
 
     @Test

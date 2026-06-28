@@ -5,6 +5,7 @@ import com.dataspec.common.perf.PerformanceProbe;
 import com.dataspec.dialect.service.SqlDialectCompatibilityService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.idempotency.WriteGuardService;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.model.ColumnDef;
 import com.dataspec.lint.model.TableDef;
@@ -23,7 +24,9 @@ import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.model.ReverseImportSummary;
 import com.dataspec.reverseimport.service.ReverseImportService;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
+import com.dataspec.security.context.ProjectAccessGuard;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +49,7 @@ public class ReverseImportServiceImpl implements ReverseImportService {
     private final FieldService fieldService;
     private final ReverseImportSourceService reverseImportSourceService;
     private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
+    private WriteGuardService writeGuardService = new WriteGuardService();
 
     @Override
     public ReverseImportPreview preview(Long projectId, String sql) {
@@ -180,13 +184,24 @@ public class ReverseImportServiceImpl implements ReverseImportService {
     @Override
     @Transactional
     public DatabaseImportResult importCandidates(DatabaseImportReq req) {
+        return importCandidates(req, null);
+    }
+
+    @Override
+    @Transactional
+    public DatabaseImportResult importCandidates(DatabaseImportReq req, String idempotencyKey) {
         if (req == null || req.getProjectId() == null) {
             throw new BizException("项目ID不能为空");
         }
         if (req.getCandidates() == null || req.getCandidates().isEmpty()) {
             throw new BizException("导入候选不能为空");
         }
+        ProjectAccessGuard.requireProjectAccess(req.getProjectId());
+        return writeGuardService.execute(req.getProjectId(), "reverse-import:database-import", idempotencyKey,
+                () -> importCandidatesInternal(req));
+    }
 
+    private DatabaseImportResult importCandidatesInternal(DatabaseImportReq req) {
         Map<String, Field> standardFieldIndex = standardFieldIndex(req.getProjectId());
         DatabaseImportResult result = new DatabaseImportResult();
         List<ImportedFieldSource> importedSources = new ArrayList<>();
@@ -225,6 +240,11 @@ public class ReverseImportServiceImpl implements ReverseImportService {
             }
         }
         return result;
+    }
+
+    @Autowired
+    void setWriteGuardService(WriteGuardService writeGuardService) {
+        this.writeGuardService = writeGuardService;
     }
 
     private ReverseImportFieldDiff compareColumn(TableDef table, ColumnDef column, Field standardField) {

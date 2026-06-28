@@ -20,7 +20,10 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AiJobRecordServiceImplTest {
@@ -94,6 +97,37 @@ class AiJobRecordServiceImplTest {
         assertThat(saved.getStandardSnapshotId()).isEqualTo(9L);
         assertThat(saved.getInputPayloadJson()).contains("businessDescription");
         assertThat(saved.getOutputPayloadJson()).contains("prompt text");
+    }
+
+    @Test
+    void create_reusesRecordForSameStableFingerprint() {
+        AiJobRecordRepository repository = mock(AiJobRecordRepository.class);
+        when(repository.insert(any(AiJobRecord.class))).thenAnswer(invocation -> {
+            AiJobRecord record = invocation.getArgument(0);
+            record.setId(42L);
+            return 1;
+        });
+        AiJobRecordServiceImpl service = new AiJobRecordServiceImpl(repository, new ObjectMapper());
+        AiJobRecordCreateReq req = new AiJobRecordCreateReq(
+                1L,
+                "SQL_LINT_FIX",
+                "SQL 检查与修正",
+                "CREATE TABLE users(id bigint);",
+                "sql-lint-fix@1",
+                "SUCCESS",
+                Map.of("sql", "CREATE TABLE users(id bigint);"),
+                Map.of("fixedSql", "CREATE TABLE users(id bigint);"),
+                9L,
+                "v1",
+                "hash",
+                88L
+        );
+
+        AiJobRecord first = service.create(req);
+        AiJobRecord second = service.create(req);
+
+        assertThat(second).isSameAs(first);
+        verify(repository, times(1)).insert(any(AiJobRecord.class));
     }
 
     @Test

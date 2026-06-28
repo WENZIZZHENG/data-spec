@@ -10,6 +10,7 @@ import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.repository.EnumDictRepository;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.repository.FieldRepository;
+import com.dataspec.idempotency.WriteGuardService;
 import com.dataspec.project.entity.Project;
 import com.dataspec.project.repository.ProjectRepository;
 import com.dataspec.project.service.ProjectService;
@@ -50,6 +51,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -94,6 +96,7 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
     private final StandardChangeLogRepository changeLogRepository;
     private final ProjectRestoreRecordRepository restoreRecordRepository;
     private final ObjectMapper objectMapper;
+    private WriteGuardService writeGuardService = new WriteGuardService();
 
     @Override
     public ProjectBackupPackage exportPackage(Long projectId) {
@@ -140,6 +143,23 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
     @Override
     @Transactional
     public ProjectRestoreResult applyRestore(ProjectRestoreReq req) {
+        return applyRestore(req, null);
+    }
+
+    @Override
+    @Transactional
+    public ProjectRestoreResult applyRestore(ProjectRestoreReq req, String idempotencyKey) {
+        Long lockProjectId = restoreLockProjectId(req);
+        if (req.targetProjectId() == null) {
+            ProjectAccessGuard.requireAllProjects("恢复到新项目需要全项目 API token");
+        } else {
+            ProjectAccessGuard.requireProjectAccess(lockProjectId);
+        }
+        return writeGuardService.execute(lockProjectId, "project-backup:restore-apply", idempotencyKey,
+                () -> applyRestoreInternal(req));
+    }
+
+    private ProjectRestoreResult applyRestoreInternal(ProjectRestoreReq req) {
         ProjectRestorePlan preview = previewRestore(req);
         if (!Boolean.TRUE.equals(preview.canApply())) {
             throw new BizException("恢复计划存在冲突或阻断项，请先处理 dry-run 结果");
@@ -167,6 +187,11 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
                 preview.warnings());
         ProjectRestoreRecord record = saveRestoreRecord(req.backupPackage(), appliedPlan, target.getId());
         return new ProjectRestoreResult(appliedPlan, record);
+    }
+
+    @Autowired
+    void setWriteGuardService(WriteGuardService writeGuardService) {
+        this.writeGuardService = writeGuardService;
     }
 
     @Override
@@ -233,6 +258,18 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
             throw new BizException("备份包包含疑似敏感字段，请重新导出脱敏包");
         }
         return pkg;
+    }
+
+    private Long restoreLockProjectId(ProjectRestoreReq req) {
+        if (req == null) {
+            throw new BizException("恢复请求不能为空");
+        }
+        if (req.targetProjectId() != null) {
+            return req.targetProjectId();
+        }
+        ProjectBackupPackage pkg = validatePackage(req.backupPackage());
+        Long sourceProjectId = pkg.sourceProject() == null ? null : pkg.sourceProject().id();
+        return sourceProjectId == null ? 0L : sourceProjectId;
     }
 
     private boolean containsSensitivePayload(ProjectBackupPackage pkg) {

@@ -7,11 +7,17 @@ import com.dataspec.aireplay.model.AiJobRecordDetail;
 import com.dataspec.aireplay.repository.AiJobRecordRepository;
 import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.common.exception.BizException;
+import com.dataspec.idempotency.WriteGuardService;
 import com.dataspec.security.context.ProjectAccessGuard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -26,6 +32,7 @@ public class AiJobRecordServiceImpl implements AiJobRecordService {
 
     private final AiJobRecordRepository aiJobRecordRepository;
     private final ObjectMapper objectMapper;
+    private WriteGuardService writeGuardService = new WriteGuardService();
 
     @Override
     public AiJobRecord create(AiJobRecordCreateReq req) {
@@ -36,6 +43,14 @@ public class AiJobRecordServiceImpl implements AiJobRecordService {
             throw new BizException("AI 作业类型不能为空");
         }
         ProjectAccessGuard.requireProjectAccess(req.projectId());
+        String inputPayloadJson = writeJson(req.inputPayload());
+        String outputPayloadJson = writeJson(req.outputPayload());
+        String fingerprint = aiJobFingerprint(req, inputPayloadJson, outputPayloadJson);
+        return writeGuardService.execute(req.projectId(), "ai-job-record:create", fingerprint,
+                () -> createInternal(req, inputPayloadJson, outputPayloadJson));
+    }
+
+    private AiJobRecord createInternal(AiJobRecordCreateReq req, String inputPayloadJson, String outputPayloadJson) {
         AiJobRecord record = new AiJobRecord();
         record.setProjectId(req.projectId());
         record.setJobType(req.jobType().trim());
@@ -43,14 +58,19 @@ public class AiJobRecordServiceImpl implements AiJobRecordService {
         record.setInputSummary(trimToNull(req.inputSummary()));
         record.setPromptVersion(trimToNull(req.promptVersion()));
         record.setStatus(isBlank(req.status()) ? "SUCCESS" : req.status().trim());
-        record.setInputPayloadJson(writeJson(req.inputPayload()));
-        record.setOutputPayloadJson(writeJson(req.outputPayload()));
+        record.setInputPayloadJson(inputPayloadJson);
+        record.setOutputPayloadJson(outputPayloadJson);
         record.setStandardSnapshotId(req.standardSnapshotId());
         record.setStandardSnapshotVersion(trimToNull(req.standardSnapshotVersion()));
         record.setStandardSnapshotHash(trimToNull(req.standardSnapshotHash()));
         record.setSqlCheckRecordId(req.sqlCheckRecordId());
         aiJobRecordRepository.insert(record);
         return record;
+    }
+
+    @Autowired
+    void setWriteGuardService(WriteGuardService writeGuardService) {
+        this.writeGuardService = writeGuardService;
     }
 
     @Override
@@ -129,6 +149,26 @@ public class AiJobRecordServiceImpl implements AiJobRecordService {
         }
     }
 
+    private String aiJobFingerprint(AiJobRecordCreateReq req, String inputPayloadJson, String outputPayloadJson) {
+        String raw = String.join("\u001F",
+                String.valueOf(req.projectId()),
+                trimToEmpty(req.jobType()),
+                trimToEmpty(req.promptVersion()),
+                trimToEmpty(req.status()),
+                inputPayloadJson,
+                outputPayloadJson,
+                String.valueOf(req.standardSnapshotId()),
+                trimToEmpty(req.standardSnapshotVersion()),
+                trimToEmpty(req.standardSnapshotHash()),
+                String.valueOf(req.sqlCheckRecordId()));
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return "fingerprint-" + HexFormat.of().formatHex(digest.digest(raw.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("当前 JDK 不支持 SHA-256", e);
+        }
+    }
+
     private Object readJson(String json) {
         if (isBlank(json)) {
             return Map.of();
@@ -145,6 +185,10 @@ public class AiJobRecordServiceImpl implements AiJobRecordService {
             return null;
         }
         return value.trim();
+    }
+
+    private String trimToEmpty(String value) {
+        return isBlank(value) ? "" : value.trim();
     }
 
     private boolean isBlank(String value) {

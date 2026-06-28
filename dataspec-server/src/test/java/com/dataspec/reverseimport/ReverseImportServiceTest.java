@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -198,6 +199,37 @@ class ReverseImportServiceTest {
         verify(sourceService).recordFieldSource(eq(batch), fieldCaptor.capture(), candidateCaptor.capture());
         assertThat(fieldCaptor.getValue().getId()).isEqualTo(99L);
         assertThat(candidateCaptor.getValue().getColumnName()).isEqualTo("user_name");
+    }
+
+    @Test
+    void importCandidates_reusesResultForSameIdempotencyKey() {
+        FieldService fieldService = mock(FieldService.class);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        when(fieldService.create(any(Field.class))).thenAnswer(invocation -> {
+            Field field = invocation.getArgument(0);
+            field.setId(99L);
+            return field;
+        });
+        ReverseImportBatch batch = new ReverseImportBatch();
+        batch.setId(7L);
+        when(sourceService.createDatabaseBatch(any(DatabaseImportReq.class), eq(1), eq(0)))
+                .thenReturn(batch);
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                sourceService);
+        DatabaseImportReq req = databaseImportReq(List.of(
+                new FieldCandidate("USER_ORDER", "user_name", "VARCHAR(50)", true, null, "用户名")
+        ));
+
+        var first = service.importCandidates(req, "retry-import-1");
+        var second = service.importCandidates(req, "retry-import-1");
+
+        assertThat(second).isSameAs(first);
+        verify(fieldService, times(1)).create(any(Field.class));
+        verify(sourceService, times(1)).createDatabaseBatch(req, 1, 0);
+        verify(sourceService, times(1)).recordFieldSource(eq(batch), any(Field.class), any(FieldCandidate.class));
     }
 
     @Test

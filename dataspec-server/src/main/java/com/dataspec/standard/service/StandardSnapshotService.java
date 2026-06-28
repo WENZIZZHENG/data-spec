@@ -13,6 +13,8 @@ public interface StandardSnapshotService {
 
     StandardSnapshotInfo createSnapshot(Long projectId, StandardSnapshotCreateReq req);
 
+    StandardSnapshotInfo createSnapshot(Long projectId, StandardSnapshotCreateReq req, String idempotencyKey);
+
     StandardSnapshotInfo getCurrentSnapshot(Long projectId);
 
     List<StandardSnapshotInfo> listSnapshots(Long projectId);

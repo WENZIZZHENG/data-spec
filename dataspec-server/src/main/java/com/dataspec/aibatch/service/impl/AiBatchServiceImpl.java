@@ -16,6 +16,7 @@ import com.dataspec.aibatch.repository.AiBatchRunRepository;
 import com.dataspec.aibatch.service.AiBatchService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.dialect.model.DialectDiagnostic;
+import com.dataspec.idempotency.WriteGuardService;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.LintResult;
@@ -23,6 +24,7 @@ import com.dataspec.security.context.DataSpecSecurityContext;
 import com.dataspec.security.context.ProjectAccessGuard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -50,12 +52,22 @@ public class AiBatchServiceImpl implements AiBatchService {
     private final AiBatchRunRepository aiBatchRunRepository;
     private final SqlLintService sqlLintService;
     private final ObjectMapper objectMapper;
+    private WriteGuardService writeGuardService = new WriteGuardService();
 
     @Override
     public AiBatchDeliveryPackage createSqlLintBatch(AiBatchSqlLintReq req) {
+        return createSqlLintBatch(req, null);
+    }
+
+    @Override
+    public AiBatchDeliveryPackage createSqlLintBatch(AiBatchSqlLintReq req, String idempotencyKey) {
         validateReq(req);
         ProjectAccessGuard.requireProjectAccess(req.projectId());
+        return writeGuardService.execute(req.projectId(), "ai-batch:sql-lint", idempotencyKey,
+                () -> createSqlLintBatchInternal(req));
+    }
 
+    private AiBatchDeliveryPackage createSqlLintBatchInternal(AiBatchSqlLintReq req) {
         List<AiBatchItemResult> itemResults = new ArrayList<>();
         for (AiBatchSqlLintItemReq item : req.items()) {
             itemResults.add(runLintItem(req.projectId(), item));
@@ -98,6 +110,11 @@ public class AiBatchServiceImpl implements AiBatchService {
         run.setSummaryJson(writeJson(summary));
         aiBatchRunRepository.update(run);
         return deliveryPackage;
+    }
+
+    @Autowired
+    void setWriteGuardService(WriteGuardService writeGuardService) {
+        this.writeGuardService = writeGuardService;
     }
 
     @Override

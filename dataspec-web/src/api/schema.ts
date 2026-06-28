@@ -5553,7 +5553,9 @@ export interface operations {
     importDatabaseCandidates: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5715,7 +5717,9 @@ export interface operations {
     createSnapshot: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 projectId: number;
             };
@@ -5785,7 +5789,9 @@ export interface operations {
     applyRestore: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6370,7 +6376,9 @@ export interface operations {
     createSqlLintBatch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };

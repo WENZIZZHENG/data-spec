@@ -247,6 +247,11 @@ class AiEvidencePackageServiceImplTest {
         }
 
         @Override
+        public AiBatchDeliveryPackage createSqlLintBatch(AiBatchSqlLintReq req, String idempotencyKey) {
+            return createSqlLintBatch(req);
+        }
+
+        @Override
         public IPage<AiBatchRun> listByProject(Long projectId, int current, int size) {
             throw new UnsupportedOperationException();
         }

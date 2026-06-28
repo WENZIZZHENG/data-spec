@@ -53,6 +53,67 @@ test('lint reads sql file, posts to server, prints json, and returns 1 for error
   }
 })
 
+test('lint forwards idempotency key option as header', async () => {
+  const calls = []
+  const fetchFn = async (url, options) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] }
+      })
+    }
+  }
+  const io = createIo('CREATE TABLE users (id bigint);')
+
+  const code = await runCli([
+    'lint',
+    '-',
+    '--project',
+    '1',
+    '--format',
+    'json',
+    '--idempotency-key',
+    'retry-lint-1'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.equal(calls[0].options.headers['Idempotency-Key'], 'retry-lint-1')
+})
+
+test('lint uses DATASPEC_IDEMPOTENCY_KEY when option is omitted', async () => {
+  const previous = process.env.DATASPEC_IDEMPOTENCY_KEY
+  process.env.DATASPEC_IDEMPOTENCY_KEY = 'env-retry-1'
+  try {
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] }
+        })
+      }
+    }
+    const io = createIo('CREATE TABLE users (id bigint);')
+
+    const code = await runCli(['lint', '-', '--project', '1', '--format', 'json'], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(calls[0].options.headers['Idempotency-Key'], 'env-retry-1')
+  } finally {
+    if (previous === undefined) {
+      delete process.env.DATASPEC_IDEMPOTENCY_KEY
+    } else {
+      process.env.DATASPEC_IDEMPOTENCY_KEY = previous
+    }
+  }
+})
+
 test('lint returns 0 when server reports no errors', async () => {
   const io = createIo('CREATE TABLE users (id bigserial);')
   const fetchFn = async () => ({

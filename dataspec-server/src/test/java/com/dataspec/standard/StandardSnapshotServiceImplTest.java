@@ -79,6 +79,30 @@ class StandardSnapshotServiceImplTest {
     }
 
     @Test
+    void createSnapshot_reusesResultForSameIdempotencyKey() {
+        DataSpecSecurityContext.set(ApiTokenPrincipal.local());
+        StandardSnapshotRepository repository = mock(StandardSnapshotRepository.class);
+        FieldService fieldService = mock(FieldService.class);
+        EnumDictService enumDictService = mock(EnumDictService.class);
+        RuleConfigService ruleConfigService = mock(RuleConfigService.class);
+        StandardSnapshotServiceImpl service = new StandardSnapshotServiceImpl(
+                repository,
+                fieldService,
+                enumDictService,
+                ruleConfigService,
+                new ObjectMapper());
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        when(enumDictService.listByProject(1L)).thenReturn(List.of());
+        when(ruleConfigService.listByProject(1L)).thenReturn(List.of());
+
+        StandardSnapshotInfo first = service.createSnapshot(1L, new StandardSnapshotCreateReq("v1", null, null), "retry-1");
+        StandardSnapshotInfo second = service.createSnapshot(1L, new StandardSnapshotCreateReq("v1", null, null), "retry-1");
+
+        assertSame(first, second);
+        verify(repository, times(1)).save(any(StandardSnapshot.class));
+    }
+
+    @Test
     void latestSnapshot_returnsUnversionedWhenMissing() {
         StandardSnapshotRepository repository = mock(StandardSnapshotRepository.class);
         StandardSnapshotServiceImpl service = new StandardSnapshotServiceImpl(

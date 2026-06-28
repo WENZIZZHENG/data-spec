@@ -16,5 +16,7 @@ public interface ProjectBackupService {
 
     ProjectRestoreResult applyRestore(ProjectRestoreReq req);
 
+    ProjectRestoreResult applyRestore(ProjectRestoreReq req, String idempotencyKey);
+
     List<ProjectRestoreRecord> listRestoreRecords(Long projectId);
 }

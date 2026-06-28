@@ -109,7 +109,17 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
 }
 
 async function runLint(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'dataspec-token', 'profile', 'task-type', 'taskType'])
+  const { positional, options } = parseArgs(args, [
+    'project',
+    'format',
+    'server',
+    'dataspec-token',
+    'idempotency-key',
+    'idempotencyKey',
+    'profile',
+    'task-type',
+    'taskType'
+  ])
   const config = loadDataSpecConfig(cliCwd(io))
   const sqlPath = positional[0]
   if (!sqlPath) {
@@ -125,12 +135,13 @@ async function runLint(args, io, fetchFn) {
   }
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
+  const idempotencyKey = resolveIdempotencyKey(options)
   const profileSelection = resolveProfileSelection(options, config)
   const sql = sqlPath === '-' ? await io.readStdin() : await readFile(sqlPath, 'utf8')
 
   const response = await fetchFn(`${server}/api/lint`, {
     method: 'POST',
-    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }, idempotencyKey),
     body: JSON.stringify({ sql, projectId, ...profileSelection })
   })
   const payload = await readJsonResponse(response)
@@ -198,6 +209,8 @@ async function runLintFiles(args, io, fetchFn) {
     'format',
     'server',
     'dataspec-token',
+    'idempotency-key',
+    'idempotencyKey',
     'delivery-package',
     'batch-package',
     'profile',
@@ -217,7 +230,8 @@ async function runLintFiles(args, io, fetchFn) {
   const deliveryPackagePath = resolveDeliveryPackagePath(options)
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
-  const output = await lintSqlFiles(inputPaths, projectId, server, fetchFn, apiToken, resolveProfileSelection(options, config))
+  const idempotencyKey = resolveIdempotencyKey(options)
+  const output = await lintSqlFiles(inputPaths, projectId, server, fetchFn, apiToken, resolveProfileSelection(options, config), idempotencyKey)
   if (deliveryPackagePath) {
     await writeDeliveryPackage(deliveryPackagePath, buildLintFilesDeliveryPackage(output, projectId))
   }
@@ -226,7 +240,18 @@ async function runLintFiles(args, io, fetchFn) {
 }
 
 async function runReviewPr(args, io, fetchFn) {
-  const { positional, options } = parseArgs(args, ['project', 'repo', 'pr', 'token', 'server', 'github-api', 'dataspec-token', 'format'])
+  const { positional, options } = parseArgs(args, [
+    'project',
+    'repo',
+    'pr',
+    'token',
+    'server',
+    'github-api',
+    'dataspec-token',
+    'idempotency-key',
+    'idempotencyKey',
+    'format'
+  ])
   const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length === 0) {
     throw new Error('review-pr 需要提供至少一个 SQL 文件或目录路径')
@@ -245,7 +270,7 @@ async function runReviewPr(args, io, fetchFn) {
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
   const githubApi = normalizeServer(options['github-api'] ?? DEFAULT_GITHUB_API)
-  const lintOutput = await lintSqlFiles(positional, projectId, server, fetchFn, apiToken)
+  const lintOutput = await lintSqlFiles(positional, projectId, server, fetchFn, apiToken, {}, resolveIdempotencyKey(options))
   const inlineResult = hasReviewIssues(lintOutput)
     ? await publishInlineReviewComments({ repo, prNumber, token, githubApi, lintOutput, fetchFn })
     : emptyInlineResult()
@@ -1874,15 +1899,16 @@ function parseOptionalBoolean(value, label) {
   throw new Error(`无效 ${label}: ${value}`)
 }
 
-async function lintSqlFiles(paths, projectId, server, fetchFn, apiToken, profileSelection = {}) {
+async function lintSqlFiles(paths, projectId, server, fetchFn, apiToken, profileSelection = {}, idempotencyKey = null) {
   const files = await collectSqlFiles(paths)
   const results = []
 
   for (const filePath of files) {
     const sql = await readFile(filePath, 'utf8')
+    const fileIdempotencyKey = scopedIdempotencyKey(idempotencyKey, filePath)
     const response = await fetchFn(`${server}/api/lint`, {
       method: 'POST',
-      headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+      headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }, fileIdempotencyKey),
       body: JSON.stringify({ sql, projectId, ...profileSelection })
     })
     const payload = await readJsonResponse(response)
@@ -2560,14 +2586,36 @@ function resolveDataSpecToken(options, config) {
   return options['dataspec-token'] ?? process.env.DATASPEC_TOKEN ?? config.apiToken
 }
 
-function dataSpecHeaders(apiToken, headers = {}) {
-  if (!apiToken) {
-    return headers
+function resolveIdempotencyKey(options) {
+  const value = options['idempotency-key'] ?? options.idempotencyKey ?? process.env.DATASPEC_IDEMPOTENCY_KEY
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return null
   }
-  return {
-    ...headers,
-    Authorization: `Bearer ${apiToken}`
+  return String(value).trim()
+}
+
+function dataSpecHeaders(apiToken, headers = {}, idempotencyKey = null) {
+  const result = {
+    ...headers
   }
+  if (apiToken) {
+    result.Authorization = `Bearer ${apiToken}`
+  }
+  if (idempotencyKey) {
+    result['Idempotency-Key'] = idempotencyKey
+  }
+  return result
+}
+
+function scopedIdempotencyKey(idempotencyKey, scope) {
+  if (!idempotencyKey) {
+    return null
+  }
+  const normalized = `${idempotencyKey}:${createHash('sha256').update(String(scope)).digest('hex').slice(0, 16)}`
+  if (normalized.length <= 128) {
+    return normalized
+  }
+  return `${idempotencyKey.slice(0, 96)}:${createHash('sha256').update(normalized).digest('hex').slice(0, 24)}`
 }
 
 function cliCwd(io) {
@@ -2659,9 +2707,9 @@ function helpText() {
   return `DataSpec CLI
 
 Usage:
-  node tools/dataspec-cli.mjs lint <path|-> [--project <id>] [--profile <id>|--task-type <type>] --format text|json [--server <url>] [--dataspec-token <token>]
-  node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] [--profile <id>|--task-type <type>] --format json [--delivery-package <json>] [--server <url>] [--dataspec-token <token>]
-  node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs lint <path|-> [--project <id>] [--profile <id>|--task-type <type>] --format text|json [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
+  node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] [--profile <id>|--task-type <type>] --format json [--delivery-package <json>] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
+  node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs export-context [--project <id>] [--profile <id>|--task-type <type>] [--output <zip>] [--cache] [--cache-ttl-days <days>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
@@ -2682,6 +2730,7 @@ Options:
   --server  可由 .dataspec/config.json 的 server 提供
   --profile/--task-type 可由 .dataspec/config.json 的 aiProfile/taskType 提供，显式参数优先
   --dataspec-token 可由 .dataspec/config.json 的 apiToken 或 DATASPEC_TOKEN 环境变量提供
+  --idempotency-key 可由 DATASPEC_IDEMPOTENCY_KEY 兜底，写入型命令会作为 Idempotency-Key header 传给后端
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
   lint-files 可通过 --delivery-package 或 --batch-package 写出 AI 批量任务交付包，stdout JSON 保持原结构
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出

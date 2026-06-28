@@ -20,4 +20,6 @@ public interface ReverseImportService {
     ReverseImportCompareResult compareTables(Long projectId, List<TableDef> tables);
 
     DatabaseImportResult importCandidates(DatabaseImportReq req);
+
+    DatabaseImportResult importCandidates(DatabaseImportReq req, String idempotencyKey);
 }

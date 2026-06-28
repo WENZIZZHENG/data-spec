@@ -18,6 +18,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -75,8 +76,11 @@ public class ReverseImportController {
     }
 
     @PostMapping("/database/import")
-    public R<DatabaseImportResult> importDatabaseCandidates(@Valid @RequestBody DatabaseImportReq req) {
-        return R.ok(reverseImportService.importCandidates(req));
+    public R<DatabaseImportResult> importDatabaseCandidates(
+            @Valid @RequestBody DatabaseImportReq req,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
+    ) {
+        return R.ok(reverseImportService.importCandidates(req, idempotencyKey));
     }
 
     public record ReverseImportReq(

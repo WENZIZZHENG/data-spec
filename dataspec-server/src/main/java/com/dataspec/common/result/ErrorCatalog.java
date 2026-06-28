@@ -35,6 +35,15 @@ public final class ErrorCatalog {
                     "README.md#安全基线"
             );
         }
+        if (statusCode == 409 || text.contains("写入操作正在进行") || lower.contains("idempotency")) {
+            return new ErrorDetail(
+                    "WRITE_OPERATION_IN_PROGRESS",
+                    "CONFLICT",
+                    true,
+                    "同一项目的高风险写入正在执行；保留相同 Idempotency-Key 稍后重试，或等待当前任务完成后再提交。",
+                    "README.md#验证"
+            );
+        }
         if (containsProjectId(text, lower)) {
             return new ErrorDetail(
                     "PROJECT_ID_INVALID",

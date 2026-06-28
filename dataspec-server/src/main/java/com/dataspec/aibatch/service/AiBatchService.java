@@ -13,6 +13,8 @@ public interface AiBatchService {
 
     AiBatchDeliveryPackage createSqlLintBatch(AiBatchSqlLintReq req);
 
+    AiBatchDeliveryPackage createSqlLintBatch(AiBatchSqlLintReq req, String idempotencyKey);
+
     IPage<AiBatchRun> listByProject(Long projectId, int current, int size);
 
     AiBatchRunDetail getDetail(Long id);

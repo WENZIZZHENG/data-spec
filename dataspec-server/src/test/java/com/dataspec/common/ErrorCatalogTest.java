@@ -69,4 +69,13 @@ class ErrorCatalogTest {
                 ErrorCatalog.from(500, "服务器内部错误").code()
         );
     }
+
+    @Test
+    void classifiesWriteLockConflictAsRetryable() {
+        ErrorDetail detail = ErrorCatalog.from(409, "写入操作正在进行，请稍后重试: reverse-import");
+
+        assertEquals("WRITE_OPERATION_IN_PROGRESS", detail.code());
+        assertEquals("CONFLICT", detail.category());
+        assertTrue(detail.retryable());
+    }
 }
