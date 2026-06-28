@@ -1,7 +1,7 @@
 # sql-check-records Specification
 
 ## Purpose
-TBD - created by archiving change add-sql-check-records. Update Purpose after archive.
+Define how SQL lint results, fixed SQL candidates, replay metadata, and issue-level fix metadata are persisted and reviewed after a SQL check.
 ## Requirements
 ### Requirement: Fixed SQL Output
 The system SHALL include a deterministic fixed SQL candidate in lint results when it can be safely generated.
@@ -48,3 +48,27 @@ SQL check record detail SHALL include standard snapshot replay metadata when ava
 - **WHEN** the record snapshot hash differs from the current standard hash
 - **THEN** replay status identifies that the record used a historical standard
 - **AND** next actions include exporting historical context before applying fixes
+
+### Requirement: SQL check record fix metadata
+SQL check records SHALL preserve issue-level fixed SQL policy metadata for later review.
+
+#### Scenario: Persist issue fix metadata
+- **WHEN** a lint result is saved as a SQL check record
+- **THEN** the serialized issues include fixer risk, change type, status, and explanation fields when present
+- **AND** existing record fields remain readable by older clients.
+
+#### Scenario: Record detail shows fix metadata
+- **WHEN** a client requests SQL check record detail
+- **THEN** the returned issues include the saved fixed SQL policy metadata
+- **AND** the record still includes original SQL, fixed SQL, issue counts, and replay metadata.
+
+### Requirement: SQL lint page fix plan review
+The SQL lint page SHALL expose the fixed SQL policy and planned changes for the current lint result.
+
+#### Scenario: Show fix plan summary
+- **WHEN** a lint result includes a fix plan
+- **THEN** the page displays effective policy, dry-run status, applied count, skipped count, and next actions.
+
+#### Scenario: Show change risk beside fixed SQL
+- **WHEN** fixed SQL or fixed SQL diff is displayed
+- **THEN** the page shows planned changes with corresponding rule code, risk level, before value, after value, and explanation.
