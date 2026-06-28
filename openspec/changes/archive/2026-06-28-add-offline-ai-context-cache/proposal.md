@@ -27,3 +27,10 @@ AI agent 在业务仓库中工作时，不一定随时能连上 DataSpec 服务�
 - 配置：复用 `.dataspec/config.json` 的 rootDir/projectId/server/defaultPaths，不改变现有配置格式。
 - 测试：新增 CLI 单测覆盖缓存写入、metadata 脱敏、离线 doctor、远端差异和无缓存场景。
 - 文档：更新 README/TODO，说明 `.dataspec/context/` 用法、离线边界、验证命令和不缓存敏感信息。
+
+## Verification Evidence
+
+- `node --test tools/dataspec-cli.test.mjs tools/dataspec-config.test.mjs`：53 tests, 0 failures。
+- `npx.cmd openspec validate add-offline-ai-context-cache`：Change valid。
+- `git diff --check`：exit 0，仅 CRLF 工作区换行提示。
+- 本地结构化代码评审：修复危险 zip 后置路径导致旧缓存被清理的问题；修复远端 manifest 对比传入原始 entries 导致 `remote-different` 漏报的问题。
