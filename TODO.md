@@ -18,7 +18,8 @@
 12. 本次继续补充优化建议已补为 P6-147 到 P6-152：Schema Registry 可视化、可复用工作流 recipe、标准包同步巡检、业务仓库合规分、字段库密集编辑体验和待办里程碑收束。
 13. 本次最新优化建议已补为 P6-153 到 P6-158：AI Context 注入防护、标准消费端 SDK、规则依赖冲突诊断、示例契约快照、单机分发预案和字段可见性策略。
 14. 本次补充优化建议已补为 P6-159 到 P6-164：AI 任务断点续跑、标准变更影响预演、字段知识卡、规则/标准 A/B 评测、连接器能力探测和个人安全红线配置。
-15. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+15. 本次追加优化建议已补为 P6-165 到 P6-170：标准对象稳定标识、AI 输出后置校验、标准查询 DSL、MCP 资源游标分页、前端操作录制和标准维护工作量估算。
+16. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -1632,6 +1633,66 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 落地产物：新增个人安全红线配置页和 `.dataspec/security.json` schema；导出、证据包、样例生成、CLI/MCP 调用前统一读取策略；doctor 输出策略缺失或冲突提示。
 - 验收标准：用户能明确配置哪些内容永不导出、哪些 AI 工具可用、样例如何脱敏；违反红线时前端/CLI/MCP 给出可执行阻断或警告；策略本身不泄漏 secret。
 - 边界：不做组织级审批，不扫描真实业务数据全量内容，不替代专业 DLP；第一版聚焦本机使用安全。
+
+### P6-165：标准对象稳定标识与引用别名层
+- 状态：待办。
+- 为什么做：AI、CLI、MCP 和业务仓库长期引用字段标准时，如果只引用可变的字段名或显示名，字段重命名、合并或废弃后很容易引用漂移；需要一个稳定标识和别名解析层，让 AI 知道“这是同一个标准对象的历史名称”。
+- 已有基础：已有标准快照、Schema Registry、字段生命周期、字段影响分析、变更日志、标准包 lockfile、标准消费端 SDK 和 AI 输出引用证据待办。
+- 缺口：缺少 fieldStableId、aliasHistory、canonicalRef、deprecatedRefs 和 referenceResolutionResult；当前 Context、证据包、SDK 或业务仓库扫描结果难以统一判断旧引用是否仍有效。
+- 参考项目：`datahub-project/datahub` 的实体 urn、`open-metadata/OpenMetadata` 的资产标识和 `bufbuild/buf` 的 breaking change 检查；只借鉴稳定引用和兼容检查，不做组织级元数据平台。
+- 落地产物：为字段、枚举、规则、模板等标准对象定义稳定引用格式；导出 Context、SDK、证据包和问答结果时同时携带 stableRef 与当前 displayName；新增别名解析 API/CLI，支持把历史字段名解析到当前标准对象。
+- 验收标准：字段重命名后，历史 SQL 检查记录、AI 证据包和业务仓库引用仍能解析到同一标准对象；废弃或合并的引用会给出替代建议；解析结果有契约测试覆盖。
+- 边界：不强制重写历史记录，不把 stableRef 暴露成用户必须手填的字段；第一版优先覆盖字段和枚举。
+
+### P6-166：AI 输出后置校验与幻觉引用拦截
+- 状态：待办。
+- 为什么做：即使 AI 能读取标准，它仍可能在 SQL、DDL、文档或修复说明里引用不存在的字段、过期枚举或错误规则；需要在 AI 产物生成后做一次确定性校验，避免“看起来引用了标准，实际引用错了”。
+- 已有基础：已有 SQL lint、fixedSql、DDL 生成、AI 回放、AI 输出契约稳定性、引用证据与 Explain Trace、规则/标准 A/B 评测和执行证据包。
+- 缺口：缺少 postGenerationCheck、unknownStandardRefs、staleRefs、unsupportedClaims 和 confidenceThreshold；AI 输出中的字段名、枚举值、规则说明和证据引用无法统一二次验证。
+- 参考项目：`promptfoo/promptfoo` 的输出断言、`great-expectations/great_expectations` 的验证结果和 `Schemathesis/schemathesis` 的契约回归；只做本地确定性检查，不依赖外部 LLM 评判。
+- 落地产物：新增 AI 产物校验 API/CLI/MCP；支持校验 SQL/DDL/Markdown/JSON 中的标准引用，输出 missingRefs、staleRefs、unsafeClaims、suggestedFixes 和 evidenceLinks；前端在复制或下载 AI 产物前显示校验摘要。
+- 验收标准：AI 输出引用不存在字段时能被拦截或明确警告；过期字段能提示替代字段；校验结果可进入执行证据包和回放记录。
+- 边界：不判断自然语言内容的全部事实正确性，不自动调用外部模型改写；第一版聚焦 DataSpec 可确定验证的字段、枚举、规则和快照引用。
+
+### P6-167：标准查询 DSL 与可组合筛选协议
+- 状态：待办。
+- 为什么做：AI 经常需要按“订单域 + 金额字段 + 可用于建表 + 非敏感 + 最近验证”这类组合条件取标准；如果每次只能拼多个松散参数，Context 裁剪、字段检索、问答和 CLI 查询都会越来越难稳定复用。
+- 已有基础：已有字段检索、字段分组、AI Context 按需裁剪、字段质量评分、字段可见性、业务术语表、本地语义检索和前端类型化 API Client 待办。
+- 缺口：缺少统一 query expression，无法稳定表达 domain/tag/status/visibility/quality/source/updatedSince/hasExample/relatedTo 等条件，也缺少 explainable query plan 说明哪些条件命中或被降级。
+- 参考项目：`sourcegraph/sourcegraph` 的搜索语法、`TanStack/table` 的筛选状态模型和 MCP resource 参数化协议；只借鉴查询表达与可解释筛选，不引入复杂全文搜索平台。
+- 落地产物：定义轻量 StandardQuery DSL 与 JSON Schema；字段检索、AI Context、CLI/MCP 和前端筛选逐步接入；输出 querySummary、appliedFilters、ignoredFilters、resultCount 和 nextQueryHints。
+- 验收标准：AI 可用同一条查询在 API、CLI 和 MCP 中获取一致字段集合；无效条件会给出结构化错误；查询语义有 fixture 防漂移。
+- 边界：不做任意 SQL 查询，不允许 DSL 绕过项目边界或安全红线；第一版只覆盖标准对象元数据筛选。
+
+### P6-168：MCP Resource 游标分页与大字段库分片导出
+- 状态：待办。
+- 为什么做：字段库、规则、模板、证据和历史记录变大后，一次性通过 MCP resource 或 Context 包返回全部内容会浪费上下文，也可能超过客户端限制；AI 需要按游标分片读取并知道下一片是否必要。
+- 已有基础：已有 AI Context 裁剪、字段分页、性能基线、大库扫描计划、元数据增量缓存、MCP/CLI 工作流模板和 MCP/CLI 兼容握手待办。
+- 缺口：MCP resources 缺少统一 cursor、pageSize、chunkHash、hasMore、resumeToken 和 compactSummary；AI 无法可靠分批读取 field-catalog、rules、evidence、records 等大资源。
+- 参考项目：Model Context Protocol resources 设计、`TanStack/query` 的分页缓存和 `OpenLineage/OpenLineage` 的事件分片结构；只借鉴分页与恢复，不引入远程缓存服务。
+- 落地产物：为大 MCP resource 和 CLI 导出定义分页契约；支持 first/next/summary 三类读取模式；Context 包 manifest 记录分片 hash；doctor 可提示客户端是否支持分页能力。
+- 验收标准：上千字段项目可通过 MCP 分页读取完整标准，不超出单次上下文预算；中断后可用 resumeToken 继续；分片内容与完整导出 hash 可校验一致。
+- 边界：不替代完整 zip 导出，不为所有小资源强制分页；第一版优先 field-catalog、rule catalog 和 evidence summary。
+
+### P6-169：前端操作录制与可复现脚本导出
+- 状态：待办。
+- 为什么做：前端页面和 AI browser automation 越来越多，问题复现常常依赖“我刚才点了哪些筛选、切了哪个项目、复制了什么 SQL”；需要把用户操作和页面状态转成可脱敏的复现脚本，方便 AI 或本地 E2E 重放。
+- 已有基础：已有前端 URL 状态、统一数据状态、命令面板、浏览器级 E2E、前端反馈转任务、执行证据包和 Playwright 失败截图待办。
+- 缺口：缺少 userActionTrace、routeState、selectedProject、apiCalls、redactedInputs 和 replayScript；错误反馈只能描述现象，不能稳定生成可运行的 Playwright/手工复现步骤。
+- 参考项目：`microsoft/playwright` 的 trace 与 codegen、`getsentry/sentry-javascript` 的 breadcrumb 和 `github/gh` 的 issue 模板；只借鉴本地复现信息采集，不上传远程平台。
+- 落地产物：新增前端可选“录制复现”模式；记录路由、关键按钮、表单状态、接口摘要和错误 traceId；导出 Markdown、JSON 和 Playwright 草稿脚本，自动脱敏 token、密码和连接串。
+- 验收标准：SQL 校验、反向导入、字段库筛选等核心流程出错时，可导出一份 AI 能复现的脚本；导出内容不含敏感值；脚本至少能作为本地 Playwright 骨架运行或转成任务描述。
+- 边界：不默认持续录制用户行为，不录制真实业务数据行，不替代完整 E2E 测试套件；第一版由用户显式开启。
+
+### P6-170：标准维护工作量估算与任务批量拆分
+- 状态：待办。
+- 为什么做：DataSpec 已能发现低质量字段、候选、导入差异、规则冲突和 AI 失败记录，但用户还需要知道“先做哪 20 分钟最值”；AI 也需要把一堆标准维护问题拆成可执行小任务，而不是一次性尝试全修。
+- 已有基础：已有字段质量评分、覆盖率报告、候选 Inbox、个人健康摘要、AI 任务推荐队列、TODO 到 OpenSpec 交接、执行证据包和统一任务结果协议待办。
+- 缺口：缺少 workEstimate、batchPlan、taskSlices、expectedImpact、riskLevel 和 verificationCommands；健康摘要能看到问题，但还不能按投入产出拆成可执行批次。
+- 参考项目：GitHub Actions job summary、`backstage/backstage` 的开发者任务入口和 `dagster-io/dagster` 的资产任务视图；只借鉴任务摘要和优先级表达，不做团队排期系统。
+- 落地产物：新增标准维护任务拆分 API/CLI；把低质量字段、导入候选、规则冲突和失败 SQL 聚合成 15/30/60 分钟任务包；每个任务包包含目标对象、预计收益、验证命令和回滚/跳过说明。
+- 验收标准：打开项目后能生成“本次最值得处理的 3 个维护批次”；AI 可按批次逐步执行并产出 TaskResult；完成后健康摘要和任务建议会更新。
+- 边界：不做团队工时估算，不自动修改标准，不把估算当承诺；第一版按本地项目指标给出启发式建议。
 
 ## 参考项目索引
 
