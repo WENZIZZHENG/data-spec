@@ -82,6 +82,67 @@ export interface FieldChangeUndoResult {
   logId?: number
 }
 
+export interface BusinessGlossary {
+  id?: number
+  projectId?: number
+  term?: string
+  synonyms?: string | null
+  rootTerms?: string | null
+  abbreviations?: string | null
+  disabledTerms?: string | null
+  canonicalFieldId?: number | null
+  scopeType?: string | null
+  scopeValue?: string | null
+  exampleFields?: string | null
+  description?: string | null
+  status?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface BusinessGlossaryReq {
+  projectId?: number
+  term?: string
+  synonyms?: string | null
+  rootTerms?: string | null
+  abbreviations?: string | null
+  disabledTerms?: string | null
+  canonicalFieldId?: number | null
+  scopeType?: string | null
+  scopeValue?: string | null
+  exampleFields?: string | null
+  description?: string | null
+  status?: string | null
+}
+
+export interface BusinessGlossaryConflictEntry {
+  id?: number
+  term?: string
+  canonicalFieldId?: number
+  canonicalFieldName?: string
+}
+
+export interface BusinessGlossaryConflictGroup {
+  type?: string
+  severity?: 'ERROR' | 'WARNING'
+  token?: string
+  message?: string
+  entries?: BusinessGlossaryConflictEntry[]
+  nextAction?: string
+}
+
+export interface BusinessGlossaryConflictSummary {
+  conflictCount?: number
+  errorCount?: number
+  warningCount?: number
+}
+
+export interface BusinessGlossaryConflictReport {
+  projectId?: number
+  summary?: BusinessGlossaryConflictSummary
+  conflicts?: BusinessGlossaryConflictGroup[]
+}
+
 export type StandardChangeLog = Schemas['StandardChangeLog']
 export type BackupProject = Schemas['BackupProject']
 export type ProjectBackupAssets = Schemas['ProjectBackupAssets']

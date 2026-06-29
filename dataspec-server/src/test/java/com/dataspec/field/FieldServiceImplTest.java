@@ -1,5 +1,7 @@
 package com.dataspec.field;
 
+import com.dataspec.businessglossary.model.GlossaryMatch;
+import com.dataspec.businessglossary.service.BusinessGlossaryService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.service.StandardChangeLogService;
@@ -612,6 +614,45 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void suggest_usesBusinessGlossaryCanonicalFieldAndReason() {
+        FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        Field mobile = field("mobile_no", "手机号", "varchar(20)", "联系人号码", "", "enabled");
+        mobile.setId(10L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(mobile));
+        when(glossaryService.match(1L, "会员手机号")).thenReturn(List.of(
+                new GlossaryMatch(3L, "手机号", "手机号", "TERM", 120, 10L, "mobile_no", Set.of("mobile_no"), false,
+                        "术语表：手机号 -> mobile_no")
+        ));
+        FieldServiceImpl service = service(repository, mock(FieldSourceRepository.class), mock(StandardChangeLogService.class), glossaryService);
+
+        List<FieldSuggestion> suggestions = service.suggest(1L, "会员手机号", 5);
+
+        assertEquals("mobile_no", suggestions.getFirst().recommendedName());
+        assertTrue(suggestions.getFirst().matchReason().contains("术语表"));
+    }
+
+    @Test
+    void search_usesBusinessGlossaryExpandedTerms() {
+        FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        Field amount = field("amount_cent", "支付金额", "bigint", "金额以分存储", "", "enabled");
+        amount.setId(20L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(amount));
+        when(glossaryService.match(1L, "订单费用")).thenReturn(List.of(
+                new GlossaryMatch(4L, "费用", "费用", "SYNONYM", 116, 20L, "amount_cent", Set.of("amount_cent"), false,
+                        "术语表：费用 -> amount_cent")
+        ));
+        FieldServiceImpl service = service(repository, mock(FieldSourceRepository.class), mock(StandardChangeLogService.class), glossaryService);
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "订单费用", null, null, null, null, null, 10));
+
+        assertEquals("amount_cent", result.items().getFirst().field().getName());
+        assertTrue(result.items().getFirst().matchReasons().stream().anyMatch(reason -> reason.contains("术语表")));
+    }
+
+    @Test
     void search_filtersByCategoryTagStatusSensitiveAndSourceBatch() {
         FieldRepository repository = mock(FieldRepository.class);
         FieldSourceRepository sourceRepository = mock(FieldSourceRepository.class);
@@ -853,6 +894,14 @@ class FieldServiceImplTest {
 
     private FieldServiceImpl service(FieldRepository repository, FieldSourceRepository sourceRepository,
                                      StandardChangeLogService changeLogService) {
-        return new FieldServiceImpl(repository, sourceRepository, changeLogService, objectMapper);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(glossaryService.match(anyLong(), anyString())).thenReturn(List.of());
+        return service(repository, sourceRepository, changeLogService, glossaryService);
+    }
+
+    private FieldServiceImpl service(FieldRepository repository, FieldSourceRepository sourceRepository,
+                                     StandardChangeLogService changeLogService,
+                                     BusinessGlossaryService glossaryService) {
+        return new FieldServiceImpl(repository, sourceRepository, changeLogService, objectMapper, glossaryService);
     }
 }

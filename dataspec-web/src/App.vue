@@ -33,6 +33,10 @@
             <el-icon><List /></el-icon>
             <span>标准字段库</span>
           </el-menu-item>
+          <el-menu-item index="/business-glossary">
+            <el-icon><Collection /></el-icon>
+            <span>业务术语表</span>
+          </el-menu-item>
           <el-menu-item index="/standard-candidates">
             <el-icon><Collection /></el-icon>
             <span>标准候选</span>

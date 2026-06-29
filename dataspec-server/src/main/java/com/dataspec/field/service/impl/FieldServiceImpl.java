@@ -1,6 +1,8 @@
 package com.dataspec.field.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.dataspec.businessglossary.model.GlossaryMatch;
+import com.dataspec.businessglossary.service.BusinessGlossaryService;
 import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.common.exception.BizException;
@@ -68,6 +70,7 @@ public class FieldServiceImpl implements FieldService {
     private final FieldSourceRepository fieldSourceRepository;
     private final StandardChangeLogService changeLogService;
     private final ObjectMapper objectMapper;
+    private final BusinessGlossaryService businessGlossaryService;
 
     @Override
     public IPage<Field> page(Long projectId, int current, int size) {
@@ -107,13 +110,16 @@ public class FieldServiceImpl implements FieldService {
         }
 
         Set<Long> sourceFieldIds = loadSourceFieldIds(req.projectId(), criteria.sourceBatchId());
+        List<GlossaryMatch> glossaryMatches = criteria.hasQuery()
+                ? businessGlossaryService.match(req.projectId(), criteria.query())
+                : List.of();
         List<Field> candidates = fieldRepository.findAllByProjectId(req.projectId()).stream()
                 .filter(field -> matchesSearchFilters(field, criteria, sourceFieldIds))
                 .toList();
 
         List<FieldSearchItem> matched = new ArrayList<>();
         for (Field field : candidates) {
-            FieldSearchItem item = searchItemFor(field, criteria);
+            FieldSearchItem item = searchItemFor(field, criteria, glossaryMatches);
             if (item != null) {
                 matched.add(item);
             }
@@ -352,13 +358,14 @@ public class FieldServiceImpl implements FieldService {
         if (queryCompact.isBlank() && queryTokens.isEmpty()) {
             throw new BizException("字段描述缺少可匹配内容");
         }
+        List<GlossaryMatch> glossaryMatches = businessGlossaryService.match(projectId, query);
         List<FieldSuggestion> suggestions = new ArrayList<>();
 
         for (Field field : fieldRepository.findAllByProjectId(projectId)) {
             if ("disabled".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
                 continue;
             }
-            ScoredMatch match = scoreField(field, queryCompact, queryTokens, querySemanticGroups);
+            ScoredMatch match = scoreFieldWithGlossary(field, queryCompact, queryTokens, querySemanticGroups, glossaryMatches);
             if (match.score() <= 0) {
                 continue;
             }
@@ -437,11 +444,16 @@ public class FieldServiceImpl implements FieldService {
         return criteria.sourceBatchId() == null || sourceFieldIds.contains(field.getId());
     }
 
-    private FieldSearchItem searchItemFor(Field field, SearchCriteria criteria) {
+    private FieldSearchItem searchItemFor(Field field, SearchCriteria criteria, List<GlossaryMatch> glossaryMatches) {
         int score = 1;
         List<String> reasons = new ArrayList<>();
         if (criteria.hasQuery()) {
-            ScoredMatch match = scoreField(field, criteria.queryCompact(), criteria.queryTokens(), criteria.querySemanticGroups());
+            ScoredMatch match = scoreFieldWithGlossary(
+                    field,
+                    criteria.queryCompact(),
+                    criteria.queryTokens(),
+                    criteria.querySemanticGroups(),
+                    glossaryMatches);
             if (match.score() <= 0) {
                 return null;
             }
@@ -830,6 +842,30 @@ public class FieldServiceImpl implements FieldService {
         }
         best = best.max(scoreSemanticGroups(querySemanticGroups, semanticGroupsForField(field)));
         return best;
+    }
+
+    private ScoredMatch scoreFieldWithGlossary(Field field, String queryCompact, Set<String> queryTokens,
+                                               Set<String> querySemanticGroups,
+                                               List<GlossaryMatch> glossaryMatches) {
+        return scoreField(field, queryCompact, queryTokens, querySemanticGroups)
+                .max(scoreGlossary(field, glossaryMatches));
+    }
+
+    private ScoredMatch scoreGlossary(Field field, List<GlossaryMatch> glossaryMatches) {
+        ScoredMatch best = ScoredMatch.none();
+        for (GlossaryMatch match : glossaryMatches) {
+            if (match.disabledTerm() || !glossaryAppliesToField(field, match)) {
+                continue;
+            }
+            best = best.max(new ScoredMatch(match.score(), match.reason()));
+        }
+        return best;
+    }
+
+    private boolean glossaryAppliesToField(Field field, GlossaryMatch match) {
+        return Objects.equals(field.getId(), match.canonicalFieldId())
+                || Objects.equals(field.getName(), match.canonicalFieldName())
+                || match.exampleFields().contains(field.getName());
     }
 
     private ScoredMatch scoreSemanticGroups(Set<String> querySemanticGroups, Set<String> fieldSemanticGroups) {

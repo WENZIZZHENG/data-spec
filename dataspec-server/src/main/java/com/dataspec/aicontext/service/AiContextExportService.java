@@ -6,6 +6,9 @@ import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.aiprofile.model.AiTaskContextScope;
 import com.dataspec.aiprofile.model.AiTaskProfile;
 import com.dataspec.aiprofile.service.AiTaskProfileService;
+import com.dataspec.businessglossary.model.BusinessGlossaryContextExport;
+import com.dataspec.businessglossary.model.BusinessGlossaryContextItem;
+import com.dataspec.businessglossary.service.BusinessGlossaryService;
 import com.dataspec.capability.service.AiCapabilityCatalogService;
 import com.dataspec.common.perf.PerformanceProbe;
 import com.dataspec.contract.service.SchemaRegistryService;
@@ -70,6 +73,7 @@ public class AiContextExportService {
     private static final int DATASPEC_CONTEXT_SCHEMA_VERSION = 1;
     private static final long FIELD_CATALOG_WARN_MS = 1_000;
     private static final long CONTEXT_PACKAGE_WARN_MS = 1_500;
+    private static final int GLOSSARY_CONTEXT_LIMIT = 200;
     private static final List<String> DEFAULT_REQUIRED_COLUMNS = List.of("id", "created_at", "updated_at", "is_deleted");
     private static final List<String> DEFAULT_FORBIDDEN_NAMES = List.of(
             "uid", "create_time", "update_time", "del_flag", "ctime", "mtime", "is_del", "tmp", "test", "flag1", "type1"
@@ -107,6 +111,7 @@ public class AiContextExportService {
     private final AiTaskProfileService aiTaskProfileService;
     private final SchemaRegistryService schemaRegistryService;
     private final AiCapabilityCatalogService capabilityCatalogService;
+    private final BusinessGlossaryService businessGlossaryService;
 
     /**
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
@@ -207,8 +212,10 @@ public class AiContextExportService {
             ObjectNode root = mapper.createObjectNode();
             root.put("projectId", projectId);
             root.set("standard", standardNode(mapper, snapshot));
-            if (scopedFields.summary().includeMetadata()) {
-                root.set("contextScope", contextScopeNode(mapper, scopedFields.summary()));
+            BusinessGlossaryContextExport glossaryExport = businessGlossaryService.contextExport(projectId, GLOSSARY_CONTEXT_LIMIT);
+            ScopeSummary scopeSummary = scopeSummaryWithGlossaryWarnings(scopedFields.summary(), glossaryExport);
+            if (scopeSummary.includeMetadata()) {
+                root.set("contextScope", contextScopeNode(mapper, scopeSummary));
             }
 
             // 字段目录
@@ -265,6 +272,7 @@ public class AiContextExportService {
                 enumsNode.add(en);
             }
             root.set("enums", enumsNode);
+            root.set("glossary", glossaryNode(mapper, glossaryExport));
 
             return mapper.writeValueAsString(root);
         } catch (Exception e) {
@@ -1345,6 +1353,59 @@ public class AiContextExportService {
         return node;
     }
 
+    private ScopeSummary scopeSummaryWithGlossaryWarnings(ScopeSummary summary, BusinessGlossaryContextExport glossaryExport) {
+        if (!glossaryExport.truncated()) {
+            return summary;
+        }
+        List<String> warnings = new ArrayList<>(summary.warnings());
+        warnings.add("业务术语表已按 " + glossaryExport.returnedCount() + "/" + glossaryExport.totalCount() + " 条截断，请收窄项目术语或按需导出。");
+        return new ScopeSummary(
+                true,
+                summary.scope(),
+                summary.query(),
+                summary.status(),
+                summary.limit(),
+                summary.profileId(),
+                summary.taskType(),
+                summary.totalFieldCount(),
+                summary.matchedFieldCount(),
+                summary.returnedFieldCount(),
+                List.copyOf(warnings),
+                summary.groupSummary());
+    }
+
+    private ArrayNode glossaryNode(ObjectMapper mapper, BusinessGlossaryContextExport glossaryExport) {
+        ArrayNode node = mapper.createArrayNode();
+        for (BusinessGlossaryContextItem item : glossaryExport.items()) {
+            ObjectNode entry = mapper.createObjectNode();
+            entry.put("term", item.term());
+            entry.set("synonyms", stringsToArrayNode(mapper, item.synonyms()));
+            entry.set("rootTerms", stringsToArrayNode(mapper, item.rootTerms()));
+            entry.set("abbreviations", stringsToArrayNode(mapper, item.abbreviations()));
+            entry.set("disabledTerms", stringsToArrayNode(mapper, item.disabledTerms()));
+            if (item.canonicalFieldName() != null) {
+                entry.put("canonicalFieldName", item.canonicalFieldName());
+            }
+            if (item.scopeType() != null) {
+                entry.put("scopeType", item.scopeType());
+            }
+            if (item.scopeValue() != null) {
+                entry.put("scopeValue", item.scopeValue());
+            }
+            entry.set("exampleFields", stringsToArrayNode(mapper, item.exampleFields()));
+            node.add(entry);
+        }
+        return node;
+    }
+
+    private ArrayNode stringsToArrayNode(ObjectMapper mapper, List<String> values) {
+        ArrayNode node = mapper.createArrayNode();
+        if (values != null) {
+            values.forEach(node::add);
+        }
+        return node;
+    }
+
     private ObjectNode groupSummaryNode(ObjectMapper mapper, FieldGroupSummary summary) {
         ObjectNode node = mapper.createObjectNode();
         node.put("totalFieldCount", summary.totalFieldCount());
@@ -1531,6 +1592,40 @@ public class AiContextExportService {
                                 "label": { "type": "string" }
                               }
                             }
+                          }
+                        }
+                      }
+                    },
+                    "glossary": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["term", "synonyms", "rootTerms", "abbreviations", "disabledTerms", "exampleFields"],
+                        "properties": {
+                          "term": { "type": "string" },
+                          "synonyms": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                          },
+                          "rootTerms": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                          },
+                          "abbreviations": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                          },
+                          "disabledTerms": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                          },
+                          "canonicalFieldName": { "type": "string" },
+                          "scopeType": { "type": "string" },
+                          "scopeValue": { "type": "string" },
+                          "exampleFields": {
+                            "type": "array",
+                            "items": { "type": "string" }
                           }
                         }
                       }

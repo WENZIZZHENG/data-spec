@@ -10,6 +10,9 @@ import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.aiprofile.model.AiTaskContextScope;
 import com.dataspec.aiprofile.model.AiTaskProfile;
 import com.dataspec.aiprofile.service.AiTaskProfileService;
+import com.dataspec.businessglossary.model.BusinessGlossaryContextExport;
+import com.dataspec.businessglossary.model.BusinessGlossaryContextItem;
+import com.dataspec.businessglossary.service.BusinessGlossaryService;
 import com.dataspec.capability.service.impl.AiCapabilityCatalogServiceImpl;
 import com.dataspec.contract.service.impl.SchemaRegistryServiceImpl;
 import com.dataspec.enumdict.service.EnumDictService;
@@ -361,6 +364,58 @@ class AiContextExportServiceTest {
     }
 
     @Test
+    void generateFieldCatalogJson_exportsBusinessGlossary() throws Exception {
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(glossaryService.contextExport(PROJECT_ID, 200)).thenReturn(new BusinessGlossaryContextExport(
+                List.of(new BusinessGlossaryContextItem(
+                        "会员",
+                        List.of("用户", "账号"),
+                        List.of("user", "member"),
+                        List.of("hy"),
+                        List.of("老用户"),
+                        "user_id",
+                        "GLOBAL",
+                        null,
+                        List.of("user_id")
+                )),
+                false,
+                1,
+                1
+        ));
+        AiContextExportService service = createService(List.of(
+                sampleField("user_id", "用户ID", "user", "core", "uid")
+        ), glossaryService);
+
+        var root = new ObjectMapper().readTree(service.generateFieldCatalogJson(PROJECT_ID));
+
+        var item = root.path("glossary").get(0);
+        assertEquals("会员", item.path("term").asText());
+        assertEquals("用户", item.path("synonyms").get(0).asText());
+        assertEquals("user", item.path("rootTerms").get(0).asText());
+        assertEquals("hy", item.path("abbreviations").get(0).asText());
+        assertEquals("老用户", item.path("disabledTerms").get(0).asText());
+        assertEquals("user_id", item.path("canonicalFieldName").asText());
+    }
+
+    @Test
+    void generateFieldCatalogJson_warnsWhenBusinessGlossaryIsTruncated() throws Exception {
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(glossaryService.contextExport(PROJECT_ID, 200)).thenReturn(new BusinessGlossaryContextExport(
+                List.of(),
+                true,
+                201,
+                200
+        ));
+        AiContextExportService service = createService(List.of(
+                sampleField("user_id", "用户ID", "user", "core", "uid")
+        ), glossaryService);
+
+        var root = new ObjectMapper().readTree(service.generateFieldCatalogJson(PROJECT_ID));
+
+        assertTrue(root.path("contextScope").path("warnings").get(0).asText().contains("业务术语表已按 200/201 条截断"));
+    }
+
+    @Test
     void generateFieldCatalogJson_includesGroupingSummaryForScopedCatalog() throws Exception {
         Field mobile = sampleField("mobile_no", "手机号", "contact", "pii,customer", "phone, mobile");
         mobile.setDomainId(10L);
@@ -543,6 +598,18 @@ class AiContextExportServiceTest {
         return createService(standardSnapshotService, new NoopAiJobRecordService(), fields);
     }
 
+    private AiContextExportService createService(List<Field> fields, BusinessGlossaryService glossaryService) {
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
+        return createService(
+                standardSnapshotService,
+                new NoopAiJobRecordService(),
+                fields,
+                mock(RuleExemptionService.class),
+                null,
+                glossaryService);
+    }
+
     private AiContextExportService createService(AiJobRecordService aiJobRecordService) {
         StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
         when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
@@ -592,6 +659,23 @@ class AiContextExportServiceTest {
                                                  List<Field> fields,
                                                  RuleExemptionService ruleExemptionService,
                                                  AiTaskProfileService aiTaskProfileService) {
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(glossaryService.contextExport(PROJECT_ID, 200)).thenReturn(BusinessGlossaryContextExport.empty());
+        return createService(
+                standardSnapshotService,
+                aiJobRecordService,
+                fields,
+                ruleExemptionService,
+                aiTaskProfileService,
+                glossaryService);
+    }
+
+    private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
+                                                 AiJobRecordService aiJobRecordService,
+                                                 List<Field> fields,
+                                                 RuleExemptionService ruleExemptionService,
+                                                 AiTaskProfileService aiTaskProfileService,
+                                                 BusinessGlossaryService glossaryService) {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
         FieldService fieldService = mock(FieldService.class);
@@ -637,7 +721,8 @@ class AiContextExportServiceTest {
                 new PromptTemplateRegistry(),
                 aiTaskProfileService,
                 new SchemaRegistryServiceImpl(),
-                new AiCapabilityCatalogServiceImpl()
+                new AiCapabilityCatalogServiceImpl(),
+                glossaryService
         );
     }
 

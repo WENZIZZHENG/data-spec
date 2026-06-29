@@ -2,6 +2,8 @@ package com.dataspec.perf;
 
 import com.dataspec.aicontext.service.AiContextExportService;
 import com.dataspec.aireplay.service.AiJobRecordService;
+import com.dataspec.businessglossary.model.BusinessGlossaryContextExport;
+import com.dataspec.businessglossary.service.BusinessGlossaryService;
 import com.dataspec.capability.service.impl.AiCapabilityCatalogServiceImpl;
 import com.dataspec.common.perf.PerformanceProbe;
 import com.dataspec.contract.service.impl.SchemaRegistryServiceImpl;
@@ -114,8 +116,15 @@ class PerformanceBaselineTest {
 
     private FieldServiceImpl fieldService(List<Field> fields) {
         FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
         when(repository.findAllByProjectId(PROJECT_ID)).thenReturn(fields);
-        return new FieldServiceImpl(repository, mock(FieldSourceRepository.class), mock(StandardChangeLogService.class), new ObjectMapper());
+        when(glossaryService.match(PROJECT_ID, "用户手机号")).thenReturn(List.of());
+        return new FieldServiceImpl(
+                repository,
+                mock(FieldSourceRepository.class),
+                mock(StandardChangeLogService.class),
+                new ObjectMapper(),
+                glossaryService);
     }
 
     private AiContextExportService aiContextExportService(FieldService fieldService) {
@@ -126,6 +135,7 @@ class PerformanceBaselineTest {
         AiJobRecordService aiJobRecordService = mock(AiJobRecordService.class);
         RuleExemptionService ruleExemptionService = mock(RuleExemptionService.class);
         RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
         when(ruleConfigService.listByProject(PROJECT_ID)).thenReturn(List.of());
@@ -136,6 +146,7 @@ class PerformanceBaselineTest {
         when(ruleExemptionService.listActiveByProject(PROJECT_ID)).thenReturn(List.of());
         when(ruleBaselineService.currentBaseline(PROJECT_ID))
                 .thenReturn(new RuleBaselineInfo(PROJECT_ID, "custom", "自定义规则", "unversioned", "inferred", null, 0));
+        when(glossaryService.contextExport(PROJECT_ID, 200)).thenReturn(BusinessGlossaryContextExport.empty());
 
         SqlLintService sqlLintService = new SqlLintService(
                 new SqlParserService(),
@@ -162,7 +173,8 @@ class PerformanceBaselineTest {
                 new PromptTemplateRegistry(),
                 null,
                 new SchemaRegistryServiceImpl(),
-                new AiCapabilityCatalogServiceImpl()
+                new AiCapabilityCatalogServiceImpl(),
+                glossaryService
         );
     }
 
