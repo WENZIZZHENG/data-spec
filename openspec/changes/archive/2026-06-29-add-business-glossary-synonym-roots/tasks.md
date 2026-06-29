@@ -33,4 +33,4 @@
 - [x] 5.2 运行 `pnpm build`。
 - [x] 5.3 运行 `openspec validate add-business-glossary-synonym-roots --strict` 和 `git diff --check`。
 - [x] 5.4 执行本地结构化代码评审并修复 findings，不使用子 agent。
-- [ ] 5.5 在 proposal 增加 Verification Evidence，提交实现并归档 OpenSpec change。
+- [x] 5.5 在 proposal 增加 Verification Evidence，提交实现并归档 OpenSpec change。
