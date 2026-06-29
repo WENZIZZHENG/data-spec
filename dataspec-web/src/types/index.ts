@@ -697,6 +697,65 @@ export interface StandardCandidateMergeReq {
   reason?: string
 }
 
+export interface RequirementDraftReq {
+  projectId: number
+  description: string
+  targetTableName: string
+  groupHint?: string
+  limit?: number
+}
+
+export interface RequirementMatchedField {
+  field?: Field
+  score?: number
+  matchReasons?: string[]
+  recommended?: boolean
+}
+
+export interface RequirementMissingCandidate {
+  candidateName?: string
+  displayName?: string
+  dataType?: string
+  comment?: string
+  evidence?: string
+  confidence?: number
+  inboxPayload?: StandardCandidateCreateReq
+}
+
+export interface RequirementAmbiguousCandidate {
+  field?: Field
+  score?: number
+  matchReasons?: string[]
+}
+
+export interface RequirementAmbiguousTerm {
+  term?: string
+  reason?: string
+  candidates?: RequirementAmbiguousCandidate[]
+}
+
+export interface RequirementRecommendedTemplate {
+  id?: number
+  name?: string
+  description?: string
+  tablePrefix?: string
+  score?: number
+  matchReasons?: string[]
+}
+
+export interface RequirementDraftResult {
+  projectId?: number
+  description?: string
+  targetTableName?: string
+  groupHint?: string
+  matchedFields?: RequirementMatchedField[]
+  missingCandidates?: RequirementMissingCandidate[]
+  ambiguousTerms?: RequirementAmbiguousTerm[]
+  recommendedTemplate?: RequirementRecommendedTemplate | null
+  nextActions?: string[]
+  copyablePrompt?: string
+}
+
 export interface R<T> {
   code?: number
   message?: string

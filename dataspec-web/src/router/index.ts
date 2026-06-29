@@ -91,6 +91,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '生成器' }
   },
   {
+    path: '/requirement-draft',
+    name: 'RequirementDraft',
+    component: () => import('@/views/RequirementDraft.vue'),
+    meta: { title: '需求草案' }
+  },
+  {
     path: '/ai-export',
     name: 'AiExport',
     component: () => import('@/views/AiExport.vue'),

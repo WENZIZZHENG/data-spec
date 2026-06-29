@@ -227,6 +227,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import { listFields } from '@/api/field'
@@ -251,6 +252,7 @@ import type { Field, StandardCandidate, StandardCandidateCreateReq } from '@/typ
 type DecisionMode = 'accept' | 'ignore' | 'postpone'
 
 const projectStore = useProjectStore()
+const route = useRoute()
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
 
 const loading = ref(false)
@@ -262,7 +264,7 @@ const current = ref(1)
 const size = ref(10)
 const statusFilter = ref('PENDING')
 const sourceFilter = ref('ALL')
-const keyword = ref('')
+const keyword = ref(keywordFromQuery())
 
 const createVisible = ref(false)
 const decisionVisible = ref(false)
@@ -319,6 +321,14 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => route.query.keyword,
+  () => {
+    applyKeywordFromQuery()
+    resetAndLoad()
+  }
+)
+
 async function loadCandidates() {
   const projectId = projectStore.currentProjectId
   if (!projectId) {
@@ -346,6 +356,19 @@ async function loadCandidates() {
 function resetAndLoad() {
   current.value = 1
   void loadCandidates()
+}
+
+function applyKeywordFromQuery() {
+  keyword.value = keywordFromQuery()
+}
+
+function keywordFromQuery() {
+  const rawKeyword = route.query.keyword
+  const value = Array.isArray(rawKeyword) ? rawKeyword[0] : rawKeyword
+  if (typeof value === 'string') {
+    return value
+  }
+  return ''
 }
 
 function openCreate() {

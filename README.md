@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、统一前端数据状态、项目活动时间线、领域 Starter Kit、业务术语表、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 执行证据包、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、统一前端数据状态、项目活动时间线、领域 Starter Kit、业务术语表、自然语言需求草案、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 执行证据包、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -64,6 +64,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI 批量任务，支持后端保存 SQL lint batch run、前端查看最近任务/分项结果/下一步动作并下载 JSON 交付包。
 - AI 执行证据包，支持从 SQL 检查记录、AI job、AI 批量任务和当前覆盖率报告生成 JSON 或 zip，前端可复制/下载，CLI/MCP 可机器读取。
 - AI/CLI 写入保护，标准快照、反向导入确认、AI 批量 SQL lint、项目恢复 apply 和 AI job 回放记录已接入单机轻量 idempotency key、项目级 operation lock 和可重试冲突诊断。
+- 自然语言需求草案 API 和前端入口，基于字段推荐/检索、业务术语表和表模板，把建表描述拆成 matchedFields、missingCandidates、ambiguousTerms、recommendedTemplate、nextActions 和可复制 Prompt；第一版只读，不自动写入候选或字段库。
 - 字段推荐与字段标准检索 API/CLI/MCP；启用的业务术语表会参与“会员手机号”“订单费用”等自然语言 query 的确定性匹配，并在命中原因中标记 `术语表`。
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
@@ -322,6 +323,20 @@ curl -X POST "http://localhost:8090/api/standard-candidates/1/accept" \
 ```
 
 候选证据会做敏感信息脱敏，不保存 token/password/Bearer/完整 JDBC URL，不读取源数据库业务数据行。第一版不做审批流、不自动合并标准字段，也不把候选处理变成团队工单系统。
+
+## 自然语言需求草案
+
+前端“校验与生成 / 需求草案”支持输入业务描述、目标表名和可选分组提示，生成只读建表草案。草案会返回建议采用的已有标准字段、缺失候选字段、歧义词、推荐表模板、下一步动作和可复制 Prompt；推荐模板可带入 DDL 生成页，缺失候选可带关键词跳转到标准候选 Inbox。
+
+后端 API：
+
+```bash
+curl -X POST "http://localhost:8090/api/requirement-drafts" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"description":"会员支付流水表，记录会员、支付金额、支付状态、第三方流水号","targetTableName":"pay_trade","groupHint":"payment","limit":10}'
+```
+
+第一版不调用外部 LLM，不新增持久化表，不自动创建标准候选或标准字段；它只做确定性检索、模板化草案和人工确认前的结构化准备。
 
 ## 字段推荐与字段标准检索
 
@@ -742,6 +757,7 @@ data-spec/
 │       ├── aicontext/        # AI 规则导出
 │       ├── dashboard/        # 个人工作台
 │       ├── generator/        # Markdown 数据字典与 DDL 生成
+│       ├── requirementdraft/  # 自然语言需求到标准候选草案
 │       ├── importexport/     # 导入导出
 │       ├── projectbackup/    # 项目备份恢复
 │       ├── changelog/        # 标准变更日志
@@ -780,6 +796,7 @@ data-spec/
 | auth | /api/auth | API token 当前身份 |
 | tokens | /api/tokens | API token 创建、列表与停用 |
 | generator | /api/generator | Markdown 数据字典与 DDL 生成 |
+| requirementdraft | /api/requirement-drafts | 自然语言需求草案 |
 | aicontext | /api/ai-context | AI 规则导出 |
 | importexport | /api/import-export | 字段导入导出 |
 | projectbackup | /api/project-backups | 项目备份、恢复 dry-run 和恢复摘要 |
@@ -816,6 +833,7 @@ data-spec/
 - [x] 字段库批量维护和单条变更回退，支持状态、分类、标签、敏感标记、代码集、别名的预览式批量更新
 - [x] 业务术语表与同义词词根库，支持项目级术语维护、冲突检测、字段推荐/检索增强和 AI Context glossary 导出
 - [x] 标准候选 Inbox，支持候选新建、筛选、采纳、合并、忽略、延后和决策记录
+- [x] 自然语言需求草案，支持从建表描述输出标准字段、缺失候选、歧义点、推荐模板、下一步和可复制 Prompt
 - [x] 前端关键流程源码级冒烟门禁，覆盖路由、项目选择、SQL 校验记录、反向导入、字段库、DDL、AI Context、覆盖率、AI 回放入口和关键按钮/空状态
 - [x] 结构化命名规则导出和 `field_suffix_type` lint 规则
 - [x] SQL 粘贴校验、结构化 issue、修复建议、`fixedSql`、请求级修复策略、dry-run 和变更风险解释

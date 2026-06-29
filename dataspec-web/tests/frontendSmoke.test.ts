@@ -21,6 +21,7 @@ test('keeps critical frontend routes and navigation entries wired', () => {
     { path: '/standard-candidates', view: 'StandardCandidate.vue', title: '标准候选' },
     { path: '/sql-lint', view: 'SqlLint.vue', title: 'SQL 校验' },
     { path: '/generator', view: 'Generator.vue', title: '生成器' },
+    { path: '/requirement-draft', view: 'RequirementDraft.vue', title: '需求草案' },
     { path: '/ai-export', view: 'AiExport.vue', title: 'AI 规则导出' },
     { path: '/ai-profiles', view: 'AiProfile.vue', title: 'AI 任务模式' },
     { path: '/ai-replay', view: 'AiReplay.vue', title: 'AI 回放' },
@@ -312,6 +313,53 @@ test('keeps standard candidate inbox workbench wired', () => {
     'RPageResultStandardCandidate',
     'RStandardCandidate'
   ], 'standard candidate schema')
+})
+
+test('keeps requirement draft workflow wired', () => {
+  const view = readSource('src/views/RequirementDraft.vue')
+  const api = readSource('src/api/requirementDraft.ts')
+  const types = readSource('src/types/index.ts')
+  const standardCandidate = readSource('src/views/StandardCandidate.vue')
+
+  assertContains(view, [
+    "import { createRequirementDraft } from '@/api/requirementDraft'",
+    'projectStore.currentProjectId',
+    'async function handleDraft()',
+    'await createRequirementDraft',
+    'function openDdlPreview()',
+    "path: '/generator'",
+    'function openCandidateInbox',
+    "path: '/standard-candidates'",
+    'copyCandidatePayload',
+    'v-model="activeTab"',
+    "activeTab.value = 'fields'",
+    '需求草案',
+    '标准字段',
+    '缺失候选',
+    '歧义词',
+    '复制 Prompt'
+  ], 'RequirementDraft.vue')
+
+  assertContains(api, [
+    "request.post<unknown, RequirementDraftResult>('/requirement-drafts', data)",
+    'export function createRequirementDraft'
+  ], 'requirement draft api')
+
+  assertContains(types, [
+    'export interface RequirementDraftReq',
+    'export interface RequirementDraftResult',
+    'export interface RequirementMatchedField',
+    'export interface RequirementMissingCandidate',
+    'export interface RequirementAmbiguousTerm',
+    'export interface RequirementRecommendedTemplate'
+  ], 'requirement draft types')
+
+  assertContains(standardCandidate, [
+    "import { useRoute } from 'vue-router'",
+    'const keyword = ref(keywordFromQuery())',
+    '() => route.query.keyword',
+    'function keywordFromQuery()'
+  ], 'standard candidate keyword query')
 })
 
 test('keeps global project selector backed by the project store', () => {

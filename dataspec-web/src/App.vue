@@ -93,6 +93,10 @@
             <el-icon><MagicStick /></el-icon>
             <span>生成器</span>
           </el-menu-item>
+          <el-menu-item index="/requirement-draft">
+            <el-icon><MagicStick /></el-icon>
+            <span>需求草案</span>
+          </el-menu-item>
           <el-menu-item index="/ai-export">
             <el-icon><Cpu /></el-icon>
             <span>AI 规则导出</span>
