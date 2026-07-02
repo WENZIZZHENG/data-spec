@@ -611,6 +611,17 @@ class FieldServiceImplTest {
         assertTrue(result.items().getFirst().recommendedUse().contains("敏感字段"));
         assertFalse(result.items().getFirst().nextActions().isEmpty());
         assertEquals(1, result.summary().matchedCount());
+
+        JsonNode evidence = objectMapper.valueToTree(result.items().getFirst()).path("evidence");
+        assertTrue(evidence.isArray());
+        assertFalse(evidence.isEmpty());
+        assertEquals("FIELD", evidence.get(0).path("sourceType").asText());
+        assertEquals(1L, evidence.get(0).path("sourceId").asLong());
+        assertTrue(evidence.get(0).path("matchReason").asText().contains("语义词")
+                || evidence.get(0).path("matchReason").asText().contains("显示名")
+                || evidence.get(0).path("matchReason").asText().contains("注释"));
+        assertTrue(evidence.get(0).path("confidence").asInt() > 0);
+        assertFalse(evidence.get(0).path("docsRef").asText().isBlank());
     }
 
     @Test
@@ -713,6 +724,7 @@ class FieldServiceImplTest {
     void suggestAiContract_exposesStableRecommendationFields() {
         FieldRepository repository = mock(FieldRepository.class);
         Field mobile = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone,mobile,tel", "enabled");
+        mobile.setId(15L);
         mobile.setSensitive(true);
         mobile.setCategory("contact");
         mobile.setCodeSetId(10L);
@@ -737,6 +749,15 @@ class FieldServiceImplTest {
         assertEquals("contact", fieldNode.path("category").asText());
         assertEquals(10L, fieldNode.path("codeSetId").asLong());
         assertEquals("13800138000", fieldNode.path("exampleValue").asText());
+
+        JsonNode evidence = root.path("evidence");
+        assertTrue(evidence.isArray());
+        assertFalse(evidence.isEmpty());
+        assertEquals("FIELD", evidence.get(0).path("sourceType").asText());
+        assertEquals(15L, evidence.get(0).path("sourceId").asLong());
+        assertFalse(evidence.get(0).path("matchReason").asText().isBlank());
+        assertTrue(evidence.get(0).path("confidence").asInt() > 0);
+        assertFalse(evidence.get(0).path("docsRef").asText().isBlank());
     }
 
     @Test

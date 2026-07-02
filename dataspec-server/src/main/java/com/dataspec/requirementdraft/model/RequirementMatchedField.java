@@ -1,5 +1,6 @@
 package com.dataspec.requirementdraft.model;
 
+import com.dataspec.explaintrace.model.ExplainTrace;
 import com.dataspec.field.entity.Field;
 
 import java.util.List;
@@ -11,6 +12,10 @@ public record RequirementMatchedField(
         Field field,
         int score,
         List<String> matchReasons,
-        boolean recommended
+        boolean recommended,
+        List<ExplainTrace> evidence
 ) {
+    public RequirementMatchedField(Field field, int score, List<String> matchReasons, boolean recommended) {
+        this(field, score, matchReasons, recommended, List.of());
+    }
 }

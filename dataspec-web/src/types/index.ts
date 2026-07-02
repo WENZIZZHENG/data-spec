@@ -705,11 +705,22 @@ export interface RequirementDraftReq {
   limit?: number
 }
 
+export interface ExplainTrace {
+  sourceType?: string
+  sourceId?: number
+  snapshotVersion?: string | null
+  matchReason?: string
+  confidence?: number
+  ruleCode?: string | null
+  docsRef?: string
+}
+
 export interface RequirementMatchedField {
   field?: Field
   score?: number
   matchReasons?: string[]
   recommended?: boolean
+  evidence?: ExplainTrace[]
 }
 
 export interface RequirementMissingCandidate {
@@ -720,12 +731,14 @@ export interface RequirementMissingCandidate {
   evidence?: string
   confidence?: number
   inboxPayload?: StandardCandidateCreateReq
+  evidenceTrace?: ExplainTrace[]
 }
 
 export interface RequirementAmbiguousCandidate {
   field?: Field
   score?: number
   matchReasons?: string[]
+  evidence?: ExplainTrace[]
 }
 
 export interface RequirementAmbiguousTerm {
@@ -741,6 +754,7 @@ export interface RequirementRecommendedTemplate {
   tablePrefix?: string
   score?: number
   matchReasons?: string[]
+  evidence?: ExplainTrace[]
 }
 
 export interface RequirementDraftResult {

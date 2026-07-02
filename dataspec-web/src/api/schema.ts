@@ -4083,6 +4083,17 @@ export interface components {
             data?: components["schemas"]["FieldImpactReport"];
             error?: components["schemas"]["ErrorDetail"];
         };
+        ExplainTrace: {
+            sourceType?: string;
+            /** Format: int64 */
+            sourceId?: number;
+            snapshotVersion?: string;
+            matchReason?: string;
+            /** Format: int32 */
+            confidence?: number;
+            ruleCode?: string;
+            docsRef?: string;
+        };
         FieldSuggestion: {
             field?: components["schemas"]["Field"];
             /** Format: int32 */
@@ -4090,6 +4101,7 @@ export interface components {
             matchReason?: string;
             recommendedName?: string;
             existing?: boolean;
+            evidence?: components["schemas"]["ExplainTrace"][];
         };
         RListFieldSuggestion: {
             /** Format: int32 */
@@ -4105,6 +4117,7 @@ export interface components {
             matchReasons?: string[];
             recommendedUse?: string;
             nextActions?: string[];
+            evidence?: components["schemas"]["ExplainTrace"][];
         };
         FieldSearchResult: {
             /** Format: int64 */

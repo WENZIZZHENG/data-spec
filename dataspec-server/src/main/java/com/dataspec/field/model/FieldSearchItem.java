@@ -1,5 +1,6 @@
 package com.dataspec.field.model;
 
+import com.dataspec.explaintrace.model.ExplainTrace;
 import com.dataspec.field.entity.Field;
 
 import java.util.List;
@@ -12,6 +13,10 @@ public record FieldSearchItem(
         int score,
         List<String> matchReasons,
         String recommendedUse,
-        List<String> nextActions
+        List<String> nextActions,
+        List<ExplainTrace> evidence
 ) {
+    public FieldSearchItem(Field field, int score, List<String> matchReasons, String recommendedUse, List<String> nextActions) {
+        this(field, score, matchReasons, recommendedUse, nextActions, List.of());
+    }
 }

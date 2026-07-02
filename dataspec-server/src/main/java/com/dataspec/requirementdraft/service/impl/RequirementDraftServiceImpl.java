@@ -1,6 +1,7 @@
 package com.dataspec.requirementdraft.service.impl;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.explaintrace.model.ExplainTrace;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldSearchItem;
 import com.dataspec.field.model.FieldSearchReq;
@@ -37,6 +38,7 @@ public class RequirementDraftServiceImpl implements RequirementDraftService {
 
     private static final int DEFAULT_LIMIT = 10;
     private static final int MAX_LIMIT = 20;
+    private static final String REQUIREMENT_DRAFT_DOCS = "README.md#自然语言需求草案";
     private static final Set<String> GENERIC_TERMS = Set.of("金额", "状态", "编号", "名称", "时间", "日期", "ID", "id");
     private static final List<MissingPattern> MISSING_PATTERNS = List.of(
             new MissingPattern("第三方流水号", "third_party_trade_no", "第三方流水号", "varchar(128)", 82),
@@ -107,7 +109,8 @@ public class RequirementDraftServiceImpl implements RequirementDraftService {
                     field,
                     suggestion.score(),
                     List.of(suggestion.matchReason()),
-                    suggestion.score() >= 70));
+                    suggestion.score() >= 70,
+                    evidenceOrField(suggestion.evidence(), field, suggestion.score(), suggestion.matchReason())));
         }
         return result.values().stream()
                 .sorted(Comparator.comparingInt(RequirementMatchedField::score).reversed()
@@ -130,7 +133,8 @@ public class RequirementDraftServiceImpl implements RequirementDraftService {
                     candidates.putIfAbsent(key, new RequirementAmbiguousCandidate(
                             field,
                             suggestion.score(),
-                            List.of(suggestion.matchReason())));
+                            List.of(suggestion.matchReason()),
+                            evidenceOrField(suggestion.evidence(), field, suggestion.score(), suggestion.matchReason())));
                 }
             }
             if (searchResult != null && searchResult.items() != null) {
@@ -141,7 +145,8 @@ public class RequirementDraftServiceImpl implements RequirementDraftService {
                         candidates.putIfAbsent(key, new RequirementAmbiguousCandidate(
                                 field,
                                 item.score(),
-                                item.matchReasons()));
+                                item.matchReasons(),
+                                evidenceOrField(item.evidence(), field, item.score(), firstReason(item.matchReasons()))));
                     }
                 }
             }
@@ -201,7 +206,11 @@ public class RequirementDraftServiceImpl implements RequirementDraftService {
                     pattern.displayName(),
                     evidence,
                     pattern.confidence(),
-                    payload));
+                    payload,
+                    List.of(requirementEvidence(
+                            evidence,
+                            pattern.confidence(),
+                            "missing_candidate_pattern"))));
         }
         return result;
     }
@@ -249,8 +258,45 @@ public class RequirementDraftServiceImpl implements RequirementDraftService {
                         item.template().getDescription(),
                         item.template().getTablePrefix(),
                         item.score(),
-                        item.reasons()))
+                        item.reasons(),
+                        List.of(new ExplainTrace(
+                                "TEMPLATE",
+                                item.template().getId(),
+                                null,
+                                String.join("；", item.reasons()),
+                                Math.max(0, Math.min(item.score(), 100)),
+                                null,
+                                REQUIREMENT_DRAFT_DOCS))))
                 .orElse(null);
+    }
+
+    private List<ExplainTrace> evidenceOrField(List<ExplainTrace> evidence, Field field, int score, String reason) {
+        if (evidence != null && !evidence.isEmpty()) {
+            return evidence;
+        }
+        return List.of(new ExplainTrace(
+                "FIELD",
+                field.getId(),
+                null,
+                reason,
+                Math.max(0, Math.min(score, 100)),
+                null,
+                REQUIREMENT_DRAFT_DOCS));
+    }
+
+    private ExplainTrace requirementEvidence(String reason, int confidence, String ruleCode) {
+        return new ExplainTrace(
+                "REQUIREMENT_DRAFT",
+                null,
+                null,
+                reason,
+                Math.max(0, Math.min(confidence, 100)),
+                ruleCode,
+                REQUIREMENT_DRAFT_DOCS);
+    }
+
+    private String firstReason(List<String> reasons) {
+        return reasons == null || reasons.isEmpty() ? "字段检索命中" : String.join("；", reasons);
     }
 
     private List<String> nextActions(List<RequirementMissingCandidate> missingCandidates,

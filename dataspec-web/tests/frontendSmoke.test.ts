@@ -331,6 +331,8 @@ test('keeps requirement draft workflow wired', () => {
     'function openCandidateInbox',
     "path: '/standard-candidates'",
     'copyCandidatePayload',
+    'renderEvidenceTrace',
+    '证据来源',
     'v-model="activeTab"',
     "activeTab.value = 'fields'",
     '需求草案',
@@ -346,6 +348,9 @@ test('keeps requirement draft workflow wired', () => {
   ], 'requirement draft api')
 
   assertContains(types, [
+    'export interface ExplainTrace',
+    'evidence?: ExplainTrace[]',
+    'evidenceTrace?: ExplainTrace[]',
     'export interface RequirementDraftReq',
     'export interface RequirementDraftResult',
     'export interface RequirementMatchedField',

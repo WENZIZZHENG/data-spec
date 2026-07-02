@@ -1,5 +1,7 @@
 package com.dataspec.requirementdraft.model;
 
+import com.dataspec.explaintrace.model.ExplainTrace;
+
 import java.util.List;
 
 /**
@@ -11,6 +13,11 @@ public record RequirementRecommendedTemplate(
         String description,
         String tablePrefix,
         int score,
-        List<String> matchReasons
+        List<String> matchReasons,
+        List<ExplainTrace> evidence
 ) {
+    public RequirementRecommendedTemplate(Long id, String name, String description, String tablePrefix,
+                                          int score, List<String> matchReasons) {
+        this(id, name, description, tablePrefix, score, matchReasons, List.of());
+    }
 }

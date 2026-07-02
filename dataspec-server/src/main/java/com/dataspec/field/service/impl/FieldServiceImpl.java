@@ -7,6 +7,7 @@ import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.common.perf.PerformanceProbe;
+import com.dataspec.explaintrace.model.ExplainTrace;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldBulkUpdateChange;
 import com.dataspec.field.model.FieldBulkUpdateItem;
@@ -65,6 +66,7 @@ public class FieldServiceImpl implements FieldService {
     private static final Map<String, SemanticGroup> SEMANTIC_GROUPS = semanticGroups();
     private static final int SPECIFIC_SEMANTIC_SCORE = 88;
     private static final int GENERIC_SEMANTIC_SCORE = 24;
+    private static final String FIELD_RECOMMENDATION_DOCS = "README.md#字段推荐与字段标准检索";
 
     private final FieldRepository fieldRepository;
     private final FieldSourceRepository fieldSourceRepository;
@@ -373,12 +375,14 @@ public class FieldServiceImpl implements FieldService {
             if ("deprecated".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
                 score = Math.max(1, score - 15);
             }
+            String reason = appendReason(match.reason(), Boolean.TRUE.equals(field.getSensitive()) ? "敏感字段" : "");
             suggestions.add(new FieldSuggestion(
                     field,
                     score,
-                    appendReason(match.reason(), Boolean.TRUE.equals(field.getSensitive()) ? "敏感字段" : ""),
+                    reason,
                     field.getName(),
-                    true));
+                    true,
+                    List.of(fieldEvidence(field, score, reason))));
         }
 
         suggestions.sort(Comparator
@@ -394,7 +398,15 @@ public class FieldServiceImpl implements FieldService {
                 0,
                 "未命中已有标准字段，按描述生成候选名",
                 generateFallbackName(query),
-                false));
+                false,
+                List.of(new ExplainTrace(
+                        "FIELD_SUGGESTION",
+                        null,
+                        null,
+                        "未命中已有标准字段，按描述生成候选名",
+                        0,
+                        "fallback_name",
+                        FIELD_RECOMMENDATION_DOCS))));
     }
 
     private SearchCriteria searchCriteria(FieldSearchReq req) {
@@ -474,7 +486,19 @@ public class FieldServiceImpl implements FieldService {
                 score,
                 List.copyOf(reasons),
                 recommendedUse(field),
-                itemNextActions(field));
+                itemNextActions(field),
+                List.of(fieldEvidence(field, score, String.join("；", reasons))));
+    }
+
+    private ExplainTrace fieldEvidence(Field field, int score, String reason) {
+        return new ExplainTrace(
+                "FIELD",
+                field.getId(),
+                null,
+                reason,
+                Math.max(0, Math.min(score, 100)),
+                null,
+                FIELD_RECOMMENDATION_DOCS);
     }
 
     private List<String> filterReasons(SearchCriteria criteria) {

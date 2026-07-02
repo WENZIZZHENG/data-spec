@@ -102,6 +102,10 @@ Capability entry 稳定字段：
 
 标准字段契约，覆盖字段库和 AI Context 中的字段基础元数据，例如 `name`、`dataType`、`nullable`、`comment`、`status`、`aliases[]` 和 `matchReasons[]`。
 
+### explain-trace
+
+轻量 AI 输出引用证据契约，覆盖 `sourceType`、`sourceId`、`snapshotVersion`、`matchReason`、`confidence`、`ruleCode` 和 `docsRef`。第一版用于字段推荐、字段检索和自然语言需求草案，不是分布式 tracing、审批依据或写入授权。
+
 ### enum-dict
 
 枚举字典契约，覆盖代码集、枚举值、展示标签和排序信息。
@@ -211,8 +215,9 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - `matchReason`
 - `existing`
 - `field`
+- `evidence[]`
 
-`field` 命中已有标准字段时应保留标准字段基础元数据，例如 `name`、`displayName`、`dataType`、`aliases`、`category`、`sensitive`、`status`、`codeSetId` 和 `exampleValue`。
+`field` 命中已有标准字段时应保留标准字段基础元数据，例如 `name`、`displayName`、`dataType`、`aliases`、`category`、`sensitive`、`status`、`codeSetId` 和 `exampleValue`。`evidence[]` 使用 `ExplainTrace`，已有字段命中时 `sourceType=FIELD`，fallback 建议可使用无 `sourceId` 的建议来源。
 
 ## 字段检索
 
@@ -220,9 +225,20 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 - `FieldSearchResult`: `projectId`、`query`、`summary`、`items[]`、`nextActions[]`。
 - `FieldSearchSummary`: `totalCandidates`、`matchedCount`、`returnedCount`、`truncated`、`appliedFilters`、`hints[]`。
-- `FieldSearchItem`: `field`、`score`、`matchReasons[]`、`recommendedUse`、`nextActions[]`。
+- `FieldSearchItem`: `field`、`score`、`matchReasons[]`、`recommendedUse`、`nextActions[]`、`evidence[]`。
 
-字段检索是只读能力。AI 可依赖 `matchReasons[]` 判断命中来源，依赖 `nextActions[]` 决定收窄检索、采用标准字段或进入候选补全流程；不得把 `score` 当作跨版本绝对分值，只能用于同一次结果内排序参考。
+字段检索是只读能力。AI 可依赖 `matchReasons[]` 和 `evidence[]` 判断命中来源，依赖 `nextActions[]` 决定收窄检索、采用标准字段或进入候选补全流程；不得把 `score` 当作跨版本绝对分值，只能用于同一次结果内排序参考。Explain Trace 不包含业务数据行、token、password 或完整 JDBC URL。
+
+## 自然语言需求草案
+
+稳定字段：
+
+- `RequirementMatchedField`: `field`、`score`、`matchReasons[]`、`recommended`、`evidence[]`。
+- `RequirementMissingCandidate`: `candidateName`、`displayName`、`dataType`、`comment`、`evidence`、`confidence`、`inboxPayload`、`evidenceTrace[]`。
+- `RequirementAmbiguousCandidate`: `field`、`score`、`matchReasons[]`、`evidence[]`。
+- `RequirementRecommendedTemplate`: `id`、`name`、`description`、`tablePrefix`、`score`、`matchReasons[]`、`evidence[]`。
+
+缺失候选保留原有字符串 `evidence` 兼容前端复制 payload，同时使用 `evidenceTrace[]` 暴露结构化来源。第一版只做确定性检索和模板化草案，不调用外部 LLM、不自动写入字段库或候选 Inbox。
 
 ## DDL 预览
 

@@ -91,6 +91,19 @@
             {{ reason }}
           </el-tag>
         </div>
+        <div v-if="result.recommendedTemplate?.evidence?.length" class="evidence-section">
+          <span class="evidence-title">证据来源</span>
+          <div class="evidence-list">
+            <el-tag
+              v-for="trace in renderEvidenceTrace(result.recommendedTemplate.evidence)"
+              :key="trace"
+              size="small"
+              effect="plain"
+            >
+              {{ trace }}
+            </el-tag>
+          </div>
+        </div>
 
         <el-tabs v-model="activeTab" class="draft-tabs">
           <el-tab-pane label="标准字段" name="fields">
@@ -126,6 +139,21 @@
               <el-table-column label="原因" min-width="220" show-overflow-tooltip>
                 <template #default="{ row }">{{ (row.matchReasons ?? []).join('；') || '-' }}</template>
               </el-table-column>
+              <el-table-column label="证据来源" min-width="260" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <div v-if="renderEvidenceTrace(row.evidence).length" class="evidence-list">
+                    <el-tag
+                      v-for="trace in renderEvidenceTrace(row.evidence)"
+                      :key="trace"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ trace }}
+                    </el-tag>
+                  </div>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
             </el-table>
           </el-tab-pane>
 
@@ -145,6 +173,21 @@
                 </template>
               </el-table-column>
               <el-table-column prop="evidence" label="证据" min-width="260" show-overflow-tooltip />
+              <el-table-column label="证据来源" min-width="260" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <div v-if="renderEvidenceTrace(row.evidenceTrace).length" class="evidence-list">
+                    <el-tag
+                      v-for="trace in renderEvidenceTrace(row.evidenceTrace)"
+                      :key="trace"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ trace }}
+                    </el-tag>
+                  </div>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
               <el-table-column label="操作" width="210" fixed="right">
                 <template #default="{ row }">
                   <el-button size="small" text type="primary" @click="copyCandidatePayload(row)">
@@ -187,6 +230,21 @@
                   <el-table-column label="原因" min-width="220" show-overflow-tooltip>
                     <template #default="{ row }">{{ (row.matchReasons ?? []).join('；') || '-' }}</template>
                   </el-table-column>
+                  <el-table-column label="证据来源" min-width="260" show-overflow-tooltip>
+                    <template #default="{ row }">
+                      <div v-if="renderEvidenceTrace(row.evidence).length" class="evidence-list">
+                        <el-tag
+                          v-for="trace in renderEvidenceTrace(row.evidence)"
+                          :key="trace"
+                          size="small"
+                          effect="plain"
+                        >
+                          {{ trace }}
+                        </el-tag>
+                      </div>
+                      <span v-else>-</span>
+                    </template>
+                  </el-table-column>
                 </el-table>
               </el-collapse-item>
             </el-collapse>
@@ -222,7 +280,7 @@ import { ElMessage } from 'element-plus'
 import { CopyDocument, Document, MagicStick } from '@element-plus/icons-vue'
 import { createRequirementDraft } from '@/api/requirementDraft'
 import { useProjectStore } from '@/stores/project'
-import type { RequirementDraftResult, RequirementMissingCandidate } from '@/types'
+import type { ExplainTrace, RequirementDraftResult, RequirementMissingCandidate } from '@/types'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -289,6 +347,18 @@ async function copyText(text: string, message: string) {
   } catch {
     ElMessage.error('复制失败，请手动选择文本')
   }
+}
+
+function renderEvidenceTrace(evidence?: ExplainTrace[]) {
+  return (evidence ?? [])
+    .filter((trace) => trace?.sourceType || trace?.matchReason || trace?.ruleCode)
+    .map((trace) => {
+      const sourceId = typeof trace.sourceId === 'number' ? `#${trace.sourceId}` : ''
+      const source = `${trace.sourceType || 'UNKNOWN'}${sourceId}`
+      const confidence = typeof trace.confidence === 'number' ? ` · ${trace.confidence}` : ''
+      const reason = trace.matchReason || trace.ruleCode || trace.docsRef || '证据'
+      return `${source}${confidence} · ${reason}`
+    })
 }
 
 function openDdlPreview() {
@@ -406,6 +476,26 @@ function openCandidateInbox(candidateName?: string) {
   flex-wrap: wrap;
   gap: 8px;
   margin: 12px 0;
+}
+
+.evidence-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.evidence-title {
+  flex: 0 0 auto;
+  color: #606266;
+  font-size: 13px;
+  line-height: 24px;
+}
+
+.evidence-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .draft-tabs {

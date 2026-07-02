@@ -13,6 +13,8 @@ import com.dataspec.requirementdraft.service.impl.RequirementDraftServiceImpl;
 import com.dataspec.template.entity.Template;
 import com.dataspec.template.entity.TemplateField;
 import com.dataspec.template.service.TemplateService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -23,6 +25,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class RequirementDraftServiceImplTest {
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void draft_buildsMatchedFieldsMissingCandidatesAmbiguityTemplateAndPrompt() {
@@ -82,6 +86,25 @@ class RequirementDraftServiceImplTest {
         assertTrue(result.copyablePrompt().contains("matchedFields"));
         assertTrue(result.nextActions().stream().anyMatch(action -> action.contains("DDL")));
         verify(fieldService, never()).create(any());
+
+        JsonNode root = objectMapper.valueToTree(result);
+        JsonNode matchedEvidence = root.path("matchedFields").path(0).path("evidence").path(0);
+        assertEquals("FIELD", matchedEvidence.path("sourceType").asText());
+        assertTrue(matchedEvidence.path("sourceId").asLong() > 0);
+        assertFalse(matchedEvidence.path("matchReason").asText().isBlank());
+        assertTrue(matchedEvidence.path("confidence").asInt() > 0);
+        assertFalse(matchedEvidence.path("docsRef").asText().isBlank());
+
+        JsonNode missingEvidence = root.path("missingCandidates").path(0).path("evidenceTrace").path(0);
+        assertEquals("REQUIREMENT_DRAFT", missingEvidence.path("sourceType").asText());
+        assertEquals("missing_candidate_pattern", missingEvidence.path("ruleCode").asText());
+        assertFalse(missingEvidence.path("matchReason").asText().isBlank());
+        assertTrue(missingEvidence.path("confidence").asInt() > 0);
+
+        JsonNode templateEvidence = root.path("recommendedTemplate").path("evidence").path(0);
+        assertEquals("TEMPLATE", templateEvidence.path("sourceType").asText());
+        assertEquals(10L, templateEvidence.path("sourceId").asLong());
+        assertTrue(templateEvidence.path("confidence").asInt() > 0);
     }
 
     @Test

@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、统一前端数据状态、项目活动时间线、领域 Starter Kit、业务术语表、自然语言需求草案、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 执行证据包、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、统一前端数据状态、项目活动时间线、领域 Starter Kit、业务术语表、自然语言需求草案、Explain Trace、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 执行证据包、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -64,8 +64,8 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI 批量任务，支持后端保存 SQL lint batch run、前端查看最近任务/分项结果/下一步动作并下载 JSON 交付包。
 - AI 执行证据包，支持从 SQL 检查记录、AI job、AI 批量任务和当前覆盖率报告生成 JSON 或 zip，前端可复制/下载，CLI/MCP 可机器读取。
 - AI/CLI 写入保护，标准快照、反向导入确认、AI 批量 SQL lint、项目恢复 apply 和 AI job 回放记录已接入单机轻量 idempotency key、项目级 operation lock 和可重试冲突诊断。
-- 自然语言需求草案 API 和前端入口，基于字段推荐/检索、业务术语表和表模板，把建表描述拆成 matchedFields、missingCandidates、ambiguousTerms、recommendedTemplate、nextActions 和可复制 Prompt；第一版只读，不自动写入候选或字段库。
-- 字段推荐与字段标准检索 API/CLI/MCP；启用的业务术语表会参与“会员手机号”“订单费用”等自然语言 query 的确定性匹配，并在命中原因中标记 `术语表`。
+- 自然语言需求草案 API 和前端入口，基于字段推荐/检索、业务术语表和表模板，把建表描述拆成 matchedFields、missingCandidates、ambiguousTerms、recommendedTemplate、nextActions 和可复制 Prompt；字段、候选和模板会展示 Explain Trace 证据来源；第一版只读，不自动写入候选或字段库。
+- 字段推荐与字段标准检索 API/CLI/MCP；启用的业务术语表会参与“会员手机号”“订单费用”等自然语言 query 的确定性匹配，并在命中原因中标记 `术语表`；推荐和检索结果包含轻量 evidence 数组，便于 AI 读取来源、置信度和文档引用。
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
 - CLI 支持业务仓库初始化 `init`、环境自检 `doctor`、capability catalog、workflow recipes、单文件 lint、批量 `lint-files`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、历史快照 Context 导出、字段推荐、字段标准检索和 DDL 生成。
@@ -326,7 +326,7 @@ curl -X POST "http://localhost:8090/api/standard-candidates/1/accept" \
 
 ## 自然语言需求草案
 
-前端“校验与生成 / 需求草案”支持输入业务描述、目标表名和可选分组提示，生成只读建表草案。草案会返回建议采用的已有标准字段、缺失候选字段、歧义词、推荐表模板、下一步动作和可复制 Prompt；推荐模板可带入 DDL 生成页，缺失候选可带关键词跳转到标准候选 Inbox。
+前端“校验与生成 / 需求草案”支持输入业务描述、目标表名和可选分组提示，生成只读建表草案。草案会返回建议采用的已有标准字段、缺失候选字段、歧义词、推荐表模板、下一步动作和可复制 Prompt；推荐模板可带入 DDL 生成页，缺失候选可带关键词跳转到标准候选 Inbox。结果中的标准字段、缺失候选、歧义候选和推荐模板会展示 Explain Trace 证据来源，包含来源类型、来源 ID、命中原因、置信度和文档引用。
 
 后端 API：
 
@@ -336,7 +336,7 @@ curl -X POST "http://localhost:8090/api/requirement-drafts" \
   -d '{"projectId":1,"description":"会员支付流水表，记录会员、支付金额、支付状态、第三方流水号","targetTableName":"pay_trade","groupHint":"payment","limit":10}'
 ```
 
-第一版不调用外部 LLM，不新增持久化表，不自动创建标准候选或标准字段；它只做确定性检索、模板化草案和人工确认前的结构化准备。
+第一版不调用外部 LLM，不新增持久化表，不自动创建标准候选或标准字段；它只做确定性检索、模板化草案和人工确认前的结构化准备。Explain Trace 仅引用 DataSpec 元数据和规则说明，不记录业务数据行，也不作为审批或写入授权。
 
 ## 字段推荐与字段标准检索
 
@@ -346,7 +346,7 @@ curl -X POST "http://localhost:8090/api/requirement-drafts" \
 curl "http://localhost:8090/api/fields/suggest?projectId=1&query=用户手机号&limit=5"
 ```
 
-推荐结果会返回已有标准字段、匹配分数、命中原因、推荐字段名和 `existing` 标记。当前推荐逻辑按字段名、显示名、注释、别名、分类、标签、业务术语表和内置语义词库匹配，覆盖 `uid/user_id`、`phone/mobile/tel/mobile_no`、`amount/price/fee/amount_cent`、`sfzh/id_card_no` 等常见叫法；泛化词会降权，敏感字段会在命中原因里提示。术语表命中 canonical 字段或示例字段时，命中原因会包含 `术语表：<术语> -> <字段>`；禁用词不会作为正向加权依据。未命中已有字段但命中已知语义组时，会优先生成 canonical snake_case fallback 字段名。
+推荐结果会返回已有标准字段、匹配分数、命中原因、推荐字段名、`existing` 标记和 `evidence[]`。当前推荐逻辑按字段名、显示名、注释、别名、分类、标签、业务术语表和内置语义词库匹配，覆盖 `uid/user_id`、`phone/mobile/tel/mobile_no`、`amount/price/fee/amount_cent`、`sfzh/id_card_no` 等常见叫法；泛化词会降权，敏感字段会在命中原因里提示。术语表命中 canonical 字段或示例字段时，命中原因会包含 `术语表：<术语> -> <字段>`；禁用词不会作为正向加权依据。未命中已有字段但命中已知语义组时，会优先生成 canonical snake_case fallback 字段名。
 
 当 AI 或用户需要先查看一组相关标准字段时，可使用只读字段标准检索：
 
@@ -355,7 +355,7 @@ curl "http://localhost:8090/api/fields/search?projectId=1&query=用户手机号&
 curl "http://localhost:8090/api/fields/search?projectId=1&category=user&status=enabled&limit=20"
 ```
 
-检索结果会返回 `summary`、`items[]` 和 `nextActions`。每个 item 包含标准字段、确定性分数、`matchReasons`、推荐使用范围和字段级下一步建议；支持关键词、中文描述、别名、拼音缩写、业务术语表、category、tag、status、sensitive 和 sourceBatchId 过滤。省略 query 且不提供任何结构化过滤时会返回校验错误，避免 AI 一次性拉取整个字段库。前端字段库的搜索框和 category/tag 分组会复用该检索结果并展示命中原因；清空搜索条件后仍使用原有字段列表。
+检索结果会返回 `summary`、`items[]` 和 `nextActions`。每个 item 包含标准字段、确定性分数、`matchReasons`、推荐使用范围、字段级下一步建议和 `evidence[]`；支持关键词、中文描述、别名、拼音缩写、业务术语表、category、tag、status、sensitive 和 sourceBatchId 过滤。省略 query 且不提供任何结构化过滤时会返回校验错误，避免 AI 一次性拉取整个字段库。前端字段库的搜索框和 category/tag 分组会复用该检索结果并展示命中原因；清空搜索条件后仍使用原有字段列表。
 
 ## DDL 生成
 
@@ -846,7 +846,7 @@ data-spec/
 - [x] 字段冲突检测，支持别名冲突、语义疑似重复、属性不一致和跳转字段库编辑
 - [x] 字段影响分析，支持模板、导入来源、SQL 检查记录、标准快照和代码集影响提示
 - [x] 大字段库性能基线和慢操作 warning，覆盖字段分组/推荐、AI Context 字段目录和反向导入 compare
-- [x] 字段推荐与字段标准检索 API/CLI/MCP，字段库可展示检索命中原因和下一步建议
+- [x] 字段推荐与字段标准检索 API/CLI/MCP，字段库可展示检索命中原因和下一步建议，并输出 Explain Trace evidence
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载
 - [x] AI Context zip 导出、按需裁剪、历史快照导出、离线 `.dataspec/context/` 缓存、分组摘要、workflow recipes 和业务项目 `.dataspec/` 约定
 - [x] AI task profiles，支持 `create-table`、`sql-fix`、`reverse-import`、`pr-review`、`minimal-context` 默认建议，前端可查看切换，CLI/MCP/doctor 可读取诊断
@@ -858,6 +858,7 @@ data-spec/
 - [x] AI 反馈报告，按项目聚合字段、规则、fixedSql、未纳管信号和下一步维护动作
 - [x] AI 批量任务交付包，支持后端保存 SQL lint batch run、CLI 写出同构 package、前端查看详情并下载 JSON
 - [x] AI 执行证据包，支持 SQL_CHECK、AI_JOB、AI_BATCH_RUN 和 COVERAGE_REPORT 生成 JSON/zip，前端复制/下载，CLI/MCP 机器读取，并默认脱敏
+- [x] AI 输出引用证据与 Explain Trace 第一版，覆盖字段推荐、字段检索和自然语言需求草案的 evidence 来源、置信度和文档引用
 - [x] AI/CLI 并发写入幂等与任务锁第一版，覆盖标准快照、反向导入确认、AI 批量 SQL lint、项目恢复 apply、AI job 回放记录和 CLI Idempotency-Key 透传
 - [x] 标准变更 What-if 预览与回滚辅助第一版，覆盖字段编辑、规则编辑、规则启停的 diff、影响、验证命令、当前快照和回退提示
 - [x] Markdown/HTML 数据字典增强和 Mermaid ERD 输出

@@ -1,5 +1,6 @@
 package com.dataspec.requirementdraft.model;
 
+import com.dataspec.explaintrace.model.ExplainTrace;
 import com.dataspec.field.entity.Field;
 
 import java.util.List;
@@ -10,6 +11,10 @@ import java.util.List;
 public record RequirementAmbiguousCandidate(
         Field field,
         int score,
-        List<String> matchReasons
+        List<String> matchReasons,
+        List<ExplainTrace> evidence
 ) {
+    public RequirementAmbiguousCandidate(Field field, int score, List<String> matchReasons) {
+        this(field, score, matchReasons, List.of());
+    }
 }
