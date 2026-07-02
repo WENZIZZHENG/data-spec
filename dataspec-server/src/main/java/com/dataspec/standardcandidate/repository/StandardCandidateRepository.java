@@ -56,6 +56,16 @@ public class StandardCandidateRepository {
                 .in(StandardCandidate::getStatus, ACTIVE_STATUSES));
     }
 
+    public int countByStatuses(Long projectId, List<String> statuses) {
+        if (statuses == null || statuses.isEmpty()) {
+            return 0;
+        }
+        Long count = standardCandidateMapper.selectCount(new LambdaQueryWrapper<StandardCandidate>()
+                .eq(StandardCandidate::getProjectId, projectId)
+                .in(StandardCandidate::getStatus, statuses));
+        return Math.toIntExact(count == null ? 0L : count);
+    }
+
     public int insert(StandardCandidate candidate) {
         return standardCandidateMapper.insert(candidate);
     }

@@ -68,7 +68,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/fields/{id}": {
+    "/api/glossary/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -84,7 +84,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enums/{id}": {
+    "/api/fields/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -95,6 +95,22 @@ export interface paths {
         put: operations["update_4"];
         post?: never;
         delete: operations["delete_5"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/enums/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getById_6"];
+        put: operations["update_5"];
+        post?: never;
+        delete: operations["delete_6"];
         options?: never;
         head?: never;
         patch?: never;
@@ -123,10 +139,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getById_6"];
-        put: operations["update_5"];
+        get: operations["getById_7"];
+        put: operations["update_6"];
         post?: never;
-        delete: operations["delete_6"];
+        delete: operations["delete_7"];
         options?: never;
         head?: never;
         patch?: never;
@@ -139,10 +155,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getById_7"];
-        put: operations["update_6"];
+        get: operations["getById_8"];
+        put: operations["update_7"];
         post?: never;
-        delete: operations["delete_7"];
+        delete: operations["delete_8"];
         options?: never;
         head?: never;
         patch?: never;
@@ -206,6 +222,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-health/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createSnapshot"];
         delete?: never;
         options?: never;
         head?: never;
@@ -548,6 +580,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/requirement-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/prompt-templates/evaluate": {
         parameters: {
             query?: never;
@@ -589,7 +637,7 @@ export interface paths {
         };
         get: operations["listSnapshots"];
         put?: never;
-        post: operations["createSnapshot"];
+        post: operations["createSnapshot_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -708,7 +756,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/fields": {
+    "/api/glossary": {
         parameters: {
             query?: never;
             header?: never;
@@ -718,6 +766,22 @@ export interface paths {
         get: operations["page_1"];
         put?: never;
         post: operations["create_5"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["page_2"];
+        put?: never;
+        post: operations["create_6"];
         delete?: never;
         options?: never;
         head?: never;
@@ -829,7 +893,7 @@ export interface paths {
         };
         get: operations["list_5"];
         put?: never;
-        post: operations["create_6"];
+        post: operations["create_7"];
         delete?: never;
         options?: never;
         head?: never;
@@ -861,7 +925,7 @@ export interface paths {
         };
         get: operations["list_6"];
         put?: never;
-        post: operations["create_7"];
+        post: operations["create_8"];
         delete?: never;
         options?: never;
         head?: never;
@@ -877,7 +941,7 @@ export interface paths {
         };
         get: operations["list_7"];
         put?: never;
-        post: operations["create_8"];
+        post: operations["create_9"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1052,6 +1116,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listInstallations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-health/trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["trend"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-health/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["plan"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1300,6 +1396,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/glossary/conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["conflicts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/glossary/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/generator/markdown/preview": {
         parameters: {
             query?: never;
@@ -1531,7 +1659,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["listAll"];
+        get: operations["listAll_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1595,7 +1723,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["page_2"];
+        get: operations["page_3"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2028,6 +2156,52 @@ export interface components {
             data?: components["schemas"]["Project"];
             error?: components["schemas"]["ErrorDetail"];
         };
+        BusinessGlossaryReq: {
+            /** Format: int64 */
+            projectId: number;
+            term: string;
+            synonyms?: string;
+            rootTerms?: string;
+            abbreviations?: string;
+            disabledTerms?: string;
+            /** Format: int64 */
+            canonicalFieldId?: number;
+            scopeType?: string;
+            scopeValue?: string;
+            exampleFields?: string;
+            description?: string;
+            status?: string;
+        };
+        BusinessGlossary: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            term?: string;
+            synonyms?: string;
+            rootTerms?: string;
+            abbreviations?: string;
+            disabledTerms?: string;
+            /** Format: int64 */
+            canonicalFieldId?: number;
+            scopeType?: string;
+            scopeValue?: string;
+            exampleFields?: string;
+            description?: string;
+            status?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        RBusinessGlossary: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["BusinessGlossary"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
         FieldReq: {
             /** Format: int64 */
             projectId: number;
@@ -2302,6 +2476,77 @@ export interface components {
             warnings?: string[];
             /** Format: date-time */
             appliedAt?: string;
+        };
+        StandardHealthCoverageInput: {
+            /** Format: double */
+            coverageRate?: number;
+            /** Format: int32 */
+            unmanagedFieldCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            possibleDuplicateCount?: number;
+            topUnmanagedFields?: string[];
+        };
+        StandardHealthSnapshotCreateReq: {
+            /** Format: int64 */
+            projectId?: number;
+            coverage?: components["schemas"]["StandardHealthCoverageInput"];
+        };
+        RStandardHealthSnapshotView: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardHealthSnapshotView"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardHealthAction: {
+            title?: string;
+            description?: string;
+            priority?: string;
+            targetRoute?: string;
+            evidence?: string;
+        };
+        StandardHealthMetrics: {
+            /** Format: int32 */
+            averageQualityScore?: number;
+            /** Format: int32 */
+            lowQualityFieldCount?: number;
+            /** Format: int32 */
+            totalFieldCount?: number;
+            coverageStatus?: string;
+            /** Format: double */
+            coverageRate?: number;
+            /** Format: int32 */
+            unmanagedFieldCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            possibleDuplicateCount?: number;
+            /** Format: int32 */
+            ruleIssueCount?: number;
+            /** Format: int32 */
+            ruleExemptionCount?: number;
+            /** Format: int32 */
+            aiFeedbackSignalCount?: number;
+            /** Format: int32 */
+            pendingCandidateCount?: number;
+            /** Format: int32 */
+            adoptedCandidateCount?: number;
+            /** Format: int32 */
+            fixedSqlAvailableCount?: number;
+        };
+        StandardHealthSnapshotView: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: date-time */
+            capturedAt?: string;
+            source?: string;
+            metrics?: components["schemas"]["StandardHealthMetrics"];
+            topActions?: components["schemas"]["StandardHealthAction"][];
+            planMarkdown?: string;
         };
         RuleChangePreviewReq: {
             /** Format: int64 */
@@ -2807,6 +3052,88 @@ export interface components {
             message?: string;
             data?: components["schemas"]["DatabaseSchemaDump"];
             error?: components["schemas"]["ErrorDetail"];
+        };
+        RequirementDraftReq: {
+            /** Format: int64 */
+            projectId: number;
+            description: string;
+            targetTableName: string;
+            groupHint?: string;
+            /** Format: int32 */
+            limit?: number;
+        };
+        ExplainTrace: {
+            sourceType?: string;
+            /** Format: int64 */
+            sourceId?: number;
+            snapshotVersion?: string;
+            matchReason?: string;
+            /** Format: int32 */
+            confidence?: number;
+            ruleCode?: string;
+            docsRef?: string;
+        };
+        RRequirementDraftResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["RequirementDraftResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RequirementAmbiguousCandidate: {
+            field?: components["schemas"]["Field"];
+            /** Format: int32 */
+            score?: number;
+            matchReasons?: string[];
+            evidence?: components["schemas"]["ExplainTrace"][];
+        };
+        RequirementAmbiguousTerm: {
+            term?: string;
+            reason?: string;
+            candidates?: components["schemas"]["RequirementAmbiguousCandidate"][];
+        };
+        RequirementDraftResult: {
+            /** Format: int64 */
+            projectId?: number;
+            description?: string;
+            targetTableName?: string;
+            groupHint?: string;
+            matchedFields?: components["schemas"]["RequirementMatchedField"][];
+            missingCandidates?: components["schemas"]["RequirementMissingCandidate"][];
+            ambiguousTerms?: components["schemas"]["RequirementAmbiguousTerm"][];
+            recommendedTemplate?: components["schemas"]["RequirementRecommendedTemplate"];
+            nextActions?: string[];
+            copyablePrompt?: string;
+        };
+        RequirementMatchedField: {
+            field?: components["schemas"]["Field"];
+            /** Format: int32 */
+            score?: number;
+            matchReasons?: string[];
+            recommended?: boolean;
+            evidence?: components["schemas"]["ExplainTrace"][];
+        };
+        RequirementMissingCandidate: {
+            candidateName?: string;
+            displayName?: string;
+            dataType?: string;
+            comment?: string;
+            evidence?: string;
+            /** Format: int32 */
+            confidence?: number;
+            inboxPayload?: components["schemas"]["StandardCandidateCreateReq"];
+            evidenceTrace?: components["schemas"]["ExplainTrace"][];
+        };
+        RequirementRecommendedTemplate: {
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            description?: string;
+            tablePrefix?: string;
+            /** Format: int32 */
+            score?: number;
+            matchReasons?: string[];
+            evidence?: components["schemas"]["ExplainTrace"][];
         };
         PromptTemplateEvalReq: {
             templateKey: string;
@@ -3773,6 +4100,53 @@ export interface components {
             /** Format: date-time */
             appliedAt?: string;
         };
+        RStandardHealthTrend: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardHealthTrend"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardHealthDelta: {
+            /** Format: int64 */
+            baselineSnapshotId?: number;
+            /** Format: int32 */
+            days?: number;
+            /** Format: int32 */
+            qualityAverageScoreDelta?: number;
+            /** Format: int32 */
+            lowQualityFieldCountDelta?: number;
+            /** Format: double */
+            coverageRateDelta?: number;
+            /** Format: int32 */
+            unmanagedFieldCountDelta?: number;
+            summary?: string;
+        };
+        StandardHealthTrend: {
+            /** Format: int64 */
+            projectId?: number;
+            latest?: components["schemas"]["StandardHealthSnapshotView"];
+            snapshots?: components["schemas"]["StandardHealthSnapshotView"][];
+            weekDelta?: components["schemas"]["StandardHealthDelta"];
+            monthDelta?: components["schemas"]["StandardHealthDelta"];
+            nextActions?: string[];
+        };
+        RStandardHealthPlan: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardHealthPlan"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardHealthPlan: {
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int64 */
+            snapshotId?: number;
+            markdown?: string;
+            topActions?: components["schemas"]["StandardHealthAction"][];
+            nextActions?: string[];
+        };
         PageResultStandardCandidate: {
             records?: components["schemas"]["StandardCandidate"][];
             /** Format: int64 */
@@ -3994,6 +4368,68 @@ export interface components {
             ruleCount?: number;
             exportCommand?: string;
         };
+        PageResultBusinessGlossary: {
+            records?: components["schemas"]["BusinessGlossary"][];
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            current?: number;
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            pages?: number;
+        };
+        RPageResultBusinessGlossary: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["PageResultBusinessGlossary"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        BusinessGlossaryConflictEntry: {
+            /** Format: int64 */
+            id?: number;
+            term?: string;
+            /** Format: int64 */
+            canonicalFieldId?: number;
+            canonicalFieldName?: string;
+        };
+        BusinessGlossaryConflictGroup: {
+            type?: string;
+            severity?: string;
+            token?: string;
+            message?: string;
+            entries?: components["schemas"]["BusinessGlossaryConflictEntry"][];
+            nextAction?: string;
+        };
+        BusinessGlossaryConflictReport: {
+            /** Format: int64 */
+            projectId?: number;
+            summary?: components["schemas"]["BusinessGlossaryConflictSummary"];
+            conflicts?: components["schemas"]["BusinessGlossaryConflictGroup"][];
+        };
+        BusinessGlossaryConflictSummary: {
+            /** Format: int32 */
+            conflictCount?: number;
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+        };
+        RBusinessGlossaryConflictReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["BusinessGlossaryConflictReport"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RListBusinessGlossary: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["BusinessGlossary"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
         DdlGenerateResult: {
             ddl?: string;
             lintResult?: components["schemas"]["LintResult"];
@@ -4091,17 +4527,6 @@ export interface components {
             message?: string;
             data?: components["schemas"]["FieldImpactReport"];
             error?: components["schemas"]["ErrorDetail"];
-        };
-        ExplainTrace: {
-            sourceType?: string;
-            /** Format: int64 */
-            sourceId?: number;
-            snapshotVersion?: string;
-            matchReason?: string;
-            /** Format: int32 */
-            confidence?: number;
-            ruleCode?: string;
-            docsRef?: string;
         };
         FieldSuggestion: {
             field?: components["schemas"]["Field"];
@@ -5111,7 +5536,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RField"];
+                    "*/*": components["schemas"]["RBusinessGlossary"];
                 };
             };
         };
@@ -5127,7 +5552,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["FieldReq"];
+                "application/json": components["schemas"]["BusinessGlossaryReq"];
             };
         };
         responses: {
@@ -5137,7 +5562,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RField"];
+                    "*/*": components["schemas"]["RBusinessGlossary"];
                 };
             };
         };
@@ -5181,12 +5606,82 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["REnumDict"];
+                    "*/*": components["schemas"]["RField"];
                 };
             };
         };
     };
     update_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RField"];
+                };
+            };
+        };
+    };
+    delete_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    getById_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["REnumDict"];
+                };
+            };
+        };
+    };
+    update_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -5212,7 +5707,7 @@ export interface operations {
             };
         };
     };
-    delete_5: {
+    delete_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -5282,7 +5777,7 @@ export interface operations {
             };
         };
     };
-    getById_6: {
+    getById_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -5304,7 +5799,7 @@ export interface operations {
             };
         };
     };
-    update_5: {
+    update_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -5330,7 +5825,7 @@ export interface operations {
             };
         };
     };
-    delete_6: {
+    delete_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -5352,7 +5847,7 @@ export interface operations {
             };
         };
     };
-    getById_7: {
+    getById_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -5374,7 +5869,7 @@ export interface operations {
             };
         };
     };
-    update_6: {
+    update_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -5400,7 +5895,7 @@ export interface operations {
             };
         };
     };
-    delete_7: {
+    delete_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -5580,6 +6075,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RStarterKitApplyResult"];
+                };
+            };
+        };
+    };
+    createSnapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardHealthSnapshotCreateReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardHealthSnapshotView"];
                 };
             };
         };
@@ -6174,6 +6693,30 @@ export interface operations {
             };
         };
     };
+    draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequirementDraftReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RRequirementDraftResult"];
+                };
+            };
+        };
+    };
     evaluate: {
         parameters: {
             query?: never;
@@ -6264,7 +6807,7 @@ export interface operations {
             };
         };
     };
-    createSnapshot: {
+    createSnapshot_1: {
         parameters: {
             query?: never;
             header?: {
@@ -6477,6 +7020,56 @@ export interface operations {
         parameters: {
             query: {
                 projectId: number;
+                keyword?: string;
+                status?: string;
+                current?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RPageResultBusinessGlossary"];
+                };
+            };
+        };
+    };
+    create_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessGlossaryReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RBusinessGlossary"];
+                };
+            };
+        };
+    };
+    page_2: {
+        parameters: {
+            query: {
+                projectId: number;
                 current?: number;
                 size?: number;
             };
@@ -6497,7 +7090,7 @@ export interface operations {
             };
         };
     };
-    create_5: {
+    create_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -6687,7 +7280,7 @@ export interface operations {
             };
         };
     };
-    create_6: {
+    create_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -6781,7 +7374,7 @@ export interface operations {
             };
         };
     };
-    create_7: {
+    create_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -6827,7 +7420,7 @@ export interface operations {
             };
         };
     };
-    create_8: {
+    create_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -7103,6 +7696,51 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RListStarterKitInstallationInfo"];
+                };
+            };
+        };
+    };
+    trend: {
+        parameters: {
+            query: {
+                projectId: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardHealthTrend"];
+                };
+            };
+        };
+    };
+    plan: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardHealthPlan"];
                 };
             };
         };
@@ -7456,6 +8094,51 @@ export interface operations {
             };
         };
     };
+    conflicts: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RBusinessGlossaryConflictReport"];
+                };
+            };
+        };
+    };
+    listAll: {
+        parameters: {
+            query: {
+                projectId: number;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListBusinessGlossary"];
+                };
+            };
+        };
+    };
     previewMarkdown: {
         parameters: {
             query: {
@@ -7777,7 +8460,7 @@ export interface operations {
             };
         };
     };
-    listAll: {
+    listAll_1: {
         parameters: {
             query: {
                 projectId: number;
@@ -7863,7 +8546,7 @@ export interface operations {
             };
         };
     };
-    page_2: {
+    page_3: {
         parameters: {
             query: {
                 projectId: number;

@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、统一前端数据状态、项目活动时间线、领域 Starter Kit、业务术语表、自然语言需求草案、Explain Trace、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 执行证据包、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、统一前端数据状态、项目活动时间线、标准健康趋势、领域 Starter Kit、业务术语表、自然语言需求草案、Explain Trace、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 执行证据包、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -23,6 +23,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 业务术语表，支持项目级术语、同义词、英文词根、拼音/历史缩写、禁用词、canonical 字段、适用范围和示例字段维护；冲突检测会提示重复术语、禁用词冲突和不可用 canonical 字段。
 - 标准候选 Inbox，支持手动创建候选、按状态/来源/关键词筛选、采纳为新字段、合并到已有字段、忽略或延后处理。
 - 字段质量评分，按注释、别名、示例、分类、敏感标识、代码集和废弃说明识别低质量字段。
+- 标准健康趋势，按项目保存健康快照，聚合字段质量、覆盖率摘要、AI 反馈、候选状态和 fixedSql 机会，展示本周/月变化、Top actions 和可复制的 AI 改进计划。
 - 字段冲突检测，识别别名冲突、显示名重复、语义疑似重复和关键属性不一致。
 - 字段影响分析，展示字段被模板、导入来源、历史 SQL 检查、标准快照和代码集引用的范围。
 - 数据域、枚举字典、表模板、规则配置、规则基线套件和规则例外管理。
@@ -61,6 +62,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - AI 回放记录，支持查看 Prompt、SQL 检查修正和 DDL 预览的输入输出、promptVersion 与标准快照。
 - AI 反馈报告，按项目聚合已有 AI job、SQL 检查记录、fixedSql、规则例外、反向导入来源和字段元数据，输出字段/规则/fixedSql/未纳管信号和下一步维护动作。
+- 标准健康计划，复用字段质量、覆盖率摘要、AI 反馈和候选 Inbox 生成 Top actions 与 Markdown，供 AI 按优先级维护字段注释、别名、未纳管字段和规则问题。
 - AI 批量任务，支持后端保存 SQL lint batch run、前端查看最近任务/分项结果/下一步动作并下载 JSON 交付包。
 - AI 执行证据包，支持从 SQL 检查记录、AI job、AI 批量任务和当前覆盖率报告生成 JSON 或 zip，前端可复制/下载，CLI/MCP 可机器读取。
 - AI/CLI 写入保护，标准快照、反向导入确认、AI 批量 SQL lint、项目恢复 apply 和 AI job 回放记录已接入单机轻量 idempotency key、项目级 operation lock 和可重试冲突诊断。
@@ -768,6 +770,7 @@ data-spec/
 │       ├── projectbackup/    # 项目备份恢复
 │       ├── changelog/        # 标准变更日志
 │       ├── standard/         # 标准版本快照
+│       ├── standardhealth/   # 标准健康快照、趋势和改进计划
 │       ├── dbpreset/         # 数据库直连非敏感连接预设
 │       ├── reverseimport/    # SQL 反向导入
 │       └── security/         # API Token 认证与管理
@@ -808,6 +811,7 @@ data-spec/
 | projectbackup | /api/project-backups | 项目备份、恢复 dry-run 和恢复摘要 |
 | changelog | /api/change-logs | 标准变更日志 |
 | standard-snapshots | /api/projects/{projectId}/standard-snapshots | 标准版本快照 |
+| standard-health | /api/standard-health | 标准健康快照、趋势和 AI 可复制改进计划 |
 | dbpreset | /api/database-connection-presets | 数据库直连非敏感连接预设 |
 | reverse-import | /api/reverse-import | SQL 与数据库直连反向导入 |
 
@@ -849,6 +853,7 @@ data-spec/
 - [x] PostgreSQL `COMMENT ON` 解析和常见 MySQL `CREATE TABLE` / `UNSIGNED` / 表选项解析
 - [x] 字段覆盖率报告，支持 SQL/DDL、数据库直连 metadata 和 schema dump 生成覆盖率与未纳管字段排行
 - [x] 字段质量评分，支持低质量字段筛选、问题编码和跳转字段库编辑
+- [x] 标准健康趋势，支持创建项目级健康快照、查看本周/月变化、Top actions 和复制 AI 改进计划
 - [x] 字段冲突检测，支持别名冲突、语义疑似重复、属性不一致和跳转字段库编辑
 - [x] 字段影响分析，支持模板、导入来源、SQL 检查记录、标准快照和代码集影响提示
 - [x] 大字段库性能基线和慢操作 warning，覆盖字段分组/推荐、AI Context 字段目录和反向导入 compare

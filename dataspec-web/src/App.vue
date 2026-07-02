@@ -45,6 +45,10 @@
             <el-icon><TrendCharts /></el-icon>
             <span>字段质量</span>
           </el-menu-item>
+          <el-menu-item index="/standard-health">
+            <el-icon><TrendCharts /></el-icon>
+            <span>标准健康</span>
+          </el-menu-item>
           <el-menu-item index="/field-conflicts">
             <el-icon><Warning /></el-icon>
             <span>字段冲突</span>

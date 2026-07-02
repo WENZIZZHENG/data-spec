@@ -657,6 +657,15 @@ export interface AiFeedbackReport {
   generatedAt?: string
 }
 
+export type StandardHealthCoverageInput = Schemas['StandardHealthCoverageInput']
+export type StandardHealthSnapshotCreateReq = Schemas['StandardHealthSnapshotCreateReq']
+export type StandardHealthMetrics = Schemas['StandardHealthMetrics']
+export type StandardHealthAction = Schemas['StandardHealthAction']
+export type StandardHealthSnapshotView = Schemas['StandardHealthSnapshotView']
+export type StandardHealthDelta = Schemas['StandardHealthDelta']
+export type StandardHealthTrend = Schemas['StandardHealthTrend']
+export type StandardHealthPlan = Schemas['StandardHealthPlan']
+
 export interface StandardCandidate {
   id?: number
   projectId?: number

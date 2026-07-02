@@ -43,6 +43,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '字段质量' }
   },
   {
+    path: '/standard-health',
+    name: 'StandardHealth',
+    component: () => import('@/views/StandardHealth.vue'),
+    meta: { title: '标准健康' }
+  },
+  {
     path: '/field-conflicts',
     name: 'FieldConflicts',
     component: () => import('@/views/FieldConflicts.vue'),

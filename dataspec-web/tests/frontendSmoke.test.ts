@@ -638,6 +638,61 @@ test('keeps SQL lint fixed SQL and record history flow wired', () => {
   ], 'lint schema fixedSql policy')
 })
 
+test('keeps standard health trend and improvement plan wired', () => {
+  const router = readSource('src/router/index.ts')
+  const app = readSource('src/App.vue')
+  const view = readSource('src/views/StandardHealth.vue')
+  const api = readSource('src/api/standardHealth.ts')
+  const types = readSource('src/types/index.ts')
+
+  assertContains(router, [
+    "path: '/standard-health'",
+    '@/views/StandardHealth.vue',
+    "title: '标准健康'"
+  ], 'standard health router')
+
+  assertContains(app, [
+    'index="/standard-health"',
+    '标准健康'
+  ], 'standard health navigation')
+
+  assertContains(view, [
+    "import { createStandardHealthSnapshot, getStandardHealthPlan, getStandardHealthTrend } from '@/api/standardHealth'",
+    'projectStore.currentProjectId',
+    'async function loadTrend()',
+    'async function handleCreateSnapshot()',
+    'async function handleCopyPlan()',
+    'coverageForm.coverageRate',
+    'topUnmanagedFields',
+    '标准健康',
+    '创建快照',
+    '复制计划',
+    'Top actions',
+    '最近快照',
+    '请先创建并选择项目'
+  ], 'StandardHealth.vue')
+
+  assertContains(api, [
+    "request.post<unknown, StandardHealthSnapshotView>('/standard-health/snapshots'",
+    "request.get<unknown, StandardHealthTrend>('/standard-health/trend'",
+    "request.get<unknown, StandardHealthPlan>('/standard-health/plan'",
+    'export function createStandardHealthSnapshot',
+    'export function getStandardHealthTrend',
+    'export function getStandardHealthPlan'
+  ], 'standard health api')
+
+  assertContains(types, [
+    "export type StandardHealthCoverageInput = Schemas['StandardHealthCoverageInput']",
+    "export type StandardHealthSnapshotCreateReq = Schemas['StandardHealthSnapshotCreateReq']",
+    "export type StandardHealthMetrics = Schemas['StandardHealthMetrics']",
+    "export type StandardHealthAction = Schemas['StandardHealthAction']",
+    "export type StandardHealthSnapshotView = Schemas['StandardHealthSnapshotView']",
+    "export type StandardHealthDelta = Schemas['StandardHealthDelta']",
+    "export type StandardHealthTrend = Schemas['StandardHealthTrend']",
+    "export type StandardHealthPlan = Schemas['StandardHealthPlan']"
+  ], 'standard health types')
+})
+
 test('keeps database reverse import and comparison flow wired', () => {
   const view = readSource('src/views/ReverseImport.vue')
   const api = readSource('src/api/reverseImport.ts')
