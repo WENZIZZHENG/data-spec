@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
+import { promisify } from 'node:util'
 import { buildInlineReviewPlan, buildPullRequestLineMap, runCli } from './dataspec-cli.mjs'
+
+const execFileAsync = promisify(execFile)
 
 test('lint reads sql file, posts to server, prints json, and returns 1 for errors', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
@@ -638,6 +642,207 @@ test('lint-files uses default paths from local config when paths are omitted', a
     assert.equal(calls[0].url, 'http://dataspec.local/api/lint')
     assert.equal(JSON.parse(calls[0].options.body).projectId, 7)
     assert.equal(output.summary.totalFiles, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('changed discovers configured git changes and recommends minimal context', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-changed-'))
+  try {
+    await initGitRepo(dir, {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      defaultPaths: ['sql', 'models']
+    })
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    await mkdir(path.join(dir, 'models'), { recursive: true })
+    await mkdir(path.join(dir, 'docs'), { recursive: true })
+    await writeFile(path.join(dir, 'sql', 'existing.sql'), 'CREATE TABLE users (id bigint);', 'utf8')
+    await writeFile(path.join(dir, 'models', 'user-model.ts'), 'export const user = {}\n', 'utf8')
+    await writeFile(path.join(dir, 'docs', 'old.sql'), 'CREATE TABLE docs_old (id bigint);', 'utf8')
+    await git(dir, ['add', '.'])
+    await git(dir, ['commit', '-m', 'baseline'])
+
+    await writeFile(path.join(dir, 'sql', 'existing.sql'), 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    await writeFile(path.join(dir, 'sql', 'new_order.sql'), 'CREATE TABLE order_items (id bigint);', 'utf8')
+    await writeFile(path.join(dir, 'models', 'user-model.ts'), 'export const userOrder = {}\n', 'utf8')
+    await writeFile(path.join(dir, 'docs', 'old.sql'), 'CREATE TABLE docs_changed (id bigint);', 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli(['changed', '--format', 'json'], io, fetchFn)
+
+    assert.equal(code, 0)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.kind, 'dataspec.changed-workflow')
+    assert.equal(output.config.rootDir, '.')
+    assert.equal(path.isAbsolute(output.config.configPath), false)
+    assert.equal(output.contextRecommendation.scope, 'changed')
+    assert.match(output.contextRecommendation.command, /export-context .*--scope changed/)
+    assert.deepEqual(output.files.sql.map((item) => item.path).sort(), ['sql/existing.sql', 'sql/new_order.sql'])
+    assert.equal('absolutePath' in output.files.sql[0], false)
+    assert.ok(output.files.other.some((item) => item.path === 'models/user-model.ts'))
+    assert.equal(output.summary.sqlFiles, 2)
+    assert.equal(output.summary.ignoredFiles, 1)
+    assert.ok(output.nextActions.some((action) => action.includes('lint-changed')))
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('lint-changed lints only changed sql files and keeps context recommendation', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-lint-changed-'))
+  try {
+    await initGitRepo(dir, {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      defaultPaths: ['sql', 'models']
+    })
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    await mkdir(path.join(dir, 'models'), { recursive: true })
+    await writeFile(path.join(dir, 'sql', 'existing.sql'), 'CREATE TABLE users (id bigint);', 'utf8')
+    await writeFile(path.join(dir, 'models', 'user-model.ts'), 'export const user = {}\n', 'utf8')
+    await git(dir, ['add', '.'])
+    await git(dir, ['commit', '-m', 'baseline'])
+
+    await writeFile(path.join(dir, 'sql', 'existing.sql'), 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    await writeFile(path.join(dir, 'sql', 'new_order.sql'), 'CREATE TABLE order_items (id bigint);', 'utf8')
+    await writeFile(path.join(dir, 'models', 'user-model.ts'), 'export const userOrder = {}\n', 'utf8')
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      const sql = JSON.parse(options.body).sql
+      const hasError = sql.includes('UserOrder')
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            errorCount: hasError ? 1 : 0,
+            warningCount: hasError ? 0 : 1,
+            suggestionCount: 0,
+            issues: hasError ? [{ ruleCode: 'table_naming_snake_case' }] : []
+          }
+        })
+      }
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli(['lint-changed', '--format', 'json'], io, fetchFn)
+
+    assert.equal(code, 1)
+    const output = JSON.parse(io.stdout)
+    assert.equal(calls.length, 2)
+    assert.equal(calls.every((call) => call.url === 'http://dataspec.local/api/lint'), true)
+    assert.equal(calls.some((call) => JSON.parse(call.options.body).sql.includes('userOrder')), false)
+    assert.deepEqual(output.changed.files.sql.map((item) => item.path).sort(), ['sql/existing.sql', 'sql/new_order.sql'])
+    assert.equal('absolutePath' in output.changed.files.sql[0], false)
+    assert.equal(output.lint.summary.totalFiles, 2)
+    assert.equal(output.lint.summary.failedFiles, 1)
+    assert.deepEqual(output.lint.files.map((item) => item.path).sort(), ['sql/existing.sql', 'sql/new_order.sql'])
+    assert.equal(output.contextRecommendation.scope, 'changed')
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('lint-changed reports recoverable diagnostic when there are no changed sql files', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-lint-changed-no-sql-'))
+  try {
+    await initGitRepo(dir, {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      defaultPaths: ['models']
+    })
+    await mkdir(path.join(dir, 'models'), { recursive: true })
+    await writeFile(path.join(dir, 'models', 'user-model.ts'), 'export const user = {}\n', 'utf8')
+    await git(dir, ['add', '.'])
+    await git(dir, ['commit', '-m', 'baseline'])
+
+    await writeFile(path.join(dir, 'models', 'user-model.ts'), 'export const userOrder = {}\n', 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli(['lint-changed', '--format', 'json'], io, fetchFn)
+
+    assert.equal(code, 0)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.diagnostics[0].code, 'NO_CHANGED_SQL_FILES')
+    assert.equal(output.lint.summary.totalFiles, 0)
+    assert.ok(output.nextActions.some((action) => action.includes('changed')))
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('changed reports recoverable diagnostic outside git repository', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-no-git-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({ projectId: 7, defaultPaths: ['sql'] }),
+      'utf8'
+    )
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli(['changed', '--format', 'json'], io, fetchFn)
+
+    assert.equal(code, 0)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.summary.totalFiles, 0)
+    assert.equal(output.diagnostics[0].code, 'NO_GIT_REPOSITORY')
+    assert.match(output.nextActions.join('\n'), /git init|在 git 仓库/)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('changed avoids full scan when default paths are missing or no changes exist', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-no-default-paths-'))
+  try {
+    await initGitRepo(dir, { projectId: 7, defaultPaths: [] })
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const missingPathsCode = await runCli(['changed', '--format', 'json'], io, fetchFn)
+
+    assert.equal(missingPathsCode, 0)
+    const missingPathsOutput = JSON.parse(io.stdout)
+    assert.equal(missingPathsOutput.diagnostics[0].code, 'DATASPEC_DEFAULT_PATHS_MISSING')
+    assert.match(missingPathsOutput.nextActions.join('\n'), /defaultPaths|dataspec init/)
+
+    io.stdout = ''
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({ projectId: 7, defaultPaths: ['sql'] }),
+      'utf8'
+    )
+    await git(dir, ['add', '.dataspec/config.json'])
+    await git(dir, ['commit', '-m', 'configure paths'])
+
+    const noChangesCode = await runCli(['changed', '--format', 'json'], io, fetchFn)
+
+    assert.equal(noChangesCode, 0)
+    const noChangesOutput = JSON.parse(io.stdout)
+    assert.equal(noChangesOutput.summary.totalFiles, 0)
+    assert.equal(noChangesOutput.diagnostics[0].code, 'NO_CHANGED_FILES')
+    assert.equal(io.stderr, '')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -2861,4 +3066,16 @@ function createIo(stdin = '', cwd = process.cwd()) {
       return this.stdin
     }
   }
+}
+
+async function initGitRepo(dir, config) {
+  await git(dir, ['init'])
+  await git(dir, ['config', 'user.email', 'dataspec@example.local'])
+  await git(dir, ['config', 'user.name', 'DataSpec Test'])
+  await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+  await writeFile(path.join(dir, '.dataspec', 'config.json'), JSON.stringify(config), 'utf8')
+}
+
+async function git(cwd, args) {
+  await execFileAsync('git', args, { cwd })
 }

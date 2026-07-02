@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
+import { execFile } from 'node:child_process'
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { inflateRawSync } from 'node:zlib'
+import { promisify } from 'node:util'
 import { loadDataSpecConfig, resolveDefaultPaths } from './dataspec-config.mjs'
 import {
   formatWorkflowListText,
@@ -35,6 +37,7 @@ const ZIP_END_OF_CENTRAL_DIRECTORY = 0x06054b50
 const ZIP_METHOD_STORED = 0
 const ZIP_METHOD_DEFLATED = 8
 const ZIP_FLAG_ENCRYPTED = 0x0001
+const execFileAsync = promisify(execFile)
 const SKIPPED_SCAN_DIRECTORIES = new Set([
   '.git',
   '.idea',
@@ -67,6 +70,12 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'lint-files') {
       return await runLintFiles(rest, io, fetchFn)
+    }
+    if (command === 'changed') {
+      return await runChanged(rest, io)
+    }
+    if (command === 'lint-changed') {
+      return await runLintChanged(rest, io, fetchFn)
     }
     if (command === 'review-pr') {
       return await runReviewPr(rest, io, fetchFn)
@@ -240,6 +249,96 @@ async function runLintFiles(args, io, fetchFn) {
   }
   io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
   return output.summary.failedFiles > 0 ? 1 : 0
+}
+
+async function runChanged(args, io) {
+  const { positional, options } = parseArgs(args, [
+    'project',
+    'format',
+    'server',
+    'profile',
+    'task-type',
+    'taskType'
+  ])
+  if (positional.length > 0) {
+    throw new Error(`changed 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const format = options.format ?? 'text'
+  if (!['text', 'json'].includes(format)) {
+    throw new Error('changed 仅支持 --format text|json')
+  }
+  const config = loadDataSpecConfig(cliCwd(io))
+  const output = publicChangedWorkflowPayload(await buildChangedWorkflow(config, options))
+  if (format === 'json') {
+    io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
+  } else {
+    io.writeOut(formatChangedText(output))
+  }
+  return 0
+}
+
+async function runLintChanged(args, io, fetchFn) {
+  const { positional, options } = parseArgs(args, [
+    'project',
+    'format',
+    'server',
+    'dataspec-token',
+    'idempotency-key',
+    'idempotencyKey',
+    'profile',
+    'task-type',
+    'taskType'
+  ])
+  if (positional.length > 0) {
+    throw new Error(`lint-changed 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const format = options.format ?? 'json'
+  if (format !== 'json') {
+    throw new Error('lint-changed 当前仅支持 --format json')
+  }
+  const config = loadDataSpecConfig(cliCwd(io))
+  const changed = await buildChangedWorkflow(config, options)
+  let lint = emptyLintOutput()
+  const diagnostics = [...changed.diagnostics]
+
+  if (changed.files.sql.length > 0) {
+    const projectId = parseProjectId(options.project ?? config.projectId)
+    const server = normalizeServer(options.server ?? config.server)
+    const apiToken = resolveDataSpecToken(options, config)
+    lint = await lintSqlFiles(
+      changed.files.sql.map((item) => item.absolutePath),
+      projectId,
+      server,
+      fetchFn,
+      apiToken,
+      resolveProfileSelection(options, config),
+      resolveIdempotencyKey(options)
+    )
+  } else if (changed.summary.totalFiles > 0 && !diagnostics.some((item) => item.code === 'NO_CHANGED_SQL_FILES')) {
+    diagnostics.push(changedWorkflowDiagnostic('NO_CHANGED_SQL_FILES'))
+  }
+
+  const publicLint = publicLintChangedOutput(lint, changed)
+  const output = {
+    kind: 'dataspec.lint-changed-workflow',
+    schemaVersion: 1,
+    changed: publicChangedWorkflowPayload(changed),
+    contextRecommendation: changed.contextRecommendation,
+    lint: publicLint,
+    summary: {
+      changedFiles: changed.summary.totalFiles,
+      changedSqlFiles: changed.summary.sqlFiles,
+      failedFiles: lint.summary.failedFiles,
+      errorCount: lint.summary.errorCount,
+      warningCount: lint.summary.warningCount,
+      suggestionCount: lint.summary.suggestionCount
+    },
+    diagnostics,
+    nextActions: buildLintChangedNextActions(changed, lint, diagnostics)
+  }
+
+  io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
+  return lint.summary.failedFiles > 0 ? 1 : 0
 }
 
 async function runReviewPr(args, io, fetchFn) {
@@ -2066,10 +2165,12 @@ function renderInitReadme({ projectId, server, defaultPaths }) {
 
 \`\`\`bash
 node tools/dataspec-cli.mjs doctor --format json
+node tools/dataspec-cli.mjs changed --format json
+node tools/dataspec-cli.mjs lint-changed --format json
 node tools/dataspec-cli.mjs lint-files --format json
 node tools/dataspec-cli.mjs export-context --output dataspec-ai-context.zip
 node tools/dataspec-cli.mjs export-context --cache
-node tools/dataspec-cli.mjs export-context --scope field --query 用户手机号 --output dataspec-ai-context.zip
+node tools/dataspec-cli.mjs export-context --scope changed --query 用户订单 --cache
 \`\`\`
 
 ## Token
@@ -2085,6 +2186,8 @@ export DATASPEC_TOKEN=ds_xxx
 ## 给 AI agent 的约定
 
 - 修改 SQL、migration 或 ORM entity 前，先运行 \`doctor\` 确认 DataSpec 可用。
+- 处理本次 git 变更时，先运行 \`changed --format json\` 获取变更文件、SQL 子集和最小 Context 建议。
+- 只检查本次 SQL 变更时，运行 \`lint-changed --format json\`；它不会扫描 defaultPaths 之外的大目录。
 - 未显式传路径时，\`lint-files\` 会读取 \`.dataspec/config.json\` 的 \`defaultPaths\`。
 - 需要完整上下文时，运行 \`export-context --cache\` 并让 AI 读取 \`.dataspec/context/\`；单个建表或修 SQL 任务可加 \`--scope field --query <关键词>\` 导出按需包。
 `
@@ -2099,6 +2202,8 @@ function renderAgentsFragment({ projectId, server, defaultPaths }) {
 
 - 修改后先运行 \`node tools/dataspec-verify-advisor.mjs --changed --format json\` 获取建议验证命令。
 - 先运行 \`node tools/dataspec-cli.mjs doctor --format json\`。
+- 优先运行 \`node tools/dataspec-cli.mjs changed --format json\` 获取本次 git 变更、SQL 子集和最小 Context 建议。
+- 只对本次 SQL 变更运行 \`node tools/dataspec-cli.mjs lint-changed --format json\`。
 - 对默认路径运行 \`node tools/dataspec-cli.mjs lint-files --format json\`。
 - 如果仓库没有 \`tools/dataspec-cli.mjs\`，先替换为团队实际使用的 DataSpec CLI 路径或封装脚本。
 - 默认扫描路径：${defaultPaths.map((item) => `\`${item}\``).join(', ')}。
@@ -2135,6 +2240,13 @@ function formatInitText(result) {
 function parseProjectId(value) {
   if (!value) {
     throw new Error('需要提供 --project <id> 或 .dataspec/config.json 的 projectId')
+  }
+  return parsePositiveInteger(value, 'project id')
+}
+
+function parseOptionalProjectId(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined
   }
   return parsePositiveInteger(value, 'project id')
 }
@@ -2264,6 +2376,385 @@ function summarizeLintResults(results) {
     warningCount: 0,
     suggestionCount: 0
   })
+}
+
+async function buildChangedWorkflow(config, options = {}) {
+  if (config.defaultPaths.length === 0) {
+    return buildChangedPayload({
+      config,
+      options,
+      git: { available: false, rootDir: null },
+      files: emptyChangedFiles(),
+      diagnostics: [changedWorkflowDiagnostic('DATASPEC_DEFAULT_PATHS_MISSING')]
+    })
+  }
+
+  const gitRoot = await findGitRoot(config.rootDir)
+  if (!gitRoot) {
+    return buildChangedPayload({
+      config,
+      options,
+      git: { available: false, rootDir: null },
+      files: emptyChangedFiles(),
+      diagnostics: [changedWorkflowDiagnostic('NO_GIT_REPOSITORY')]
+    })
+  }
+
+  const gitPaths = await collectGitChangedPaths(gitRoot, config)
+  const files = classifyChangedFiles(gitPaths, gitRoot, config)
+  const diagnostics = files.all.length === 0 ? [changedWorkflowDiagnostic('NO_CHANGED_FILES')] : []
+  return buildChangedPayload({
+    config,
+    options,
+    git: { available: true, rootDir: gitRoot },
+    files,
+    diagnostics
+  })
+}
+
+function buildChangedPayload({ config, options, git, files, diagnostics }) {
+  const contextRecommendation = buildChangedContextRecommendation(files, config, options)
+  return {
+    kind: 'dataspec.changed-workflow',
+    schemaVersion: 1,
+    config: changedConfigMetadata(config, options),
+    git: {
+      available: git.available,
+      rootDir: git.rootDir ? toPosixPath(path.relative(config.rootDir, git.rootDir) || '.') : null
+    },
+    files,
+    summary: {
+      totalFiles: files.all.length,
+      sqlFiles: files.sql.length,
+      otherFiles: files.other.length,
+      ignoredFiles: files.ignored.length,
+      defaultPathCount: config.defaultPaths.length
+    },
+    contextRecommendation,
+    diagnostics,
+    nextActions: buildChangedNextActions(files, contextRecommendation, diagnostics)
+  }
+}
+
+function publicChangedWorkflowPayload(output) {
+  return {
+    ...output,
+    files: publicChangedFiles(output.files)
+  }
+}
+
+function publicLintChangedOutput(lint, changed) {
+  return {
+    ...lint,
+    files: lint.files.map((file, index) => ({
+      ...file,
+      path: changed.files.sql[index]?.path ?? file.path
+    }))
+  }
+}
+
+function publicChangedFiles(files) {
+  return {
+    all: files.all.map(publicChangedFileItem),
+    sql: files.sql.map(publicChangedFileItem),
+    other: files.other.map(publicChangedFileItem),
+    ignored: files.ignored.map(publicChangedFileItem)
+  }
+}
+
+function publicChangedFileItem(file) {
+  const { absolutePath, ...publicFile } = file
+  return publicFile
+}
+
+function changedConfigMetadata(config, options) {
+  return {
+    configPath: config.configPath ? toPosixPath(path.relative(config.rootDir, config.configPath)) : null,
+    rootDir: '.',
+    projectId: parseOptionalProjectId(options.project ?? config.projectId) ?? null,
+    server: options.server || config.server ? safeServerForMetadata(normalizeServer(options.server ?? config.server)) : null,
+    defaultPaths: config.defaultPaths.map((item) => toPosixPath(item)),
+    profileId: normalizeOptionalCliText(options.profile ?? config.aiProfile) ?? null,
+    taskType: normalizeOptionalCliText(options.taskType ?? options['task-type'] ?? config.taskType) ?? null
+  }
+}
+
+async function findGitRoot(cwd) {
+  try {
+    const stdout = await execGit(cwd, ['rev-parse', '--show-toplevel'])
+    return path.resolve(stdout.trim())
+  } catch {
+    return null
+  }
+}
+
+async function collectGitChangedPaths(gitRoot, config) {
+  const defaultPathspecs = gitDefaultPathspecs(gitRoot, config)
+  const untrackedArgs = ['ls-files', '-z', '--others', '--exclude-standard']
+  if (defaultPathspecs.length > 0) {
+    untrackedArgs.push('--', ...defaultPathspecs)
+  }
+  const [unstaged, staged, untracked] = await Promise.all([
+    execGit(gitRoot, ['diff', '--name-only', '-z', '--diff-filter=ACMRT']),
+    execGit(gitRoot, ['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMRT']),
+    execGit(gitRoot, untrackedArgs)
+  ])
+  return uniqueSorted([
+    ...parseGitPathList(unstaged),
+    ...parseGitPathList(staged),
+    ...parseGitPathList(untracked)
+  ])
+}
+
+function gitDefaultPathspecs(gitRoot, config) {
+  return resolveDefaultPaths(config)
+    .map((defaultPath) => path.relative(gitRoot, defaultPath))
+    .filter((relativePath) => relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+    .map((relativePath) => toPosixPath(relativePath))
+}
+
+async function execGit(cwd, args) {
+  const { stdout } = await execFileAsync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024
+  })
+  return stdout
+}
+
+function parseGitPathList(output) {
+  return output
+    .split('\0')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => item.replaceAll('\\', '/'))
+}
+
+function classifyChangedFiles(gitPaths, gitRoot, config) {
+  const defaultRoots = resolveDefaultPaths(config)
+  const files = emptyChangedFiles()
+  for (const gitPath of gitPaths) {
+    const absolutePath = path.resolve(gitRoot, gitPath)
+    const item = changedFileItem(absolutePath, gitPath, gitRoot, config)
+    if (!defaultRoots.some((defaultRoot) => isPathInside(path.resolve(defaultRoot), absolutePath))) {
+      files.ignored.push(item)
+      continue
+    }
+    files.all.push(item)
+    if (isSqlCandidateFile(item.path)) {
+      files.sql.push(item)
+    } else {
+      files.other.push(item)
+    }
+  }
+  files.all.sort(compareChangedFile)
+  files.sql.sort(compareChangedFile)
+  files.other.sort(compareChangedFile)
+  files.ignored.sort(compareChangedFile)
+  return files
+}
+
+function changedFileItem(absolutePath, gitPath, gitRoot, config) {
+  const pathFromConfigRoot = path.relative(config.rootDir, absolutePath)
+  const outputPath = pathFromConfigRoot && !pathFromConfigRoot.startsWith('..') && !path.isAbsolute(pathFromConfigRoot)
+    ? pathFromConfigRoot
+    : path.relative(gitRoot, absolutePath)
+  return {
+    path: toPosixPath(outputPath),
+    gitPath: toPosixPath(gitPath),
+    absolutePath,
+    kind: isSqlCandidateFile(outputPath) ? 'sql' : 'other'
+  }
+}
+
+function emptyChangedFiles() {
+  return {
+    all: [],
+    sql: [],
+    other: [],
+    ignored: []
+  }
+}
+
+function emptyLintOutput() {
+  return {
+    summary: {
+      totalFiles: 0,
+      failedFiles: 0,
+      errorCount: 0,
+      warningCount: 0,
+      suggestionCount: 0
+    },
+    files: []
+  }
+}
+
+function isSqlCandidateFile(filePath) {
+  return String(filePath).toLowerCase().endsWith('.sql')
+}
+
+function compareChangedFile(left, right) {
+  return left.path.localeCompare(right.path)
+}
+
+function uniqueSorted(items) {
+  return [...new Set(items)].sort((left, right) => left.localeCompare(right))
+}
+
+function changedWorkflowDiagnostic(code) {
+  const diagnostics = {
+    DATASPEC_DEFAULT_PATHS_MISSING: {
+      severity: 'WARNING',
+      message: '未配置 .dataspec/config.json 的 defaultPaths，已停止以避免扫描整个业务仓库。',
+      suggestedAction: '运行 dataspec init --default-path <path>，或在 .dataspec/config.json 中配置 defaultPaths 后重试。'
+    },
+    NO_GIT_REPOSITORY: {
+      severity: 'WARNING',
+      message: '当前目录不在 git 仓库内，无法判断本次变更文件。',
+      suggestedAction: '切换到业务 git 仓库后重试，或先运行 git init 建立仓库。'
+    },
+    NO_CHANGED_FILES: {
+      severity: 'INFO',
+      message: '配置路径内没有检测到 git 变更文件。',
+      suggestedAction: '修改 SQL/模型文件后重试，或确认 defaultPaths 是否覆盖本次工作目录。'
+    },
+    NO_CHANGED_SQL_FILES: {
+      severity: 'INFO',
+      message: '本次配置路径内没有变更 SQL 文件，已跳过 lint 调用。',
+      suggestedAction: '如需检查 SQL，请修改或新增 .sql 文件；如只需上下文，可运行 dataspec changed --format json。'
+    }
+  }
+  return {
+    code,
+    ...diagnostics[code]
+  }
+}
+
+function buildChangedContextRecommendation(files, config, options = {}) {
+  const query = buildChangedContextQuery(files)
+  const commandParts = ['dataspec', 'export-context']
+  const projectId = parseOptionalProjectId(options.project ?? config.projectId)
+  if (projectId) {
+    commandParts.push('--project', String(projectId))
+  }
+  commandParts.push('--scope', 'changed')
+  commandParts.push('--query', quoteCommandArg(query))
+  commandParts.push('--cache')
+  return {
+    scope: 'changed',
+    query,
+    command: commandParts.join(' '),
+    reason: files.all.length > 0
+      ? '基于本次 git 变更文件名生成最小上下文检索词。'
+      : '暂无变更文件，保留 changed scope 作为恢复后的推荐入口。',
+    evidenceFiles: files.all.slice(0, 20).map((item) => item.path)
+  }
+}
+
+function buildChangedContextQuery(files) {
+  const tokens = []
+  for (const file of files.all) {
+    const parsed = path.posix.parse(file.path)
+    tokens.push(...pathTokens(parsed.dir), ...pathTokens(parsed.name))
+  }
+  const uniqueTokens = uniqueSorted(tokens.filter((item) => item.length >= 2 && !['sql', 'db', 'src'].includes(item)))
+  return uniqueTokens.slice(0, 12).join(' ') || 'changed'
+}
+
+function pathTokens(value) {
+  return String(value ?? '')
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function quoteCommandArg(value) {
+  const text = String(value ?? '')
+  if (/^[A-Za-z0-9_./:-]+$/.test(text)) {
+    return text
+  }
+  return `"${text.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+}
+
+function buildChangedNextActions(files, contextRecommendation, diagnostics) {
+  const codes = diagnostics.map((item) => item.code)
+  if (codes.includes('DATASPEC_DEFAULT_PATHS_MISSING')) {
+    return [
+      '在 .dataspec/config.json 中配置 defaultPaths，或重新运行 dataspec init --default-path <path>。',
+      '配置后再次运行 dataspec changed --format json。'
+    ]
+  }
+  if (codes.includes('NO_GIT_REPOSITORY')) {
+    return [
+      '切换到业务 git 仓库后重新运行 dataspec changed --format json，或先运行 git init。',
+      '确认 .dataspec/config.json 位于业务仓库内。'
+    ]
+  }
+  if (codes.includes('NO_CHANGED_FILES')) {
+    return [
+      '确认本次修改位于 defaultPaths 覆盖范围内。',
+      '如刚新增文件，确认文件未被 .gitignore 忽略。'
+    ]
+  }
+  const actions = []
+  if (files.sql.length > 0) {
+    actions.push('运行 dataspec lint-changed --format json 检查本次变更 SQL。')
+  } else {
+    actions.push('本次没有 SQL 变更；可先根据文件名判断是否需要导出最小上下文。')
+  }
+  actions.push(`运行 ${contextRecommendation.command} 获取最小 AI Context。`)
+  return actions
+}
+
+function buildLintChangedNextActions(changed, lint, diagnostics) {
+  const codes = diagnostics.map((item) => item.code)
+  if (codes.includes('NO_CHANGED_SQL_FILES')) {
+    return [
+      '运行 dataspec changed --format json 查看本次非 SQL 变更和最小上下文建议。',
+      `如需要字段标准上下文，运行 ${changed.contextRecommendation.command}。`
+    ]
+  }
+  if (diagnostics.length > 0) {
+    return changed.nextActions
+  }
+  if (lint.summary.errorCount > 0) {
+    return [
+      '优先修复 ERROR 级 SQL 标准问题。',
+      `需要相关字段标准时运行 ${changed.contextRecommendation.command}。`
+    ]
+  }
+  return [
+    'SQL 变更未发现 ERROR 级问题。',
+    `需要继续给 AI 补上下文时运行 ${changed.contextRecommendation.command}。`
+  ]
+}
+
+function formatChangedText(output) {
+  const lines = ['DataSpec Changed Workflow']
+  lines.push(`Changed files: ${output.summary.totalFiles}`)
+  lines.push(`SQL files: ${output.summary.sqlFiles}`)
+  lines.push(`Ignored outside defaultPaths: ${output.summary.ignoredFiles}`)
+  if (output.diagnostics.length > 0) {
+    lines.push('', 'Diagnostics:')
+    for (const diagnostic of output.diagnostics) {
+      lines.push(`- [${diagnostic.severity}] ${diagnostic.code}: ${diagnostic.message}`)
+      lines.push(`  next: ${diagnostic.suggestedAction}`)
+    }
+  }
+  if (output.files.sql.length > 0) {
+    lines.push('', 'SQL:')
+    for (const file of output.files.sql) {
+      lines.push(`- ${file.path}`)
+    }
+  }
+  lines.push('', 'Context:')
+  lines.push(`- ${output.contextRecommendation.command}`)
+  lines.push('', 'Next actions:')
+  for (const action of output.nextActions) {
+    lines.push(`- ${action}`)
+  }
+  lines.push('')
+  return lines.join('\n')
 }
 
 function resolveDeliveryPackagePath(options) {
@@ -3026,6 +3517,8 @@ function helpText() {
 Usage:
   node tools/dataspec-cli.mjs lint <path|-> [--project <id>] [--profile <id>|--task-type <type>] --format text|json [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] [--profile <id>|--task-type <type>] --format json [--delivery-package <json>] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
+  node tools/dataspec-cli.mjs changed [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>]
+  node tools/dataspec-cli.mjs lint-changed [--project <id>] [--profile <id>|--task-type <type>] --format json [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs export-context [--project <id>] [--profile <id>|--task-type <type>] [--output <zip>] [--cache] [--cache-ttl-days <days>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
@@ -3053,6 +3546,8 @@ Options:
   --idempotency-key 可由 DATASPEC_IDEMPOTENCY_KEY 兜底，写入型命令会作为 Idempotency-Key header 传给后端
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
   lint-files 可通过 --delivery-package 或 --batch-package 写出 AI 批量任务交付包，stdout JSON 保持原结构
+  changed 读取 git 变更并按 defaultPaths 输出文件清单、SQL 子集、最小 Context 建议和恢复诊断，不调用服务端
+  lint-changed 只对 changed 发现的 SQL 文件调用 lint；无 SQL 变更时返回诊断且不调用服务端
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
