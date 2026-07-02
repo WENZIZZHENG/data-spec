@@ -56,6 +56,8 @@ class StandardChangePreviewServiceImplTest {
                 null,
                 false,
                 "enabled",
+                null,
+                null,
                 null));
 
         assertThat(preview.riskLevel()).isEqualTo("HIGH");

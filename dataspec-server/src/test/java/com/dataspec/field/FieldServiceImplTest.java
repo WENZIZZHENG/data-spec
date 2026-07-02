@@ -81,6 +81,45 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void create_acceptsDraftStatus() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.existsByNameInProject("draft_mobile_no", 1L)).thenReturn(false);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        Field field = new Field();
+        field.setProjectId(1L);
+        field.setName("draft_mobile_no");
+        field.setDataType("varchar(20)");
+        field.setStatus("draft");
+
+        Field created = service.create(field);
+
+        assertEquals("draft", created.getStatus());
+        verify(repository).insert(created);
+    }
+
+    @Test
+    void create_rejectsCrossProjectReplacementField() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.existsByNameInProject("old_mobile_no", 1L)).thenReturn(false);
+        Field replacement = new Field();
+        replacement.setId(12L);
+        replacement.setProjectId(2L);
+        when(repository.findById(12L)).thenReturn(Optional.of(replacement));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        Field field = new Field();
+        field.setProjectId(1L);
+        field.setName("old_mobile_no");
+        field.setDataType("varchar(20)");
+        field.setStatus("deprecated");
+        field.setReplacementFieldId(12L);
+
+        assertThrows(BizException.class, () -> service.create(field));
+        verify(repository, never()).insert(any());
+    }
+
+    @Test
     void update_copiesPersonalMetadata() {
         FieldRepository repository = mock(FieldRepository.class);
         Field existing = new Field();
@@ -88,6 +127,10 @@ class FieldServiceImplTest {
         existing.setProjectId(1L);
         existing.setName("mobile_no");
         when(repository.findById(9L)).thenReturn(Optional.of(existing));
+        Field replacement = new Field();
+        replacement.setId(12L);
+        replacement.setProjectId(1L);
+        when(repository.findById(12L)).thenReturn(Optional.of(replacement));
         when(repository.existsByNameInProjectExcludeId("mobile_no", 1L, 9L)).thenReturn(false);
         FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
 
@@ -102,6 +145,8 @@ class FieldServiceImplTest {
         incoming.setSensitive(true);
         incoming.setStatus("deprecated");
         incoming.setExampleValue("13800138000");
+        incoming.setReplacementFieldId(12L);
+        incoming.setReplacementReason("历史字段，改用 user_mobile_no");
 
         Field updated = service.update(9L, incoming);
 
@@ -111,7 +156,51 @@ class FieldServiceImplTest {
         assertTrue(updated.getSensitive());
         assertEquals("deprecated", updated.getStatus());
         assertEquals("13800138000", updated.getExampleValue());
+        assertEquals(12L, updated.getReplacementFieldId());
+        assertEquals("历史字段，改用 user_mobile_no", updated.getReplacementReason());
         verify(repository).update(updated);
+    }
+
+    @Test
+    void update_recordsLifecycleReplacementInChangeLog() {
+        FieldRepository repository = mock(FieldRepository.class);
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        Field existing = new Field();
+        existing.setId(9L);
+        existing.setProjectId(1L);
+        existing.setName("old_mobile_no");
+        existing.setDataType("varchar(20)");
+        existing.setStatus("enabled");
+        when(repository.findById(9L)).thenReturn(Optional.of(existing));
+        Field replacement = new Field();
+        replacement.setId(12L);
+        replacement.setProjectId(1L);
+        when(repository.findById(12L)).thenReturn(Optional.of(replacement));
+        when(repository.existsByNameInProjectExcludeId("old_mobile_no", 1L, 9L)).thenReturn(false);
+        when(changeLogService.snapshot(any(Field.class))).thenAnswer(invocation -> {
+            Field field = invocation.getArgument(0);
+            return field.getStatus() + "|" + field.getReplacementFieldId()
+                    + "|" + field.getReplacementReason();
+        });
+        FieldServiceImpl service = service(repository, changeLogService);
+
+        Field incoming = new Field();
+        incoming.setName("old_mobile_no");
+        incoming.setDataType("varchar(20)");
+        incoming.setStatus("deprecated");
+        incoming.setNullable(true);
+        incoming.setReplacementFieldId(12L);
+        incoming.setReplacementReason("历史兼容字段，改用 mobile_no");
+
+        service.update(9L, incoming);
+
+        verify(changeLogService).recordChange(
+                1L,
+                "field",
+                9L,
+                "update",
+                "enabled|null|null",
+                "deprecated|12|历史兼容字段，改用 mobile_no");
     }
 
     @Test
@@ -842,6 +931,42 @@ class FieldServiceImplTest {
         assertFalse(suggestions.isEmpty());
         assertFalse(suggestions.getFirst().existing());
         assertNull(suggestions.getFirst().field());
+    }
+
+    @Test
+    void suggest_skipsNonEnabledFieldsByDefault() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field draft = field("draft_mobile_no", "草稿手机号", "varchar(20)", "用户手机号", "phone,mobile", "draft");
+        Field deprecated = field("old_mobile_no", "旧手机号", "varchar(20)", "用户手机号", "phone,mobile", "deprecated");
+        Field disabled = field("disabled_mobile_no", "停用手机号", "varchar(20)", "用户手机号", "phone,mobile", "disabled");
+        deprecated.setReplacementReason("历史字段，改用 mobile_no");
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(draft, deprecated, disabled));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSuggestion suggestion = service.suggest(1L, "手机号", 5).getFirst();
+
+        assertFalse(suggestion.existing());
+        assertNull(suggestion.field());
+        assertEquals("mobile_no", suggestion.recommendedName());
+    }
+
+    @Test
+    void search_explicitNonEnabledFieldShowsLifecycleGuidance() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field legacy = field("old_mobile_no", "旧手机号", "varchar(20)", "历史手机号", "phone,mobile", "deprecated");
+        legacy.setId(1L);
+        legacy.setReplacementFieldId(2L);
+        legacy.setReplacementReason("历史兼容字段，改用 mobile_no");
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(legacy));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "旧手机号", null, null, "deprecated", null, null, 10));
+
+        assertEquals(1, result.items().size());
+        assertTrue(result.items().getFirst().recommendedUse().contains("改用 mobile_no"));
+        assertTrue(result.items().getFirst().nextActions().stream()
+                .anyMatch(action -> action.contains("replacementFieldId=2")));
     }
 
     @Test

@@ -237,6 +237,8 @@ public class AiContextExportService {
                 if (!starterKitSourcesNode.isEmpty()) fn.set("starterKitSources", starterKitSourcesNode);
                 if (f.getCodeSetId() != null) fn.put("codeSetId", f.getCodeSetId());
                 if (f.getExampleValue() != null) fn.put("example", f.getExampleValue());
+                if (f.getReplacementFieldId() != null) fn.put("replacementFieldId", f.getReplacementFieldId());
+                if (f.getReplacementReason() != null) fn.put("replacementReason", f.getReplacementReason());
                 ArrayNode aliasesNode = aliasesToArrayNode(mapper, f.getAliases());
                 if (!aliasesNode.isEmpty()) fn.set("aliases", aliasesNode);
                 if (scopedFields.summary().includeMetadata() && !match.reasons().isEmpty()) {
@@ -307,6 +309,8 @@ public class AiContextExportService {
                 }
                 copyLong(fn, field, "codeSetId", "codeSetId");
                 copyText(fn, field, "exampleValue", "example");
+                copyLong(fn, field, "replacementFieldId", "replacementFieldId");
+                copyText(fn, field, "replacementReason", "replacementReason");
                 ArrayNode aliasesNode = aliasesToArrayNode(mapper, field.path("aliases").asText(null));
                 if (!aliasesNode.isEmpty()) {
                     fn.set("aliases", aliasesNode);
@@ -1548,8 +1552,10 @@ public class AiContextExportService {
                           "sensitive": { "type": "boolean" },
                           "status": {
                             "type": "string",
-                            "enum": ["enabled", "disabled", "deprecated"]
+                            "enum": ["draft", "enabled", "disabled", "deprecated"]
                           },
+                          "replacementFieldId": { "type": "integer" },
+                          "replacementReason": { "type": "string" },
                           "tags": { "type": "string" },
                           "starterKitSources": {
                             "type": "array",

@@ -176,6 +176,8 @@ public class StandardSnapshotServiceImpl implements StandardSnapshotService {
         item.put("codeSetId", field.getCodeSetId());
         item.put("sensitive", field.getSensitive());
         item.put("status", field.getStatus());
+        item.put("replacementFieldId", field.getReplacementFieldId());
+        item.put("replacementReason", field.getReplacementReason());
         item.put("exampleValue", field.getExampleValue());
         return item;
     }

@@ -102,6 +102,22 @@ class FieldQualityServiceImplTest {
         assertThat(item.getSuggestions()).contains("为废弃字段补充替代字段或迁移说明");
     }
 
+    @Test
+    void report_usesStructuredReplacementGuidance() {
+        FieldService fieldService = mock(FieldService.class);
+        Field field = completeField("old_user_id", "旧用户ID", "bigint");
+        field.setStatus("deprecated");
+        field.setComment("旧用户字段");
+        field.setReplacementFieldId(2L);
+        when(fieldService.listByProject(1L)).thenReturn(List.of(field));
+        FieldQualityServiceImpl service = new FieldQualityServiceImpl(fieldService);
+
+        var item = service.report(1L).getFields().getFirst();
+
+        assertThat(item.getIssues()).extracting("code")
+                .doesNotContain("deprecated_without_replacement");
+    }
+
     private Field completeField(String name, String displayName, String dataType) {
         Field field = baseField(name, displayName, dataType);
         field.setComment(displayName + "，用于核心业务流程");
@@ -124,4 +140,5 @@ class FieldQualityServiceImplTest {
         field.setStatus("enabled");
         return field;
     }
+
 }

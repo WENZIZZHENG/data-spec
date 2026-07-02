@@ -100,7 +100,7 @@ Capability entry 稳定字段：
 
 ### field
 
-标准字段契约，覆盖字段库和 AI Context 中的字段基础元数据，例如 `name`、`dataType`、`nullable`、`comment`、`status`、`aliases[]` 和 `matchReasons[]`。
+标准字段契约，覆盖字段库和 AI Context 中的字段基础元数据，例如 `name`、`dataType`、`nullable`、`comment`、`status`、`replacementFieldId`、`replacementReason`、`aliases[]` 和 `matchReasons[]`。`status` 稳定值至少包含 `draft`、`enabled`、`deprecated` 和 `disabled`。
 
 ### explain-trace
 
@@ -166,7 +166,7 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - `.dataspec/schema-registry.json`: Schema Registry catalog，稳定字段遵循上方 Schema Registry 契约。
 - `.dataspec/capabilities.json`: AI Capability Catalog，稳定字段遵循上方 Capability Catalog 契约。
 - `.dataspec/field-catalog.json`: `projectId`、`standard.specVersion`、`standard.specHash`、`contextScope`、`fields[]`、`enums[]`。
-- `fields[]`: `name`、`dataType`、`nullable`、`sensitive`、`status`、`comment`、`displayName`、`category`、`tags`、`codeSetId`、`example`、`aliases[]`、`matchReasons[]`。
+- `fields[]`: `name`、`dataType`、`nullable`、`sensitive`、`status`、`replacementFieldId`、`replacementReason`、`comment`、`displayName`、`category`、`tags`、`codeSetId`、`example`、`aliases[]`、`matchReasons[]`。
 - `.dataspec/rules.yaml`: `standard`、`naming`、`rules`、`rule_exemptions`。
 - `.dataspec/workflows.md`: `create-table`、`review-pr-sql`、`reverse-import-standards`、`export-min-context` 四个 recipe id。
 
@@ -217,7 +217,7 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - `field`
 - `evidence[]`
 
-`field` 命中已有标准字段时应保留标准字段基础元数据，例如 `name`、`displayName`、`dataType`、`aliases`、`category`、`sensitive`、`status`、`codeSetId` 和 `exampleValue`。`evidence[]` 使用 `ExplainTrace`，已有字段命中时 `sourceType=FIELD`，fallback 建议可使用无 `sourceId` 的建议来源。
+`field` 命中已有标准字段时应保留标准字段基础元数据，例如 `name`、`displayName`、`dataType`、`aliases`、`category`、`sensitive`、`status`、`replacementFieldId`、`replacementReason`、`codeSetId` 和 `exampleValue`。默认推荐只返回 `enabled` 字段；`draft`、`deprecated` 和 `disabled` 字段应通过显式字段检索查看。`evidence[]` 使用 `ExplainTrace`，已有字段命中时 `sourceType=FIELD`，fallback 建议可使用无 `sourceId` 的建议来源。
 
 ## 字段检索
 
@@ -227,7 +227,7 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - `FieldSearchSummary`: `totalCandidates`、`matchedCount`、`returnedCount`、`truncated`、`appliedFilters`、`hints[]`。
 - `FieldSearchItem`: `field`、`score`、`matchReasons[]`、`recommendedUse`、`nextActions[]`、`evidence[]`。
 
-字段检索是只读能力。AI 可依赖 `matchReasons[]` 和 `evidence[]` 判断命中来源，依赖 `nextActions[]` 决定收窄检索、采用标准字段或进入候选补全流程；不得把 `score` 当作跨版本绝对分值，只能用于同一次结果内排序参考。Explain Trace 不包含业务数据行、token、password 或完整 JDBC URL。
+字段检索是只读能力。AI 可依赖 `matchReasons[]` 和 `evidence[]` 判断命中来源，依赖 `recommendedUse` 和 `nextActions[]` 决定收窄检索、采用标准字段或进入候选补全流程。默认检索只返回 `enabled` 字段；显式传入非 enabled `status` 时，返回项必须说明状态、替代字段或替代原因。不得把 `score` 当作跨版本绝对分值，只能用于同一次结果内排序参考。Explain Trace 不包含业务数据行、token、password 或完整 JDBC URL。
 
 ## 自然语言需求草案
 

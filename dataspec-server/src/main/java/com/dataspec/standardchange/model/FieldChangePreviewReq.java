@@ -21,6 +21,8 @@ public record FieldChangePreviewReq(
         Long codeSetId,
         Boolean sensitive,
         String status,
+        Long replacementFieldId,
+        String replacementReason,
         String exampleValue
 ) {
 }

@@ -2052,6 +2052,9 @@ export interface components {
             codeSetId?: number;
             sensitive?: boolean;
             status?: string;
+            /** Format: int64 */
+            replacementFieldId?: number;
+            replacementReason?: string;
             exampleValue?: string;
         };
         Field: {
@@ -2080,6 +2083,9 @@ export interface components {
             codeSetId?: number;
             sensitive?: boolean;
             status?: string;
+            /** Format: int64 */
+            replacementFieldId?: number;
+            replacementReason?: string;
             exampleValue?: string;
             /** Format: date-time */
             createdAt?: string;
@@ -2393,6 +2399,9 @@ export interface components {
             codeSetId?: number;
             sensitive?: boolean;
             status?: string;
+            /** Format: int64 */
+            replacementFieldId?: number;
+            replacementReason?: string;
             exampleValue?: string;
         };
         StandardCandidateCreateReq: {

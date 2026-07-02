@@ -100,7 +100,8 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                 "标准字段",
                 "字段库和 AI Context 中的标准字段结构。",
                 List.of("name", "dataType", "nullable", "comment", "displayName", "category", "tags",
-                        "codeSetId", "sensitive", "status", "example", "aliases[]", "matchReasons[]"),
+                        "codeSetId", "sensitive", "status", "replacementFieldId", "replacementReason",
+                        "example", "aliases[]", "matchReasons[]"),
                 List.of(),
                 objectSchema("DataSpec Field", List.of("name", "dataType"), orderedMap(
                         "name", stringProp(),
@@ -112,7 +113,9 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                         "tags", arrayOf(stringProp()),
                         "codeSetId", integerProp(),
                         "sensitive", booleanProp(),
-                        "status", enumProp("enabled", "disabled", "deprecated"),
+                        "status", enumProp("draft", "enabled", "disabled", "deprecated"),
+                        "replacementFieldId", integerProp(),
+                        "replacementReason", stringProp(),
                         "example", stringProp(),
                         "aliases", arrayOf(stringProp()),
                         "matchReasons", arrayOf(stringProp())

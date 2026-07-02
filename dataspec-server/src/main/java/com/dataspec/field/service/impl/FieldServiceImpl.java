@@ -51,8 +51,12 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class FieldServiceImpl implements FieldService {
 
-    private static final String DEFAULT_STATUS = "enabled";
-    private static final Set<String> ALLOWED_STATUSES = Set.of("enabled", "disabled", "deprecated");
+    private static final String STATUS_DRAFT = "draft";
+    private static final String STATUS_ENABLED = "enabled";
+    private static final String STATUS_DEPRECATED = "deprecated";
+    private static final String STATUS_DISABLED = "disabled";
+    private static final String DEFAULT_STATUS = STATUS_ENABLED;
+    private static final Set<String> ALLOWED_STATUSES = Set.of(STATUS_DRAFT, STATUS_ENABLED, STATUS_DEPRECATED, STATUS_DISABLED);
     private static final int DEFAULT_SUGGEST_LIMIT = 5;
     private static final int MAX_SUGGEST_LIMIT = 20;
     private static final int DEFAULT_SEARCH_LIMIT = 20;
@@ -164,6 +168,7 @@ public class FieldServiceImpl implements FieldService {
         }
         field.setNullable(field.getNullable() != null ? field.getNullable() : true);
         applyPersonalMetadataDefaults(field);
+        validateLifecycleReplacement(field, null);
         fieldRepository.insert(field);
         changeLogService.recordChange(
                 field.getProjectId(),
@@ -198,7 +203,10 @@ public class FieldServiceImpl implements FieldService {
         existing.setCodeSetId(field.getCodeSetId());
         existing.setSensitive(field.getSensitive() != null ? field.getSensitive() : false);
         existing.setStatus(normalizeStatus(field.getStatus()));
+        existing.setReplacementFieldId(field.getReplacementFieldId());
+        existing.setReplacementReason(FieldGroupingSummaries.normalizeText(field.getReplacementReason()));
         existing.setExampleValue(field.getExampleValue());
+        validateLifecycleReplacement(existing, id);
         fieldRepository.update(existing);
         changeLogService.recordChange(
                 existing.getProjectId(),
@@ -364,7 +372,7 @@ public class FieldServiceImpl implements FieldService {
         List<FieldSuggestion> suggestions = new ArrayList<>();
 
         for (Field field : fieldRepository.findAllByProjectId(projectId)) {
-            if ("disabled".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
+            if (!isEnabledStatus(field.getStatus())) {
                 continue;
             }
             ScoredMatch match = scoreFieldWithGlossary(field, queryCompact, queryTokens, querySemanticGroups, glossaryMatches);
@@ -372,9 +380,6 @@ public class FieldServiceImpl implements FieldService {
                 continue;
             }
             int score = match.score();
-            if ("deprecated".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
-                score = Math.max(1, score - 15);
-            }
             String reason = appendReason(match.reason(), Boolean.TRUE.equals(field.getSensitive()) ? "敏感字段" : "");
             suggestions.add(new FieldSuggestion(
                     field,
@@ -438,7 +443,7 @@ public class FieldServiceImpl implements FieldService {
     }
 
     private boolean matchesSearchFilters(Field field, SearchCriteria criteria, Set<Long> sourceFieldIds) {
-        if (criteria.status() == null && "disabled".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
+        if (criteria.status() == null && !isEnabledStatus(field.getStatus())) {
             return false;
         }
         if (criteria.category() != null && !criteria.category().equals(FieldGroupingSummaries.normalizeText(field.getCategory()))) {
@@ -474,9 +479,9 @@ public class FieldServiceImpl implements FieldService {
         } else {
             reasons.addAll(filterReasons(criteria));
         }
-        if ("deprecated".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
+        if (!isEnabledStatus(field.getStatus())) {
             score = Math.max(1, score - 15);
-            reasons.add("字段状态为 deprecated");
+            reasons.add("字段状态为 " + normalizeStatus(field.getStatus()));
         }
         if (Boolean.TRUE.equals(field.getSensitive())) {
             reasons.add("敏感字段");
@@ -522,8 +527,9 @@ public class FieldServiceImpl implements FieldService {
     }
 
     private String recommendedUse(Field field) {
-        if ("deprecated".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
-            return "谨慎使用：字段已废弃，优先查找替代字段或确认历史兼容原因。";
+        String status = normalizeStatus(field.getStatus());
+        if (!STATUS_ENABLED.equals(status)) {
+            return "谨慎使用：字段状态为 " + status + "，" + replacementGuidance(field);
         }
         if (Boolean.TRUE.equals(field.getSensitive())) {
             return "敏感字段：建表、导出或 AI Context 使用前确认脱敏和权限要求。";
@@ -535,11 +541,34 @@ public class FieldServiceImpl implements FieldService {
         return "可作为建表、SQL 修复或字段标准补全的候选标准字段。";
     }
 
+    private String replacementGuidance(Field field) {
+        Long replacementFieldId = field.getReplacementFieldId();
+        String replacementReason = FieldGroupingSummaries.normalizeText(field.getReplacementReason());
+        if (replacementFieldId != null && replacementReason != null) {
+            return "优先查看 replacementFieldId=" + replacementFieldId + "；" + replacementReason;
+        }
+        if (replacementFieldId != null) {
+            return "优先查看 replacementFieldId=" + replacementFieldId + " 对应的替代字段。";
+        }
+        if (replacementReason != null) {
+            return replacementReason;
+        }
+        return "尚未配置替代字段或替代说明，先确认历史兼容原因。";
+    }
+
     private List<String> itemNextActions(Field field) {
         List<String> actions = new ArrayList<>();
-        actions.add("优先采用标准字段名 `" + field.getName() + "`，并沿用其数据类型与注释。");
-        if ("deprecated".equalsIgnoreCase(nullToEmpty(field.getStatus()))) {
-            actions.add("确认是否存在替代字段；新建表不建议直接采用 deprecated 字段。");
+        String status = normalizeStatus(field.getStatus());
+        if (STATUS_ENABLED.equals(status)) {
+            actions.add("优先采用标准字段名 `" + field.getName() + "`，并沿用其数据类型与注释。");
+        } else {
+            actions.add("该字段状态为 `" + status + "`，新建表默认不要采用；" + replacementGuidance(field));
+        }
+        if (field.getReplacementFieldId() != null) {
+            actions.add("优先评估 replacementFieldId=" + field.getReplacementFieldId() + " 对应字段。");
+        }
+        if (FieldGroupingSummaries.normalizeText(field.getReplacementReason()) != null) {
+            actions.add("替代说明：" + FieldGroupingSummaries.normalizeText(field.getReplacementReason()));
         }
         if (Boolean.TRUE.equals(field.getSensitive())) {
             actions.add("如用于导出或日志，先确认脱敏规则和访问边界。");
@@ -588,6 +617,25 @@ public class FieldServiceImpl implements FieldService {
     private void applyPersonalMetadataDefaults(Field field) {
         field.setSensitive(field.getSensitive() != null ? field.getSensitive() : false);
         field.setStatus(normalizeStatus(field.getStatus()));
+        field.setReplacementReason(FieldGroupingSummaries.normalizeText(field.getReplacementReason()));
+    }
+
+    private void validateLifecycleReplacement(Field field, Long currentFieldId) {
+        Long replacementFieldId = field.getReplacementFieldId();
+        if (replacementFieldId == null) {
+            return;
+        }
+        if (replacementFieldId <= 0) {
+            throw new BizException("无效replacementFieldId: " + replacementFieldId);
+        }
+        if (currentFieldId != null && Objects.equals(currentFieldId, replacementFieldId)) {
+            throw new BizException("替代字段不能指向自身");
+        }
+        Field replacement = fieldRepository.findById(replacementFieldId)
+                .orElseThrow(() -> new BizException("替代字段不存在: " + replacementFieldId));
+        if (!Objects.equals(field.getProjectId(), replacement.getProjectId())) {
+            throw new BizException("替代字段不属于当前项目: " + replacementFieldId);
+        }
     }
 
     private void validateGroupingKeys(Map<String, Object> updates) {
@@ -780,6 +828,8 @@ public class FieldServiceImpl implements FieldService {
         target.setCodeSetId(snapshot.getCodeSetId());
         target.setSensitive(snapshot.getSensitive() != null ? snapshot.getSensitive() : false);
         target.setStatus(normalizeStatus(snapshot.getStatus()));
+        target.setReplacementFieldId(snapshot.getReplacementFieldId());
+        target.setReplacementReason(FieldGroupingSummaries.normalizeText(snapshot.getReplacementReason()));
         target.setExampleValue(snapshot.getExampleValue());
     }
 
@@ -844,6 +894,10 @@ public class FieldServiceImpl implements FieldService {
             throw new BizException("无效字段状态: " + status + "，允许值: " + ALLOWED_STATUSES);
         }
         return normalized;
+    }
+
+    private boolean isEnabledStatus(String status) {
+        return STATUS_ENABLED.equals(normalizeStatus(status));
     }
 
     private int normalizeLimit(int limit) {

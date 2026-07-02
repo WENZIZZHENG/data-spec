@@ -210,6 +210,9 @@ public class FieldQualityServiceImpl implements FieldQualityService {
     }
 
     private boolean lacksReplacementGuidance(Field field) {
+        if (field.getReplacementFieldId() != null || !isBlank(field.getReplacementReason())) {
+            return false;
+        }
         return !containsKeyword(combinedText(field), REPLACEMENT_KEYWORDS);
     }
 

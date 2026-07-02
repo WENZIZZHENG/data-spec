@@ -79,6 +79,38 @@ class StandardSnapshotServiceImplTest {
     }
 
     @Test
+    void createSnapshot_storesFieldLifecycleReplacement() throws Exception {
+        DataSpecSecurityContext.set(ApiTokenPrincipal.local());
+        StandardSnapshotRepository repository = mock(StandardSnapshotRepository.class);
+        FieldService fieldService = mock(FieldService.class);
+        EnumDictService enumDictService = mock(EnumDictService.class);
+        RuleConfigService ruleConfigService = mock(RuleConfigService.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        StandardSnapshotServiceImpl service = new StandardSnapshotServiceImpl(
+                repository,
+                fieldService,
+                enumDictService,
+                ruleConfigService,
+                objectMapper);
+        Field legacy = field(1L, "old_mobile_no");
+        legacy.setStatus("deprecated");
+        legacy.setReplacementFieldId(2L);
+        legacy.setReplacementReason("历史兼容字段，改用 mobile_no");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(legacy));
+        when(enumDictService.listByProject(1L)).thenReturn(List.of());
+        when(ruleConfigService.listByProject(1L)).thenReturn(List.of());
+
+        service.createSnapshot(1L, new StandardSnapshotCreateReq("v-lifecycle", null, null));
+
+        ArgumentCaptor<StandardSnapshot> captor = ArgumentCaptor.forClass(StandardSnapshot.class);
+        verify(repository).save(captor.capture());
+        var fieldNode = objectMapper.readTree(captor.getValue().getPayloadJson()).path("fields").get(0);
+        assertEquals("deprecated", fieldNode.path("status").asText());
+        assertEquals(2L, fieldNode.path("replacementFieldId").asLong());
+        assertEquals("历史兼容字段，改用 mobile_no", fieldNode.path("replacementReason").asText());
+    }
+
+    @Test
     void createSnapshot_reusesResultForSameIdempotencyKey() {
         DataSpecSecurityContext.set(ApiTokenPrincipal.local());
         StandardSnapshotRepository repository = mock(StandardSnapshotRepository.class);

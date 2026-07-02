@@ -168,6 +168,31 @@ class AiContextExportServiceTest {
     }
 
     @Test
+    void generateAiContextPackage_exportsFieldLifecycleReplacement() throws Exception {
+        Field legacy = sampleField("old_mobile_no", "旧手机号", "contact", "pii", "phone,mobile");
+        legacy.setId(1L);
+        legacy.setStatus("deprecated");
+        legacy.setReplacementFieldId(2L);
+        legacy.setReplacementReason("历史兼容字段，改用 mobile_no");
+        AiContextExportService service = createService(List.of(legacy));
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(PROJECT_ID));
+
+        ObjectMapper mapper = new ObjectMapper();
+        var catalog = mapper.readTree(entries.get(".dataspec/field-catalog.json"));
+        var field = catalog.path("fields").get(0);
+        assertEquals("deprecated", field.path("status").asText());
+        assertEquals(2L, field.path("replacementFieldId").asLong());
+        assertEquals("历史兼容字段，改用 mobile_no", field.path("replacementReason").asText());
+
+        var schema = mapper.readTree(entries.get(".dataspec/field-catalog.schema.json"));
+        var fieldProperties = schema.path("properties").path("fields").path("items").path("properties");
+        assertTrue(fieldProperties.has("replacementFieldId"));
+        assertTrue(fieldProperties.has("replacementReason"));
+        assertTrue(fieldProperties.path("status").path("enum").toString().contains("draft"));
+    }
+
+    @Test
     void generateAiContextPackageAiContract_exposesStableContextFields() throws Exception {
         AiContextExportService service = createService();
 

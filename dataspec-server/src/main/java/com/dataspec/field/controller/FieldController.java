@@ -150,6 +150,8 @@ public class FieldController {
         field.setCodeSetId(req.codeSetId());
         field.setSensitive(req.sensitive());
         field.setStatus(req.status());
+        field.setReplacementFieldId(req.replacementFieldId());
+        field.setReplacementReason(req.replacementReason());
         field.setExampleValue(req.exampleValue());
         return R.ok(fieldService.create(field));
     }
@@ -175,6 +177,8 @@ public class FieldController {
         field.setCodeSetId(req.codeSetId());
         field.setSensitive(req.sensitive());
         field.setStatus(req.status());
+        field.setReplacementFieldId(req.replacementFieldId());
+        field.setReplacementReason(req.replacementReason());
         field.setExampleValue(req.exampleValue());
         return R.ok(fieldService.update(id, field));
     }
@@ -205,6 +209,8 @@ public class FieldController {
             Long codeSetId,
             Boolean sensitive,
             String status,
+            Long replacementFieldId,
+            String replacementReason,
             String exampleValue
     ) {}
 }

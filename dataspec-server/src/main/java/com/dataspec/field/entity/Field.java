@@ -66,8 +66,16 @@ public class Field {
     /** 是否敏感字段 */
     private Boolean sensitive;
 
-    /** 字段状态: enabled/disabled/deprecated */
+    /** 字段状态: draft/enabled/deprecated/disabled */
     private String status;
+
+    /** 生命周期替代字段 ID，仅允许指向同项目标准字段 */
+    @TableField("replacement_field_id")
+    private Long replacementFieldId;
+
+    /** 生命周期替代说明、迁移建议或历史兼容原因 */
+    @TableField("replacement_reason")
+    private String replacementReason;
 
     /** 示例值 */
     @TableField("example_value")

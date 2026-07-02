@@ -19,7 +19,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 ### 标准维护
 
 - 项目空间管理，创建项目时可导入内置 standards，可选择用户账号、订单交易、支付金额、库存商品和审计日志等领域 Starter Kit，并支持一键创建演示项目。
-- 标准字段库，支持别名、分类、代码集关联、敏感标记、状态、示例值、分组筛选、批量归组、批量维护和字段标准检索命中原因展示。
+- 标准字段库，支持别名、分类、代码集关联、敏感标记、生命周期状态、替代字段/说明、示例值、分组筛选、批量归组、批量维护和字段标准检索命中原因展示。
 - 业务术语表，支持项目级术语、同义词、英文词根、拼音/历史缩写、禁用词、canonical 字段、适用范围和示例字段维护；冲突检测会提示重复术语、禁用词冲突和不可用 canonical 字段。
 - 标准候选 Inbox，支持手动创建候选、按状态/来源/关键词筛选、采纳为新字段、合并到已有字段、忽略或延后处理。
 - 字段质量评分，按注释、别名、示例、分类、敏感标识、代码集和废弃说明识别低质量字段。
@@ -54,7 +54,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 
 ### AI 与自动化
 
-- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、项目级业务术语表、规则、项目规则例外、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包，也支持按历史标准快照导出可复现上下文，并可写入业务仓库 `.dataspec/context/` 离线缓存。来自 Starter Kit 的字段会在字段目录中暴露 kit key/version 来源，方便 AI 判断领域模板出处。
+- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、项目级业务术语表、规则、项目规则例外、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包，也支持按历史标准快照导出可复现上下文，并可写入业务仓库 `.dataspec/context/` 离线缓存。字段目录会导出生命周期状态和可选替代字段/说明；来自 Starter Kit 的字段会在字段目录中暴露 kit key/version 来源，方便 AI 判断领域模板出处。
 - AI 能力清单，提供只读 `/api/capabilities` 和 `/api/capabilities/{id}`，稳定描述 API/CLI/MCP/前端入口、输入输出契约、preflightChecks、writeRisk、示例和 nextActions；能力清单不会执行任务，也不替代鉴权或 dry-run。
 - AI Context manifest、字段目录和规则文件携带标准快照版本、hash 与来源 `source=current|snapshot|unversioned`；`rules.yaml` 还会标明当前规则基线 key/name/version/source/appliedAt；未创建快照时标记为 `unversioned`。
 - AI 任务模式，内置 `create-table`、`sql-fix`、`reverse-import`、`pr-review`、`minimal-context`，用于给 AI/CLI/MCP 提供上下文范围、fixedSql 策略、输出格式和推荐命令的默认建议。
@@ -229,7 +229,7 @@ curl -X POST "http://localhost:8090/api/projects/1/standard-snapshots" \
 
 ## 标准字段模型
 
-标准字段支持 `aliases`、`category`、`domainId`、`tags`、`codeSetId`、`sensitive`、`status`、`exampleValue` 等个人版元数据。字段库支持按数据域、分类、标签和未分组状态浏览字段，并可对选中字段批量设置或清空数据域、分类和标签；也支持批量维护状态、分类、标签、敏感标记、代码集和别名，提交前会先展示后端预览。每次批量维护都会写入字段变更日志，字段行内“变更”入口可查看最近日志，并对带 before 快照的更新记录执行确认回退。AI 导出的 `field-catalog.json` 会把 `aliases` 转成数组，并输出敏感标记、字段状态、代码集关联、示例值和可选 `contextScope.groupSummary`，方便 AI 按业务语义复用标准字段并识别未分组字段。
+标准字段支持 `aliases`、`category`、`domainId`、`tags`、`codeSetId`、`sensitive`、`status=draft|enabled|deprecated|disabled`、`replacementFieldId`、`replacementReason`、`exampleValue` 等个人版元数据。字段库支持按数据域、分类、标签、生命周期状态和未分组状态浏览字段；编辑字段时可维护替代字段或替代说明，并可对选中字段批量设置或清空数据域、分类和标签。批量维护支持状态、分类、标签、敏感标记、代码集和别名，提交前会先展示后端预览。每次批量维护和字段更新都会写入字段变更日志，字段行内“变更”入口可查看最近日志，并对带 before 快照的更新记录执行确认回退。AI 导出的 `field-catalog.json` 会把 `aliases` 转成数组，并输出敏感标记、字段状态、替代字段/说明、代码集关联、示例值和可选 `contextScope.groupSummary`，方便 AI 按业务语义复用标准字段、避开草稿/废弃/停用字段并识别未分组字段。
 
 前端“基础数据 / 业务术语表”提供项目级 glossary 维护入口。每条术语可配置主术语、同义词、英文词根、拼音或历史缩写、禁用词、推荐 canonical 字段、适用范围、示例字段和状态；后端提供 `/api/glossary` 分页、`/api/glossary/all`、`/api/glossary/conflicts`、创建、更新和软删除接口。第一版只做确定性匹配和轻量冲突检测，不做企业级本体、知识图谱、向量检索或自动覆盖字段已有别名。
 
@@ -346,7 +346,7 @@ curl -X POST "http://localhost:8090/api/requirement-drafts" \
 curl "http://localhost:8090/api/fields/suggest?projectId=1&query=用户手机号&limit=5"
 ```
 
-推荐结果会返回已有标准字段、匹配分数、命中原因、推荐字段名、`existing` 标记和 `evidence[]`。当前推荐逻辑按字段名、显示名、注释、别名、分类、标签、业务术语表和内置语义词库匹配，覆盖 `uid/user_id`、`phone/mobile/tel/mobile_no`、`amount/price/fee/amount_cent`、`sfzh/id_card_no` 等常见叫法；泛化词会降权，敏感字段会在命中原因里提示。术语表命中 canonical 字段或示例字段时，命中原因会包含 `术语表：<术语> -> <字段>`；禁用词不会作为正向加权依据。未命中已有字段但命中已知语义组时，会优先生成 canonical snake_case fallback 字段名。
+推荐结果会返回已有标准字段、匹配分数、命中原因、推荐字段名、`existing` 标记和 `evidence[]`。当前推荐逻辑按字段名、显示名、注释、别名、分类、标签、业务术语表和内置语义词库匹配，覆盖 `uid/user_id`、`phone/mobile/tel/mobile_no`、`amount/price/fee/amount_cent`、`sfzh/id_card_no` 等常见叫法；默认只推荐 `enabled` 字段，草稿、废弃和停用字段不会作为 AI 既有字段推荐返回。泛化词会降权，敏感字段会在命中原因里提示。术语表命中 canonical 字段或示例字段时，命中原因会包含 `术语表：<术语> -> <字段>`；禁用词不会作为正向加权依据。未命中已有字段但命中已知语义组时，会优先生成 canonical snake_case fallback 字段名。
 
 当 AI 或用户需要先查看一组相关标准字段时，可使用只读字段标准检索：
 
@@ -355,7 +355,7 @@ curl "http://localhost:8090/api/fields/search?projectId=1&query=用户手机号&
 curl "http://localhost:8090/api/fields/search?projectId=1&category=user&status=enabled&limit=20"
 ```
 
-检索结果会返回 `summary`、`items[]` 和 `nextActions`。每个 item 包含标准字段、确定性分数、`matchReasons`、推荐使用范围、字段级下一步建议和 `evidence[]`；支持关键词、中文描述、别名、拼音缩写、业务术语表、category、tag、status、sensitive 和 sourceBatchId 过滤。省略 query 且不提供任何结构化过滤时会返回校验错误，避免 AI 一次性拉取整个字段库。前端字段库的搜索框和 category/tag 分组会复用该检索结果并展示命中原因；清空搜索条件后仍使用原有字段列表。
+检索结果会返回 `summary`、`items[]` 和 `nextActions`。每个 item 包含标准字段、确定性分数、`matchReasons`、推荐使用范围、字段级下一步建议和 `evidence[]`；支持关键词、中文描述、别名、拼音缩写、业务术语表、category、tag、status、sensitive 和 sourceBatchId 过滤。默认检索只返回 `enabled` 字段；显式传 `status=draft|deprecated|disabled` 时，会返回对应历史字段并在 `recommendedUse`/`nextActions` 中说明状态、替代字段或替代原因。省略 query 且不提供任何结构化过滤时会返回校验错误，避免 AI 一次性拉取整个字段库。前端字段库的搜索框、生命周期状态筛选和 category/tag 分组会复用该检索结果并展示命中原因；清空搜索条件后仍使用原有字段列表。
 
 ## DDL 生成
 
@@ -432,7 +432,7 @@ curl -X POST "http://localhost:8090/api/coverage/sql" \
 curl "http://localhost:8090/api/fields/quality?projectId=1"
 ```
 
-第一版实时计算，不新增质量评分表，不自动修改字段标准，不调用外部 LLM。当前检查项覆盖缺注释、缺别名、缺示例值、缺分类/标签、疑似敏感未标记、枚举/状态字段未关联代码集、废弃/停用字段缺少替代说明。
+第一版实时计算，不新增质量评分表，不自动修改字段标准，不调用外部 LLM。当前检查项覆盖缺注释、缺别名、缺示例值、缺分类/标签、疑似敏感未标记、枚举/状态字段未关联代码集、废弃/停用字段缺少替代说明；若字段已配置结构化 `replacementFieldId` 或 `replacementReason`，不会再按“缺少替代说明”报问题。
 
 ## 字段冲突检测
 

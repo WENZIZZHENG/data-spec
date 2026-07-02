@@ -44,7 +44,7 @@ public class StandardChangePreviewServiceImpl implements StandardChangePreviewSe
     private static final String RISK_WARNING = "WARNING";
     private static final String RISK_HIGH = "HIGH";
     private static final Set<String> CRITICAL_FIELD_ATTRIBUTES = Set.of(
-            "name", "dataType", "status", "aliases", "codeSetId", "sensitive");
+            "name", "dataType", "status", "replacementFieldId", "replacementReason", "aliases", "codeSetId", "sensitive");
 
     private final FieldService fieldService;
     private final FieldImpactService fieldImpactService;
@@ -149,6 +149,8 @@ public class StandardChangePreviewServiceImpl implements StandardChangePreviewSe
         addChange(changes, "codeSetId", existing.getCodeSetId(), req.codeSetId(), "代码集会影响枚举语义和 AI 输出");
         addChange(changes, "sensitive", existing.getSensitive(), req.sensitive(), "敏感标记会影响 AI Context 和导出提示");
         addChange(changes, "status", existing.getStatus(), req.status(), "状态会影响 AI 是否继续推荐该字段");
+        addChange(changes, "replacementFieldId", existing.getReplacementFieldId(), req.replacementFieldId(), "替代字段会影响 AI 是否采用废弃或停用字段");
+        addChange(changes, "replacementReason", existing.getReplacementReason(), req.replacementReason(), "替代说明会影响 AI 对历史字段的迁移判断");
         addChange(changes, "exampleValue", existing.getExampleValue(), req.exampleValue(), "示例值会影响 AI 示例和数据字典");
         return changes;
     }

@@ -686,8 +686,15 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
     'fieldSearchSummary',
     'fieldSearchItems',
     'fieldSearchNextActions',
+    'fieldStatusFilter',
+    'lifecycleStatusOptions',
+    'replacementFieldOptions',
+    'replacementSummary(row)',
     '命中原因',
     '下一步建议',
+    '替代字段',
+    '替代说明',
+    "value: 'draft'",
     'listFields(projectId)',
     'getFieldGroupSummary(projectId)',
     'previewFieldBulkUpdate(payload)',
@@ -964,7 +971,7 @@ test('keeps critical action labels and empty states visible', () => {
     },
     {
       path: 'src/views/FieldLibrary.vue',
-      snippets: ['搜索字段名、显示名、别名、分类或注释', '批量维护', '暂无标准字段', '暂无字段变更', '回退字段变更']
+      snippets: ['搜索字段名、显示名、别名、分类、注释或替代说明', '替代字段', '替代说明', '批量维护', '暂无标准字段', '暂无字段变更', '回退字段变更']
     },
     {
       path: 'src/views/Generator.vue',

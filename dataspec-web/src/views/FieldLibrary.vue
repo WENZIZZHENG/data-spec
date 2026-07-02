@@ -29,8 +29,16 @@
           v-model="fieldKeyword"
           :prefix-icon="Search"
           clearable
-          placeholder="搜索字段名、显示名、别名、分类或注释"
+          placeholder="搜索字段名、显示名、别名、分类、注释或替代说明"
         />
+        <el-select v-model="fieldStatusFilter" clearable class="status-filter" placeholder="全部状态">
+          <el-option
+            v-for="option in lifecycleStatusOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
         <div class="toolbar-actions">
           <span class="toolbar-count">匹配 {{ filteredFields.length }} / {{ fields.length }}</span>
           <el-button :disabled="selectedFields.length === 0" @click="openBatchDialog">
@@ -124,11 +132,14 @@
               <el-tag v-else type="info" size="small">否</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="100">
+          <el-table-column label="状态" width="160">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ statusText(row.status) }}
               </el-tag>
+              <div v-if="replacementSummary(row)" class="muted-text lifecycle-hint">
+                {{ replacementSummary(row) }}
+              </div>
             </template>
           </el-table-column>
           <el-table-column prop="comment" label="注释" min-width="220" show-overflow-tooltip />
@@ -229,9 +240,12 @@
           <el-col :span="8">
             <el-form-item label="状态">
               <el-select v-model="form.status" class="full-width">
-                <el-option label="启用" value="enabled" />
-                <el-option label="停用" value="disabled" />
-                <el-option label="废弃" value="deprecated" />
+                <el-option
+                  v-for="option in lifecycleStatusOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
               </el-select>
             </el-form-item>
           </el-col>
@@ -263,6 +277,32 @@
           <el-col :span="8">
             <el-form-item label="示例值">
               <el-input v-model="form.exampleValue" placeholder="13800138000" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="替代字段">
+              <el-select
+                v-model="form.replacementFieldId"
+                clearable
+                filterable
+                class="full-width"
+                placeholder="选择同项目字段"
+              >
+                <el-option
+                  v-for="field in replacementFieldOptions"
+                  :key="field.id"
+                  :label="replacementFieldLabel(field)"
+                  :value="field.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="替代说明">
+              <el-input v-model="form.replacementReason" clearable placeholder="历史兼容字段，改用 mobile_no" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -335,9 +375,12 @@
               <el-form-item>
                 <el-checkbox v-model="bulkForm.applyStatus">状态</el-checkbox>
                 <el-select v-model="bulkForm.status" class="bulk-input">
-                  <el-option label="启用" value="enabled" />
-                  <el-option label="停用" value="disabled" />
-                  <el-option label="废弃" value="deprecated" />
+                  <el-option
+                    v-for="option in lifecycleStatusOptions"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
+                  />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -622,6 +665,7 @@ const fields = ref<Field[]>([])
 const groupSummary = ref<FieldGroupSummary | null>(null)
 const domains = ref<Domain[]>([])
 const fieldKeyword = ref(routeKeyword(route.query.keyword))
+const fieldStatusFilter = ref('')
 const fieldSearchItems = ref<FieldSearchItem[]>([])
 const fieldSearchSummary = ref<FieldSearchSummary | null>(null)
 const fieldSearchNextActions = ref<string[]>([])
@@ -701,6 +745,13 @@ const dataTypeOptions = [
   'jsonb'
 ]
 
+const lifecycleStatusOptions = [
+  { label: '草稿', value: 'draft' },
+  { label: '启用', value: 'enabled' },
+  { label: '废弃', value: 'deprecated' },
+  { label: '停用', value: 'disabled' }
+]
+
 const form = reactive<FieldReq>({
   projectId: 0,
   name: '',
@@ -719,6 +770,8 @@ const form = reactive<FieldReq>({
   codeSetId: undefined,
   sensitive: false,
   status: 'enabled',
+  replacementFieldId: undefined,
+  replacementReason: '',
   exampleValue: ''
 })
 
@@ -750,7 +803,10 @@ const groupOptions = computed(() => [
   }))
 ])
 const hasFieldSearchConditions = computed(() =>
-  Boolean(fieldKeyword.value.trim()) || isSearchableGroupKey(activeGroupKey.value) || Boolean(sourceBatchIdFilter.value)
+  Boolean(fieldKeyword.value.trim())
+    || Boolean(fieldStatusFilter.value)
+    || isSearchableGroupKey(activeGroupKey.value)
+    || Boolean(sourceBatchIdFilter.value)
 )
 const fieldSearchHints = computed(() => fieldSearchSummary.value?.hints?.filter(Boolean) ?? [])
 const fieldSearchItemByFieldId = computed(() => {
@@ -766,16 +822,17 @@ const fieldSearchItemByFieldId = computed(() => {
 const filteredFields = computed(() => {
   const keyword = fieldKeyword.value.trim().toLowerCase()
   if (hasFieldSearchConditions.value) {
-    return fields.value.filter((field) => matchesActiveGroup(field))
+    return fields.value.filter((field) => matchesActiveGroup(field) && matchesFieldStatus(field))
   }
   return fields.value.filter((field) =>
-    matchesActiveGroup(field) && (!keyword || [
+    matchesActiveGroup(field) && matchesFieldStatus(field) && (!keyword || [
         field.name,
         field.displayName,
         field.aliases,
         field.category,
         field.tags,
         field.comment,
+        field.replacementReason,
         field.dataType,
         fieldGroupLabel(field)
       ]
@@ -788,6 +845,10 @@ const pagedFields = computed(() => {
   return filteredFields.value.slice(start, start + pagination.size)
 })
 const bulkChangedItems = computed(() => bulkPreview.value?.items?.filter((item) => item.changed) ?? [])
+const replacementFieldOptions = computed(() =>
+  fields.value.filter((field): field is Field & { id: number } =>
+    typeof field.id === 'number' && field.id !== editingField.value?.id)
+)
 
 onMounted(() => {
   if (projectStore.projects.length === 0) {
@@ -817,7 +878,7 @@ watch(
   }
 )
 
-watch([fieldKeyword, activeGroupKey], () => {
+watch([fieldKeyword, fieldStatusFilter, activeGroupKey], () => {
   pagination.current = 1
   selectedFields.value = []
   void syncFieldUrlState({ fieldId: null })
@@ -922,7 +983,10 @@ function buildFieldSearchRequest(projectId: number): FieldSearchReq | null {
   if (sourceBatchIdFilter.value) {
     request.sourceBatchId = sourceBatchIdFilter.value
   }
-  return request.query || request.category || request.tag || request.sourceBatchId ? request : null
+  if (fieldStatusFilter.value) {
+    request.status = fieldStatusFilter.value
+  }
+  return request.query || request.category || request.tag || request.status || request.sourceBatchId ? request : null
 }
 
 function handleSizeChange(size: number) {
@@ -1139,6 +1203,8 @@ function resetForm(field?: Field) {
   form.codeSetId = field?.codeSetId
   form.sensitive = field?.sensitive ?? false
   form.status = field?.status ?? 'enabled'
+  form.replacementFieldId = field?.replacementFieldId
+  form.replacementReason = field?.replacementReason ?? ''
   form.exampleValue = field?.exampleValue ?? ''
   formRef.value?.clearValidate()
 }
@@ -1433,6 +1499,10 @@ function matchesActiveGroup(field: Field) {
   return true
 }
 
+function matchesFieldStatus(field: Field) {
+  return !fieldStatusFilter.value || field.status === fieldStatusFilter.value
+}
+
 function fieldSearchReasons(field: Field) {
   const id = field.id
   if (typeof id !== 'number') {
@@ -1458,6 +1528,18 @@ function fieldGroupLabel(field: Field) {
     parts.push(field.category)
   }
   return parts.length > 0 ? parts.join(' / ') : '未分组'
+}
+
+function replacementFieldLabel(field: Field) {
+  return `${field.name ?? '-'}${field.displayName ? `（${field.displayName}）` : ''}`
+}
+
+function replacementSummary(field: Field) {
+  if (field.replacementFieldId) {
+    const replacement = fields.value.find((item) => item.id === field.replacementFieldId)
+    return replacement ? `替代：${replacement.name}` : `替代：#${field.replacementFieldId}`
+  }
+  return field.replacementReason ? `说明：${field.replacementReason}` : ''
 }
 
 function domainNameById(value?: string) {
@@ -1494,6 +1576,9 @@ function formatDataType(field: Field) {
 }
 
 function statusText(status?: string) {
+  if (status === 'draft') {
+    return '草稿'
+  }
   if (status === 'disabled') {
     return '停用'
   }
@@ -1504,6 +1589,9 @@ function statusText(status?: string) {
 }
 
 function statusTagType(status?: string) {
+  if (status === 'draft') {
+    return 'primary'
+  }
   if (status === 'disabled') {
     return 'info'
   }
@@ -1527,6 +1615,8 @@ function bulkAttributeText(attribute?: string) {
     nullable: '空值',
     comment: '注释',
     domainId: '数据域',
+    replacementFieldId: '替代字段',
+    replacementReason: '替代说明',
     exampleValue: '示例'
   }
   return attribute ? labels[attribute] ?? attribute : '-'
@@ -1595,6 +1685,8 @@ function changeLogSummary(log: StandardChangeLog) {
     'displayName',
     'dataType',
     'status',
+    'replacementFieldId',
+    'replacementReason',
     'category',
     'tags',
     'sensitive',
@@ -1715,10 +1807,14 @@ function routeFieldId() {
 
 .field-toolbar {
   display: grid;
-  grid-template-columns: minmax(240px, 420px) 1fr;
+  grid-template-columns: minmax(240px, 420px) 136px 1fr;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.status-filter {
+  width: 136px;
 }
 
 .toolbar-actions {
@@ -1885,9 +1981,20 @@ function routeFieldId() {
   font-size: 12px;
 }
 
+.lifecycle-hint {
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 640px) {
   .field-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .status-filter {
+    width: 100%;
   }
 
   .toolbar-actions {
