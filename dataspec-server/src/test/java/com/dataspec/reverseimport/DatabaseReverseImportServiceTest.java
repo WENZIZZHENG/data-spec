@@ -91,6 +91,16 @@ class DatabaseReverseImportServiceTest {
         DatabaseConnectionResult result = service.testConnection(req);
 
         assertThat(result.success()).isTrue();
+        assertThat(result.health()).isNotNull();
+        assertThat(result.health().connectionStatus()).isEqualTo("CONNECTED");
+        assertThat(result.health().latencyMs()).isNotNull();
+        assertThat(result.health().dialect()).isEqualTo("POSTGRESQL");
+        assertThat(result.health().capability().schemaSupport()).isEqualTo("SUPPORTED");
+        assertThat(result.health().capability().commentSupport()).isEqualTo("SUPPORTED");
+        assertThat(result.health().capability().indexSupport()).isEqualTo("SUPPORTED");
+        assertThat(result.health().retryable()).isNull();
+        assertThat(result.health().requiredPrivileges()).contains("CONNECT", "USAGE", "SELECT");
+        assertThat(result.health().nextActions()).contains("可以继续加载表、反向导入、二次比对或覆盖率报告。");
         DatabaseConnectionSecurityDiagnostic security = result.security();
         assertThat(security).isNotNull();
         assertThat(security.databaseType()).isEqualTo("POSTGRESQL");
@@ -241,8 +251,68 @@ class DatabaseReverseImportServiceTest {
 
         assertThat(result.success()).isFalse();
         assertThat(result.security()).isNull();
+        assertThat(result.health()).isNotNull();
+        assertThat(result.health().connectionStatus()).isEqualTo("FAILED");
+        assertThat(result.health().failureCategory()).isEqualTo("AUTHENTICATION");
+        assertThat(result.health().retryable()).isTrue();
+        assertThat(result.health().nextActions()).anyMatch(action -> action.contains("用户名或密码"));
         assertThat(result.message()).contains("[REDACTED]");
         assertThat(result.message()).doesNotContain("top-secret", "jdbc:postgresql://localhost:5432/demo", "token123");
+        assertThat(result.health().message()).doesNotContain("top-secret", "jdbc:postgresql://localhost:5432/demo", "token123");
+    }
+
+    @Test
+    void testConnection_classifiesFailureHealthDiagnostics() {
+        List<FailureCase> cases = List.of(
+                new FailureCase("postgresql",
+                        "connect timed out to jdbc:postgresql://localhost:5432/demo Bearer token123",
+                        "NETWORK",
+                        true,
+                        "网络",
+                        "SUPPORTED"),
+                new FailureCase("postgresql",
+                        "database demo does not exist Bearer token123",
+                        "SCHEMA_NOT_FOUND",
+                        true,
+                        "数据库名",
+                        "SUPPORTED"),
+                new FailureCase("mysql",
+                        "permission denied for table user_order Bearer token123",
+                        "PERMISSION_DENIED",
+                        true,
+                        "只读 metadata",
+                        "SUPPORTED"),
+                new FailureCase("sqlite",
+                        "driver not found Bearer token123",
+                        "UNSUPPORTED_DIALECT",
+                        false,
+                        "只支持 PostgreSQL/MySQL",
+                        "UNSUPPORTED")
+        );
+
+        for (FailureCase item : cases) {
+            DatabaseConnectionReq req = connectionReq();
+            req.setDatabaseType(item.databaseType());
+            req.setPassword("top-secret");
+            DatabaseReverseImportServiceImpl service = new DatabaseReverseImportServiceImpl(
+                    mock(com.dataspec.reverseimport.service.ReverseImportService.class),
+                    ignored -> {
+                        throw new SQLException(item.rawMessage());
+                    });
+
+            DatabaseConnectionResult result = service.testConnection(req);
+
+            assertThat(result.success()).isFalse();
+            assertThat(result.security()).isNull();
+            assertThat(result.health().connectionStatus()).isEqualTo("FAILED");
+            assertThat(result.health().failureCategory()).isEqualTo(item.category());
+            assertThat(result.health().retryable()).isEqualTo(item.retryable());
+            assertThat(result.health().capability().schemaSupport()).isEqualTo(item.schemaSupport());
+            assertThat(result.health().nextActions()).anyMatch(action -> action.contains(item.nextActionKeyword()));
+            assertThat(result.message()).contains("[REDACTED]");
+            assertThat(result.message()).doesNotContain("top-secret", "jdbc:postgresql://localhost:5432/demo", "token123");
+            assertThat(result.health().message()).doesNotContain("top-secret", "jdbc:postgresql://localhost:5432/demo", "token123");
+        }
     }
 
     @Test
@@ -497,5 +567,13 @@ class DatabaseReverseImportServiceTest {
         field.setName(name);
         field.setAliases(aliases);
         return field;
+    }
+
+    private record FailureCase(String databaseType,
+                               String rawMessage,
+                               String category,
+                               boolean retryable,
+                               String nextActionKeyword,
+                               String schemaSupport) {
     }
 }

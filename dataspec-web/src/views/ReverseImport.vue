@@ -150,31 +150,66 @@
                     加载表
                   </el-button>
                 </div>
-                <div v-if="connectionSecurity" class="security-diagnostic">
-                  <div class="security-header">
+                <div v-if="connectionSecurity || connectionHealth" class="security-diagnostic">
+                  <div v-if="connectionHealth" class="security-section">
+                    <div class="security-header">
+                      <span>连接健康画像</span>
+                      <el-tag :type="connectionStatusTagType(connectionHealth.connectionStatus)" effect="plain">
+                        {{ connectionStatusLabel(connectionHealth.connectionStatus) }}
+                      </el-tag>
+                    </div>
+                    <div class="security-summary">{{ databaseHealthSummary(connectionHealth) }}</div>
+                    <div class="security-meta">
+                      <span v-if="connectionHealth.failureCategory">失败分类：{{ failureCategoryLabel(connectionHealth.failureCategory) }}</span>
+                      <span v-if="connectionHealth.latencyMs !== undefined">耗时：{{ connectionHealth.latencyMs }}ms</span>
+                      <span v-if="connectionHealth.connectionStatus === 'FAILED'">{{ retryableLabel(connectionHealth.retryable) }}</span>
+                      <span>{{ metadataReadableLabel(connectionHealth.capability?.metadataReadable) }}</span>
+                    </div>
+                    <div v-if="connectionHealth.capability" class="security-meta">
+                      <span>Schema：{{ capabilitySupportLabel(connectionHealth.capability.schemaSupport) }}</span>
+                      <span>Comment：{{ capabilitySupportLabel(connectionHealth.capability.commentSupport) }}</span>
+                      <span>Index：{{ capabilitySupportLabel(connectionHealth.capability.indexSupport) }}</span>
+                    </div>
+                    <div v-if="connectionHealth.requiredPrivileges?.length" class="security-line">
+                      所需权限：{{ connectionHealth.requiredPrivileges.join('、') }}
+                    </div>
+                    <div v-if="connectionHealth.warnings?.length" class="security-list">
+                      <div v-for="warning in connectionHealth.warnings" :key="warning" class="security-line">
+                        {{ warning }}
+                      </div>
+                    </div>
+                    <div v-if="connectionHealth.nextActions?.length" class="security-list">
+                      <div v-for="action in connectionHealth.nextActions" :key="action" class="security-line muted">
+                        {{ action }}
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="connectionSecurity" class="security-section">
+                    <div class="security-header">
                     <span>只读安全诊断</span>
                     <el-tag :type="securityRiskTagType(connectionSecurity.riskLevel)" effect="plain">
                       {{ securityRiskLabel(connectionSecurity.riskLevel) }}
                     </el-tag>
-                  </div>
-                  <div class="security-summary">{{ databaseSecuritySummary(connectionSecurity) }}</div>
-                  <div class="security-meta">
-                    <span>{{ readOnlyLabel(connectionSecurity.readOnly) }}</span>
-                    <span>{{ writeRiskLabel(connectionSecurity.writeRisk) }}</span>
-                    <span>{{ connectionSecurity.accessibleSchemaCount ?? 0 }} 个 schema</span>
-                    <span>{{ connectionSecurity.accessibleTableCount ?? 0 }} 张表</span>
-                  </div>
-                  <div v-if="connectionSecurity.warnings?.length" class="security-list">
-                    <div v-for="warning in connectionSecurity.warnings" :key="warning" class="security-line">
-                      {{ warning }}
                     </div>
-                  </div>
-                  <div v-if="connectionSecurity.recommendedActions?.length" class="security-list">
-                    <div v-for="action in connectionSecurity.recommendedActions" :key="action" class="security-line muted">
-                      {{ action }}
+                    <div class="security-summary">{{ databaseSecuritySummary(connectionSecurity) }}</div>
+                    <div class="security-meta">
+                      <span>{{ readOnlyLabel(connectionSecurity.readOnly) }}</span>
+                      <span>{{ writeRiskLabel(connectionSecurity.writeRisk) }}</span>
+                      <span>{{ connectionSecurity.accessibleSchemaCount ?? 0 }} 个 schema</span>
+                      <span>{{ connectionSecurity.accessibleTableCount ?? 0 }} 张表</span>
                     </div>
+                    <div v-if="connectionSecurity.warnings?.length" class="security-list">
+                      <div v-for="warning in connectionSecurity.warnings" :key="warning" class="security-line">
+                        {{ warning }}
+                      </div>
+                    </div>
+                    <div v-if="connectionSecurity.recommendedActions?.length" class="security-list">
+                      <div v-for="action in connectionSecurity.recommendedActions" :key="action" class="security-line muted">
+                        {{ action }}
+                      </div>
+                    </div>
+                    <pre v-if="connectionSecurity.recommendedSql?.length" class="security-sql">{{ connectionSecurity.recommendedSql.join('\n') }}</pre>
                   </div>
-                  <pre v-if="connectionSecurity.recommendedSql?.length" class="security-sql">{{ connectionSecurity.recommendedSql.join('\n') }}</pre>
                 </div>
               </div>
 
@@ -538,8 +573,15 @@ import {
   dialectSummary
 } from '@/utils/dialectDiagnostics'
 import {
+  capabilitySupportLabel,
+  connectionStatusLabel,
+  connectionStatusTagType,
+  databaseHealthSummary,
   databaseSecuritySummary,
+  failureCategoryLabel,
+  metadataReadableLabel,
   readOnlyLabel,
+  retryableLabel,
   securityRiskLabel,
   securityRiskTagType,
   writeRiskLabel
@@ -547,6 +589,7 @@ import {
 import { copyRouteUrl, readEnumQuery, readPositiveIntQuery, readStringQuery, replaceRouteQuery } from '@/utils/urlState'
 import type {
   DatabaseConnectionReq,
+  DatabaseConnectionHealthDiagnostic,
   DatabaseConnectionPreset,
   DatabaseConnectionPresetReq,
   DatabaseConnectionSecurityDiagnostic,
@@ -590,6 +633,7 @@ const tableSearch = ref('')
 const connectionStatus = ref<ConnectionStatus>('idle')
 const connectionMessage = ref('')
 const connectionSecurity = ref<DatabaseConnectionSecurityDiagnostic | null>(null)
+const connectionHealth = ref<DatabaseConnectionHealthDiagnostic | null>(null)
 const selectedCandidateKeys = ref<Set<string>>(new Set())
 const presets = ref<DatabaseConnectionPreset[]>([])
 const presetId = ref<number | null>(null)
@@ -847,6 +891,7 @@ function resetConnectionStatus() {
   connectionStatus.value = 'idle'
   connectionMessage.value = ''
   connectionSecurity.value = null
+  connectionHealth.value = null
 }
 
 function clearSql() {
@@ -1033,6 +1078,7 @@ async function handleTestConnection() {
   testLoading.value = true
   try {
     const result = await testDatabaseConnection(databaseRequest())
+    connectionHealth.value = result.health ?? null
     connectionSecurity.value = result.security ?? null
     if (result.success) {
       connectionStatus.value = 'success'
@@ -1066,6 +1112,9 @@ async function handleLoadTables() {
     tableSearch.value = ''
     connectionStatus.value = 'success'
     connectionMessage.value = `已加载 ${databaseTables.value.length} 张表`
+    if (connectionHealth.value?.connectionStatus === 'FAILED') {
+      connectionHealth.value = null
+    }
     resetResults()
     ElMessage.success(`已加载 ${databaseTables.value.length} 张表`)
   } finally {
@@ -1533,6 +1582,12 @@ function browserStorage() {
   padding: 10px 12px;
   border-left: 3px solid #dcdfe6;
   background: #fff;
+}
+
+.security-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .security-header {

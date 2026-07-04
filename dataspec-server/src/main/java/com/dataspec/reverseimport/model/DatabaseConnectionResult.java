@@ -5,9 +5,16 @@ package com.dataspec.reverseimport.model;
  */
 public record DatabaseConnectionResult(boolean success,
                                        String message,
-                                       DatabaseConnectionSecurityDiagnostic security) {
+                                       DatabaseConnectionSecurityDiagnostic security,
+                                       DatabaseConnectionHealthDiagnostic health) {
 
     public DatabaseConnectionResult(boolean success, String message) {
-        this(success, message, null);
+        this(success, message, null, null);
+    }
+
+    public DatabaseConnectionResult(boolean success,
+                                    String message,
+                                    DatabaseConnectionSecurityDiagnostic security) {
+        this(success, message, security, null);
     }
 }

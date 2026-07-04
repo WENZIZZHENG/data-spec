@@ -5,9 +5,11 @@ import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.coverage.model.FieldCoverageReport;
 import com.dataspec.coverage.service.FieldCoverageService;
 import com.dataspec.dialect.service.SqlDialectCompatibilityService;
+import com.dataspec.reverseimport.model.DatabaseConnectionHealthDiagnostic;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseConnectionSecurityDiagnostic;
+import com.dataspec.reverseimport.model.DatabaseDialectCapability;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
@@ -44,6 +46,14 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     private static final String RISK_WARNING = "WARNING";
     private static final String RISK_DANGER = "DANGER";
     private static final String RISK_UNKNOWN = "UNKNOWN";
+    private static final String STATUS_CONNECTED = "CONNECTED";
+    private static final String STATUS_FAILED = "FAILED";
+    private static final String FAILURE_AUTHENTICATION = "AUTHENTICATION";
+    private static final String FAILURE_NETWORK = "NETWORK";
+    private static final String FAILURE_SCHEMA_NOT_FOUND = "SCHEMA_NOT_FOUND";
+    private static final String FAILURE_PERMISSION_DENIED = "PERMISSION_DENIED";
+    private static final String FAILURE_UNSUPPORTED_DIALECT = "UNSUPPORTED_DIALECT";
+    private static final String FAILURE_UNKNOWN = "UNKNOWN";
 
     private final ReverseImportService reverseImportService;
     private final FieldCoverageService fieldCoverageService;
@@ -81,10 +91,18 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
 
     @Override
     public DatabaseConnectionResult testConnection(DatabaseConnectionReq req) {
+        long started = System.nanoTime();
         try (Connection connection = connectionProvider.open(req)) {
-            return new DatabaseConnectionResult(true, "连接成功", diagnoseConnectionSecurity(connection, req));
+            DatabaseConnectionSecurityDiagnostic security = diagnoseConnectionSecurity(connection, req);
+            DatabaseConnectionHealthDiagnostic health = connectedHealth(connection, req, security, elapsedMs(started));
+            return new DatabaseConnectionResult(true, "连接成功", security, health);
         } catch (SQLException | RuntimeException e) {
-            return new DatabaseConnectionResult(false, "连接失败: " + sanitizeConnectionError(e.getMessage(), req));
+            String sanitized = sanitizeConnectionError(e.getMessage(), req);
+            return new DatabaseConnectionResult(
+                    false,
+                    "连接失败: " + sanitized,
+                    null,
+                    failedHealth(req, e, sanitized, elapsedMs(started)));
         }
     }
 
@@ -399,6 +417,176 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
                     "GRANT SELECT, SHOW VIEW ON `" + database + "`.* TO 'dataspec_ro'@'%';");
         }
         return List.of();
+    }
+
+    private DatabaseConnectionHealthDiagnostic connectedHealth(Connection connection,
+                                                              DatabaseConnectionReq req,
+                                                              DatabaseConnectionSecurityDiagnostic security,
+                                                              long latencyMs) {
+        String type = databaseType(req);
+        List<String> warnings = new ArrayList<>();
+        String product = null;
+        String version = null;
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            product = sanitizeConnectionError(metaData.getDatabaseProductName(), req);
+            version = sanitizeConnectionError(metaData.getDatabaseProductVersion(), req);
+        } catch (SQLException e) {
+            warnings.add("无法读取数据库产品信息: " + sanitizeConnectionError(e.getMessage(), req));
+        }
+        if (security != null && security.warnings() != null) {
+            warnings.addAll(security.warnings());
+        }
+        DatabaseDialectCapability capability = dialectCapability(type, product != null || version != null);
+        String readonlyCheck = security == null ? "UNKNOWN" : security.riskLevel();
+        return new DatabaseConnectionHealthDiagnostic(
+                STATUS_CONNECTED,
+                latencyMs,
+                product,
+                version,
+                normalizeDiagnosticType(type),
+                null,
+                null,
+                "连接成功",
+                capability,
+                readonlyCheck,
+                requiredPrivileges(type),
+                warnings,
+                connectedNextActions(type, readonlyCheck));
+    }
+
+    private DatabaseConnectionHealthDiagnostic failedHealth(DatabaseConnectionReq req,
+                                                           Exception error,
+                                                           String sanitizedMessage,
+                                                           long latencyMs) {
+        String type = databaseType(req);
+        String category = failureCategory(type, error == null ? null : error.getMessage());
+        return new DatabaseConnectionHealthDiagnostic(
+                STATUS_FAILED,
+                latencyMs,
+                null,
+                null,
+                normalizeDiagnosticType(type),
+                category,
+                retryable(category),
+                sanitizedMessage,
+                dialectCapability(type, false),
+                "UNKNOWN",
+                requiredPrivileges(type),
+                failureWarnings(category, sanitizedMessage),
+                failureNextActions(category));
+    }
+
+    private DatabaseDialectCapability dialectCapability(String type, boolean metadataReadable) {
+        if (TYPE_POSTGRESQL.equals(type)) {
+            return new DatabaseDialectCapability(
+                    "POSTGRESQL",
+                    "SUPPORTED",
+                    "SUPPORTED",
+                    "SUPPORTED",
+                    metadataReadable,
+                    List.of("reverse-import", "compare", "coverage", "dump"));
+        }
+        if (TYPE_MYSQL.equals(type)) {
+            return new DatabaseDialectCapability(
+                    "MYSQL",
+                    "SUPPORTED",
+                    "SUPPORTED",
+                    "SUPPORTED",
+                    metadataReadable,
+                    List.of("reverse-import", "compare", "coverage", "dump"));
+        }
+        return new DatabaseDialectCapability(
+                normalizeDiagnosticType(type),
+                "UNSUPPORTED",
+                "UNSUPPORTED",
+                "UNSUPPORTED",
+                false,
+                List.of());
+    }
+
+    private List<String> requiredPrivileges(String type) {
+        if (TYPE_POSTGRESQL.equals(type)) {
+            return List.of("CONNECT", "USAGE", "SELECT");
+        }
+        if (TYPE_MYSQL.equals(type)) {
+            return List.of("SELECT", "SHOW VIEW");
+        }
+        return List.of("只读 metadata 读取权限");
+    }
+
+    private List<String> connectedNextActions(String type, String readonlyCheck) {
+        List<String> actions = new ArrayList<>();
+        actions.add("可以继续加载表、反向导入、二次比对或覆盖率报告。");
+        if (!RISK_SAFE.equals(readonlyCheck)) {
+            actions.add("连接可用但只读安全性未完全确认，建议优先切换专用只读账号。");
+        }
+        if (!TYPE_POSTGRESQL.equals(type) && !TYPE_MYSQL.equals(type)) {
+            actions.add("当前方言能力未内置，建议改用 PostgreSQL/MySQL 或停止直连流程。");
+        }
+        return actions;
+    }
+
+    private String failureCategory(String type, String rawMessage) {
+        if (!TYPE_POSTGRESQL.equals(type) && !TYPE_MYSQL.equals(type)) {
+            return FAILURE_UNSUPPORTED_DIALECT;
+        }
+        String message = rawMessage == null ? "" : rawMessage.toLowerCase(Locale.ROOT);
+        if (message.contains("password")
+                || message.contains("authentication")
+                || message.contains("access denied")
+                || message.contains("login")
+                || message.contains("认证")) {
+            return FAILURE_AUTHENTICATION;
+        }
+        if (message.contains("permission denied")
+                || message.contains("privilege")
+                || message.contains("not allowed")
+                || message.contains("权限")) {
+            return FAILURE_PERMISSION_DENIED;
+        }
+        if (message.contains("unknown database")
+                || message.contains("database") && message.contains("does not exist")
+                || message.contains("schema") && message.contains("does not exist")
+                || message.contains("catalog")) {
+            return FAILURE_SCHEMA_NOT_FOUND;
+        }
+        if (message.contains("connection refused")
+                || message.contains("timed out")
+                || message.contains("timeout")
+                || message.contains("unknown host")
+                || message.contains("network")
+                || message.contains("no route")
+                || message.contains("could not connect")) {
+            return FAILURE_NETWORK;
+        }
+        return FAILURE_UNKNOWN;
+    }
+
+    private boolean retryable(String category) {
+        return !FAILURE_UNSUPPORTED_DIALECT.equals(category);
+    }
+
+    private List<String> failureWarnings(String category, String sanitizedMessage) {
+        if (FAILURE_UNKNOWN.equals(category)) {
+            return List.of("连接失败原因未能精确分类: " + sanitizedMessage);
+        }
+        return List.of();
+    }
+
+    private List<String> failureNextActions(String category) {
+        return switch (category) {
+            case FAILURE_AUTHENTICATION -> List.of("检查用户名或密码是否正确，确认账号未过期或被锁定。");
+            case FAILURE_NETWORK -> List.of("确认主机、端口、防火墙、VPN 或容器网络是否可达。");
+            case FAILURE_SCHEMA_NOT_FOUND -> List.of("确认数据库名、schema/catalog 名称和大小写是否正确。");
+            case FAILURE_PERMISSION_DENIED -> List.of("为连接账号授予只读 metadata 与 SELECT 权限，或切换专用只读账号。");
+            case FAILURE_UNSUPPORTED_DIALECT -> List.of("当前只支持 PostgreSQL/MySQL 直连诊断，请选择受支持的数据库类型。");
+            default -> List.of("查看数据库返回的脱敏错误信息，修复连接配置后重试。");
+        };
+    }
+
+    private long elapsedMs(long started) {
+        return Math.max(0, (System.nanoTime() - started) / 1_000_000);
     }
 
     private String normalizeDiagnosticType(String type) {

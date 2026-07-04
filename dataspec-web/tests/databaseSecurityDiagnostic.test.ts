@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  capabilitySupportLabel,
+  capabilitySupportTagType,
+  connectionStatusLabel,
+  connectionStatusTagType,
+  databaseHealthSummary,
   databaseSecuritySummary,
+  failureCategoryLabel,
+  metadataReadableLabel,
   readOnlyLabel,
+  retryableLabel,
   securityRiskLabel,
   securityRiskTagType,
   writeRiskLabel
@@ -38,4 +46,45 @@ test('formats readonly and write risk labels without exposing credentials', () =
   assert.equal(summary, 'POSTGRESQL · dataspec_ro · 只读安全 · 12 张表')
   assert.equal(summary.includes('password'), false)
   assert.equal(summary.includes('jdbc:'), false)
+})
+
+test('formats connection health and capability labels for AI-facing diagnostics', () => {
+  assert.equal(connectionStatusLabel('CONNECTED'), '连接可用')
+  assert.equal(connectionStatusTagType('CONNECTED'), 'success')
+  assert.equal(connectionStatusLabel('FAILED'), '连接失败')
+  assert.equal(connectionStatusTagType('FAILED'), 'danger')
+  assert.equal(failureCategoryLabel('AUTHENTICATION'), '认证失败')
+  assert.equal(failureCategoryLabel('UNSUPPORTED_DIALECT'), '方言不支持')
+  assert.equal(capabilitySupportLabel('SUPPORTED'), '支持')
+  assert.equal(capabilitySupportTagType('SUPPORTED'), 'success')
+  assert.equal(capabilitySupportLabel('UNSUPPORTED'), '不支持')
+  assert.equal(capabilitySupportTagType('UNSUPPORTED'), 'danger')
+  assert.equal(metadataReadableLabel(true), 'Metadata：可读')
+  assert.equal(retryableLabel(false), '不建议重试')
+
+  const connectedSummary = databaseHealthSummary({
+    connectionStatus: 'CONNECTED',
+    latencyMs: 32,
+    databaseProduct: 'PostgreSQL',
+    version: '15.6',
+    dialect: 'POSTGRESQL',
+    capability: {
+      dialect: 'POSTGRESQL',
+      schemaSupport: 'SUPPORTED',
+      commentSupport: 'SUPPORTED',
+      indexSupport: 'SUPPORTED',
+      metadataReadable: true
+    }
+  })
+  assert.equal(connectedSummary, '连接可用 · POSTGRESQL / PostgreSQL / 15.6 · 32ms')
+
+  const failedSummary = databaseHealthSummary({
+    connectionStatus: 'FAILED',
+    latencyMs: 8,
+    failureCategory: 'AUTHENTICATION',
+    message: '密码错误，请检查 [REDACTED]'
+  })
+  assert.equal(failedSummary, '连接失败 · 认证失败 · 8ms')
+  assert.equal(failedSummary.includes('password'), false)
+  assert.equal(failedSummary.includes('jdbc:'), false)
 })

@@ -995,24 +995,10 @@ export interface DatabaseConnectionPresetReq {
   tableNames?: string[]
 }
 
-export interface DatabaseConnectionResult {
-  success?: boolean
-  message?: string
-  security?: DatabaseConnectionSecurityDiagnostic
-}
-
-export interface DatabaseConnectionSecurityDiagnostic {
-  databaseType?: string
-  currentUser?: string
-  readOnly?: boolean
-  writeRisk?: boolean
-  riskLevel?: 'SAFE' | 'WARNING' | 'DANGER' | 'UNKNOWN' | string
-  accessibleSchemaCount?: number
-  accessibleTableCount?: number
-  warnings?: string[]
-  recommendedActions?: string[]
-  recommendedSql?: string[]
-}
+export type DatabaseConnectionResult = Schemas['DatabaseConnectionResult']
+export type DatabaseConnectionSecurityDiagnostic = Schemas['DatabaseConnectionSecurityDiagnostic']
+export type DatabaseConnectionHealthDiagnostic = Schemas['DatabaseConnectionHealthDiagnostic']
+export type DatabaseDialectCapability = Schemas['DatabaseDialectCapability']
 
 export interface DatabaseTableInfo {
   schemaName?: string

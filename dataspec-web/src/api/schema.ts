@@ -2983,10 +2983,27 @@ export interface components {
             password?: string;
             tableNames?: string[];
         };
+        DatabaseConnectionHealthDiagnostic: {
+            connectionStatus?: string;
+            /** Format: int64 */
+            latencyMs?: number;
+            databaseProduct?: string;
+            version?: string;
+            dialect?: string;
+            failureCategory?: string;
+            retryable?: boolean;
+            message?: string;
+            capability?: components["schemas"]["DatabaseDialectCapability"];
+            readonlyCheck?: string;
+            requiredPrivileges?: string[];
+            warnings?: string[];
+            nextActions?: string[];
+        };
         DatabaseConnectionResult: {
             success?: boolean;
             message?: string;
             security?: components["schemas"]["DatabaseConnectionSecurityDiagnostic"];
+            health?: components["schemas"]["DatabaseConnectionHealthDiagnostic"];
         };
         DatabaseConnectionSecurityDiagnostic: {
             databaseType?: string;
@@ -3001,6 +3018,14 @@ export interface components {
             warnings?: string[];
             recommendedActions?: string[];
             recommendedSql?: string[];
+        };
+        DatabaseDialectCapability: {
+            dialect?: string;
+            schemaSupport?: string;
+            commentSupport?: string;
+            indexSupport?: string;
+            metadataReadable?: boolean;
+            supportedWorkflows?: string[];
         };
         RDatabaseConnectionResult: {
             /** Format: int32 */
