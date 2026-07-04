@@ -1931,6 +1931,119 @@ test('task command prints DataSpecError when server is unavailable', async () =>
   assert.doesNotMatch(io.stderr, /Authorization|ds_cli_token|password=/)
 })
 
+test('quality-gate check prints pass result and exits zero', async () => {
+  const calls = []
+  const fetchFn = async (url, options = {}) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: qualityGateResultFixture({ status: 'PASS' })
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'quality-gate',
+    'check',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(calls[0].url, 'http://dataspec.local/api/quality-gate/evaluate')
+  assert.equal(calls[0].options.method, 'POST')
+  assert.equal(JSON.parse(calls[0].options.body).projectId, 7)
+  assert.equal(output.status, 'PASS')
+})
+
+test('quality-gate check exits one when gate fails', async () => {
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 200,
+      data: qualityGateResultFixture({
+        status: 'FAIL',
+        failedChecks: [
+          {
+            code: 'coverage_rate',
+            status: 'FAIL',
+            nextAction: '处理未纳管字段并重新生成覆盖率报告'
+          }
+        ]
+      })
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'quality',
+    'check',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 1)
+  assert.equal(output.status, 'FAIL')
+  assert.equal(output.failedChecks[0].code, 'coverage_rate')
+})
+
+test('quality-gate check prints DataSpecError when server is unavailable', async () => {
+  const io = createIo()
+  const code = await runCli([
+    'quality-gate',
+    'check',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, async () => {
+    throw new Error('ECONNREFUSED password=p@ss Authorization: Bearer ds_cli_token')
+  })
+  const diagnosticLine = io.stderr.split(/\r?\n/).find((line) => line.startsWith('DataSpecError: '))
+  const diagnostic = JSON.parse(diagnosticLine.replace('DataSpecError: ', ''))
+
+  assert.equal(code, 2)
+  assert.equal(diagnostic.code, 'DATASPEC_SERVER_UNAVAILABLE')
+  assert.equal(diagnostic.retryable, true)
+  assert.doesNotMatch(io.stderr, /ds_cli_token|p@ss/)
+})
+
+test('quality-gate check redacts secrets in argument errors', async () => {
+  const io = createIo()
+  const code = await runCli([
+    'quality-gate',
+    'check',
+    'password=p@ss',
+    'Authorization: Bearer ds_cli_token',
+    'jdbc:postgresql://localhost/db',
+    '--project',
+    '7',
+    '--format',
+    'json'
+  ], io, async () => {
+    throw new Error('fetch should not be called')
+  })
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /password=\*\*\*/)
+  assert.match(io.stderr, /Authorization: Bearer \*\*\*/)
+  assert.match(io.stderr, /jdbc:\*\*\*/)
+  assert.doesNotMatch(io.stderr, /p@ss|ds_cli_token|jdbc:postgresql:\/\/localhost\/db/)
+})
+
 test('evidence export prints machine-readable package json', async () => {
   const calls = []
   const fetchFn = async (url, init) => {
@@ -3251,6 +3364,46 @@ function taskRunDetailFixture(overrides = {}) {
       source: 'cli'
     },
     updatedAt: '2026-07-04T10:00:02',
+    ...overrides
+  }
+}
+
+function qualityGateResultFixture(overrides = {}) {
+  return {
+    projectId: 7,
+    enabled: true,
+    status: 'PASS',
+    config: {
+      projectId: 7,
+      enabled: true,
+      minCoverage: 80,
+      minAverageFieldScore: 80,
+      maxErrorIssues: 0,
+      maxNewUnmanagedFields: 0,
+      requiredSensitiveMarking: true
+    },
+    summary: {
+      totalChecks: 3,
+      passedChecks: 3,
+      failedChecks: 0,
+      warningChecks: 0,
+      skippedChecks: 0
+    },
+    checks: [
+      {
+        code: 'average_field_score',
+        label: '字段质量均分',
+        status: 'PASS',
+        severity: 'INFO',
+        actualValue: 92,
+        expectedValue: 80,
+        operator: '>=',
+        nextAction: '保持当前质量水平'
+      }
+    ],
+    failedChecks: [],
+    nextActions: ['质量门禁通过，可继续当前交付'],
+    evaluatedAt: '2026-07-04T10:00:00',
     ...overrides
   }
 }

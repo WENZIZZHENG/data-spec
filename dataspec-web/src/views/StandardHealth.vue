@@ -54,6 +54,98 @@
           </div>
         </section>
 
+        <section class="quality-gate-panel" v-loading="qualityGateLoading">
+          <div class="section-header">
+            <div>
+              <h3>质量门禁</h3>
+              <p class="section-subtitle">CI/AI 可读取的项目级检查结果</p>
+            </div>
+            <div class="gate-header-actions">
+              <el-tag :type="gateStatusTagType(qualityGate?.status)" effect="plain">
+                {{ gateStatusLabel(qualityGate?.status) }}
+              </el-tag>
+              <el-button size="small" :loading="qualityGateLoading" @click="loadQualityGate">刷新门禁</el-button>
+            </div>
+          </div>
+          <el-alert
+            v-if="qualityGateError"
+            class="quality-gate-alert"
+            type="warning"
+            :title="qualityGateError"
+            show-icon
+            :closable="false"
+          />
+          <template v-else>
+            <div class="gate-summary-grid">
+              <div class="gate-status-block">
+                <span class="metric-label">状态</span>
+                <strong>{{ gateStatusLabel(qualityGate?.status) }}</strong>
+                <span class="muted-text">{{ gateStatusDescription(qualityGate?.status) }}</span>
+              </div>
+              <div class="gate-summary-item">
+                <span class="metric-label">失败项</span>
+                <strong>{{ qualityGate?.summary?.failedChecks ?? 0 }}</strong>
+              </div>
+              <div class="gate-summary-item">
+                <span class="metric-label">告警项</span>
+                <strong>{{ qualityGate?.summary?.warningChecks ?? 0 }}</strong>
+              </div>
+              <div class="gate-summary-item">
+                <span class="metric-label">通过项</span>
+                <strong>{{ qualityGate?.summary?.passedChecks ?? 0 }}</strong>
+              </div>
+              <div class="gate-summary-item">
+                <span class="metric-label">跳过项</span>
+                <strong>{{ qualityGate?.summary?.skippedChecks ?? 0 }}</strong>
+              </div>
+            </div>
+
+            <div v-if="gateNextActions.length > 0" class="gate-next-actions">
+              <span class="metric-label">Next actions</span>
+              <ul>
+                <li v-for="action in gateNextActions" :key="action">{{ action }}</li>
+              </ul>
+            </div>
+
+            <el-table
+              :data="gateCheckRows"
+              size="small"
+              stripe
+              empty-text="暂无质量门禁检查项"
+            >
+              <el-table-column label="检查项" min-width="150">
+                <template #default="{ row }">
+                  <strong>{{ row.label || row.code }}</strong>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="110">
+                <template #default="{ row }">
+                  <el-tag :type="checkStatusTagType(row.status)" effect="plain">
+                    {{ checkStatusLabel(row.status) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="实际 / 阈值" width="150">
+                <template #default="{ row }">
+                  {{ formatGateValue(row.actualValue) }} {{ row.operator || '' }} {{ formatGateValue(row.expectedValue) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="建议" min-width="260" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ row.nextAction || row.message || '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="96">
+                <template #default="{ row }">
+                  <el-button v-if="row.route" size="small" text type="primary" @click="goTarget(row.route)">
+                    打开
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </template>
+        </section>
+
         <section class="delta-section">
           <div v-for="item in deltaItems" :key="item.key" class="delta-item">
             <span class="metric-label">{{ item.label }}</span>
@@ -186,17 +278,20 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis, DocumentCopy, Refresh } from '@element-plus/icons-vue'
+import { evaluateQualityGate } from '@/api/qualityGate'
 import { createStandardHealthSnapshot, getStandardHealthPlan, getStandardHealthTrend } from '@/api/standardHealth'
 import ProjectRequired from '@/components/ProjectRequired.vue'
 import StateBlock from '@/components/StateBlock.vue'
 import { useProjectStore } from '@/stores/project'
 import type {
+  QualityGateCheckResult,
   StandardHealthAction,
   StandardHealthCoverageInput,
   StandardHealthDelta,
   StandardHealthMetrics,
   StandardHealthPlan,
-  StandardHealthTrend
+  StandardHealthTrend,
+  StandardQualityGateResult
 } from '@/types'
 
 interface CoverageFormState {
@@ -212,9 +307,12 @@ const router = useRouter()
 const loading = ref(false)
 const createLoading = ref(false)
 const planLoading = ref(false)
+const qualityGateLoading = ref(false)
 const errorMessage = ref('')
+const qualityGateError = ref('')
 const trend = ref<StandardHealthTrend>({})
 const plan = ref<StandardHealthPlan | null>(null)
+const qualityGate = ref<StandardQualityGateResult | null>(null)
 const activePanels = ref<string[]>(['coverage', 'plan'])
 const coverageForm = reactive<CoverageFormState>({
   coverageRate: undefined,
@@ -229,6 +327,12 @@ const latest = computed(() => trend.value.latest ?? null)
 const metrics = computed<StandardHealthMetrics>(() => latest.value?.metrics ?? {})
 const snapshots = computed(() => trend.value.snapshots ?? [])
 const topActions = computed(() => latest.value?.topActions ?? [])
+const gateNextActions = computed(() => qualityGate.value?.nextActions?.filter(Boolean) ?? [])
+const gateCheckRows = computed<QualityGateCheckResult[]>(() => {
+  const checks = qualityGate.value?.checks ?? []
+  const failedOrWarning = checks.filter((check) => check.status === 'FAIL' || check.status === 'WARNING')
+  return failedOrWarning.length > 0 ? failedOrWarning : checks
+})
 const planMarkdown = computed(() =>
   latest.value?.planMarkdown || plan.value?.markdown || '暂无计划。创建第一条快照后，这里会出现可复制给 AI 的维护计划。'
 )
@@ -268,6 +372,7 @@ watch(
   () => {
     plan.value = null
     void loadTrend()
+    void loadQualityGate()
   },
   { immediate: true }
 )
@@ -290,6 +395,25 @@ async function loadTrend() {
   }
 }
 
+async function loadQualityGate() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    qualityGate.value = null
+    qualityGateError.value = ''
+    return
+  }
+  qualityGateLoading.value = true
+  qualityGateError.value = ''
+  try {
+    qualityGate.value = await evaluateQualityGate({ projectId })
+  } catch (error) {
+    qualityGate.value = null
+    qualityGateError.value = error instanceof Error ? error.message : '质量门禁加载失败'
+  } finally {
+    qualityGateLoading.value = false
+  }
+}
+
 async function handleCreateSnapshot() {
   const projectId = projectStore.currentProjectId
   if (!projectId) {
@@ -304,6 +428,7 @@ async function handleCreateSnapshot() {
     plan.value = null
     ElMessage.success('已创建标准健康快照')
     await loadTrend()
+    await loadQualityGate()
   } finally {
     createLoading.value = false
   }
@@ -364,6 +489,13 @@ function formatPercent(value?: number | null) {
   return `${value}%`
 }
 
+function formatGateValue(value?: number | null) {
+  if (value === null || value === undefined) {
+    return 'N/A'
+  }
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
 function formatTime(value?: string) {
   if (!value) {
     return '-'
@@ -403,6 +535,65 @@ function priorityTagType(priority?: string) {
     return 'danger'
   }
   if (priority === 'MEDIUM') {
+    return 'warning'
+  }
+  return 'info'
+}
+
+function gateStatusLabel(status?: string) {
+  if (status === 'PASS') {
+    return '通过'
+  }
+  if (status === 'FAIL') {
+    return '未通过'
+  }
+  return '未启用'
+}
+
+function gateStatusDescription(status?: string) {
+  if (status === 'PASS') {
+    return '当前信号满足项目阈值'
+  }
+  if (status === 'FAIL') {
+    return '先处理失败项后再进入 CI/AI 交付'
+  }
+  return '默认不阻断本地编辑'
+}
+
+function gateStatusTagType(status?: string) {
+  if (status === 'PASS') {
+    return 'success'
+  }
+  if (status === 'FAIL') {
+    return 'danger'
+  }
+  return 'info'
+}
+
+function checkStatusLabel(status?: string) {
+  if (status === 'PASS') {
+    return '通过'
+  }
+  if (status === 'FAIL') {
+    return '失败'
+  }
+  if (status === 'WARNING') {
+    return '告警'
+  }
+  if (status === 'SKIPPED') {
+    return '跳过'
+  }
+  return status || '-'
+}
+
+function checkStatusTagType(status?: string) {
+  if (status === 'PASS') {
+    return 'success'
+  }
+  if (status === 'FAIL') {
+    return 'danger'
+  }
+  if (status === 'WARNING') {
     return 'warning'
   }
   return 'info'
@@ -494,6 +685,7 @@ async function copyText(text: string) {
 .score-panel,
 .summary-item,
 .delta-item,
+.quality-gate-panel,
 .main-panel,
 .side-panel {
   border: 1px solid #ebeef5;
@@ -535,6 +727,77 @@ async function copyText(text: string) {
   color: #111827;
   font-size: 22px;
   line-height: 1.1;
+}
+
+.quality-gate-panel {
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 14px;
+}
+
+.section-subtitle {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.gate-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quality-gate-alert {
+  margin-bottom: 12px;
+}
+
+.gate-summary-grid {
+  display: grid;
+  grid-template-columns: 1.5fr repeat(4, minmax(96px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.gate-status-block,
+.gate-summary-item {
+  min-height: 72px;
+  padding: 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.gate-status-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.gate-status-block strong,
+.gate-summary-item strong {
+  display: block;
+  margin-top: 6px;
+  color: #111827;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.gate-next-actions {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.gate-next-actions ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .delta-section {
@@ -650,6 +913,7 @@ async function copyText(text: string) {
 
 @media (max-width: 1000px) {
   .summary-section,
+  .gate-summary-grid,
   .health-layout {
     grid-template-columns: 1fr;
   }

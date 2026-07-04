@@ -676,6 +676,13 @@ export type StandardHealthSnapshotView = Schemas['StandardHealthSnapshotView']
 export type StandardHealthDelta = Schemas['StandardHealthDelta']
 export type StandardHealthTrend = Schemas['StandardHealthTrend']
 export type StandardHealthPlan = Schemas['StandardHealthPlan']
+export type StandardQualityGateConfig = Schemas['StandardQualityGateConfig']
+export type StandardQualityGateSaveReq = Schemas['StandardQualityGateSaveReq']
+export type StandardQualityGateEvaluateReq = Schemas['StandardQualityGateEvaluateReq']
+export type StandardQualityGateResult = Schemas['StandardQualityGateResult']
+export type QualityGateCheckResult = Schemas['QualityGateCheckResult']
+export type QualityGateSummary = Schemas['QualityGateSummary']
+export type QualityGateLintSummary = Schemas['QualityGateLintSummary']
 
 export interface StandardCandidate {
   id?: number

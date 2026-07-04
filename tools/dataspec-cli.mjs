@@ -104,6 +104,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'task' || command === 'tasks') {
       return await runTask(rest, io, fetchFn)
     }
+    if (command === 'quality-gate' || command === 'quality') {
+      return await runQualityGate(rest, io, fetchFn)
+    }
     if (command === 'profile' || command === 'profiles') {
       return await runProfile(rest, io, fetchFn)
     }
@@ -978,6 +981,35 @@ async function runTask(args, io, fetchFn) {
   throw new Error(`未知 task 子命令: ${subcommand}。支持: list, failures, show`)
 }
 
+async function runQualityGate(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'check') {
+    throw new Error(`未知 quality-gate 子命令: ${subcommand ?? '(empty)'}。支持: check`)
+  }
+  const { positional, options } = parseArgs(rest, [
+    'project',
+    'format',
+    'server',
+    'dataspec-token'
+  ])
+  if (positional.length > 0) {
+    throw new Error(`quality-gate check 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const config = loadDataSpecConfig(cliCwd(io))
+  const format = options.format ?? 'json'
+  if (format !== 'json') {
+    throw new Error('quality-gate check 仅支持 --format json')
+  }
+  const result = await fetchQualityGateEvaluation({
+    server: normalizeServer(options.server ?? config.server),
+    projectId: parseProjectId(options.project ?? config.projectId),
+    apiToken: resolveDataSpecToken(options, config),
+    fetchFn
+  })
+  io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  return result?.status === 'FAIL' ? 1 : 0
+}
+
 async function runInit(args, io, fetchFn) {
   const { positional, options } = parseArgs(
     args,
@@ -1611,6 +1643,19 @@ async function fetchTaskRunDetail({ server, projectId, taskRunId, apiToken, fetc
   }
 }
 
+async function fetchQualityGateEvaluation({ server, projectId, apiToken, fetchFn }) {
+  try {
+    const response = await fetchFn(`${server}/api/quality-gate/evaluate`, {
+      method: 'POST',
+      headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ projectId })
+    })
+    return unwrapResponse(await readJsonResponse(response))
+  } catch (error) {
+    throw normalizeQualityGateFetchError(error)
+  }
+}
+
 async function buildEvidenceRequest(options, config) {
   const sourceType = normalizeEvidenceSourceType(options['source-type'] ?? options.sourceType)
   const sourceId = options['source-id'] ?? options.sourceId
@@ -1816,6 +1861,24 @@ function normalizeTaskRunFetchError(error) {
       category: 'NETWORK',
       retryable: true,
       suggestedAction: '先运行 dataspec doctor --format json 检查服务、server URL、token 和项目配置；然后重试 dataspec task failures --format json。',
+      docsRef: 'README.md#cli',
+      httpStatus: null
+    }
+  )
+}
+
+function normalizeQualityGateFetchError(error) {
+  if (error instanceof DataSpecCliError) {
+    return error
+  }
+  const message = sanitizeSecretText(error?.message ?? 'DataSpec 服务不可用')
+  return new DataSpecCliError(
+    `读取质量门禁失败: ${message}`,
+    {
+      code: 'DATASPEC_SERVER_UNAVAILABLE',
+      category: 'NETWORK',
+      retryable: true,
+      suggestedAction: '先运行 dataspec doctor --format json 检查服务、server URL、token 和项目配置；然后重试 dataspec quality-gate check --format json。',
       docsRef: 'README.md#cli',
       httpStatus: null
     }
@@ -3664,9 +3727,9 @@ function fallbackDataSpecDiagnostic(httpStatus, message) {
 }
 
 function formatCliError(error) {
-  const lines = [`错误: ${error.message}`]
+  const lines = [`错误: ${sanitizeSecretText(error.message)}`]
   if (error instanceof DataSpecCliError && error.diagnostic) {
-    lines.push(`DataSpecError: ${JSON.stringify(error.diagnostic)}`)
+    lines.push(`DataSpecError: ${JSON.stringify(sanitizeSecretValue(error.diagnostic))}`)
   }
   return `${lines.join('\n')}\n`
 }
@@ -3690,6 +3753,7 @@ Usage:
   node tools/dataspec-cli.mjs task list [--project <id>] [--status <status>] [--task-type <type>] [--current <n>] [--size <n>] [--format json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs task failures [--project <id>] [--limit <n>] [--format json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs task show <id> [--project <id>] [--format json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs quality-gate check [--project <id>] [--format json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract list [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract show <contractId> [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract check [--format text|json] [--server <url>] [--dataspec-token <token>]

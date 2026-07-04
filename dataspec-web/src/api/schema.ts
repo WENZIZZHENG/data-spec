@@ -52,6 +52,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/quality-gate/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getConfig"];
+        put: operations["saveConfig"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{id}": {
         parameters: {
             query?: never;
@@ -596,7 +612,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/prompt-templates/evaluate": {
+    "/api/quality-gate/evaluate": {
         parameters: {
             query?: never;
             header?: never;
@@ -606,6 +622,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["evaluate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/prompt-templates/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["evaluate_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2195,6 +2227,43 @@ export interface components {
             updatedAt?: string;
             isDeleted?: boolean;
         };
+        StandardQualityGateSaveReq: {
+            /** Format: int64 */
+            projectId?: number;
+            enabled?: boolean;
+            /** Format: int32 */
+            minCoverage?: number;
+            /** Format: int32 */
+            minAverageFieldScore?: number;
+            /** Format: int32 */
+            maxErrorIssues?: number;
+            /** Format: int32 */
+            maxNewUnmanagedFields?: number;
+            requiredSensitiveMarking?: boolean;
+        };
+        RStandardQualityGateConfig: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardQualityGateConfig"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardQualityGateConfig: {
+            /** Format: int64 */
+            projectId?: number;
+            enabled?: boolean;
+            /** Format: int32 */
+            minCoverage?: number;
+            /** Format: int32 */
+            minAverageFieldScore?: number;
+            /** Format: int32 */
+            maxErrorIssues?: number;
+            /** Format: int32 */
+            maxNewUnmanagedFields?: number;
+            requiredSensitiveMarking?: boolean;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
         CreateProjectReq: {
             name: string;
             description?: string;
@@ -3289,6 +3358,66 @@ export interface components {
             matchReasons?: string[];
             evidence?: components["schemas"]["ExplainTrace"][];
         };
+        QualityGateLintSummary: {
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            warningCount?: number;
+            /** Format: int32 */
+            suggestionCount?: number;
+        };
+        StandardQualityGateEvaluateReq: {
+            /** Format: int64 */
+            projectId?: number;
+            coverage?: components["schemas"]["StandardHealthCoverageInput"];
+            lintSummary?: components["schemas"]["QualityGateLintSummary"];
+        };
+        QualityGateCheckResult: {
+            code?: string;
+            label?: string;
+            status?: string;
+            severity?: string;
+            /** Format: double */
+            actualValue?: number;
+            /** Format: double */
+            expectedValue?: number;
+            operator?: string;
+            message?: string;
+            route?: string;
+            nextAction?: string;
+        };
+        QualityGateSummary: {
+            /** Format: int32 */
+            totalChecks?: number;
+            /** Format: int32 */
+            passedChecks?: number;
+            /** Format: int32 */
+            failedChecks?: number;
+            /** Format: int32 */
+            warningChecks?: number;
+            /** Format: int32 */
+            skippedChecks?: number;
+        };
+        RStandardQualityGateResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardQualityGateResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardQualityGateResult: {
+            /** Format: int64 */
+            projectId?: number;
+            enabled?: boolean;
+            status?: string;
+            config?: components["schemas"]["StandardQualityGateConfig"];
+            summary?: components["schemas"]["QualityGateSummary"];
+            checks?: components["schemas"]["QualityGateCheckResult"][];
+            failedChecks?: components["schemas"]["QualityGateCheckResult"][];
+            nextActions?: string[];
+            /** Format: date-time */
+            evaluatedAt?: string;
+        };
         PromptTemplateEvalReq: {
             templateKey: string;
             output: string;
@@ -4181,9 +4310,9 @@ export interface components {
             /** Format: int32 */
             fieldCount?: number;
             /** Format: int32 */
-            templateCount?: number;
-            /** Format: int32 */
             enumCount?: number;
+            /** Format: int32 */
+            templateCount?: number;
         };
         StarterKitDomain: {
             code?: string;
@@ -5722,6 +5851,52 @@ export interface operations {
             };
         };
     };
+    getConfig: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardQualityGateConfig"];
+                };
+            };
+        };
+    };
+    saveConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardQualityGateSaveReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardQualityGateConfig"];
+                };
+            };
+        };
+    };
     getById_3: {
         parameters: {
             query?: never;
@@ -6991,6 +7166,30 @@ export interface operations {
         };
     };
     evaluate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardQualityGateEvaluateReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardQualityGateResult"];
+                };
+            };
+        };
+    };
+    evaluate_1: {
         parameters: {
             query?: never;
             header?: never;

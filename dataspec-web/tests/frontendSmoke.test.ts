@@ -691,7 +691,9 @@ test('keeps standard health trend and improvement plan wired', () => {
   const app = readSource('src/App.vue')
   const view = readSource('src/views/StandardHealth.vue')
   const api = readSource('src/api/standardHealth.ts')
+  const qualityGateApi = readSource('src/api/qualityGate.ts')
   const types = readSource('src/types/index.ts')
+  const schema = readSource('src/api/schema.ts')
 
   assertContains(router, [
     "path: '/standard-health'",
@@ -705,14 +707,21 @@ test('keeps standard health trend and improvement plan wired', () => {
   ], 'standard health navigation')
 
   assertContains(view, [
+    "import { evaluateQualityGate } from '@/api/qualityGate'",
     "import { createStandardHealthSnapshot, getStandardHealthPlan, getStandardHealthTrend } from '@/api/standardHealth'",
     'projectStore.currentProjectId',
     'async function loadTrend()',
+    'async function loadQualityGate()',
+    'qualityGate.value = await evaluateQualityGate({ projectId })',
+    'gateCheckRows',
+    'goTarget(row.route)',
     'async function handleCreateSnapshot()',
     'async function handleCopyPlan()',
     'coverageForm.coverageRate',
     'topUnmanagedFields',
     '标准健康',
+    '质量门禁',
+    'Next actions',
     '创建快照',
     '复制计划',
     'Top actions',
@@ -729,6 +738,13 @@ test('keeps standard health trend and improvement plan wired', () => {
     'export function getStandardHealthPlan'
   ], 'standard health api')
 
+  assertContains(qualityGateApi, [
+    "request.get<unknown, StandardQualityGateConfig>('/quality-gate/config'",
+    "request.put<unknown, StandardQualityGateConfig>('/quality-gate/config'",
+    "request.post<unknown, StandardQualityGateResult>('/quality-gate/evaluate'",
+    'export function evaluateQualityGate'
+  ], 'quality gate api')
+
   assertContains(types, [
     "export type StandardHealthCoverageInput = Schemas['StandardHealthCoverageInput']",
     "export type StandardHealthSnapshotCreateReq = Schemas['StandardHealthSnapshotCreateReq']",
@@ -737,8 +753,19 @@ test('keeps standard health trend and improvement plan wired', () => {
     "export type StandardHealthSnapshotView = Schemas['StandardHealthSnapshotView']",
     "export type StandardHealthDelta = Schemas['StandardHealthDelta']",
     "export type StandardHealthTrend = Schemas['StandardHealthTrend']",
-    "export type StandardHealthPlan = Schemas['StandardHealthPlan']"
+    "export type StandardHealthPlan = Schemas['StandardHealthPlan']",
+    "export type StandardQualityGateConfig = Schemas['StandardQualityGateConfig']",
+    "export type StandardQualityGateEvaluateReq = Schemas['StandardQualityGateEvaluateReq']",
+    "export type StandardQualityGateResult = Schemas['StandardQualityGateResult']",
+    "export type QualityGateCheckResult = Schemas['QualityGateCheckResult']"
   ], 'standard health types')
+
+  assertContains(schema, [
+    '"/api/quality-gate/config"',
+    '"/api/quality-gate/evaluate"',
+    'StandardQualityGateResult',
+    'QualityGateCheckResult'
+  ], 'quality gate schema')
 })
 
 test('keeps database reverse import and comparison flow wired', () => {
