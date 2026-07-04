@@ -41,6 +41,7 @@ test('resources list and read use configured project', async () => {
   const listed = await handler({ jsonrpc: '2.0', id: 2, method: 'resources/list' })
   assert.deepEqual(listed.result.resources.map((resource) => resource.uri), [
     'dataspec://project/7/capability-catalog',
+    'dataspec://project/7/session-bootstrap',
     'dataspec://project/7/field-catalog',
     'dataspec://project/7/database-rules',
     'dataspec://project/7/rules-yaml',
@@ -61,6 +62,35 @@ test('resources list and read use configured project', async () => {
   assert.equal(read.result.contents[0].uri, 'dataspec://project/7/field-catalog')
   assert.equal(read.result.contents[0].mimeType, 'application/json')
   assert.equal(read.result.contents[0].text, '{"fields":[]}')
+})
+
+test('session bootstrap resource is read from backend with structured content', async () => {
+  const calls = []
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local/',
+    apiToken: 'ds_mcp_token'
+  }, async (url, options = {}) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: sessionBootstrapFixture()
+    })
+  })
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 38,
+    method: 'resources/read',
+    params: { uri: 'dataspec://project/7/session-bootstrap' }
+  })
+
+  const payload = JSON.parse(read.result.contents[0].text)
+  assert.equal(calls[0].url, 'http://dataspec.local/api/bootstrap/session?projectId=7&server=http%3A%2F%2Fdataspec.local')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_mcp_token')
+  assert.equal(read.result.contents[0].mimeType, 'application/json')
+  assert.equal(payload.kind, 'dataspec-ai-session-bootstrap')
+  assert.equal(read.result.structuredContent.status, 'READY')
 })
 
 test('capability catalog resource is read from backend with project diagnostics and structured content', async () => {
@@ -345,6 +375,70 @@ test('lint_sql tool forwards configured and explicit profile hints', async () =>
     projectId: 7,
     taskType: 'PR_REVIEW'
   })
+})
+
+test('get_session_bootstrap tool returns structured bootstrap package', async () => {
+  const calls = []
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local',
+    apiToken: 'ds_mcp_token'
+  }, async (url, options = {}) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: { ...sessionBootstrapFixture(), projectId: 8 }
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 63,
+    method: 'tools/call',
+    params: {
+      name: 'get_session_bootstrap',
+      arguments: { projectId: 8 }
+    }
+  })
+
+  assert.equal(calls[0].url, 'http://dataspec.local/api/bootstrap/session?projectId=8&server=http%3A%2F%2Fdataspec.local')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_mcp_token')
+  assert.equal(response.result.structuredContent.kind, 'dataspec-ai-session-bootstrap')
+  assert.equal(response.result.structuredContent.projectId, 8)
+  assert.equal(JSON.parse(response.result.content[0].text).status, 'READY')
+})
+
+test('get_session_bootstrap tool works without configured project', async () => {
+  const calls = []
+  const handler = createMcpHandler({
+    server: 'http://dataspec.local'
+  }, async (url) => {
+    calls.push(url)
+    return jsonResponse({
+      code: 200,
+      data: {
+        ...sessionBootstrapFixture(),
+        status: 'BLOCKED',
+        projectId: null,
+        nextActions: [{ code: 'SELECT_PROJECT', severity: 'error', message: '请选择项目' }]
+      }
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 64,
+    method: 'tools/call',
+    params: {
+      name: 'get_session_bootstrap',
+      arguments: {}
+    }
+  })
+
+  assert.equal(calls[0], 'http://dataspec.local/api/bootstrap/session?server=http%3A%2F%2Fdataspec.local')
+  assert.equal(response.result.structuredContent.status, 'BLOCKED')
+  assert.equal(response.result.structuredContent.projectId, null)
+  assert.equal(response.result.structuredContent.nextActions[0].code, 'SELECT_PROJECT')
 })
 
 test('get_field_catalog tool parses json catalog when possible', async () => {
@@ -782,13 +876,17 @@ test('invalid tool project id returns invalid params error', async () => {
   assert.match(response.error.message, /无效 project id/)
 })
 
-test('parseServerArgs requires project id and normalizes server url', () => {
+test('parseServerArgs keeps project optional and normalizes server url', () => {
   assert.deepEqual(parseServerArgs(['--project', '7', '--server', 'http://dataspec.local/']), {
     projectId: 7,
     server: 'http://dataspec.local',
     apiToken: undefined
   })
-  assert.throws(() => parseServerArgs(['--server', 'http://dataspec.local']), /需要提供 --project/)
+  assert.deepEqual(parseServerArgs(['--server', 'http://dataspec.local']), {
+    projectId: undefined,
+    server: 'http://dataspec.local',
+    apiToken: undefined
+  })
 })
 
 test('parseServerArgs reads local config defaults and keeps explicit overrides', async () => {
@@ -861,6 +959,62 @@ function jsonResponse(payload) {
     ok: true,
     status: 200,
     json: async () => payload
+  }
+}
+
+function sessionBootstrapFixture() {
+  return {
+    kind: 'dataspec-ai-session-bootstrap',
+    schemaVersion: 1,
+    generatedAt: '2026-07-04T12:00:00',
+    status: 'READY',
+    projectId: 7,
+    server: 'http://dataspec.local',
+    authMode: 'TOKEN_PRESENT',
+    specVersion: 'v2026.07.04',
+    standardSnapshot: {
+      snapshotId: 11,
+      projectId: 7,
+      specVersion: 'v2026.07.04',
+      specHash: 'hash-1',
+      versioned: true,
+      source: 'current'
+    },
+    availableCapabilities: [
+      {
+        id: 'lint-sql',
+        title: 'SQL 校验与 fixedSql',
+        status: 'AVAILABLE',
+        writeRisk: 'WRITES_DATASPEC_RECORD',
+        requiresProject: true,
+        apiEndpoints: ['POST /api/lint'],
+        cliCommands: ['dataspec lint <sql-file> --project 7 --format json'],
+        mcpResources: [],
+        mcpTools: ['lint_sql'],
+        nextActions: ['先读取字段目录和规则']
+      }
+    ],
+    recommendedCommands: [
+      'dataspec doctor --project 7 --format json',
+      'dataspec export-context --project 7 --cache',
+      'dataspec lint <sql-file> --project 7 --format json'
+    ],
+    knownRisks: ['启动包不会执行 lint、导出 Context、反向导入或生成 DDL。'],
+    docsRefs: ['README.md#ai-会话启动包', 'README.md#cli'],
+    checks: [
+      { name: 'project', status: 'pass', message: '已选择 projectId: 7' },
+      { name: 'standard', status: 'pass', message: '当前标准快照可用: v2026.07.04' }
+    ],
+    nextActions: [
+      {
+        code: 'RUN_DOCTOR',
+        severity: 'info',
+        message: '从 doctor 开始确认本地配置和远端契约状态。',
+        command: 'dataspec doctor --project 7 --format json',
+        docsRef: 'README.md#cli',
+        retryable: true
+      }
+    ]
   }
 }
 

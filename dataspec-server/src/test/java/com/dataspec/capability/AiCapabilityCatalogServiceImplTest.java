@@ -45,7 +45,8 @@ class AiCapabilityCatalogServiceImplTest {
                 "export-evidence-package",
                 "workflow-recipes",
                 "ai-task-profiles",
-                "domain-starter-kits"
+                "domain-starter-kits",
+                "session-bootstrap"
         )));
     }
 
@@ -100,5 +101,18 @@ class AiCapabilityCatalogServiceImplTest {
         assertFalse(json.contains("jdbc:postgresql://"));
         assertFalse(json.contains("jdbc:mysql://"));
         assertFalse(json.contains("source database rows"));
+    }
+
+    @Test
+    void catalogExposesSessionBootstrapSurfaces() {
+        AiCapabilityEntry entry = service.getCapability("session_bootstrap", 1L);
+
+        assertEquals("session-bootstrap", entry.id());
+        assertEquals("READ_ONLY", entry.writeRisk());
+        assertTrue(entry.apiEndpoints().contains("GET /api/bootstrap/session"));
+        assertTrue(entry.cliCommands().stream().anyMatch(command -> command.contains("bootstrap")));
+        assertTrue(entry.mcpResources().contains("dataspec://project/<id>/session-bootstrap"));
+        assertTrue(entry.mcpTools().contains("get_session_bootstrap"));
+        assertTrue(entry.preflightChecks().stream().anyMatch(check -> check.contains("不执行")));
     }
 }

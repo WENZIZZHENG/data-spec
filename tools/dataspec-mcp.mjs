@@ -18,6 +18,13 @@ const RESOURCE_DEFS = {
     mimeType: 'application/json',
     capabilityResource: true
   },
+  'session-bootstrap': {
+    name: 'DataSpec AI Session Bootstrap',
+    description: 'AI 新会话第一跳，聚合当前项目、标准版本、可用能力、推荐命令、风险提示和 nextActions。',
+    path: '/api/bootstrap/session',
+    mimeType: 'application/json',
+    bootstrapResource: true
+  },
   'field-catalog': {
     name: 'DataSpec Field Catalog',
     description: '当前项目的标准字段目录，供 AI 生成或评审 SQL 时引用。',
@@ -167,7 +174,7 @@ export function createMcpHandler(config, fetchFn = globalThis.fetch) {
     throw new Error('当前 Node 版本不支持 fetch，请使用 Node.js 18+')
   }
   const server = normalizeServer(config.server)
-  const defaultProjectId = parseProjectId(config.projectId)
+  const defaultProjectId = parseConfiguredProjectId(config.projectId)
   const apiToken = normalizeApiToken(config.apiToken)
   const defaultProfileSelection = resolveProfileSelection(config)
 
@@ -195,8 +202,8 @@ export function createMcpHandler(config, fetchFn = globalThis.fetch) {
 }
 
 /**
- * 解析 MCP Server 启动参数。项目 ID 是 resource URI 可确定化的基础，
- * 可由显式参数提供，也可由业务仓库 `.dataspec/config.json` 提供。
+ * 解析 MCP Server 启动参数。项目 ID 可由显式参数或 `.dataspec/config.json`
+ * 提供；缺省时仍允许 AI 先调用 get_session_bootstrap 获取 SELECT_PROJECT。
  */
 export function parseServerArgs(argv, startDir = process.cwd(), env = process.env) {
   const { options } = parseArgs(argv, ['project', 'server', 'dataspec-token', 'profile', 'task-type', 'taskType'])
@@ -206,7 +213,7 @@ export function parseServerArgs(argv, startDir = process.cwd(), env = process.en
     taskType: options.taskType ?? options['task-type']
   }, config)
   return {
-    projectId: parseProjectId(options.project ?? config.projectId),
+    projectId: parseConfiguredProjectId(options.project ?? config.projectId),
     server: normalizeServer(options.server ?? config.server),
     apiToken: normalizeApiToken(options['dataspec-token'] ?? env.DATASPEC_TOKEN ?? config.apiToken),
     ...profileSelection
@@ -253,6 +260,19 @@ async function dispatch(method, params, context) {
 }
 
 function listResources(projectId) {
+  if (projectId === undefined) {
+    const def = RESOURCE_DEFS['capability-catalog']
+    return {
+      resources: [
+        {
+          uri: 'dataspec://capability-catalog',
+          name: def.name,
+          description: def.description,
+          mimeType: def.mimeType
+        }
+      ]
+    }
+  }
   return {
     resources: Object.entries(RESOURCE_DEFS).map(([key, def]) => ({
       uri: resourceUri(projectId, key),
@@ -282,9 +302,11 @@ async function readResource(params, context) {
         ? JSON.stringify(await fetchContractResource(context), null, 2)
         : def.capabilityResource
           ? JSON.stringify(structuredContent = await fetchCapabilityResource(context, projectId), null, 2)
-          : def.taskRunResource
-            ? JSON.stringify(structuredContent = await fetchTaskRunResource(context, projectId), null, 2)
-            : await fetchAiContextText(context, def.path, projectId)
+          : def.bootstrapResource
+            ? JSON.stringify(structuredContent = await fetchSessionBootstrapResource(context, projectId), null, 2)
+            : def.taskRunResource
+              ? JSON.stringify(structuredContent = await fetchTaskRunResource(context, projectId), null, 2)
+              : await fetchAiContextText(context, def.path, projectId)
   const result = {
     contents: [
       {
@@ -335,6 +357,19 @@ function getPrompt(params, defaultProjectId) {
 function listTools() {
   return {
     tools: [
+      {
+        name: 'get_session_bootstrap',
+        description: '读取 DataSpec AI 会话启动包，返回当前项目、标准版本、可用能力、推荐命令、风险提示和 nextActions。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            }
+          }
+        }
+      },
       {
         name: 'lint_sql',
         description: '调用 DataSpec lint 校验 SQL，返回结构化问题列表。',
@@ -592,6 +627,9 @@ function listTools() {
 async function callTool(params, context) {
   const name = params?.name
   const args = params?.arguments ?? {}
+  if (name === 'get_session_bootstrap') {
+    return await callGetSessionBootstrap(args, context)
+  }
   if (name === 'lint_sql') {
     return await callLintSql(args, context)
   }
@@ -617,6 +655,12 @@ async function callTool(params, context) {
     return await callGetAiTaskRun(args, context)
   }
   throw new JsonRpcError(-32602, `未知 tool: ${name}`)
+}
+
+async function callGetSessionBootstrap(args, context) {
+  const projectId = optionalBootstrapProjectId(args.projectId, context.defaultProjectId)
+  const result = await fetchSessionBootstrapResource(context, projectId)
+  return toolJsonResult(result)
 }
 
 async function callLintSql(args, context) {
@@ -835,6 +879,32 @@ async function fetchCapabilityResource(context, projectId) {
   }
 }
 
+async function fetchSessionBootstrapResource(context, projectId) {
+  try {
+    const params = new URLSearchParams()
+    appendOptionalParam(params, 'projectId', projectId)
+    params.set('server', context.server)
+    const response = await context.fetchFn(`${context.server}/api/bootstrap/session?${params.toString()}`, {
+      headers: dataSpecHeaders(context.apiToken)
+    })
+    return await readDataSpecJson(response)
+  } catch (error) {
+    if (error instanceof JsonRpcError) {
+      throw error
+    }
+    throw new JsonRpcError(-32000, `读取 session bootstrap 失败: ${error?.message ?? 'DataSpec 服务不可用'}`, {
+      dataspecError: {
+        code: 'DATASPEC_SERVER_UNAVAILABLE',
+        category: 'NETWORK',
+        retryable: true,
+        suggestedAction: '先运行 dataspec doctor --format json 检查服务、server URL、token 和项目配置；然后重试 session bootstrap。',
+        docsRef: 'README.md#ai-会话启动包',
+        httpStatus: null
+      }
+    })
+  }
+}
+
 async function fetchTaskRunResource(context, projectId) {
   try {
     const params = new URLSearchParams()
@@ -1035,8 +1105,19 @@ function resourceUri(projectId, key) {
 }
 
 function optionalProjectId(value, fallback) {
+  return parseProjectId(value === undefined || value === null || value === '' ? fallback : value)
+}
+
+function optionalBootstrapProjectId(value, fallback) {
+  if ((value === undefined || value === null || value === '') && (fallback === undefined || fallback === null || fallback === '')) {
+    return undefined
+  }
+  return parseProjectId(value === undefined || value === null || value === '' ? fallback : value)
+}
+
+function parseConfiguredProjectId(value) {
   if (value === undefined || value === null || value === '') {
-    return fallback
+    return undefined
   }
   return parseProjectId(value)
 }

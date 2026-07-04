@@ -107,6 +107,22 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
     private static Map<String, AiCapabilityEntry> builtIns() {
         Map<String, AiCapabilityEntry> map = new LinkedHashMap<>();
         add(map, cap(
+                "session-bootstrap", "discovery", "AI 会话启动包",
+                "新会话第一跳，聚合当前项目、标准版本、可用能力、推荐命令、风险提示和结构化 nextActions。",
+                false, "READ_ONLY",
+                list(), list("projectId", "server"),
+                list("ai-session-bootstrap"),
+                list("GET /api/bootstrap/session"),
+                list("dataspec bootstrap --project <id> --format json"),
+                list("dataspec://project/<id>/session-bootstrap"),
+                list("get_session_bootstrap"),
+                list(), list(), list(), list(),
+                examples("CLI", "dataspec bootstrap --project 1 --format json", null),
+                list("不执行 lint、导出 Context、反向导入、DDL 生成或写入操作", "如传 projectId，token 需有项目访问权"),
+                list("AI 新会话先读取启动包，再按 recommendedCommands 调用 doctor/context/lint/workflow。"),
+                "README.md#ai-会话启动包"
+        ));
+        add(map, cap(
                 "capability-catalog", "discovery", "AI 能力清单",
                 "列出 DataSpec 面向 AI/CLI/MCP 的稳定能力、入口、契约和下一步建议。",
                 false, "READ_ONLY",

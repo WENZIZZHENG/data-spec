@@ -1844,6 +1844,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/bootstrap/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["session"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/me": {
         parameters: {
             query?: never;
@@ -5357,6 +5373,69 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["AiCapabilityEntry"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        AiSessionBootstrap: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: date-time */
+            generatedAt?: string;
+            status?: string;
+            /** Format: int64 */
+            projectId?: number;
+            server?: string;
+            authMode?: string;
+            specVersion?: string;
+            standardSnapshot?: components["schemas"]["AiSessionBootstrapSnapshot"];
+            availableCapabilities?: components["schemas"]["AiSessionBootstrapCapability"][];
+            recommendedCommands?: string[];
+            knownRisks?: string[];
+            docsRefs?: string[];
+            checks?: components["schemas"]["AiSessionBootstrapCheck"][];
+            nextActions?: components["schemas"]["AiSessionBootstrapNextAction"][];
+        };
+        AiSessionBootstrapCapability: {
+            id?: string;
+            title?: string;
+            status?: string;
+            writeRisk?: string;
+            requiresProject?: boolean;
+            apiEndpoints?: string[];
+            cliCommands?: string[];
+            mcpResources?: string[];
+            mcpTools?: string[];
+            nextActions?: string[];
+        };
+        AiSessionBootstrapCheck: {
+            name?: string;
+            status?: string;
+            message?: string;
+            nextAction?: string;
+        };
+        AiSessionBootstrapNextAction: {
+            code?: string;
+            severity?: string;
+            message?: string;
+            command?: string;
+            docsRef?: string;
+            retryable?: boolean;
+        };
+        AiSessionBootstrapSnapshot: {
+            /** Format: int64 */
+            snapshotId?: number;
+            /** Format: int64 */
+            projectId?: number;
+            specVersion?: string;
+            specHash?: string;
+            versioned?: boolean;
+            source?: string;
+        };
+        RAiSessionBootstrap: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiSessionBootstrap"];
             error?: components["schemas"]["ErrorDetail"];
         };
         AuthMe: {
@@ -9314,6 +9393,29 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RAiCapabilityEntry"];
+                };
+            };
+        };
+    };
+    session: {
+        parameters: {
+            query?: {
+                projectId?: number;
+                server?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiSessionBootstrap"];
                 };
             };
         };

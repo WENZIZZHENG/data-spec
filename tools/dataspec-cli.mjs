@@ -116,6 +116,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'capability' || command === 'capabilities') {
       return await runCapability(rest, io, fetchFn)
     }
+    if (command === 'bootstrap') {
+      return await runBootstrap(rest, io, fetchFn)
+    }
     if (command === 'workflow' || command === 'workflows') {
       return runWorkflow(rest, io)
     }
@@ -981,6 +984,31 @@ async function runTask(args, io, fetchFn) {
   throw new Error(`未知 task 子命令: ${subcommand}。支持: list, failures, show`)
 }
 
+async function runBootstrap(args, io, fetchFn) {
+  const { positional, options } = parseArgs(args, ['project', 'format', 'server', 'dataspec-token'])
+  if (positional.length > 0) {
+    throw new Error(`bootstrap 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const config = loadDataSpecConfig(cliCwd(io))
+  const format = options.format ?? 'json'
+  if (!['json', 'text'].includes(format)) {
+    throw new Error('bootstrap 仅支持 --format text|json')
+  }
+  const server = normalizeServer(options.server ?? config.server)
+  const projectId = parseOptionalProjectId(options.project ?? config.projectId)
+  const apiToken = resolveDataSpecToken(options, config)
+  const bootstrap = await fetchSessionBootstrapWithFallback({
+    server,
+    projectId,
+    apiToken,
+    fetchFn
+  })
+  io.writeOut(format === 'json'
+    ? `${JSON.stringify(bootstrap, null, 2)}\n`
+    : formatSessionBootstrapText(bootstrap))
+  return bootstrap.status === 'READY' ? 0 : 1
+}
+
 async function runQualityGate(args, io, fetchFn) {
   const [subcommand, ...rest] = args
   if (subcommand !== 'check') {
@@ -1656,6 +1684,179 @@ async function fetchQualityGateEvaluation({ server, projectId, apiToken, fetchFn
   }
 }
 
+async function fetchSessionBootstrapWithFallback({ server, projectId, apiToken, fetchFn }) {
+  try {
+    return await fetchSessionBootstrap({ server, projectId, apiToken, fetchFn })
+  } catch (error) {
+    if (error instanceof DataSpecCliError) {
+      if (isBootstrapAuthorizationFailure(error)) {
+        return buildRejectedBootstrapPackage({ server, projectId, apiToken, error })
+      }
+      throw error
+    }
+    return buildLocalBootstrapFallback({ server, projectId, apiToken, error })
+  }
+}
+
+async function fetchSessionBootstrap({ server, projectId, apiToken, fetchFn }) {
+  const params = new URLSearchParams()
+  appendOptionalParam(params, 'projectId', projectId)
+  params.set('server', server)
+  const response = await fetchFn(`${server}/api/bootstrap/session?${params.toString()}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  return unwrapResponse(await readJsonResponse(response))
+}
+
+function buildLocalBootstrapFallback({ server, projectId, apiToken, error }) {
+  const message = `DataSpec 服务不可访问: ${error?.message ?? 'unknown error'}`
+  const commandServer = safeServerForMetadata(server)
+  const doctorCommand = projectId
+    ? `dataspec doctor --project ${projectId} --server ${commandServer} --format json`
+    : `dataspec doctor --server ${commandServer} --format json`
+  return {
+    kind: 'dataspec-ai-session-bootstrap',
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    status: 'BLOCKED',
+    projectId: projectId ?? null,
+    server: safeServerForMetadata(server),
+    authMode: apiToken ? 'TOKEN_PRESENT' : 'TOKEN_MISSING',
+    specVersion: 'unavailable',
+    standardSnapshot: {
+      snapshotId: null,
+      projectId: projectId ?? null,
+      specVersion: 'unavailable',
+      specHash: null,
+      versioned: false,
+      source: 'server-unavailable'
+    },
+    availableCapabilities: [],
+    recommendedCommands: [
+      doctorCommand,
+      'dataspec capability list --format json',
+      projectId
+        ? `dataspec bootstrap --project ${projectId} --server ${commandServer} --format json`
+        : `dataspec bootstrap --project <id> --server ${commandServer} --format json`
+    ].map((command) => sanitizeSecretText(command)),
+    knownRisks: [
+      '当前无法连接 DataSpec 服务，不能确认项目、标准版本和远端能力状态。',
+      'fallback 启动包只包含本地配置和恢复建议，不代表 lint、Context、反向导入或 DDL 能力可用。'
+    ],
+    docsRefs: ['README.md#ai-会话启动包', 'README.md#cli'],
+    checks: [
+      {
+        name: 'server',
+        status: 'fail',
+        message: sanitizeSecretText(message),
+        nextAction: '启动 DataSpec 后端或修正 --server/.dataspec/config.json。'
+      },
+      {
+        name: 'project',
+        status: projectId ? 'warn' : 'fail',
+        message: projectId ? `本地已配置 projectId: ${projectId}，但尚未远端校验。` : '缺少 projectId。',
+        nextAction: projectId ? '服务恢复后重新运行 bootstrap。' : '提供 --project <id> 或更新 .dataspec/config.json。'
+      }
+    ],
+    nextActions: [
+      {
+        code: 'RUN_DOCTOR',
+        severity: 'error',
+        message: sanitizeSecretText(message),
+        command: sanitizeSecretText(doctorCommand),
+        docsRef: 'README.md#cli',
+        retryable: true
+      },
+      {
+        code: 'START_DATASPEC_SERVER',
+        severity: 'error',
+        message: '启动 DataSpec 后端服务后重试 bootstrap。',
+        command: 'mvn spring-boot:run',
+        docsRef: 'README.md#本地启动',
+        retryable: true
+      }
+    ]
+  }
+}
+
+function isBootstrapAuthorizationFailure(error) {
+  return error?.diagnostic?.httpStatus === 401 || error?.diagnostic?.httpStatus === 403
+}
+
+function buildRejectedBootstrapPackage({ server, projectId, apiToken, error }) {
+  const diagnostic = error.diagnostic ?? fallbackDataSpecDiagnostic(0, error.message)
+  const commandServer = safeServerForMetadata(server)
+  const doctorCommand = projectId
+    ? `dataspec doctor --project ${projectId} --server ${commandServer} --format json`
+    : `dataspec doctor --server ${commandServer} --format json`
+  const isForbidden = diagnostic.httpStatus === 403
+  const message = sanitizeSecretText(error.message ?? diagnostic.suggestedAction)
+  const checks = [
+    {
+      name: 'server',
+      status: 'pass',
+      message: 'DataSpec 服务已响应 bootstrap 请求。',
+      nextAction: '继续处理认证或项目访问诊断。'
+    },
+    {
+      name: isForbidden ? 'project' : 'auth',
+      status: 'fail',
+      message,
+      nextAction: sanitizeSecretText(diagnostic.suggestedAction)
+    }
+  ]
+  if (!projectId) {
+    checks.push({
+      name: 'project',
+      status: 'fail',
+      message: '缺少 projectId。',
+      nextAction: '提供 --project <id> 或更新 .dataspec/config.json。'
+    })
+  }
+  return {
+    kind: 'dataspec-ai-session-bootstrap',
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    status: 'BLOCKED',
+    projectId: projectId ?? null,
+    server: commandServer,
+    authMode: apiToken ? 'TOKEN_PRESENT' : 'TOKEN_MISSING',
+    specVersion: 'unavailable',
+    standardSnapshot: {
+      snapshotId: null,
+      projectId: projectId ?? null,
+      specVersion: 'unavailable',
+      specHash: null,
+      versioned: false,
+      source: 'server-rejected'
+    },
+    availableCapabilities: [],
+    recommendedCommands: [
+      doctorCommand,
+      'dataspec capability list --format json',
+      projectId
+        ? `dataspec bootstrap --project ${projectId} --server ${commandServer} --format json`
+        : `dataspec bootstrap --project <id> --server ${commandServer} --format json`
+    ].map((command) => sanitizeSecretText(command)),
+    knownRisks: [
+      'DataSpec 服务已响应，但当前 token 或项目访问未通过校验。',
+      '在修复认证或项目访问前，不应继续执行 lint、Context、反向导入或 DDL 生成。'
+    ],
+    docsRefs: [diagnostic.docsRef ?? 'README.md#安全基线', 'README.md#ai-会话启动包'],
+    checks,
+    nextActions: [
+      {
+        code: diagnostic.code ?? (isForbidden ? 'PROJECT_ACCESS_DENIED' : 'AUTH_TOKEN_MISSING_OR_INVALID'),
+        severity: 'error',
+        message,
+        command: sanitizeSecretText(doctorCommand),
+        docsRef: diagnostic.docsRef ?? 'README.md#安全基线',
+        retryable: Boolean(diagnostic.retryable)
+      }
+    ]
+  }
+}
+
 async function buildEvidenceRequest(options, config) {
   const sourceType = normalizeEvidenceSourceType(options['source-type'] ?? options.sourceType)
   const sourceId = options['source-id'] ?? options.sourceId
@@ -1771,7 +1972,8 @@ const REQUIRED_CAPABILITY_IDS = [
   'export-evidence-package',
   'workflow-recipes',
   'ai-task-profiles',
-  'domain-starter-kits'
+  'domain-starter-kits',
+  'session-bootstrap'
 ]
 
 function checkCapabilityCatalog(catalog) {
@@ -2269,6 +2471,40 @@ function formatCapabilityCheckText(result) {
   return lines.join('\n')
 }
 
+function formatSessionBootstrapText(bootstrap) {
+  const lines = [
+    'DataSpec AI Session Bootstrap',
+    `status: ${bootstrap.status ?? '-'}`,
+    `server: ${bootstrap.server ?? '-'}`,
+    `projectId: ${bootstrap.projectId ?? '-'}`,
+    `authMode: ${bootstrap.authMode ?? '-'}`,
+    `specVersion: ${bootstrap.specVersion ?? '-'}`,
+    ''
+  ]
+  appendTextList(lines, 'recommended commands', bootstrap.recommendedCommands)
+  appendTextList(lines, 'known risks', bootstrap.knownRisks)
+  if ((bootstrap.checks ?? []).length > 0) {
+    lines.push('checks:')
+    for (const check of bootstrap.checks) {
+      lines.push(`  - [${String(check.status ?? '-').toUpperCase()}] ${check.name ?? '-'}: ${check.message ?? '-'}`)
+      if (check.nextAction) {
+        lines.push(`    next: ${check.nextAction}`)
+      }
+    }
+  }
+  if ((bootstrap.nextActions ?? []).length > 0) {
+    lines.push('next actions:')
+    for (const action of bootstrap.nextActions) {
+      lines.push(`  - ${action.code ?? '-'}: ${action.message ?? '-'}`)
+      if (action.command) {
+        lines.push(`    ${action.command}`)
+      }
+    }
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
 function appendTextList(lines, title, values = []) {
   if (!Array.isArray(values) || values.length === 0) {
     return
@@ -2387,6 +2623,7 @@ function renderInitReadme({ projectId, server, defaultPaths }) {
 如果业务仓库没有 \`tools/dataspec-cli.mjs\`，请把下面示例替换为团队实际使用的 DataSpec CLI 路径或封装脚本。
 
 \`\`\`bash
+node tools/dataspec-cli.mjs bootstrap --format json
 node tools/dataspec-cli.mjs doctor --format json
 node tools/dataspec-cli.mjs changed --format json
 node tools/dataspec-cli.mjs lint-changed --format json
@@ -2408,6 +2645,7 @@ export DATASPEC_TOKEN=ds_xxx
 
 ## 给 AI agent 的约定
 
+- 新会话第一步运行 \`bootstrap --format json\`，读取 projectId、server、authMode、specVersion、availableCapabilities、recommendedCommands、knownRisks 和 nextActions。
 - 修改 SQL、migration 或 ORM entity 前，先运行 \`doctor\` 确认 DataSpec 可用。
 - 处理本次 git 变更时，先运行 \`changed --format json\` 获取变更文件、SQL 子集和最小 Context 建议。
 - 只检查本次 SQL 变更时，运行 \`lint-changed --format json\`；它不会扫描 defaultPaths 之外的大目录。
@@ -2424,6 +2662,7 @@ function renderAgentsFragment({ projectId, server, defaultPaths }) {
 在创建或修改数据库 schema、SQL migration、ORM entity 或数据字典前：
 
 - 修改后先运行 \`node tools/dataspec-verify-advisor.mjs --changed --format json\` 获取建议验证命令。
+- 新会话第一步运行 \`node tools/dataspec-cli.mjs bootstrap --format json\`，读取当前项目、标准版本、可用能力、风险提示和 nextActions。
 - 先运行 \`node tools/dataspec-cli.mjs doctor --format json\`。
 - 优先运行 \`node tools/dataspec-cli.mjs changed --format json\` 获取本次 git 变更、SQL 子集和最小 Context 建议。
 - 只对本次 SQL 变更运行 \`node tools/dataspec-cli.mjs lint-changed --format json\`。
@@ -3130,6 +3369,7 @@ function sanitizeSecretText(value) {
     return value
   }
   return String(value)
+    .replace(/\b(https?:\/\/)[^\s/]*@/gi, '$1')
     .replace(/jdbc:[^\s"'<>]+/gi, 'jdbc:***')
     .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s,;]+/gi, '$1***')
     .replace(/(authorization\s*[:=]\s*)(?!\s*['"]?bearer\s+)(['"]?)[^,;}&\r\n]+\2/gi, '$1$2***$2')
@@ -3748,6 +3988,7 @@ Usage:
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
+  node tools/dataspec-cli.mjs bootstrap [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs doctor [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
   node tools/dataspec-cli.mjs evidence export --source-type <AI_JOB|SQL_CHECK|COVERAGE_REPORT|AI_BATCH_RUN|AI_TASK_RUN> [--source-id <id>] [--payload <json>] [--format json|zip] [--output <path>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs task list [--project <id>] [--status <status>] [--task-type <type>] [--current <n>] [--size <n>] [--format json] [--server <url>] [--dataspec-token <token>]
@@ -3778,6 +4019,7 @@ Options:
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
+  bootstrap 是 AI 新会话第一跳；服务可达时读取后端启动包，服务不可达时仍输出本地 BLOCKED JSON 和 nextActions
   doctor 默认做轻量 OpenAPI 状态和 AI Context 缓存检查；传 --check-openapi 时执行完整 schema 漂移检查
   evidence export 生成只读 AI 执行证据包；zip 输出必须显式指定 --output，证据包不是审批、审计或写入权限
   contract 用于读取和检查 AI 可消费输出契约 registry，不代表权限或发布审批

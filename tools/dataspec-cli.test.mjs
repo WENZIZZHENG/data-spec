@@ -1667,7 +1667,8 @@ test('capability list prints machine-readable catalog with project diagnostics',
   assert.equal(calls[0], 'http://dataspec.local/api/capabilities?projectId=7')
   assert.equal(output.kind, 'dataspec-ai-capability-catalog')
   assert.equal(output.projectId, 7)
-  assert.equal(output.capabilities[0].id, 'capability-catalog')
+  assert.ok(output.capabilities.some((capability) => capability.id === 'session-bootstrap'))
+  assert.ok(output.capabilities.some((capability) => capability.id === 'capability-catalog'))
 })
 
 test('capability show prints capability detail', async () => {
@@ -1775,6 +1776,165 @@ test('capability list prints DataSpecError when server is unavailable', async ()
   assert.equal(code, 2)
   assert.equal(diagnostic.code, 'DATASPEC_SERVER_UNAVAILABLE')
   assert.match(diagnostic.suggestedAction, /doctor/)
+})
+
+test('bootstrap prints server session package and hides token value', async () => {
+  const calls = []
+  const fetchFn = async (url, options = {}) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: sessionBootstrapFixture()
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'bootstrap',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local/',
+    '--dataspec-token',
+    'ds_secret_token',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(calls[0].url, 'http://dataspec.local/api/bootstrap/session?projectId=7&server=http%3A%2F%2Fdataspec.local')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_secret_token')
+  assert.equal(output.kind, 'dataspec-ai-session-bootstrap')
+  assert.equal(output.status, 'READY')
+  assert.equal(output.projectId, 7)
+  assert.match(output.recommendedCommands.join('\n'), /dataspec lint/)
+  assert.doesNotMatch(io.stdout, /ds_secret_token|Authorization|Bearer/)
+  assert.equal(io.stderr, '')
+})
+
+test('bootstrap returns structured fallback when server is unavailable', async () => {
+  const fetchFn = async () => {
+    throw new Error('ECONNREFUSED')
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'bootstrap',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local',
+    '--dataspec-token',
+    'ds_secret_token',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 1)
+  assert.equal(output.kind, 'dataspec-ai-session-bootstrap')
+  assert.equal(output.status, 'BLOCKED')
+  assert.equal(output.server, 'http://dataspec.local')
+  assert.equal(output.projectId, 7)
+  assert.equal(output.authMode, 'TOKEN_PRESENT')
+  assert.equal(output.nextActions[0].code, 'RUN_DOCTOR')
+  assert.match(output.nextActions.map((action) => action.command).join('\n'), /doctor/)
+  assert.doesNotMatch(io.stdout, /ds_secret_token|Authorization|Bearer/)
+  assert.equal(io.stderr, '')
+})
+
+test('bootstrap returns auth next action when server rejects token', async () => {
+  const fetchFn = async () => ({
+    ok: false,
+    status: 401,
+    json: async () => ({
+      code: 401,
+      message: 'API Token 无效',
+      error: {
+        code: 'AUTH_TOKEN_MISSING_OR_INVALID',
+        category: 'AUTH',
+        retryable: true,
+        suggestedAction: '重新设置 DATASPEC_TOKEN 或 --dataspec-token。',
+        docsRef: 'README.md#安全基线'
+      }
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'bootstrap',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local',
+    '--dataspec-token',
+    'expired_token',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 1)
+  assert.equal(output.status, 'BLOCKED')
+  assert.equal(output.checks.find((check) => check.name === 'server').status, 'pass')
+  assert.equal(output.checks.find((check) => check.name === 'auth').status, 'fail')
+  assert.equal(output.nextActions[0].code, 'AUTH_TOKEN_MISSING_OR_INVALID')
+  assert.doesNotMatch(output.nextActions.map((action) => action.code).join('\n'), /START_DATASPEC_SERVER/)
+  assert.doesNotMatch(io.stdout, /expired_token|Authorization|Bearer/)
+  assert.equal(io.stderr, '')
+})
+
+test('bootstrap fallback redacts server userinfo in commands', async () => {
+  const fetchFn = async () => {
+    throw new Error('ECONNREFUSED')
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'bootstrap',
+    '--project',
+    '7',
+    '--server',
+    'http://user:p@ss@dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 1)
+  assert.equal(output.server, 'http://dataspec.local')
+  assert.match(output.recommendedCommands.join('\n'), /--server http:\/\/dataspec\.local/)
+  assert.doesNotMatch(io.stdout, /user:p|p@ss|user%3A|p%40ss|http:\/\/user/)
+  assert.equal(io.stderr, '')
+})
+
+test('bootstrap text output summarizes status and next commands', async () => {
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 200,
+      data: {
+        ...sessionBootstrapFixture(),
+        status: 'DEGRADED',
+        checks: [{ name: 'standard', status: 'warn', message: '当前项目还没有版本化标准快照' }]
+      }
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli(['bootstrap', '--project', '7', '--format', 'text'], io, fetchFn)
+
+  assert.equal(code, 1)
+  assert.match(io.stdout, /AI Session Bootstrap/)
+  assert.match(io.stdout, /DEGRADED/)
+  assert.match(io.stdout, /dataspec doctor/)
+  assert.match(io.stdout, /当前项目还没有版本化标准快照/)
 })
 
 test('task list prints paginated task run json with filters', async () => {
@@ -3218,6 +3378,7 @@ function contractCatalogFixture() {
 
 function capabilityCatalogFixture() {
   const ids = [
+    'session-bootstrap',
     'capability-catalog',
     'doctor',
     'export-ai-context',
@@ -3246,17 +3407,21 @@ function capabilityCatalogFixture() {
       summary: `${id} summary`,
       status: 'AVAILABLE',
       stability: 'stable-ai',
-      requiresProject: !['capability-catalog', 'doctor', 'schema-registry', 'workflow-recipes'].includes(id),
+      requiresProject: !['session-bootstrap', 'capability-catalog', 'doctor', 'schema-registry', 'workflow-recipes'].includes(id),
       writeRisk: id === 'lint-sql' ? 'WRITES_DATASPEC_RECORD' : 'READ_ONLY',
       requiredInputs: id === 'lint-sql' ? ['projectId', 'sql'] : [],
       optionalInputs: [],
       outputContracts: id === 'lint-sql' ? ['lint-result'] : ['ai-capability-catalog'],
-      apiEndpoints: id === 'lint-sql' ? ['POST /api/lint'] : ['GET /api/capabilities'],
+      apiEndpoints: id === 'session-bootstrap'
+        ? ['GET /api/bootstrap/session']
+        : id === 'lint-sql' ? ['POST /api/lint'] : ['GET /api/capabilities'],
       cliCommands: id === 'lint-sql'
         ? ['dataspec lint <file.sql> --project <id> --format json']
-        : ['dataspec capability list --format json'],
-      mcpResources: id === 'capability-catalog' ? ['dataspec://project/<id>/capability-catalog'] : [],
-      mcpTools: id === 'lint-sql' ? ['lint_sql'] : [],
+        : id === 'session-bootstrap' ? ['dataspec bootstrap --project <id> --format json'] : ['dataspec capability list --format json'],
+      mcpResources: id === 'capability-catalog'
+        ? ['dataspec://project/<id>/capability-catalog']
+        : id === 'session-bootstrap' ? ['dataspec://project/<id>/session-bootstrap'] : [],
+      mcpTools: id === 'lint-sql' ? ['lint_sql'] : id === 'session-bootstrap' ? ['get_session_bootstrap'] : [],
       frontendRoutes: [],
       contractIds: [],
       workflowIds: [],
@@ -3269,6 +3434,62 @@ function capabilityCatalogFixture() {
     requiredCapabilityIds: ids,
     recommendedFirstActions: ['run doctor'],
     diagnostics: [{ code: 'CATALOG_READY', status: 'pass', message: 'ready', nextAction: 'continue' }]
+  }
+}
+
+function sessionBootstrapFixture() {
+  return {
+    kind: 'dataspec-ai-session-bootstrap',
+    schemaVersion: 1,
+    generatedAt: '2026-07-04T12:00:00',
+    status: 'READY',
+    projectId: 7,
+    server: 'http://dataspec.local',
+    authMode: 'TOKEN_PRESENT',
+    specVersion: 'v2026.07.04',
+    standardSnapshot: {
+      snapshotId: 11,
+      projectId: 7,
+      specVersion: 'v2026.07.04',
+      specHash: 'hash-1',
+      versioned: true,
+      source: 'current'
+    },
+    availableCapabilities: [
+      {
+        id: 'lint-sql',
+        title: 'SQL 校验与 fixedSql',
+        status: 'AVAILABLE',
+        writeRisk: 'WRITES_DATASPEC_RECORD',
+        requiresProject: true,
+        apiEndpoints: ['POST /api/lint'],
+        cliCommands: ['dataspec lint <sql-file> --project 7 --format json'],
+        mcpResources: [],
+        mcpTools: ['lint_sql'],
+        nextActions: ['先读取字段目录和规则']
+      }
+    ],
+    recommendedCommands: [
+      'dataspec doctor --project 7 --format json',
+      'dataspec export-context --project 7 --cache',
+      'dataspec lint <sql-file> --project 7 --format json'
+    ],
+    knownRisks: ['启动包不会执行 lint、导出 Context、反向导入或生成 DDL。'],
+    docsRefs: ['README.md#ai-会话启动包', 'README.md#cli'],
+    checks: [
+      { name: 'project', status: 'pass', message: '已选择 projectId: 7' },
+      { name: 'standard', status: 'pass', message: '当前标准快照可用: v2026.07.04' }
+    ],
+    nextActions: [
+      {
+        code: 'RUN_DOCTOR',
+        severity: 'info',
+        message: '从 doctor 开始确认本地配置和远端契约状态。',
+        command: 'dataspec doctor --project 7 --format json',
+        docsRef: 'README.md#cli',
+        retryable: true
+      }
+    ]
   }
 }
 
