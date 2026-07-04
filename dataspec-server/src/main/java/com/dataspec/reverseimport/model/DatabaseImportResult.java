@@ -1,5 +1,6 @@
 package com.dataspec.reverseimport.model;
 
+import com.dataspec.reverseimport.entity.ReverseImportDecision;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -11,8 +12,10 @@ import java.util.List;
 @Data
 public class DatabaseImportResult {
 
+    private Long batchId;
     private int importedCount;
     private int skippedCount;
     private List<String> importedFields = new ArrayList<>();
     private List<String> skippedFields = new ArrayList<>();
+    private List<ReverseImportDecision> mappingDecisions = new ArrayList<>();
 }

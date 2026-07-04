@@ -6,6 +6,7 @@ import type {
   DatabaseImportResult,
   DatabaseTableInfo,
   FieldCandidate,
+  ReverseImportDecision,
   ReverseImportCompareResult,
   ReverseImportPreview
 } from '@/types'
@@ -36,11 +37,19 @@ export function compareDatabaseReverseImport(data: DatabaseConnectionReq) {
 export function importDatabaseCandidates(
   projectId: number,
   candidates: FieldCandidate[],
-  source?: DatabaseImportSourceContext
+  source?: DatabaseImportSourceContext,
+  ignoredCandidates: FieldCandidate[] = []
 ) {
   return request.post<unknown, DatabaseImportResult>('/reverse-import/database/import', {
     projectId,
     candidates,
+    ignoredCandidates,
     ...source
+  })
+}
+
+export function listReverseImportDecisions(projectId: number, batchId?: number, limit = 50) {
+  return request.get<unknown, ReverseImportDecision[]>('/reverse-import/decisions', {
+    params: { projectId, batchId, limit }
   })
 }

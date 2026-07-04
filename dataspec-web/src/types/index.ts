@@ -888,7 +888,16 @@ export interface FieldCandidate {
   nullable?: boolean
   defaultValue?: string
   comment?: string
+  decisionType?: string
+  matchedFieldId?: number
+  matchedFieldName?: string
+  matchReason?: string
+  confidence?: number
+  ignoreReason?: string
+  confirmReason?: string
 }
+
+export type ReverseImportDecision = Schemas['ReverseImportDecision']
 
 export interface MissingCommentIssue {
   tableName?: string
@@ -908,6 +917,7 @@ export interface ReverseImportPreview {
   summary?: ReverseImportSummary
   tables?: TableDef[]
   fieldCandidates?: FieldCandidate[]
+  mappingDecisions?: ReverseImportDecision[]
   missingComments?: MissingCommentIssue[]
   nonStandardFields?: NonStandardField[]
   dialectDiagnostics?: DialectDiagnostic[]
@@ -1012,10 +1022,12 @@ export interface DatabaseTableInfo {
 }
 
 export interface DatabaseImportResult {
+  batchId?: number
   importedCount?: number
   skippedCount?: number
   importedFields?: string[]
   skippedFields?: string[]
+  mappingDecisions?: ReverseImportDecision[]
 }
 
 export interface DatabaseImportSourceContext {

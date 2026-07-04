@@ -752,6 +752,10 @@ test('keeps database reverse import and comparison flow wired', () => {
     'securityRiskLabel(connectionSecurity.riskLevel)',
     'connectionSecurity.recommendedSql',
     '只读安全诊断',
+    'candidateReasonValue(row)',
+    'ignoredFieldCandidates',
+    'importDecisionRows',
+    '映射决策',
     'goToFieldLibrary'
   ], 'ReverseImport.vue')
 
@@ -761,7 +765,8 @@ test('keeps database reverse import and comparison flow wired', () => {
     "request.post<unknown, DatabaseTableInfo[]>('/reverse-import/database/tables'",
     "request.post<unknown, ReverseImportPreview>('/reverse-import/database/preview'",
     "request.post<unknown, ReverseImportCompareResult>('/reverse-import/database/compare'",
-    "request.post<unknown, DatabaseImportResult>('/reverse-import/database/import'"
+    "request.post<unknown, DatabaseImportResult>('/reverse-import/database/import'",
+    "request.get<unknown, ReverseImportDecision[]>('/reverse-import/decisions'"
   ], 'reverse import api')
 })
 

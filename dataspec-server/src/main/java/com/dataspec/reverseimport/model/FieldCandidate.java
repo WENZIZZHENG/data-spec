@@ -1,6 +1,5 @@
 package com.dataspec.reverseimport.model;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -9,7 +8,6 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class FieldCandidate {
 
     private String tableName;
@@ -18,4 +16,25 @@ public class FieldCandidate {
     private Boolean nullable;
     private String defaultValue;
     private String comment;
+    private String decisionType;
+    private Long matchedFieldId;
+    private String matchedFieldName;
+    private String matchReason;
+    private Double confidence;
+    private String ignoreReason;
+    private String confirmReason;
+
+    public FieldCandidate(String tableName,
+                          String columnName,
+                          String dataType,
+                          Boolean nullable,
+                          String defaultValue,
+                          String comment) {
+        this.tableName = tableName;
+        this.columnName = columnName;
+        this.dataType = dataType;
+        this.nullable = nullable;
+        this.defaultValue = defaultValue;
+        this.comment = comment;
+    }
 }

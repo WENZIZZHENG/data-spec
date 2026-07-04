@@ -1220,6 +1220,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reverse-import/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMappingDecisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/prompt-templates": {
         parameters: {
             query?: never;
@@ -2854,6 +2870,15 @@ export interface components {
             nullable?: boolean;
             defaultValue?: string;
             comment?: string;
+            decisionType?: string;
+            /** Format: int64 */
+            matchedFieldId?: number;
+            matchedFieldName?: string;
+            matchReason?: string;
+            /** Format: double */
+            confidence?: number;
+            ignoreReason?: string;
+            confirmReason?: string;
         };
         MissingCommentIssue: {
             tableName?: string;
@@ -2874,10 +2899,35 @@ export interface components {
             data?: components["schemas"]["ReverseImportPreview"];
             error?: components["schemas"]["ErrorDetail"];
         };
+        ReverseImportDecision: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int64 */
+            batchId?: number;
+            sourceType?: string;
+            schemaName?: string;
+            tableName?: string;
+            columnName?: string;
+            dataType?: string;
+            decisionType?: string;
+            /** Format: int64 */
+            matchedFieldId?: number;
+            matchedFieldName?: string;
+            matchReason?: string;
+            confidence?: number;
+            ignoreReason?: string;
+            confirmReason?: string;
+            metadataJson?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
         ReverseImportPreview: {
             summary?: components["schemas"]["ReverseImportSummary"];
             tables?: components["schemas"]["TableDef"][];
             fieldCandidates?: components["schemas"]["FieldCandidate"][];
+            mappingDecisions?: components["schemas"]["ReverseImportDecision"][];
             missingComments?: components["schemas"]["MissingCommentIssue"][];
             nonStandardFields?: components["schemas"]["NonStandardField"][];
             dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
@@ -3078,18 +3128,22 @@ export interface components {
             /** Format: int64 */
             projectId: number;
             candidates?: components["schemas"]["FieldCandidate"][];
+            ignoredCandidates?: components["schemas"]["FieldCandidate"][];
             databaseType?: string;
             databaseName?: string;
             schemaName?: string;
             tableNames?: string[];
         };
         DatabaseImportResult: {
+            /** Format: int64 */
+            batchId?: number;
             /** Format: int32 */
             importedCount?: number;
             /** Format: int32 */
             skippedCount?: number;
             importedFields?: string[];
             skippedFields?: string[];
+            mappingDecisions?: components["schemas"]["ReverseImportDecision"][];
         };
         RDatabaseImportResult: {
             /** Format: int32 */
@@ -4259,6 +4313,13 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["RuleBaselineInfo"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RListReverseImportDecision: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ReverseImportDecision"][];
             error?: components["schemas"]["ErrorDetail"];
         };
         PromptTemplateDefinition: {
@@ -7901,6 +7962,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RRuleBaselineInfo"];
+                };
+            };
+        };
+    };
+    listMappingDecisions: {
+        parameters: {
+            query: {
+                projectId: number;
+                batchId?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListReverseImportDecision"];
                 };
             };
         };

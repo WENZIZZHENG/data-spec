@@ -19,6 +19,9 @@ public class DatabaseImportReq {
     @Valid
     private List<FieldCandidate> candidates = new ArrayList<>();
 
+    @Valid
+    private List<FieldCandidate> ignoredCandidates = new ArrayList<>();
+
     /** 以下来源上下文字段仅用于追踪直连反向导入，不包含密码或完整连接串。 */
     private String databaseType;
     private String databaseName;

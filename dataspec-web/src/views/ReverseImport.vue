@@ -342,6 +342,23 @@
             <span v-if="!(importResult.skippedFields?.length)" class="empty-inline">无</span>
           </div>
         </div>
+        <div v-if="importDecisionRows.length" class="decision-summary">
+          <div class="list-title">映射决策</div>
+          <el-table :data="importDecisionRows" size="small" stripe>
+            <el-table-column prop="columnName" label="字段" min-width="140" />
+            <el-table-column label="决策" width="120">
+              <template #default="{ row }">
+                <el-tag size="small" :type="decisionTagType(row.decisionType)">
+                  {{ decisionTypeLabel(row.decisionType) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="matchedFieldName" label="标准字段" min-width="140" />
+            <el-table-column prop="matchReason" label="匹配理由" min-width="240" show-overflow-tooltip />
+            <el-table-column prop="confirmReason" label="确认理由" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="ignoreReason" label="忽略理由" min-width="180" show-overflow-tooltip />
+          </el-table>
+        </div>
       </section>
 
       <section v-if="compareResult" class="result-section compare-result">
@@ -482,6 +499,17 @@
                       <template #default="{ row }">{{ row.nullable ? '可空' : '非空' }}</template>
                     </el-table-column>
                     <el-table-column prop="comment" label="注释" min-width="220" show-overflow-tooltip />
+                    <el-table-column label="确认理由" min-width="260">
+                      <template #default="{ row }">
+                        <el-input
+                          :model-value="candidateReasonValue(row)"
+                          size="small"
+                          maxlength="200"
+                          @input="updateCandidateConfirmReason(row, String($event))"
+                        />
+                        <div v-if="row.matchReason" class="decision-hint">{{ row.matchReason }}</div>
+                      </template>
+                    </el-table-column>
                   </el-table>
                 </el-collapse-item>
               </el-collapse>
@@ -549,7 +577,10 @@ import {
 } from '@/api/reverseImport'
 import { useProjectStore } from '@/stores/project'
 import {
+  attachCandidateConfirmReasons,
+  buildIgnoredCandidates,
   buildCandidateKey,
+  defaultCandidateConfirmReason,
   filterDatabaseTables,
   groupFieldCandidatesByTable,
   mergeSelectedTableNames,
@@ -596,6 +627,7 @@ import type {
   DatabaseImportResult,
   DatabaseTableInfo,
   FieldCandidate,
+  ReverseImportDecision,
   ReverseImportCompareResult,
   ReverseImportFieldChange,
   ReverseImportFieldDiff,
@@ -635,6 +667,7 @@ const connectionMessage = ref('')
 const connectionSecurity = ref<DatabaseConnectionSecurityDiagnostic | null>(null)
 const connectionHealth = ref<DatabaseConnectionHealthDiagnostic | null>(null)
 const selectedCandidateKeys = ref<Set<string>>(new Set())
+const candidateConfirmReasons = ref<Record<string, string>>({})
 const presets = ref<DatabaseConnectionPreset[]>([])
 const presetId = ref<number | null>(null)
 const presetForm = reactive({
@@ -698,11 +731,18 @@ const selectedTableCount = computed(() => dbForm.tableNames?.length ?? 0)
 const candidateTotal = computed(() => preview.value?.fieldCandidates?.length ?? 0)
 const selectedCandidateCount = computed(() => selectedCandidateKeys.value.size)
 const selectedFieldCandidates = computed(() =>
-  pickSelectedCandidates(preview.value?.fieldCandidates ?? [], selectedCandidateKeys.value)
+  attachCandidateConfirmReasons(
+    pickSelectedCandidates(preview.value?.fieldCandidates ?? [], selectedCandidateKeys.value),
+    candidateConfirmReasons.value
+  )
+)
+const ignoredFieldCandidates = computed(() =>
+  buildIgnoredCandidates(preview.value?.fieldCandidates ?? [], selectedCandidateKeys.value)
 )
 const candidateGroups = computed(() =>
   groupFieldCandidatesByTable(preview.value?.fieldCandidates ?? [])
 )
+const importDecisionRows = computed<ReverseImportDecision[]>(() => importResult.value?.mappingDecisions ?? [])
 const databaseStep = computed(() => {
   if (importResult.value) {
     return 3
@@ -885,6 +925,7 @@ function resetResults() {
   compareResult.value = null
   importResult.value = null
   selectedCandidateKeys.value = new Set()
+  candidateConfirmReasons.value = {}
 }
 
 function resetConnectionStatus() {
@@ -1150,7 +1191,8 @@ async function handleImportCandidates() {
         databaseName: dbForm.databaseName,
         schemaName: dbForm.schemaName,
         tableNames: [...(dbForm.tableNames ?? [])]
-      }
+      },
+      ignoredFieldCandidates.value
     )
     ElMessage.success(`导入 ${importResult.value.importedCount ?? 0} 个字段，跳过 ${importResult.value.skippedCount ?? 0} 个字段`)
   } finally {
@@ -1220,6 +1262,43 @@ function isCandidateSelected(candidate: FieldCandidate) {
 
 function handleCandidateCheck(candidate: FieldCandidate, checked: boolean | string | number) {
   toggleCandidate(candidate, Boolean(checked))
+}
+
+function candidateReasonValue(candidate: FieldCandidate) {
+  const key = buildCandidateKey(candidate)
+  return candidateConfirmReasons.value[key] ?? defaultCandidateConfirmReason(candidate)
+}
+
+function updateCandidateConfirmReason(candidate: FieldCandidate, reason: string) {
+  const key = buildCandidateKey(candidate)
+  candidateConfirmReasons.value = {
+    ...candidateConfirmReasons.value,
+    [key]: reason
+  }
+}
+
+function decisionTypeLabel(type?: string) {
+  const labels: Record<string, string> = {
+    EXISTING_MATCH: '已匹配',
+    NEW_CANDIDATE: '新候选',
+    IMPORTED: '已导入',
+    SKIPPED_EXISTING: '已跳过',
+    IGNORED: '已忽略'
+  }
+  return type ? labels[type] ?? type : '未知'
+}
+
+function decisionTagType(type?: string) {
+  if (type === 'IMPORTED') {
+    return 'success'
+  }
+  if (type === 'SKIPPED_EXISTING') {
+    return 'warning'
+  }
+  if (type === 'IGNORED') {
+    return 'info'
+  }
+  return 'primary'
 }
 
 function compareStatusLabel(status?: ReverseImportFieldStatus) {
@@ -1854,6 +1933,17 @@ function browserStorage() {
 .empty-inline {
   color: #9ca3af;
   font-size: 13px;
+}
+
+.decision-summary {
+  margin-top: 16px;
+}
+
+.decision-hint {
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .candidate-toolbar {

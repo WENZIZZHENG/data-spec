@@ -4,6 +4,7 @@ import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.coverage.model.FieldCoverageStatus;
 import com.dataspec.coverage.service.impl.FieldCoverageServiceImpl;
+import com.dataspec.reverseimport.entity.ReverseImportBatch;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseConnectionSecurityDiagnostic;
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -474,10 +476,15 @@ class DatabaseReverseImportServiceTest {
             created.add(field);
             return field;
         });
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        ReverseImportBatch batch = new ReverseImportBatch();
+        batch.setId(11L);
+        when(sourceService.createDatabaseBatch(any(DatabaseImportReq.class), eq(1), eq(1)))
+                .thenReturn(batch);
         ReverseImportServiceImpl reverseImportService = new ReverseImportServiceImpl(
                 new com.dataspec.lint.engine.SqlParserService(),
                 fieldService,
-                mock(ReverseImportSourceService.class));
+                sourceService);
 
         DatabaseImportReq req = new DatabaseImportReq();
         req.setProjectId(1L);

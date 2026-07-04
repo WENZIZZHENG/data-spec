@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  attachCandidateConfirmReasons,
   buildCandidateKey,
+  buildIgnoredCandidates,
+  defaultCandidateConfirmReason,
   filterDatabaseTables,
   groupFieldCandidatesByTable,
   mergeSelectedTableNames,
@@ -27,6 +30,26 @@ test('filters database tables by schema, table name, and comment', () => {
   assert.deepEqual(
     filterDatabaseTables(tables, '').map((table) => table.tableName),
     ['user_order', 'event_log', 'payment_bill']
+  )
+})
+
+test('builds candidate confirm and ignored reasons for import decisions', () => {
+  const candidates = [
+    { tableName: 'users', columnName: 'mobile_no', matchReason: '未命中标准字段名或别名' },
+    { tableName: 'users', columnName: 'tmp_flag' }
+  ]
+
+  assert.equal(defaultCandidateConfirmReason(candidates[0]), '未命中标准字段名或别名')
+  assert.deepEqual(
+    attachCandidateConfirmReasons(candidates, { 'users.mobile_no': '确认导入手机号标准' }),
+    [
+      { ...candidates[0], confirmReason: '确认导入手机号标准' },
+      { ...candidates[1], confirmReason: '确认将 tmp_flag 作为新标准字段导入' }
+    ]
+  )
+  assert.deepEqual(
+    buildIgnoredCandidates(candidates, new Set(['users.mobile_no'])),
+    [{ ...candidates[1], ignoreReason: '本次未选择导入' }]
   )
 })
 

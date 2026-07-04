@@ -1,29 +1,4 @@
-# db-reverse-import-frontend Specification
-
-## Purpose
-TBD - created by archiving change enhance-db-reverse-import-frontend. Update Purpose after archive.
-## Requirements
-### Requirement: 数据库直连流程步骤化
-反向导入页在数据库直连模式下 SHALL 以连续步骤呈现连接信息、选择表、预览确认、导入结果，且 SHALL 根据当前操作状态高亮当前步骤。
-
-#### Scenario: 用户进入数据库直连模式
-- **WHEN** 用户在反向导入页切换到数据库直连
-- **THEN** 页面展示数据库连接、选择表、预览确认、导入结果四个步骤和当前项目名称
-
-#### Scenario: 用户完成预览
-- **WHEN** 用户选择表并成功生成反向导入预览
-- **THEN** 页面高亮预览确认步骤，并展示字段候选、缺注释和非标准字段摘要
-
-### Requirement: 表选择可批量操作
-反向导入页 SHALL 支持用户在已加载数据库表后搜索、全选、清空表，并展示当前已选数量。
-
-#### Scenario: 用户搜索并选择表
-- **WHEN** 数据库表已加载且用户输入搜索关键字
-- **THEN** 页面只展示匹配的表，并保留当前已选表数量
-
-#### Scenario: 用户批量选择表
-- **WHEN** 数据库表已加载且用户点击全选或清空
-- **THEN** 页面更新待预览表集合，并同步更新已选数量
+## MODIFIED Requirements
 
 ### Requirement: 候选字段可确认导入
 反向导入页 SHALL 在预览结果中按表组织字段候选，并允许用户勾选本次要导入的候选字段；确认导入时 MUST 只提交已勾选候选字段。

@@ -7,6 +7,10 @@ export interface DatabaseTableLike {
 export interface FieldCandidateLike {
   tableName?: string
   columnName?: string
+  matchReason?: string
+  confidence?: number
+  ignoreReason?: string
+  confirmReason?: string
 }
 
 export interface CandidateGroup<T extends FieldCandidateLike> {
@@ -63,4 +67,43 @@ export function pickSelectedCandidates<T extends FieldCandidateLike>(
   selectedKeys: Set<string>
 ): T[] {
   return candidates.filter((candidate) => selectedKeys.has(buildCandidateKey(candidate)))
+}
+
+export function defaultCandidateConfirmReason(candidate: FieldCandidateLike): string {
+  const current = candidate.confirmReason?.trim()
+  if (current) {
+    return current
+  }
+  const reason = candidate.matchReason?.trim()
+  if (reason) {
+    return reason
+  }
+  return `确认将 ${candidate.columnName || '该字段'} 作为新标准字段导入`
+}
+
+export function defaultCandidateIgnoreReason(candidate: FieldCandidateLike): string {
+  return candidate.ignoreReason?.trim() || '本次未选择导入'
+}
+
+export function attachCandidateConfirmReasons<T extends FieldCandidateLike>(
+  candidates: T[],
+  reasonByKey: Record<string, string>
+): Array<T & { confirmReason: string }> {
+  return candidates.map((candidate) => {
+    const key = buildCandidateKey(candidate)
+    const reason = reasonByKey[key]?.trim() || defaultCandidateConfirmReason(candidate)
+    return { ...candidate, confirmReason: reason }
+  })
+}
+
+export function buildIgnoredCandidates<T extends FieldCandidateLike>(
+  candidates: T[],
+  selectedKeys: Set<string>
+): Array<T & { ignoreReason: string }> {
+  return candidates
+    .filter((candidate) => !selectedKeys.has(buildCandidateKey(candidate)))
+    .map((candidate) => ({
+      ...candidate,
+      ignoreReason: defaultCandidateIgnoreReason(candidate)
+    }))
 }

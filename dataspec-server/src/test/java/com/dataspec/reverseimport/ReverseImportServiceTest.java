@@ -5,6 +5,7 @@ import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.model.ColumnDef;
 import com.dataspec.lint.model.TableDef;
+import com.dataspec.reverseimport.entity.ReverseImportDecision;
 import com.dataspec.reverseimport.entity.ReverseImportBatch;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
 import com.dataspec.reverseimport.model.FieldCandidate;
@@ -60,6 +61,19 @@ class ReverseImportServiceTest {
         assertThat(preview.getSummary().getTableCount()).isEqualTo(1);
         assertThat(preview.getSummary().getColumnCount()).isEqualTo(3);
         assertThat(preview.getFieldCandidates()).extracting("columnName").containsExactly("user_name");
+        assertThat(preview.getMappingDecisions())
+                .extracting("columnName", "decisionType")
+                .contains(
+                        org.assertj.core.groups.Tuple.tuple("id", "EXISTING_MATCH"),
+                        org.assertj.core.groups.Tuple.tuple("phone", "EXISTING_MATCH"),
+                        org.assertj.core.groups.Tuple.tuple("user_name", "NEW_CANDIDATE")
+                );
+        assertThat(preview.getMappingDecisions())
+                .filteredOn(decision -> "phone".equals(decision.getColumnName()))
+                .singleElement()
+                .extracting("matchReason")
+                .asString()
+                .contains("别名", "mobile_no");
         assertThat(preview.getMissingComments()).extracting("columnName").containsExactlyInAnyOrder("id", "user_name");
         assertThat(preview.getNonStandardFields()).extracting("columnName").containsExactly("user_name");
         assertThat(preview.getDialectDiagnostics())
@@ -193,10 +207,26 @@ class ReverseImportServiceTest {
 
         assertThat(result.getImportedCount()).isEqualTo(1);
         assertThat(result.getSkippedCount()).isEqualTo(1);
+        assertThat(result.getBatchId()).isEqualTo(7L);
         verify(sourceService).createDatabaseBatch(req, 1, 1);
         ArgumentCaptor<Field> fieldCaptor = ArgumentCaptor.forClass(Field.class);
         ArgumentCaptor<FieldCandidate> candidateCaptor = ArgumentCaptor.forClass(FieldCandidate.class);
         verify(sourceService).recordFieldSource(eq(batch), fieldCaptor.capture(), candidateCaptor.capture());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ReverseImportDecision>> decisionsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(sourceService).recordMappingDecisions(eq(batch), decisionsCaptor.capture());
+        assertThat(decisionsCaptor.getValue()).extracting("columnName", "decisionType")
+                .contains(
+                        org.assertj.core.groups.Tuple.tuple("id", "SKIPPED_EXISTING"),
+                        org.assertj.core.groups.Tuple.tuple("user_name", "IMPORTED")
+                );
+        assertThat(decisionsCaptor.getValue())
+                .filteredOn(decision -> "user_name".equals(decision.getColumnName()))
+                .singleElement()
+                .satisfies(decision -> {
+                    assertThat(decision.getMetadataJson()).contains("user_name");
+                    assertThat(decision.getMetadataJson()).doesNotContain("password", "token", "jdbc");
+                });
         assertThat(fieldCaptor.getValue().getId()).isEqualTo(99L);
         assertThat(candidateCaptor.getValue().getColumnName()).isEqualTo("user_name");
     }
@@ -230,13 +260,18 @@ class ReverseImportServiceTest {
         verify(fieldService, times(1)).create(any(Field.class));
         verify(sourceService, times(1)).createDatabaseBatch(req, 1, 0);
         verify(sourceService, times(1)).recordFieldSource(eq(batch), any(Field.class), any(FieldCandidate.class));
+        verify(sourceService, times(1)).recordMappingDecisions(eq(batch), any());
     }
 
     @Test
-    void importCandidates_doesNotCreateBatchWhenAllFieldsAreSkipped() {
+    void importCandidates_recordsSkippedDecisionWhenAllFieldsAreSkipped() {
         FieldService fieldService = mock(FieldService.class);
         ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
         when(fieldService.listByProject(1L)).thenReturn(List.of(standardField("id", null)));
+        ReverseImportBatch batch = new ReverseImportBatch();
+        batch.setId(9L);
+        when(sourceService.createDatabaseBatch(any(DatabaseImportReq.class), eq(0), eq(1)))
+                .thenReturn(batch);
         ReverseImportServiceImpl service = new ReverseImportServiceImpl(
                 new SqlParserService(),
                 fieldService,
@@ -249,7 +284,9 @@ class ReverseImportServiceTest {
 
         assertThat(result.getImportedCount()).isZero();
         assertThat(result.getSkippedCount()).isEqualTo(1);
-        verify(sourceService, never()).createDatabaseBatch(any(), anyInt(), anyInt());
+        assertThat(result.getBatchId()).isEqualTo(9L);
+        verify(sourceService).createDatabaseBatch(req, 0, 1);
+        verify(sourceService).recordMappingDecisions(eq(batch), any());
         verify(sourceService, never()).recordFieldSource(any(), any(), any());
     }
 
@@ -282,6 +319,127 @@ class ReverseImportServiceTest {
         assertThat(result.getImportedCount()).isEqualTo(1);
         verify(sourceService).createDatabaseBatch(req, 1, 0);
         verify(sourceService).recordFieldSource(eq(batch), any(Field.class), any(FieldCandidate.class));
+        verify(sourceService).recordMappingDecisions(eq(batch), any());
+    }
+
+    @Test
+    void importCandidates_recordsIgnoredCandidatesWithDefaultReason() {
+        FieldService fieldService = mock(FieldService.class);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        when(fieldService.create(any(Field.class))).thenAnswer(invocation -> {
+            Field field = invocation.getArgument(0);
+            field.setId(101L);
+            return field;
+        });
+        ReverseImportBatch batch = new ReverseImportBatch();
+        batch.setId(10L);
+        when(sourceService.createDatabaseBatch(any(DatabaseImportReq.class), eq(1), eq(0)))
+                .thenReturn(batch);
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                sourceService);
+        FieldCandidate selected = new FieldCandidate("USER_ORDER", "user_name", "VARCHAR(50)", true, null, "用户名");
+        selected.setConfirmReason("确认导入客户姓名标准");
+        FieldCandidate ignored = new FieldCandidate("USER_ORDER", "tmp_flag", "BOOLEAN", true, null, "临时标记");
+        DatabaseImportReq req = databaseImportReq(List.of(selected));
+        req.setIgnoredCandidates(List.of(ignored));
+
+        var result = service.importCandidates(req);
+
+        assertThat(result.getImportedCount()).isEqualTo(1);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ReverseImportDecision>> decisionsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(sourceService).recordMappingDecisions(eq(batch), decisionsCaptor.capture());
+        assertThat(decisionsCaptor.getValue()).extracting("columnName", "decisionType")
+                .contains(
+                        org.assertj.core.groups.Tuple.tuple("user_name", "IMPORTED"),
+                        org.assertj.core.groups.Tuple.tuple("tmp_flag", "IGNORED")
+                );
+        assertThat(decisionsCaptor.getValue())
+                .filteredOn(decision -> "tmp_flag".equals(decision.getColumnName()))
+                .singleElement()
+                .extracting("ignoreReason")
+                .isEqualTo("本次未选择导入");
+    }
+
+    @Test
+    void importCandidates_sanitizesSensitiveDecisionTextBeforeRecording() {
+        FieldService fieldService = mock(FieldService.class);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        when(fieldService.create(any(Field.class))).thenAnswer(invocation -> {
+            Field field = invocation.getArgument(0);
+            field.setId(102L);
+            return field;
+        });
+        ReverseImportBatch batch = new ReverseImportBatch();
+        batch.setId(11L);
+        when(sourceService.createDatabaseBatch(any(DatabaseImportReq.class), eq(1), eq(0)))
+                .thenReturn(batch);
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                sourceService);
+        FieldCandidate selected = new FieldCandidate(
+                "USER_ORDER",
+                "user_secret_note",
+                "VARCHAR(50)",
+                true,
+                "password=p@ssw0rd",
+                "连接 jdbc:postgresql://db.internal:5432/app");
+        selected.setConfirmReason("Authorization: Bearer secret-token-123; token=plain-token-456");
+        DatabaseImportReq req = databaseImportReq(List.of(selected));
+
+        service.importCandidates(req);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ReverseImportDecision>> decisionsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(sourceService).recordMappingDecisions(eq(batch), decisionsCaptor.capture());
+        ReverseImportDecision decision = decisionsCaptor.getValue().get(0);
+        assertThat(decision.getConfirmReason())
+                .contains("[REDACTED]")
+                .doesNotContain("secret-token-123", "plain-token-456");
+        assertThat(decision.getMetadataJson())
+                .contains("[REDACTED]")
+                .doesNotContain(
+                        "p@ssw0rd",
+                        "jdbc:postgresql://db.internal:5432/app",
+                        "secret-token-123",
+                        "plain-token-456");
+    }
+
+    @Test
+    void importCandidates_ignoresDuplicateIgnoredCandidatesAlreadyProcessed() {
+        FieldService fieldService = mock(FieldService.class);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        when(fieldService.create(any(Field.class))).thenAnswer(invocation -> {
+            Field field = invocation.getArgument(0);
+            field.setId(103L);
+            return field;
+        });
+        ReverseImportBatch batch = new ReverseImportBatch();
+        batch.setId(12L);
+        when(sourceService.createDatabaseBatch(any(DatabaseImportReq.class), eq(1), eq(0)))
+                .thenReturn(batch);
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                sourceService);
+        FieldCandidate selected = new FieldCandidate("USER_ORDER", "user_name", "VARCHAR(50)", true, null, "用户名");
+        FieldCandidate duplicateIgnored = new FieldCandidate("user_order", "USER_NAME", "VARCHAR(50)", true, null, "用户名");
+        DatabaseImportReq req = databaseImportReq(List.of(selected));
+        req.setIgnoredCandidates(List.of(duplicateIgnored));
+
+        service.importCandidates(req);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ReverseImportDecision>> decisionsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(sourceService).recordMappingDecisions(eq(batch), decisionsCaptor.capture());
+        assertThat(decisionsCaptor.getValue()).extracting("columnName", "decisionType")
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("user_name", "IMPORTED"));
     }
 
     private DatabaseImportReq databaseImportReq(List<FieldCandidate> candidates) {

@@ -1,6 +1,7 @@
 package com.dataspec.reverseimport;
 
 import com.dataspec.reverseimport.controller.ReverseImportController;
+import com.dataspec.reverseimport.entity.ReverseImportDecision;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
@@ -8,6 +9,7 @@ import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.service.DatabaseReverseImportService;
 import com.dataspec.reverseimport.service.ReverseImportService;
+import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,7 +23,8 @@ class ReverseImportControllerTest {
     void dumpEndpoints_delegateToDatabaseService() {
         ReverseImportService reverseImportService = mock(ReverseImportService.class);
         DatabaseReverseImportService databaseService = mock(DatabaseReverseImportService.class);
-        ReverseImportController controller = new ReverseImportController(reverseImportService, databaseService);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        ReverseImportController controller = new ReverseImportController(reverseImportService, databaseService, sourceService);
         DatabaseConnectionReq connectionReq = new DatabaseConnectionReq();
         DatabaseSchemaDump dump = new DatabaseSchemaDump();
         DatabaseSchemaDumpReq dumpReq = new DatabaseSchemaDumpReq();
@@ -38,5 +41,21 @@ class ReverseImportControllerTest {
         verify(databaseService).exportDump(connectionReq);
         verify(databaseService).previewDump(dumpReq);
         verify(databaseService).compareDump(dumpReq);
+    }
+
+    @Test
+    void listMappingDecisions_delegatesToSourceService() {
+        ReverseImportService reverseImportService = mock(ReverseImportService.class);
+        DatabaseReverseImportService databaseService = mock(DatabaseReverseImportService.class);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        ReverseImportController controller = new ReverseImportController(reverseImportService, databaseService, sourceService);
+        ReverseImportDecision decision = new ReverseImportDecision();
+        decision.setColumnName("mobile_no");
+        when(sourceService.listDecisions(1L, 7L, 20)).thenReturn(java.util.List.of(decision));
+
+        var result = controller.listMappingDecisions(1L, 7L, 20);
+
+        assertThat(result.getData()).containsExactly(decision);
+        verify(sourceService).listDecisions(1L, 7L, 20);
     }
 }

@@ -1,6 +1,7 @@
 package com.dataspec.reverseimport.controller;
 
 import com.dataspec.common.result.R;
+import com.dataspec.reverseimport.entity.ReverseImportDecision;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
@@ -12,14 +13,18 @@ import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.service.DatabaseReverseImportService;
 import com.dataspec.reverseimport.service.ReverseImportService;
+import com.dataspec.reverseimport.service.ReverseImportSourceService;
+import com.dataspec.security.context.ProjectAccessGuard;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.web.bind.annotation.GetMapping;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -34,6 +39,7 @@ public class ReverseImportController {
 
     private final ReverseImportService reverseImportService;
     private final DatabaseReverseImportService databaseReverseImportService;
+    private final ReverseImportSourceService reverseImportSourceService;
 
     @PostMapping("/preview")
     public R<ReverseImportPreview> preview(@Valid @RequestBody ReverseImportReq req) {
@@ -81,6 +87,16 @@ public class ReverseImportController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
         return R.ok(reverseImportService.importCandidates(req, idempotencyKey));
+    }
+
+    @GetMapping("/decisions")
+    public R<List<ReverseImportDecision>> listMappingDecisions(
+            @RequestParam @NotNull(message = "项目ID不能为空") Long projectId,
+            @RequestParam(required = false) Long batchId,
+            @RequestParam(defaultValue = "50") Integer limit
+    ) {
+        ProjectAccessGuard.requireProjectAccess(projectId);
+        return R.ok(reverseImportSourceService.listDecisions(projectId, batchId, limit));
     }
 
     public record ReverseImportReq(
