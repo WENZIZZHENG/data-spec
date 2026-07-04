@@ -75,6 +75,7 @@ test('keeps field conflict naming risk view wired', () => {
 test('keeps AI batch delivery package page wired', () => {
   const view = readSource('src/views/AiBatch.vue')
   const api = readSource('src/api/aiBatch.ts')
+  const taskApi = readSource('src/api/aiTaskRun.ts')
   const types = readSource('src/types/index.ts')
 
   assertContains(view, [
@@ -87,6 +88,13 @@ test('keeps AI batch delivery package page wired', () => {
     'await listAiBatches(projectId, current.value, size.value)',
     'async function openDetail(id?: number)',
     'activeDetail.value = await getAiBatchDetail(id)',
+    'await getAiTaskRunDetail(taskRunId, projectId)',
+    'listRecentAiTaskFailures(projectId, 5)',
+    '最近可恢复任务',
+    'copyResumeCommand',
+    'activeTaskRunDetail?.partialArtifacts',
+    'prop="type"',
+    'prop="ref"',
     'async function handleDownload(id?: number)',
     'downloadAiBatchPackage(id)',
     'AI 批量任务',
@@ -99,8 +107,18 @@ test('keeps AI batch delivery package page wired', () => {
     'export function downloadAiBatchPackage(id: number)'
   ], 'ai batch api')
 
+  assertContains(taskApi, [
+    "request.get<unknown, PageResult<AiTaskRunListItem>>('/ai-task-runs'",
+    "request.get<unknown, AiTaskRunListItem[]>('/ai-task-runs/recent-failures'",
+    'export function getAiTaskRunDetail(id: number, projectId: number)'
+  ], 'ai task run api')
+
   assertContains(types, [
     'export interface AiBatchDeliveryPackage',
+    'taskRun?: AiTaskResumeInfo',
+    'export type AiTaskResumeInfo',
+    'export type AiTaskRunListItem',
+    'export type AiTaskRunDetail',
     'export interface AiBatchRunListItem',
     'export interface AiBatchRunDetail'
   ], 'ai batch types')

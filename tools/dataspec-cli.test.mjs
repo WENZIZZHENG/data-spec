@@ -1777,6 +1777,160 @@ test('capability list prints DataSpecError when server is unavailable', async ()
   assert.match(diagnostic.suggestedAction, /doctor/)
 })
 
+test('task list prints paginated task run json with filters', async () => {
+  const calls = []
+  const fetchFn = async (url, init) => {
+    calls.push({ url, init })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          records: [taskRunListItemFixture()],
+          total: 1,
+          current: 2,
+          size: 5
+        }
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'task',
+    'list',
+    '--project',
+    '7',
+    '--status',
+    'FAILED',
+    '--task-type',
+    'SQL_LINT',
+    '--current',
+    '2',
+    '--size',
+    '5',
+    '--server',
+    'http://dataspec.local',
+    '--dataspec-token',
+    'ds_cli_token',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  const url = new URL(calls[0].url)
+  assert.equal(code, 0)
+  assert.equal(url.pathname, '/api/ai-task-runs')
+  assert.equal(url.searchParams.get('projectId'), '7')
+  assert.equal(url.searchParams.get('status'), 'FAILED')
+  assert.equal(url.searchParams.get('taskType'), 'SQL_LINT')
+  assert.equal(url.searchParams.get('current'), '2')
+  assert.equal(url.searchParams.get('size'), '5')
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer ds_cli_token')
+  assert.equal(output.records[0].resumeCommand, 'node tools/dataspec-cli.mjs task show 91 --project 7 --format json')
+  assert.equal(io.stderr, '')
+})
+
+test('task failures prints recent failed task runs', async () => {
+  const calls = []
+  const fetchFn = async (url) => {
+    calls.push(url)
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: [
+          taskRunListItemFixture({
+            id: 92,
+            status: 'PARTIAL_FAILED',
+            retryable: true,
+            nextAction: '复制 resumeCommand 后只重试失败 SQL 文件。'
+          })
+        ]
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'tasks',
+    'failures',
+    '--project',
+    '7',
+    '--limit',
+    '3',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(calls[0], 'http://dataspec.local/api/ai-task-runs/recent-failures?projectId=7&limit=3')
+  assert.equal(output[0].id, 92)
+  assert.equal(output[0].retryable, true)
+  assert.match(output[0].nextAction, /resumeCommand/)
+})
+
+test('task show prints task run detail', async () => {
+  const calls = []
+  const fetchFn = async (url) => {
+    calls.push(url)
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: taskRunDetailFixture()
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'task',
+    'show',
+    '91',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(calls[0], 'http://dataspec.local/api/ai-task-runs/91?projectId=7')
+  assert.equal(output.id, 91)
+  assert.equal(output.stepStatus[0].step, 'lint-items')
+  assert.equal(output.partialArtifacts[0].type, 'sql-lint-result')
+  assert.equal(output.partialArtifacts[0].ref, 'sql-lint-result:good.sql')
+  assert.equal(output.resumeCommand, 'node tools/dataspec-cli.mjs task show 91 --project 7 --format json')
+})
+
+test('task command prints DataSpecError when server is unavailable', async () => {
+  const io = createIo()
+  const code = await runCli([
+    'task',
+    'failures',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, async () => {
+    throw new Error('ECONNREFUSED')
+  })
+  const diagnosticLine = io.stderr.split(/\r?\n/).find((line) => line.startsWith('DataSpecError: '))
+  const diagnostic = JSON.parse(diagnosticLine.replace('DataSpecError: ', ''))
+
+  assert.equal(code, 2)
+  assert.equal(diagnostic.code, 'DATASPEC_SERVER_UNAVAILABLE')
+  assert.equal(diagnostic.retryable, true)
+  assert.doesNotMatch(io.stderr, /Authorization|ds_cli_token|password=/)
+})
+
 test('evidence export prints machine-readable package json', async () => {
   const calls = []
   const fetchFn = async (url, init) => {
@@ -3047,6 +3201,57 @@ function evidencePackageFixture() {
     nextActions: ['review fixedSql'],
     suggestedCommands: ['dataspec lint <path|-> --project 7 --format json'],
     diagnostics: []
+  }
+}
+
+function taskRunListItemFixture(overrides = {}) {
+  return {
+    id: 91,
+    projectId: 7,
+    taskType: 'SQL_LINT',
+    sourceType: 'AI_BATCH',
+    sourceId: 31,
+    status: 'FAILED',
+    inputHash: 'sha256:test',
+    retryable: true,
+    failedStep: 'lint-items',
+    resumeCommand: 'node tools/dataspec-cli.mjs task show 91 --project 7 --format json',
+    nextAction: '查看失败步骤并复制 resumeCommand 重试。',
+    operatorName: 'cli',
+    startedAt: '2026-07-04T10:00:00',
+    finishedAt: '2026-07-04T10:00:02',
+    expiresAt: '2026-07-11T10:00:00',
+    createdAt: '2026-07-04T10:00:00',
+    ...overrides
+  }
+}
+
+function taskRunDetailFixture(overrides = {}) {
+  return {
+    ...taskRunListItemFixture(),
+    idempotencyKey: 'retry-91',
+    stepStatus: [
+      {
+        step: 'lint-items',
+        status: 'FAILED',
+        message: '1 个 SQL 文件检查失败',
+        artifactRef: 'sql-lint-result:bad.sql'
+      }
+    ],
+    partialArtifacts: [
+      {
+        type: 'sql-lint-result',
+        name: 'good.sql',
+        ref: 'sql-lint-result:good.sql',
+        summary: { errorCount: 0 }
+      }
+    ],
+    metadata: {
+      profileId: 'sql-fix',
+      source: 'cli'
+    },
+    updatedAt: '2026-07-04T10:00:02',
+    ...overrides
   }
 }
 

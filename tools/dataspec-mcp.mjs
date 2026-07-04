@@ -8,7 +8,7 @@ import { workflowRecipesResourcePayload } from './dataspec-workflows.mjs'
 const DEFAULT_SERVER = 'http://localhost:8090'
 const SERVER_NAME = 'dataspec-mcp'
 const SERVER_VERSION = '0.1.0'
-const EVIDENCE_SOURCE_TYPES = ['AI_JOB', 'SQL_CHECK', 'COVERAGE_REPORT', 'AI_BATCH_RUN']
+const EVIDENCE_SOURCE_TYPES = ['AI_JOB', 'SQL_CHECK', 'COVERAGE_REPORT', 'AI_BATCH_RUN', 'AI_TASK_RUN']
 
 const RESOURCE_DEFS = {
   'capability-catalog': {
@@ -57,6 +57,12 @@ const RESOURCE_DEFS = {
     path: '/api/contracts',
     mimeType: 'application/json',
     contractResource: true
+  },
+  'ai-task-runs': {
+    name: 'DataSpec AI Task Runs',
+    description: '当前项目最近失败或部分失败的 AI task run，包含失败步骤、retryable 状态和恢复命令。',
+    mimeType: 'application/json',
+    taskRunResource: true
   }
 }
 
@@ -276,7 +282,9 @@ async function readResource(params, context) {
         ? JSON.stringify(await fetchContractResource(context), null, 2)
         : def.capabilityResource
           ? JSON.stringify(structuredContent = await fetchCapabilityResource(context, projectId), null, 2)
-          : await fetchAiContextText(context, def.path, projectId)
+          : def.taskRunResource
+            ? JSON.stringify(structuredContent = await fetchTaskRunResource(context, projectId), null, 2)
+            : await fetchAiContextText(context, def.path, projectId)
   const result = {
     contents: [
       {
@@ -522,7 +530,7 @@ function listTools() {
             sourceType: {
               type: 'string',
               enum: EVIDENCE_SOURCE_TYPES,
-              description: '证据来源类型: AI_JOB、SQL_CHECK、COVERAGE_REPORT、AI_BATCH_RUN。'
+              description: '证据来源类型: AI_JOB、SQL_CHECK、COVERAGE_REPORT、AI_BATCH_RUN、AI_TASK_RUN。'
             },
             sourceId: {
               type: 'integer',
@@ -550,6 +558,31 @@ function listTools() {
             }
           },
           required: ['sourceType']
+        }
+      },
+      {
+        name: 'get_ai_task_run',
+        description: '读取 AI task run 详情，返回失败步骤、partial artifacts、metadata 和恢复命令。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            taskRunId: {
+              type: 'integer',
+              description: 'AI task run ID。'
+            },
+            id: {
+              type: 'integer',
+              description: 'taskRunId 的兼容别名。'
+            },
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            }
+          },
+          anyOf: [
+            { required: ['taskRunId'] },
+            { required: ['id'] }
+          ]
         }
       }
     ]
@@ -579,6 +612,9 @@ async function callTool(params, context) {
   }
   if (name === 'export_evidence_package') {
     return await callExportEvidencePackage(args, context)
+  }
+  if (name === 'get_ai_task_run') {
+    return await callGetAiTaskRun(args, context)
   }
   throw new JsonRpcError(-32602, `未知 tool: ${name}`)
 }
@@ -675,6 +711,22 @@ async function callExportEvidencePackage(args, context) {
   })
   const result = await readDataSpecJson(response)
   return toolJsonResult(result)
+}
+
+async function callGetAiTaskRun(args, context) {
+  const taskRunId = parsePositiveInteger(args.taskRunId ?? args.id, 'taskRunId')
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  try {
+    const params = new URLSearchParams()
+    params.set('projectId', String(projectId))
+    const response = await context.fetchFn(`${context.server}/api/ai-task-runs/${encodeURIComponent(taskRunId)}?${params.toString()}`, {
+      headers: dataSpecHeaders(context.apiToken)
+    })
+    const result = await readDataSpecJson(response)
+    return toolJsonResult(result)
+  } catch (error) {
+    throw normalizeTaskRunRpcError(error)
+  }
 }
 
 function buildEvidencePackageRequest(args, defaultProjectId) {
@@ -781,6 +833,43 @@ async function fetchCapabilityResource(context, projectId) {
       }
     })
   }
+}
+
+async function fetchTaskRunResource(context, projectId) {
+  try {
+    const params = new URLSearchParams()
+    params.set('projectId', String(projectId))
+    params.set('limit', '10')
+    const response = await context.fetchFn(`${context.server}/api/ai-task-runs/recent-failures?${params.toString()}`, {
+      headers: dataSpecHeaders(context.apiToken)
+    })
+    const items = await readDataSpecJson(response)
+    return {
+      kind: 'dataspec-ai-task-runs',
+      schemaVersion: 1,
+      projectId,
+      scope: 'recent-failures',
+      items
+    }
+  } catch (error) {
+    throw normalizeTaskRunRpcError(error)
+  }
+}
+
+function normalizeTaskRunRpcError(error) {
+  if (error instanceof JsonRpcError) {
+    return error
+  }
+  return new JsonRpcError(-32000, `读取 AI task run 失败: ${error?.message ?? 'DataSpec 服务不可用'}`, {
+    dataspecError: {
+      code: 'DATASPEC_SERVER_UNAVAILABLE',
+      category: 'NETWORK',
+      retryable: true,
+      suggestedAction: '先运行 dataspec doctor --format json 检查服务、server URL、token 和项目配置；然后重试 task run 查询。',
+      docsRef: 'README.md#cli',
+      httpStatus: null
+    }
+  })
 }
 
 function scopedCatalogParams(args, context) {

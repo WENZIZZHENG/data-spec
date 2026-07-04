@@ -9,6 +9,15 @@ import com.dataspec.aibatch.model.AiBatchRunDetail;
 import com.dataspec.aibatch.model.AiBatchSqlLintReq;
 import com.dataspec.aibatch.model.AiBatchSummary;
 import com.dataspec.aibatch.service.AiBatchService;
+import com.dataspec.aitaskrun.entity.AiTaskRun;
+import com.dataspec.aitaskrun.model.AiTaskPartialArtifact;
+import com.dataspec.aitaskrun.model.AiTaskResumeInfo;
+import com.dataspec.aitaskrun.model.AiTaskRunDetail;
+import com.dataspec.aitaskrun.model.AiTaskRunFinishCommand;
+import com.dataspec.aitaskrun.model.AiTaskRunListItem;
+import com.dataspec.aitaskrun.model.AiTaskRunStartCommand;
+import com.dataspec.aitaskrun.model.AiTaskStepStatus;
+import com.dataspec.aitaskrun.service.AiTaskRunService;
 import com.dataspec.aireplay.entity.AiJobRecord;
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.model.AiJobRecordDetail;
@@ -51,6 +60,7 @@ class AiEvidencePackageServiceImplTest {
             new StubSqlCheckRecordService(),
             new StubAiJobRecordService(),
             new StubAiBatchService(),
+            new StubAiTaskRunService(),
             objectMapper
     );
 
@@ -88,6 +98,12 @@ class AiEvidencePackageServiceImplTest {
         AiEvidencePackage batch = service.generate(new AiEvidencePackageReq(null, EvidenceSourceType.AI_BATCH_RUN, 31L, null, null, null, null));
         assertEquals(EvidenceSourceType.AI_BATCH_RUN, batch.source().sourceType());
         assertEquals("DONE", batch.validationSummary().get("status"));
+
+        AiEvidencePackage taskRun = service.generate(new AiEvidencePackageReq(7L, EvidenceSourceType.AI_TASK_RUN, 41L, null, null, null, null));
+        assertEquals(EvidenceSourceType.AI_TASK_RUN, taskRun.source().sourceType());
+        assertEquals("PARTIAL_FAILED", taskRun.validationSummary().get("status"));
+        assertTrue(taskRun.suggestedCommands().get(0).contains("task show 41"));
+        assertFalse(objectMapper.valueToTree(taskRun).toString().contains("secret123"));
 
         AiEvidencePackage coverage = service.generate(new AiEvidencePackageReq(
                 7L,
@@ -283,8 +299,73 @@ class AiEvidencePackageServiceImplTest {
                     List.of(),
                     List.of(),
                     List.of("下载证据包 token=ds_token_raw"),
+                    LocalDateTime.now(),
+                    new AiTaskResumeInfo(41L, "PARTIAL_FAILED", true, "lint-items", "dataspec task show 41 --project 7 --format json", "修复失败项")
+            );
+        }
+    }
+
+    private static class StubAiTaskRunService implements AiTaskRunService {
+        @Override
+        public AiTaskRun start(AiTaskRunStartCommand command) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AiTaskRun succeed(AiTaskRun run, AiTaskRunFinishCommand command) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AiTaskRun partialFail(AiTaskRun run, AiTaskRunFinishCommand command) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AiTaskRun fail(AiTaskRun run, AiTaskRunFinishCommand command) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public com.dataspec.common.result.PageResult<AiTaskRunListItem> list(Long projectId, String status, String taskType, int current, int size) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<AiTaskRunListItem> recentFailures(Long projectId, Integer limit) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AiTaskRunDetail detail(Long projectId, Long id) {
+            return new AiTaskRunDetail(
+                    id,
+                    projectId,
+                    "SQL_LINT",
+                    "AI_BATCH",
+                    31L,
+                    "PARTIAL_FAILED",
+                    "hash-1",
+                    "idempotency",
+                    List.of(new AiTaskStepStatus("lint-items", "PARTIAL_FAILED", "password=secret123", "ai-batch:31")),
+                    true,
+                    "lint-items",
+                    "dataspec task show 41 --project 7 --format json",
+                    "修复失败项 token=ds_token_raw",
+                    List.of(new AiTaskPartialArtifact("sql", "bad.sql", "bad.sql", "jdbc:postgresql://localhost/db")),
+                    Map.of("note", "Bearer abc"),
+                    "local",
+                    LocalDateTime.now(),
+                    LocalDateTime.now(),
+                    null,
+                    LocalDateTime.now(),
                     LocalDateTime.now()
             );
+        }
+
+        @Override
+        public AiTaskResumeInfo resumeInfo(AiTaskRun run) {
+            return null;
         }
     }
 }

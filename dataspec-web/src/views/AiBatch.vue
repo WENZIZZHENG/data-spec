@@ -7,7 +7,7 @@
       </div>
       <div class="header-actions">
         <el-tooltip content="刷新任务">
-          <el-button aria-label="刷新任务" :disabled="!hasProject" :loading="listLoading" @click="loadBatches">
+          <el-button aria-label="刷新任务" :disabled="!hasProject" :loading="listLoading || taskRunLoading" @click="refreshPage">
             <el-icon><Refresh /></el-icon>
           </el-button>
         </el-tooltip>
@@ -22,6 +22,50 @@
     />
 
     <template v-else>
+      <section v-if="recoverableTaskRuns.length > 0" class="recoverable-panel" v-loading="taskRunLoading">
+        <div class="panel-heading">
+          <div>
+            <h3>最近可恢复任务</h3>
+            <p>失败或部分失败的 AI task run，可复制恢复命令继续处理。</p>
+          </div>
+          <el-button size="small" text type="primary" @click="loadRecoverableTasks">刷新</el-button>
+        </div>
+        <el-table :data="recoverableTaskRuns" size="small" border empty-text="暂无可恢复任务">
+          <el-table-column label="时间" width="160">
+            <template #default="{ row }">{{ formatAiBatchTime(row.createdAt) }}</template>
+          </el-table-column>
+          <el-table-column label="类型" width="120">
+            <template #default="{ row }">{{ row.taskType || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="120">
+            <template #default="{ row }">
+              <el-tag size="small" :type="taskRunTagType(row.status)" effect="plain">
+                {{ taskRunStatusLabel(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="failedStep" label="失败步骤" min-width="140" show-overflow-tooltip />
+          <el-table-column label="可重试" width="90">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.retryable ? 'success' : 'info'" effect="plain">
+                {{ row.retryable ? '是' : '否' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="nextAction" label="下一步" min-width="220" show-overflow-tooltip />
+          <el-table-column label="操作" width="150" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" text type="primary" @click="copyResumeCommand(row.resumeCommand)">
+                复制命令
+              </el-button>
+              <el-button size="small" text type="primary" @click="copyText(JSON.stringify(row, null, 2))">
+                复制 JSON
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </section>
+
       <StateBlock
         v-if="listState.errorMessage.value"
         type="error"
@@ -30,7 +74,7 @@
         :suggested-action="listState.suggestedAction.value"
         :docs-ref="listState.docsRef.value"
         action-text="重试"
-        @action="loadBatches"
+        @action="refreshPage"
       />
       <StateBlock
         v-else-if="!listLoading && records.length === 0"
@@ -119,6 +163,56 @@
             <el-tag type="warning" effect="plain">警告 {{ activeSummary?.warningCount ?? 0 }}</el-tag>
             <el-tag type="info" effect="plain">建议 {{ activeSummary?.suggestionCount ?? 0 }}</el-tag>
             <el-tag effect="plain">fixedSql {{ activeSummary?.fixedSqlCount ?? 0 }}</el-tag>
+          </div>
+
+          <div v-if="activeTaskRun || activeTaskRunDetail" class="task-run-panel">
+            <div class="panel-heading">
+              <div>
+                <h3>AI task run</h3>
+                <p>{{ linkedNextAction || '该批量任务已绑定运行状态，可用于失败恢复和交接。' }}</p>
+              </div>
+              <el-tag size="small" :type="taskRunTagType(linkedTaskStatus)" effect="plain">
+                {{ taskRunStatusLabel(linkedTaskStatus) }}
+              </el-tag>
+            </div>
+            <div class="task-run-grid">
+              <div>
+                <span>Task Run ID</span>
+                <strong>{{ linkedTaskRunId || '-' }}</strong>
+              </div>
+              <div>
+                <span>失败步骤</span>
+                <strong>{{ linkedFailedStep || '-' }}</strong>
+              </div>
+              <div>
+                <span>可重试</span>
+                <strong>{{ linkedRetryable ? '是' : '否' }}</strong>
+              </div>
+              <div>
+                <span>来源</span>
+                <strong>{{ activeTaskRunDetail?.sourceType || 'AI_BATCH' }}</strong>
+              </div>
+            </div>
+            <div v-if="linkedResumeCommand" class="resume-command">
+              <code>{{ linkedResumeCommand }}</code>
+              <el-button size="small" type="primary" @click="copyResumeCommand(linkedResumeCommand)">
+                复制恢复命令
+              </el-button>
+            </div>
+            <el-table
+              v-if="activeTaskRunDetail?.partialArtifacts?.length"
+              :data="activeTaskRunDetail.partialArtifacts"
+              size="small"
+              border
+              class="artifact-table"
+            >
+              <el-table-column prop="type" label="Artifact" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip />
+              <el-table-column prop="ref" label="引用" min-width="160" show-overflow-tooltip />
+              <el-table-column label="摘要" min-width="220" show-overflow-tooltip>
+                <template #default="{ row }">{{ formatArtifactSummary(row.summary) }}</template>
+              </el-table-column>
+            </el-table>
           </div>
 
           <div class="detail-actions">
@@ -217,6 +311,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { downloadAiBatchPackage, getAiBatchDetail, listAiBatches } from '@/api/aiBatch'
+import { getAiTaskRunDetail, listRecentAiTaskFailures } from '@/api/aiTaskRun'
 import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
 import ProjectRequired from '@/components/ProjectRequired.vue'
 import StateBlock from '@/components/StateBlock.vue'
@@ -228,7 +323,15 @@ import {
   buildAiBatchJson,
   formatAiBatchTime
 } from '@/utils/aiBatchDisplay'
-import type { AiBatchItemResult, AiBatchRunDetail, AiBatchRunListItem, LintIssue, PageResult } from '@/types'
+import type {
+  AiBatchItemResult,
+  AiBatchRunDetail,
+  AiBatchRunListItem,
+  AiTaskRunDetail,
+  AiTaskRunListItem,
+  LintIssue,
+  PageResult
+} from '@/types'
 
 const projectStore = useProjectStore()
 const router = useRouter()
@@ -240,13 +343,23 @@ const listState = useRequestState<PageResult<AiBatchRunListItem>>()
 const detailLoading = ref(false)
 const detailVisible = ref(false)
 const activeDetail = ref<AiBatchRunDetail | null>(null)
+const activeTaskRunDetail = ref<AiTaskRunDetail | null>(null)
+const recoverableTaskRuns = ref<AiTaskRunListItem[]>([])
+const taskRunLoading = ref(false)
 const evidenceActionId = ref<number | null>(null)
 
 const hasProject = computed(() => projectStore.currentProjectId !== null)
 const listLoading = computed(() => listState.loading.value)
 const activePackage = computed(() => activeDetail.value?.deliveryPackage)
+const activeTaskRun = computed(() => activePackage.value?.taskRun)
 const activeSummary = computed(() => activePackage.value?.summary)
 const packageJson = computed(() => buildAiBatchJson(activePackage.value))
+const linkedTaskRunId = computed(() => activeTaskRunDetail.value?.id ?? activeTaskRun.value?.taskRunId)
+const linkedTaskStatus = computed(() => activeTaskRunDetail.value?.status ?? activeTaskRun.value?.status)
+const linkedRetryable = computed(() => activeTaskRunDetail.value?.retryable ?? activeTaskRun.value?.retryable ?? false)
+const linkedFailedStep = computed(() => activeTaskRunDetail.value?.failedStep ?? activeTaskRun.value?.failedStep)
+const linkedResumeCommand = computed(() => activeTaskRunDetail.value?.resumeCommand ?? activeTaskRun.value?.resumeCommand)
+const linkedNextAction = computed(() => activeTaskRunDetail.value?.nextAction ?? activeTaskRun.value?.nextAction)
 const issueItems = computed(() => {
   const items: Array<{ key: string; path: string; issue: LintIssue }> = []
   for (const item of activePackage.value?.items ?? []) {
@@ -265,7 +378,7 @@ const fixedSqlItems = computed<AiBatchItemResult[]>(() =>
 )
 
 onMounted(() => {
-  void loadBatches()
+  void refreshPage()
 })
 
 watch(
@@ -273,10 +386,15 @@ watch(
   () => {
     current.value = 1
     activeDetail.value = null
+    activeTaskRunDetail.value = null
     detailVisible.value = false
-    void loadBatches()
+    void refreshPage()
   }
 )
+
+async function refreshPage() {
+  await Promise.all([loadBatches(), loadRecoverableTasks()])
+}
 
 async function loadBatches() {
   const projectId = projectStore.currentProjectId
@@ -298,19 +416,50 @@ async function loadBatches() {
   }
 }
 
+async function loadRecoverableTasks() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    recoverableTaskRuns.value = []
+    return
+  }
+  taskRunLoading.value = true
+  try {
+    recoverableTaskRuns.value = await listRecentAiTaskFailures(projectId, 5)
+  } catch {
+    recoverableTaskRuns.value = []
+  } finally {
+    taskRunLoading.value = false
+  }
+}
+
 async function openDetail(id?: number) {
   if (!id) {
     return
   }
   activeDetail.value = null
+  activeTaskRunDetail.value = null
   detailVisible.value = true
   detailLoading.value = true
   try {
     activeDetail.value = await getAiBatchDetail(id)
+    await loadLinkedTaskRunDetail()
   } catch {
     detailVisible.value = false
   } finally {
     detailLoading.value = false
+  }
+}
+
+async function loadLinkedTaskRunDetail() {
+  const projectId = projectStore.currentProjectId
+  const taskRunId = activeDetail.value?.deliveryPackage?.taskRun?.taskRunId
+  if (!projectId || !taskRunId) {
+    return
+  }
+  try {
+    activeTaskRunDetail.value = await getAiTaskRunDetail(taskRunId, projectId)
+  } catch {
+    // 交付包本身仍可查看；task run 详情失败时保留 delivery package 内的恢复摘要。
   }
 }
 
@@ -400,6 +549,14 @@ async function copyText(text: string) {
   ElMessage.success('已复制')
 }
 
+async function copyResumeCommand(command?: string | null) {
+  if (!command) {
+    ElMessage.warning('暂无恢复命令')
+    return
+  }
+  await copyText(command)
+}
+
 function issueTagType(severity?: string) {
   if (severity === 'ERROR') {
     return 'danger'
@@ -408,6 +565,45 @@ function issueTagType(severity?: string) {
     return 'warning'
   }
   return 'info'
+}
+
+function taskRunStatusLabel(status?: string | null) {
+  if (status === 'SUCCEEDED') {
+    return '成功'
+  }
+  if (status === 'PARTIAL_FAILED') {
+    return '部分失败'
+  }
+  if (status === 'FAILED') {
+    return '失败'
+  }
+  if (status === 'RUNNING') {
+    return '运行中'
+  }
+  return status || '-'
+}
+
+function taskRunTagType(status?: string | null) {
+  if (status === 'SUCCEEDED') {
+    return 'success'
+  }
+  if (status === 'PARTIAL_FAILED') {
+    return 'warning'
+  }
+  if (status === 'FAILED') {
+    return 'danger'
+  }
+  return 'info'
+}
+
+function formatArtifactSummary(value: unknown) {
+  if (value === undefined || value === null || value === '') {
+    return '-'
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  return JSON.stringify(value)
 }
 </script>
 
@@ -456,9 +652,89 @@ function issueTagType(severity?: string) {
 
 .detail-meta,
 .summary-panel,
+.recoverable-panel,
+.task-run-panel,
 .detail-actions,
 .detail-tabs {
   margin-top: 14px;
+}
+
+.recoverable-panel,
+.task-run-panel {
+  padding: 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panel-heading h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.panel-heading p {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.task-run-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.task-run-grid div {
+  padding: 8px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.task-run-grid span {
+  display: block;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.task-run-grid strong {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.resume-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.resume-command code {
+  padding: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #e5e7eb;
+  font-size: 12px;
+}
+
+.artifact-table {
+  margin-top: 10px;
 }
 
 .issue-list,

@@ -9,6 +9,7 @@ import com.dataspec.aibatch.model.AiBatchIssueSummary;
 import com.dataspec.aibatch.model.AiBatchRunListItem;
 import com.dataspec.aibatch.model.AiBatchSummary;
 import com.dataspec.aibatch.service.AiBatchService;
+import com.dataspec.aitaskrun.model.AiTaskResumeInfo;
 import com.dataspec.common.result.PageResult;
 import com.dataspec.common.result.R;
 import org.junit.jupiter.api.Test;
@@ -69,7 +70,8 @@ class AiBatchControllerTest {
                 List.of(),
                 List.of(),
                 List.of("无需处理"),
-                LocalDateTime.of(2026, 6, 28, 10, 30)
+                LocalDateTime.of(2026, 6, 28, 10, 30),
+                new AiTaskResumeInfo(77L, "SUCCEEDED", false, null, null, "无需处理")
         );
         AiBatchService service = mock(AiBatchService.class);
         when(service.getPackage(42L)).thenReturn(pkg);

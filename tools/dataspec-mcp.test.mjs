@@ -46,7 +46,8 @@ test('resources list and read use configured project', async () => {
     'dataspec://project/7/rules-yaml',
     'dataspec://project/7/workflow-recipes',
     'dataspec://project/7/ai-task-profiles',
-    'dataspec://project/7/schema-registry'
+    'dataspec://project/7/schema-registry',
+    'dataspec://project/7/ai-task-runs'
   ])
 
   const read = await handler({
@@ -220,6 +221,36 @@ test('schema registry resource is read from backend without project query', asyn
   assert.equal(read.result.contents[0].mimeType, 'application/json')
   assert.equal(payload.kind, 'dataspec-schema-registry')
   assert.equal(payload.contracts[0].contractId, 'field')
+})
+
+test('ai task runs resource returns recent failures with structured content', async () => {
+  const calls = []
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local',
+    apiToken: 'ds_mcp_token'
+  }, async (url, options = {}) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: [taskRunListItemFixture()]
+    })
+  })
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 37,
+    method: 'resources/read',
+    params: { uri: 'dataspec://project/7/ai-task-runs' }
+  })
+
+  const payload = JSON.parse(read.result.contents[0].text)
+  assert.equal(calls[0].url, 'http://dataspec.local/api/ai-task-runs/recent-failures?projectId=7&limit=10')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_mcp_token')
+  assert.equal(read.result.contents[0].mimeType, 'application/json')
+  assert.equal(payload.kind, 'dataspec-ai-task-runs')
+  assert.equal(payload.items[0].failedStep, 'lint-items')
+  assert.equal(read.result.structuredContent.items[0].resumeCommand, 'node tools/dataspec-cli.mjs task show 91 --project 7 --format json')
 })
 
 test('prompts list and get return DataSpec workflow guidance', async () => {
@@ -569,6 +600,40 @@ test('export_evidence_package tool returns structured package without adding sec
   assert.doesNotMatch(response.result.content[0].text, /ds_mcp_secret_token|Authorization|password=secret|jdbc:postgresql/)
 })
 
+test('get_ai_task_run tool returns task run detail as structured content', async () => {
+  const calls = []
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local'
+  }, async (url, options) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: taskRunDetailFixture()
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 18,
+    method: 'tools/call',
+    params: {
+      name: 'get_ai_task_run',
+      arguments: {
+        taskRunId: 91,
+        projectId: 7
+      }
+    }
+  })
+
+  assert.equal(calls[0].url, 'http://dataspec.local/api/ai-task-runs/91?projectId=7')
+  assert.equal(response.result.structuredContent.id, 91)
+  assert.equal(response.result.structuredContent.stepStatus[0].step, 'lint-items')
+  assert.equal(JSON.parse(response.result.content[0].text).partialArtifacts[0].type, 'sql-lint-result')
+  assert.equal(JSON.parse(response.result.content[0].text).partialArtifacts[0].ref, 'sql-lint-result:good.sql')
+  assert.equal(response.result.isError, false)
+})
+
 test('export_evidence_package tool accepts coverage payload source', async () => {
   const calls = []
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url, options) => {
@@ -656,6 +721,39 @@ test('tool call classifies legacy authorization failure without backend diagnost
   assert.equal(response.error.data.dataspecError.category, 'AUTH')
   assert.equal(response.error.data.dataspecError.retryable, true)
   assert.equal(response.error.data.dataspecError.httpStatus, 401)
+})
+
+test('get_ai_task_run tool returns AI-readable backend diagnostic', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async () => ({
+    ok: false,
+    status: 403,
+    json: async () => ({
+      code: 403,
+      message: '无权访问项目: 9',
+      error: {
+        code: 'PROJECT_ACCESS_DENIED',
+        category: 'AUTH',
+        retryable: false,
+        suggestedAction: '切换到 token 授权的项目后重试。',
+        docsRef: 'README.md#安全基线'
+      }
+    })
+  }))
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 19,
+    method: 'tools/call',
+    params: {
+      name: 'get_ai_task_run',
+      arguments: { taskRunId: 91, projectId: 9 }
+    }
+  })
+
+  assert.equal(response.error.code, -32000)
+  assert.equal(response.error.data.dataspecError.code, 'PROJECT_ACCESS_DENIED')
+  assert.equal(response.error.data.dataspecError.retryable, false)
+  assert.equal(response.error.data.dataspecError.httpStatus, 403)
 })
 
 test('unknown method returns json rpc method not found error', async () => {
@@ -805,5 +903,56 @@ function evidencePackageFixture(overrides = {}) {
     artifacts: [{ name: 'fixedSql', mediaType: 'text/sql', summary: { available: true } }],
     nextActions: ['复核 fixedSql 后再应用补丁。'],
     suggestedCommands: ['dataspec evidence export --source-type SQL_CHECK --source-id 42 --format zip --output evidence.zip']
+  }
+}
+
+function taskRunListItemFixture(overrides = {}) {
+  return {
+    id: 91,
+    projectId: 7,
+    taskType: 'SQL_LINT',
+    sourceType: 'AI_BATCH',
+    sourceId: 31,
+    status: 'FAILED',
+    inputHash: 'sha256:test',
+    retryable: true,
+    failedStep: 'lint-items',
+    resumeCommand: 'node tools/dataspec-cli.mjs task show 91 --project 7 --format json',
+    nextAction: '查看失败步骤并复制 resumeCommand 重试。',
+    operatorName: 'mcp',
+    startedAt: '2026-07-04T10:00:00',
+    finishedAt: '2026-07-04T10:00:02',
+    expiresAt: '2026-07-11T10:00:00',
+    createdAt: '2026-07-04T10:00:00',
+    ...overrides
+  }
+}
+
+function taskRunDetailFixture(overrides = {}) {
+  return {
+    ...taskRunListItemFixture(),
+    idempotencyKey: 'retry-91',
+    stepStatus: [
+      {
+        step: 'lint-items',
+        status: 'FAILED',
+        message: '1 个 SQL 文件检查失败',
+        artifactRef: 'sql-lint-result:bad.sql'
+      }
+    ],
+    partialArtifacts: [
+      {
+        type: 'sql-lint-result',
+        name: 'good.sql',
+        ref: 'sql-lint-result:good.sql',
+        summary: { errorCount: 0 }
+      }
+    ],
+    metadata: {
+      profileId: 'sql-fix',
+      source: 'mcp'
+    },
+    updatedAt: '2026-07-04T10:00:02',
+    ...overrides
   }
 }

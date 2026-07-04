@@ -4,5 +4,6 @@ public enum EvidenceSourceType {
     AI_JOB,
     SQL_CHECK,
     COVERAGE_REPORT,
-    AI_BATCH_RUN
+    AI_BATCH_RUN,
+    AI_TASK_RUN
 }

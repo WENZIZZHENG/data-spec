@@ -3,6 +3,8 @@ package com.dataspec.evidence.service.impl;
 import com.dataspec.aibatch.model.AiBatchDeliveryPackage;
 import com.dataspec.aibatch.model.AiBatchRunDetail;
 import com.dataspec.aibatch.service.AiBatchService;
+import com.dataspec.aitaskrun.model.AiTaskRunDetail;
+import com.dataspec.aitaskrun.service.AiTaskRunService;
 import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.aireplay.entity.AiJobRecord;
 import com.dataspec.aireplay.model.AiJobRecordDetail;
@@ -52,17 +54,19 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
     private final SqlCheckRecordService sqlCheckRecordService;
     private final AiJobRecordService aiJobRecordService;
     private final AiBatchService aiBatchService;
+    private final AiTaskRunService aiTaskRunService;
     private final ObjectMapper objectMapper;
 
     @Override
     public AiEvidencePackage generate(AiEvidencePackageReq req) {
         if (req == null || req.sourceType() == null) {
-            throw new BizException("sourceType 不能为空，支持: AI_JOB, SQL_CHECK, COVERAGE_REPORT, AI_BATCH_RUN");
+            throw new BizException("sourceType 不能为空，支持: AI_JOB, SQL_CHECK, COVERAGE_REPORT, AI_BATCH_RUN, AI_TASK_RUN");
         }
         return switch (req.sourceType()) {
             case SQL_CHECK -> fromSqlCheck(req);
             case AI_JOB -> fromAiJob(req);
             case AI_BATCH_RUN -> fromAiBatch(req);
+            case AI_TASK_RUN -> fromAiTaskRun(req);
             case COVERAGE_REPORT -> fromCoverage(req);
         };
     }
@@ -187,6 +191,50 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 artifacts,
                 deliveryPackage != null && deliveryPackage.nextActions() != null ? sanitizeStringList(deliveryPackage.nextActions()) : List.of("查看失败项并按需重试。"),
                 List.of("dataspec evidence export --source-type AI_BATCH_RUN --source-id " + sourceId + " --format json"),
+                List.of()
+        );
+    }
+
+    private AiEvidencePackage fromAiTaskRun(AiEvidencePackageReq req) {
+        Long sourceId = requireSourceId(req);
+        if (req.projectId() == null) {
+            throw new BizException("AI_TASK_RUN 需要 projectId");
+        }
+        AiTaskRunDetail detail = aiTaskRunService.detail(req.projectId(), sourceId);
+        Map<String, Object> inputs = orderedMap(
+                "taskType", detail.taskType(),
+                "sourceType", detail.sourceType(),
+                "sourceId", detail.sourceId(),
+                "inputHash", detail.inputHash()
+        );
+        Map<String, Object> outputs = orderedMap(
+                "status", detail.status(),
+                "retryable", detail.retryable(),
+                "failedStep", detail.failedStep(),
+                "resumeCommand", detail.resumeCommand(),
+                "nextAction", detail.nextAction()
+        );
+        Map<String, Object> validation = orderedMap(
+                "status", detail.status(),
+                "retryable", detail.retryable(),
+                "failedStep", detail.failedStep()
+        );
+        List<AiEvidenceArtifact> artifacts = List.of(
+                new AiEvidenceArtifact("ai-task-run", "AI 任务运行状态", "json", sanitizeToMap(detail)),
+                new AiEvidenceArtifact("ai-task-partial-artifacts", "AI 任务已完成产物摘要", "json", orderedMap("items", detail.partialArtifacts()))
+        );
+        List<String> suggestedCommands = hasText(detail.resumeCommand())
+                ? List.of(detail.resumeCommand())
+                : List.of("dataspec task show " + sourceId + " --project " + req.projectId() + " --format json");
+        return build(req.projectId(),
+                new AiEvidenceSource(EvidenceSourceType.AI_TASK_RUN, sourceId, "AI 任务运行 #" + sourceId, detail.status(), true),
+                AiEvidenceStandardSnapshot.unversioned(),
+                inputs,
+                outputs,
+                validation,
+                artifacts,
+                List.of(firstText(detail.nextAction(), "查看任务状态后决定是否重试。")),
+                suggestedCommands,
                 List.of()
         );
     }

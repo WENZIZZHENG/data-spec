@@ -101,6 +101,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'evidence') {
       return await runEvidence(rest, io, fetchFn)
     }
+    if (command === 'task' || command === 'tasks') {
+      return await runTask(rest, io, fetchFn)
+    }
     if (command === 'profile' || command === 'profiles') {
       return await runProfile(rest, io, fetchFn)
     }
@@ -879,6 +882,102 @@ async function runEvidence(args, io, fetchFn) {
   return 0
 }
 
+async function runTask(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (!subcommand || subcommand === 'list' || subcommand.startsWith('--')) {
+    const { positional, options } = parseArgs(subcommand === 'list' ? rest : args, [
+      'project',
+      'format',
+      'server',
+      'dataspec-token',
+      'status',
+      'task-type',
+      'taskType',
+      'current',
+      'size'
+    ])
+    if (positional.length > 0) {
+      throw new Error(`task list 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (format !== 'json') {
+      throw new Error('task list 仅支持 --format json')
+    }
+    const result = await fetchTaskRuns({
+      server: normalizeServer(options.server ?? config.server),
+      projectId: parseProjectId(options.project ?? config.projectId),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      status: normalizeOptionalCliText(options.status),
+      taskType: normalizeOptionalCliText(options.taskType ?? options['task-type']),
+      current: parseLimit(options.current, 1),
+      size: parseLimit(options.size, 10)
+    })
+    io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+    return 0
+  }
+
+  if (subcommand === 'failures') {
+    const { positional, options } = parseArgs(rest, [
+      'project',
+      'format',
+      'server',
+      'dataspec-token',
+      'limit'
+    ])
+    if (positional.length > 0) {
+      throw new Error(`task failures 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (format !== 'json') {
+      throw new Error('task failures 仅支持 --format json')
+    }
+    const result = await fetchRecentTaskFailures({
+      server: normalizeServer(options.server ?? config.server),
+      projectId: parseProjectId(options.project ?? config.projectId),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      limit: parseLimit(options.limit, 10)
+    })
+    io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+    return 0
+  }
+
+  if (subcommand === 'show') {
+    const { positional, options } = parseArgs(rest, [
+      'project',
+      'format',
+      'server',
+      'dataspec-token'
+    ])
+    const taskRunId = positional[0]
+    if (!taskRunId) {
+      throw new Error('task show 需要提供 task run id')
+    }
+    if (positional.length > 1) {
+      throw new Error(`task show 只接受一个 task run id，收到: ${positional.slice(1).join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (format !== 'json') {
+      throw new Error('task show 仅支持 --format json')
+    }
+    const result = await fetchTaskRunDetail({
+      server: normalizeServer(options.server ?? config.server),
+      projectId: parseProjectId(options.project ?? config.projectId),
+      taskRunId: parsePositiveInteger(taskRunId, 'task run id'),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn
+    })
+    io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+    return 0
+  }
+
+  throw new Error(`未知 task 子命令: ${subcommand}。支持: list, failures, show`)
+}
+
 async function runInit(args, io, fetchFn) {
   const { positional, options } = parseArgs(
     args,
@@ -1468,6 +1567,50 @@ async function fetchEvidencePackage({ server, apiToken, fetchFn, req }) {
   return unwrapResponse(await readJsonResponse(response))
 }
 
+async function fetchTaskRuns({ server, projectId, apiToken, fetchFn, status, taskType, current, size }) {
+  try {
+    const params = new URLSearchParams()
+    params.set('projectId', String(projectId))
+    appendOptionalParam(params, 'status', status)
+    appendOptionalParam(params, 'taskType', taskType)
+    params.set('current', String(current))
+    params.set('size', String(size))
+    const response = await fetchFn(`${server}/api/ai-task-runs?${params.toString()}`, {
+      headers: dataSpecHeaders(apiToken)
+    })
+    return unwrapResponse(await readJsonResponse(response))
+  } catch (error) {
+    throw normalizeTaskRunFetchError(error)
+  }
+}
+
+async function fetchRecentTaskFailures({ server, projectId, apiToken, fetchFn, limit }) {
+  try {
+    const params = new URLSearchParams()
+    params.set('projectId', String(projectId))
+    params.set('limit', String(limit))
+    const response = await fetchFn(`${server}/api/ai-task-runs/recent-failures?${params.toString()}`, {
+      headers: dataSpecHeaders(apiToken)
+    })
+    return unwrapResponse(await readJsonResponse(response))
+  } catch (error) {
+    throw normalizeTaskRunFetchError(error)
+  }
+}
+
+async function fetchTaskRunDetail({ server, projectId, taskRunId, apiToken, fetchFn }) {
+  try {
+    const params = new URLSearchParams()
+    params.set('projectId', String(projectId))
+    const response = await fetchFn(`${server}/api/ai-task-runs/${encodeURIComponent(taskRunId)}?${params.toString()}`, {
+      headers: dataSpecHeaders(apiToken)
+    })
+    return unwrapResponse(await readJsonResponse(response))
+  } catch (error) {
+    throw normalizeTaskRunFetchError(error)
+  }
+}
+
 async function buildEvidenceRequest(options, config) {
   const sourceType = normalizeEvidenceSourceType(options['source-type'] ?? options.sourceType)
   const sourceId = options['source-id'] ?? options.sourceId
@@ -1480,7 +1623,7 @@ async function buildEvidenceRequest(options, config) {
     sourceTitle: options['source-title'] ?? options.sourceTitle ?? payload.sourceTitle
   }
   if (!req.sourceType) {
-    throw new Error('evidence export 需要提供 --source-type <AI_JOB|SQL_CHECK|COVERAGE_REPORT|AI_BATCH_RUN>')
+    throw new Error('evidence export 需要提供 --source-type <AI_JOB|SQL_CHECK|COVERAGE_REPORT|AI_BATCH_RUN|AI_TASK_RUN>')
   }
   if (req.sourceType !== 'COVERAGE_REPORT' && !req.sourceId) {
     throw new Error(`${req.sourceType} 需要提供 --source-id <id>`)
@@ -1656,6 +1799,23 @@ function normalizeCapabilityFetchError(error, options = {}) {
       category: 'NETWORK',
       retryable: true,
       suggestedAction: '先运行 dataspec doctor --format json 检查服务、server URL、token 和项目配置。',
+      docsRef: 'README.md#cli',
+      httpStatus: null
+    }
+  )
+}
+
+function normalizeTaskRunFetchError(error) {
+  if (error instanceof DataSpecCliError) {
+    return error
+  }
+  return new DataSpecCliError(
+    `读取 AI task run 失败: ${error?.message ?? 'DataSpec 服务不可用'}`,
+    {
+      code: 'DATASPEC_SERVER_UNAVAILABLE',
+      category: 'NETWORK',
+      retryable: true,
+      suggestedAction: '先运行 dataspec doctor --format json 检查服务、server URL、token 和项目配置；然后重试 dataspec task failures --format json。',
       docsRef: 'README.md#cli',
       httpStatus: null
     }
@@ -3526,7 +3686,10 @@ Usage:
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
   node tools/dataspec-cli.mjs doctor [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
-  node tools/dataspec-cli.mjs evidence export --source-type <AI_JOB|SQL_CHECK|COVERAGE_REPORT|AI_BATCH_RUN> [--source-id <id>] [--payload <json>] [--format json|zip] [--output <path>] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs evidence export --source-type <AI_JOB|SQL_CHECK|COVERAGE_REPORT|AI_BATCH_RUN|AI_TASK_RUN> [--source-id <id>] [--payload <json>] [--format json|zip] [--output <path>] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs task list [--project <id>] [--status <status>] [--task-type <type>] [--current <n>] [--size <n>] [--format json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs task failures [--project <id>] [--limit <n>] [--format json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs task show <id> [--project <id>] [--format json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract list [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract show <contractId> [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract check [--format text|json] [--server <url>] [--dataspec-token <token>]

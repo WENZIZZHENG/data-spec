@@ -480,6 +480,12 @@ export interface PageResult<T> {
   pages?: number
 }
 
+export type AiTaskResumeInfo = Schemas['AiTaskResumeInfo']
+export type AiTaskRunListItem = Schemas['AiTaskRunListItem']
+export type AiTaskRunDetail = Schemas['AiTaskRunDetail']
+export type AiTaskStepStatus = Schemas['AiTaskStepStatus']
+export type AiTaskPartialArtifact = Schemas['AiTaskPartialArtifact']
+
 export interface AiJobRecord {
   id?: number
   projectId?: number
@@ -572,6 +578,7 @@ export interface AiBatchDeliveryPackage {
   fixedSqlSummary?: AiBatchFixedSqlSummary
   unmanagedHints?: string[]
   evidence?: AiBatchEvidence[]
+  taskRun?: AiTaskResumeInfo
   nextActions?: string[]
   createdAt?: string
 }

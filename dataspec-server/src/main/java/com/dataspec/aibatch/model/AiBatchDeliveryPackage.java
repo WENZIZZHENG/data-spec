@@ -1,5 +1,7 @@
 package com.dataspec.aibatch.model;
 
+import com.dataspec.aitaskrun.model.AiTaskResumeInfo;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -20,6 +22,7 @@ public record AiBatchDeliveryPackage(
         List<String> unmanagedHints,
         List<AiBatchEvidence> evidence,
         List<String> nextActions,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        AiTaskResumeInfo taskRun
 ) {
 }

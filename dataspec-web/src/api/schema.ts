@@ -1796,6 +1796,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-task-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_8"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-task-runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-task-runs/recent-failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["recentFailures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-profiles": {
         parameters: {
             query?: never;
@@ -1835,7 +1883,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_8"];
+        get: operations["list_9"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1851,7 +1899,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail"];
+        get: operations["detail_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1995,7 +2043,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_9"];
+        get: operations["list_10"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2011,7 +2059,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["detail_1"];
+        get: operations["detail_2"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3808,7 +3856,7 @@ export interface components {
             /** Format: int64 */
             projectId?: number;
             /** @enum {string} */
-            sourceType: "AI_JOB" | "SQL_CHECK" | "COVERAGE_REPORT" | "AI_BATCH_RUN";
+            sourceType: "AI_JOB" | "SQL_CHECK" | "COVERAGE_REPORT" | "AI_BATCH_RUN" | "AI_TASK_RUN";
             /** Format: int64 */
             sourceId?: number;
             sourceTitle?: string;
@@ -3925,7 +3973,7 @@ export interface components {
         };
         AiEvidenceSource: {
             /** @enum {string} */
-            sourceType?: "AI_JOB" | "SQL_CHECK" | "COVERAGE_REPORT" | "AI_BATCH_RUN";
+            sourceType?: "AI_JOB" | "SQL_CHECK" | "COVERAGE_REPORT" | "AI_BATCH_RUN" | "AI_TASK_RUN";
             /** Format: int64 */
             sourceId?: number;
             sourceTitle?: string;
@@ -3996,6 +4044,7 @@ export interface components {
             nextActions?: string[];
             /** Format: date-time */
             createdAt?: string;
+            taskRun?: components["schemas"]["AiTaskResumeInfo"];
         };
         AiBatchEvidence: {
             kind?: string;
@@ -4060,6 +4109,15 @@ export interface components {
             /** Format: int32 */
             fixedSqlCount?: number;
         };
+        AiTaskResumeInfo: {
+            /** Format: int64 */
+            taskRunId?: number;
+            status?: string;
+            retryable?: boolean;
+            failedStep?: string;
+            resumeCommand?: string;
+            nextAction?: string;
+        };
         RAiBatchDeliveryPackage: {
             /** Format: int32 */
             code?: number;
@@ -4123,9 +4181,9 @@ export interface components {
             /** Format: int32 */
             fieldCount?: number;
             /** Format: int32 */
-            enumCount?: number;
-            /** Format: int32 */
             templateCount?: number;
+            /** Format: int32 */
+            enumCount?: number;
         };
         StarterKitDomain: {
             code?: string;
@@ -5080,6 +5138,108 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["AuthMe"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        AiTaskRunListItem: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            taskType?: string;
+            sourceType?: string;
+            /** Format: int64 */
+            sourceId?: number;
+            status?: string;
+            inputHash?: string;
+            retryable?: boolean;
+            failedStep?: string;
+            resumeCommand?: string;
+            nextAction?: string;
+            operatorName?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        PageResultAiTaskRunListItem: {
+            records?: components["schemas"]["AiTaskRunListItem"][];
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            current?: number;
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            pages?: number;
+        };
+        RPageResultAiTaskRunListItem: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["PageResultAiTaskRunListItem"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        AiTaskPartialArtifact: {
+            type?: string;
+            name?: string;
+            ref?: string;
+            summary?: string;
+        };
+        AiTaskRunDetail: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            taskType?: string;
+            sourceType?: string;
+            /** Format: int64 */
+            sourceId?: number;
+            status?: string;
+            inputHash?: string;
+            idempotencyKey?: string;
+            stepStatus?: components["schemas"]["AiTaskStepStatus"][];
+            retryable?: boolean;
+            failedStep?: string;
+            resumeCommand?: string;
+            nextAction?: string;
+            partialArtifacts?: components["schemas"]["AiTaskPartialArtifact"][];
+            metadata?: {
+                [key: string]: Record<string, never>;
+            };
+            operatorName?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        AiTaskStepStatus: {
+            step?: string;
+            status?: string;
+            message?: string;
+            artifactRef?: string;
+        };
+        RAiTaskRunDetail: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiTaskRunDetail"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RListAiTaskRunListItem: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiTaskRunListItem"][];
             error?: components["schemas"]["ErrorDetail"];
         };
         AiProfileDiagnostic: {
@@ -8775,6 +8935,79 @@ export interface operations {
             };
         };
     };
+    list_8: {
+        parameters: {
+            query: {
+                projectId: number;
+                status?: string;
+                taskType?: string;
+                current?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RPageResultAiTaskRunListItem"];
+                };
+            };
+        };
+    };
+    detail: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiTaskRunDetail"];
+                };
+            };
+        };
+    };
+    recentFailures: {
+        parameters: {
+            query: {
+                projectId: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListAiTaskRunListItem"];
+                };
+            };
+        };
+    };
     listProfiles: {
         parameters: {
             query?: {
@@ -8822,7 +9055,7 @@ export interface operations {
             };
         };
     };
-    list_8: {
+    list_9: {
         parameters: {
             query: {
                 projectId: number;
@@ -8847,7 +9080,7 @@ export interface operations {
             };
         };
     };
-    detail: {
+    detail_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -9089,7 +9322,7 @@ export interface operations {
             };
         };
     };
-    list_9: {
+    list_10: {
         parameters: {
             query: {
                 projectId: number;
@@ -9113,7 +9346,7 @@ export interface operations {
             };
         };
     };
-    detail_1: {
+    detail_2: {
         parameters: {
             query?: never;
             header?: never;

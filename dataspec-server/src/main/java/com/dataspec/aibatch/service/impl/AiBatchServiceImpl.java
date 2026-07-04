@@ -14,6 +14,13 @@ import com.dataspec.aibatch.model.AiBatchSqlLintReq;
 import com.dataspec.aibatch.model.AiBatchSummary;
 import com.dataspec.aibatch.repository.AiBatchRunRepository;
 import com.dataspec.aibatch.service.AiBatchService;
+import com.dataspec.aitaskrun.entity.AiTaskRun;
+import com.dataspec.aitaskrun.model.AiTaskPartialArtifact;
+import com.dataspec.aitaskrun.model.AiTaskResumeInfo;
+import com.dataspec.aitaskrun.model.AiTaskRunFinishCommand;
+import com.dataspec.aitaskrun.model.AiTaskRunStartCommand;
+import com.dataspec.aitaskrun.model.AiTaskStepStatus;
+import com.dataspec.aitaskrun.service.AiTaskRunService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.dialect.model.DialectDiagnostic;
 import com.dataspec.idempotency.WriteGuardService;
@@ -27,9 +34,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +63,7 @@ public class AiBatchServiceImpl implements AiBatchService {
     private final AiBatchRunRepository aiBatchRunRepository;
     private final SqlLintService sqlLintService;
     private final ObjectMapper objectMapper;
+    private final AiTaskRunService aiTaskRunService;
     private WriteGuardService writeGuardService = new WriteGuardService();
 
     @Override
@@ -64,10 +76,50 @@ public class AiBatchServiceImpl implements AiBatchService {
         validateReq(req);
         ProjectAccessGuard.requireProjectAccess(req.projectId());
         return writeGuardService.execute(req.projectId(), "ai-batch:sql-lint", idempotencyKey,
-                () -> createSqlLintBatchInternal(req));
+                () -> createSqlLintBatchInternal(req, idempotencyKey));
     }
 
-    private AiBatchDeliveryPackage createSqlLintBatchInternal(AiBatchSqlLintReq req) {
+    private AiBatchDeliveryPackage createSqlLintBatchInternal(AiBatchSqlLintReq req, String idempotencyKey) {
+        String source = normalizeSource(req.source());
+        AiTaskRun taskRun = aiTaskRunService.start(new AiTaskRunStartCommand(
+                req.projectId(),
+                BATCH_TYPE_SQL_LINT,
+                "AI_BATCH",
+                inputHash(req),
+                idempotencyKey,
+                List.of(
+                        new AiTaskStepStatus("collect-input", "SUCCEEDED", "已收集批量 SQL 输入", null),
+                        new AiTaskStepStatus("lint-items", "RUNNING", "正在执行 SQL lint", null)
+                ),
+                List.of(),
+                taskMetadata(source, req.items().size()),
+                LocalDateTime.now().plus(7, ChronoUnit.DAYS)
+        ));
+        try {
+            return createSqlLintBatchInternal(req, source, idempotencyKey, taskRun);
+        } catch (Exception e) {
+            aiTaskRunService.fail(taskRun, new AiTaskRunFinishCommand(
+                    null,
+                    true,
+                    "persist-batch",
+                    inspectTaskCommand(taskRun, req.projectId()),
+                    "检查服务端日志或缩小输入范围后重试",
+                    List.of(
+                            new AiTaskStepStatus("collect-input", "SUCCEEDED", "已收集批量 SQL 输入", null),
+                            new AiTaskStepStatus("persist-batch", "FAILED", sanitize(e.getMessage()), null)
+                    ),
+                    List.of(),
+                    taskMetadata(source, req.items().size()),
+                    LocalDateTime.now().plus(7, ChronoUnit.DAYS)
+            ));
+            throw e;
+        }
+    }
+
+    private AiBatchDeliveryPackage createSqlLintBatchInternal(AiBatchSqlLintReq req,
+                                                             String source,
+                                                             String idempotencyKey,
+                                                             AiTaskRun taskRun) {
         List<AiBatchItemResult> itemResults = new ArrayList<>();
         for (AiBatchSqlLintItemReq item : req.items()) {
             itemResults.add(runLintItem(req.projectId(), item));
@@ -77,7 +129,6 @@ public class AiBatchServiceImpl implements AiBatchService {
         AiBatchIssueSummary issueSummary = buildIssueSummary(itemResults);
         AiBatchFixedSqlSummary fixedSqlSummary = buildFixedSqlSummary(itemResults);
         String status = resolveStatus(summary);
-        String source = normalizeSource(req.source());
 
         AiBatchRun run = new AiBatchRun();
         run.setProjectId(req.projectId());
@@ -90,6 +141,8 @@ public class AiBatchServiceImpl implements AiBatchService {
         aiBatchRunRepository.insert(run);
 
         LocalDateTime createdAt = run.getCreatedAt() == null ? LocalDateTime.now() : run.getCreatedAt();
+        AiTaskRun finishedTaskRun = finishTaskRun(taskRun, run.getId(), req, source, idempotencyKey, summary, itemResults);
+        AiTaskResumeInfo taskRunInfo = aiTaskRunService.resumeInfo(finishedTaskRun);
         AiBatchDeliveryPackage deliveryPackage = new AiBatchDeliveryPackage(
                 PACKAGE_VERSION,
                 batchId(run),
@@ -104,12 +157,51 @@ public class AiBatchServiceImpl implements AiBatchService {
                 List.of(),
                 buildEvidence(source, summary),
                 buildNextActions(summary),
-                createdAt
+                createdAt,
+                taskRunInfo
         );
         run.setPayloadJson(writeJson(deliveryPackage));
         run.setSummaryJson(writeJson(summary));
         aiBatchRunRepository.update(run);
         return deliveryPackage;
+    }
+
+    private AiTaskRun finishTaskRun(AiTaskRun taskRun,
+                                    Long batchRunId,
+                                    AiBatchSqlLintReq req,
+                                    String source,
+                                    String idempotencyKey,
+                                    AiBatchSummary summary,
+                                    List<AiBatchItemResult> itemResults) {
+        boolean retryable = summary.failedItems() > 0;
+        String failedStep = retryable ? "lint-items" : null;
+        String resumeCommand = retryable ? resumeCommand(req, itemResults, idempotencyKey, taskRun.getId()) : null;
+        String nextAction = retryable
+                ? "修正失败 SQL 后使用恢复命令重试失败文件"
+                : "无需处理";
+        List<AiTaskStepStatus> steps = List.of(
+                new AiTaskStepStatus("collect-input", "SUCCEEDED", "已收集批量 SQL 输入", null),
+                new AiTaskStepStatus("lint-items", taskStatus(summary), "SQL lint 执行完成", "ai-batch:" + batchRunId),
+                new AiTaskStepStatus("persist-batch", "SUCCEEDED", "已保存 AI batch delivery package", "ai-batch:" + batchRunId)
+        );
+        AiTaskRunFinishCommand command = new AiTaskRunFinishCommand(
+                batchRunId,
+                retryable,
+                failedStep,
+                resumeCommand,
+                nextAction,
+                steps,
+                partialArtifacts(batchRunId, itemResults),
+                taskMetadata(source, req.items().size()),
+                LocalDateTime.now().plus(7, ChronoUnit.DAYS)
+        );
+        if ("SUCCESS".equals(summaryStatus(summary))) {
+            return aiTaskRunService.succeed(taskRun, command);
+        }
+        if ("PARTIAL_FAILED".equals(summaryStatus(summary))) {
+            return aiTaskRunService.partialFail(taskRun, command);
+        }
+        return aiTaskRunService.fail(taskRun, command);
     }
 
     @Autowired
@@ -273,6 +365,124 @@ public class AiBatchServiceImpl implements AiBatchService {
             actions.add("无需处理");
         }
         return actions;
+    }
+
+    private String summaryStatus(AiBatchSummary summary) {
+        return resolveStatus(summary);
+    }
+
+    private String taskStatus(AiBatchSummary summary) {
+        return switch (resolveStatus(summary)) {
+            case "SUCCESS" -> "SUCCEEDED";
+            case "PARTIAL_FAILED" -> "PARTIAL_FAILED";
+            default -> "FAILED";
+        };
+    }
+
+    private List<AiTaskPartialArtifact> partialArtifacts(Long batchRunId, List<AiBatchItemResult> itemResults) {
+        List<AiTaskPartialArtifact> artifacts = new ArrayList<>();
+        artifacts.add(new AiTaskPartialArtifact(
+                "ai-batch",
+                "AI batch delivery package",
+                "ai-batch:" + batchRunId,
+                "批量 SQL lint 交付包"));
+        for (AiBatchItemResult item : itemResults) {
+            String name = !isBlank(item.filePath()) ? item.filePath() : item.itemName();
+            if (isBlank(name)) {
+                name = "unnamed-sql";
+            }
+            String summary = "SUCCESS".equals(item.status())
+                    ? "已完成, ERROR=" + item.errorCount() + ", fixedSql=" + item.fixedSqlAvailable()
+                    : "失败: " + sanitize(item.errorMessage());
+            artifacts.add(new AiTaskPartialArtifact(
+                    "sql-lint-item",
+                    sanitize(name),
+                    !isBlank(item.filePath()) ? sanitize(item.filePath()) : null,
+                    summary));
+        }
+        return artifacts;
+    }
+
+    private Map<String, Object> taskMetadata(String source, int itemCount) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("taskType", BATCH_TYPE_SQL_LINT);
+        metadata.put("source", source);
+        metadata.put("itemCount", itemCount);
+        metadata.put("retryBoundary", "不自动重放任务；按 resumeCommand 显式重试");
+        return metadata;
+    }
+
+    private String inputHash(AiBatchSqlLintReq req) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(writeJson(req).getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new BizException("AI 批量任务输入 hash 计算失败: " + e.getMessage());
+        }
+    }
+
+    private String resumeCommand(AiBatchSqlLintReq req,
+                                 List<AiBatchItemResult> itemResults,
+                                 String idempotencyKey,
+                                 Long taskRunId) {
+        List<String> failedPaths = itemResults.stream()
+                .filter(item -> "FAILED".equals(item.status()))
+                .map(AiBatchItemResult::filePath)
+                .filter(path -> !isBlank(path))
+                .map(this::sanitize)
+                .distinct()
+                .toList();
+        if (failedPaths.isEmpty()) {
+            return inspectTaskCommand(taskRunId, req.projectId());
+        }
+        StringBuilder command = new StringBuilder("node tools/dataspec-cli.mjs lint-files");
+        for (String path : failedPaths) {
+            command.append(' ').append(quoteArg(path));
+        }
+        command.append(" --project ").append(req.projectId())
+                .append(" --format json --idempotency-key ")
+                .append(quoteArg(resumeIdempotencyKey(idempotencyKey, taskRunId)));
+        return command.toString();
+    }
+
+    private String resumeIdempotencyKey(String idempotencyKey, Long taskRunId) {
+        String taskPart = taskRunId == null ? "pending" : String.valueOf(taskRunId);
+        if (isBlank(idempotencyKey)) {
+            return "ai-task-run-" + taskPart;
+        }
+        String digest = HexFormat.of().formatHex(
+                sha256(sanitize(idempotencyKey)).digest()
+        ).substring(0, 16);
+        return "ai-task-run-" + taskPart + "-resume-" + digest;
+    }
+
+    private MessageDigest sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(String.valueOf(value).getBytes(StandardCharsets.UTF_8));
+            return digest;
+        } catch (Exception e) {
+            throw new BizException("AI 批量任务恢复 key 计算失败: " + e.getMessage());
+        }
+    }
+
+    private String inspectTaskCommand(AiTaskRun taskRun, Long projectId) {
+        return inspectTaskCommand(taskRun == null ? null : taskRun.getId(), projectId);
+    }
+
+    private String inspectTaskCommand(Long taskRunId, Long projectId) {
+        if (taskRunId == null) {
+            return "node tools/dataspec-cli.mjs task failures --project " + projectId + " --format json";
+        }
+        return "node tools/dataspec-cli.mjs task show " + taskRunId + " --project " + projectId + " --format json";
+    }
+
+    private String quoteArg(String value) {
+        String safe = sanitize(value);
+        if (safe == null) {
+            return "\"\"";
+        }
+        return "\"" + safe.replace("\"", "\\\"") + "\"";
     }
 
     private String batchId(AiBatchRun run) {

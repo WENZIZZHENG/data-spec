@@ -58,3 +58,14 @@ Evidence packages MUST NOT expose secrets, full connection strings, or raw busin
 - **THEN** the package includes schema/field/rule/count summaries only
 - **AND** it does not include sampled business data rows.
 
+### Requirement: Evidence package can reference task runs
+AI evidence packages SHALL be able to include AI task run state for handoff and recovery.
+
+#### Scenario: Evidence from task run
+- **WHEN** a caller exports evidence for an AI task run
+- **THEN** the package includes task status, failed step, retryable state, resume command, source reference, partial artifacts, validation summary, and next actions.
+
+#### Scenario: Evidence task run redaction
+- **WHEN** task run metadata or artifacts are included in an evidence package
+- **THEN** the package MUST NOT include token, password, Authorization header, full JDBC URL, or sampled business data rows.
+
