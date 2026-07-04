@@ -1,15 +1,4 @@
-# field-conflict-detection Specification
-
-## Purpose
-TBD - created by archiving change add-field-conflict-detection. Update Purpose after archive.
-## Requirements
-### Requirement: Generate field conflict report
-The system SHALL generate a read-only field conflict report for a project.
-
-#### Scenario: Conflict report
-- **WHEN** a user requests a conflict report for a valid `projectId`
-- **THEN** the system returns summary counts and conflict groups
-- **AND** the report does not modify fields, aliases, code sets, snapshots, or rules.
+## MODIFIED Requirements
 
 ### Requirement: Detect duplicate aliases and semantic conflicts
 The system SHALL detect common duplicate, conflicting, and SQL-unsafe standard field definitions.
@@ -50,6 +39,8 @@ The frontend SHALL expose field conflict detection from a dedicated page.
 #### Scenario: Edit involved field
 - **WHEN** a user clicks an involved field
 - **THEN** the frontend routes to the field library with that field selected for editing.
+
+## ADDED Requirements
 
 ### Requirement: Naming risk summary
 The conflict report SHALL summarize naming risks that are especially relevant to AI-generated SQL and DDL.

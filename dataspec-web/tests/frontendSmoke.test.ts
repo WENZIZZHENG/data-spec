@@ -29,6 +29,7 @@ test('keeps critical frontend routes and navigation entries wired', () => {
     { path: '/ai-feedback', view: 'AiFeedback.vue', title: 'AI 反馈' },
     { path: '/project-backup', view: 'ProjectBackup.vue', title: '项目备份' },
     { path: '/reverse-import', view: 'ReverseImport.vue', title: '反向导入' },
+    { path: '/field-conflicts', view: 'FieldConflicts.vue', title: '字段冲突' },
     { path: '/field-coverage', view: 'FieldCoverage.vue', title: '覆盖率报告' }
   ]
 
@@ -40,6 +41,35 @@ test('keeps critical frontend routes and navigation entries wired', () => {
     ], `router ${route.path}`)
     assertContains(app, [`index="${route.path}"`, route.title], `app navigation ${route.path}`)
   }
+})
+
+test('keeps field conflict naming risk view wired', () => {
+  const view = readSource('src/views/FieldConflicts.vue')
+  const utils = readSource('src/utils/fieldConflictDisplay.ts')
+  const types = readSource('src/types/index.ts')
+
+  assertContains(view, [
+    '命名风险',
+    'RESERVED_WORD',
+    'DANGEROUS_SQL_NAME',
+    'CASE_COLLISION',
+    'AMBIGUOUS_ALIAS',
+    'isNamingRiskType(group.conflictType)'
+  ], 'FieldConflicts.vue')
+
+  assertContains(utils, [
+    "type === 'RESERVED_WORD'",
+    "type === 'DANGEROUS_SQL_NAME'",
+    "type === 'CASE_COLLISION'",
+    "type === 'AMBIGUOUS_ALIAS'"
+  ], 'fieldConflictDisplay utils')
+
+  assertContains(types, [
+    "| 'RESERVED_WORD'",
+    "| 'DANGEROUS_SQL_NAME'",
+    "| 'CASE_COLLISION'",
+    "| 'AMBIGUOUS_ALIAS'"
+  ], 'field conflict types')
 })
 
 test('keeps AI batch delivery package page wired', () => {

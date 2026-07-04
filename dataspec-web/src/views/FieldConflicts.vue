@@ -53,6 +53,12 @@
             <strong>{{ summary.attributeMismatchCount ?? 0 }}</strong>
           </div>
         </el-col>
+        <el-col :xs="12" :sm="8" :md="4">
+          <div class="metric-card">
+            <span class="metric-label">命名风险</span>
+            <strong>{{ namingRiskCount }}</strong>
+          </div>
+        </el-col>
       </el-row>
 
       <div class="conflict-toolbar">
@@ -68,6 +74,10 @@
           <el-option label="别名冲突" value="ALIAS_CONFLICT" />
           <el-option label="显示名重复" value="DISPLAY_NAME_DUPLICATE" />
           <el-option label="语义疑似重复" value="SEMANTIC_DUPLICATE" />
+          <el-option label="SQL 保留字" value="RESERVED_WORD" />
+          <el-option label="SQL 危险命名" value="DANGEROUS_SQL_NAME" />
+          <el-option label="大小写碰撞" value="CASE_COLLISION" />
+          <el-option label="Alias 歧义" value="AMBIGUOUS_ALIAS" />
         </el-select>
         <span class="toolbar-count">当前匹配 {{ filteredGroups.length }} / {{ groups.length }}</span>
       </div>
@@ -154,7 +164,8 @@ import {
   conflictFieldSummary,
   conflictSeverityTagType,
   conflictTypeLabel,
-  filterConflictGroups
+  filterConflictGroups,
+  isNamingRiskType
 } from '@/utils/fieldConflictDisplay'
 import type {
   FieldConflictField,
@@ -175,6 +186,7 @@ const hasProject = computed(() => Boolean(projectStore.currentProjectId))
 const summary = computed(() => report.value.summary ?? {})
 const groups = computed(() => report.value.groups ?? [])
 const filteredGroups = computed(() => filterConflictGroups(groups.value, severityFilter.value, typeFilter.value))
+const namingRiskCount = computed(() => groups.value.filter((group) => isNamingRiskType(group.conflictType)).length)
 
 onMounted(() => {
   if (projectStore.projects.length === 0) {

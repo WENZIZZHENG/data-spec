@@ -17,6 +17,10 @@ import com.dataspec.field.model.FieldGroupItem;
 import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingSummaries;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.fieldconflict.model.FieldConflictGroup;
+import com.dataspec.fieldconflict.model.FieldConflictReport;
+import com.dataspec.fieldconflict.model.FieldConflictType;
+import com.dataspec.fieldconflict.service.FieldConflictService;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.prompt.service.PromptTemplateRegistry;
@@ -112,6 +116,7 @@ public class AiContextExportService {
     private final SchemaRegistryService schemaRegistryService;
     private final AiCapabilityCatalogService capabilityCatalogService;
     private final BusinessGlossaryService businessGlossaryService;
+    private final FieldConflictService fieldConflictService;
 
     /**
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
@@ -160,6 +165,7 @@ public class AiContextExportService {
             md.append("\n");
         }
         appendRuleExemptionsMarkdown(md, projectId);
+        appendNamingRisksMarkdown(md, projectId, scopedFields.fields().stream().map(FieldMatch::field).toList());
 
         // 标准字段
         List<FieldMatch> fields = scopedFields.fields();
@@ -181,6 +187,46 @@ public class AiContextExportService {
         }
 
         return md.toString();
+    }
+
+    private void appendNamingRisksMarkdown(StringBuilder md, Long projectId, List<Field> fields) {
+        FieldConflictReport report = fieldConflictService.report(projectId, fields);
+        List<FieldConflictGroup> risks = report.getGroups().stream()
+                .filter(group -> isNamingRiskType(group.getConflictType()))
+                .limit(20)
+                .toList();
+        if (risks.isEmpty()) {
+            return;
+        }
+        md.append("## 字段命名风险\n\n");
+        md.append("AI 生成新 DDL/SQL 时应避让以下高风险字段名或歧义 alias；历史字段必须保留时需要显式确认引用策略。\n\n");
+        for (FieldConflictGroup risk : risks) {
+            md.append(String.format("- **%s** [%s] %s\n",
+                    risk.getTitle(),
+                    risk.getConflictType(),
+                    risk.getDescription()));
+            List<String> fieldNames = risk.getFields().stream()
+                    .map(field -> field.getName() == null ? "" : field.getName())
+                    .filter(name -> !name.isBlank())
+                    .toList();
+            if (!fieldNames.isEmpty()) {
+                md.append("  - 字段: ").append(String.join(", ", fieldNames)).append("\n");
+            }
+            if (!risk.getEvidence().isEmpty()) {
+                md.append("  - 证据: ").append(String.join("；", risk.getEvidence())).append("\n");
+            }
+            if (risk.getSuggestedAction() != null && !risk.getSuggestedAction().isBlank()) {
+                md.append("  - 建议: ").append(risk.getSuggestedAction()).append("\n");
+            }
+        }
+        md.append("\n");
+    }
+
+    private boolean isNamingRiskType(FieldConflictType type) {
+        return FieldConflictType.RESERVED_WORD.equals(type)
+                || FieldConflictType.DANGEROUS_SQL_NAME.equals(type)
+                || FieldConflictType.CASE_COLLISION.equals(type)
+                || FieldConflictType.AMBIGUOUS_ALIAS.equals(type);
     }
 
     /**

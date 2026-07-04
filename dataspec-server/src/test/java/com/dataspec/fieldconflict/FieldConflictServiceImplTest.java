@@ -69,6 +69,58 @@ class FieldConflictServiceImplTest {
         assertTrue(report.getGroups().isEmpty());
     }
 
+    @Test
+    void report_detectsSqlNamingRisks() {
+        FieldService fieldService = mock(FieldService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of(
+                field(1L, "order", "订单", "varchar(32)", null, false, null),
+                field(2L, "UserID", "用户编号", "bigint", null, false, null),
+                field(3L, "userid", "用户编号小写", "bigint", null, false, null),
+                field(4L, "customer_type", "客户类型", "varchar(20)", "type", false, null),
+                field(5L, "type", "类型", "varchar(20)", null, false, null)
+        ));
+        FieldConflictServiceImpl service = new FieldConflictServiceImpl(fieldService);
+
+        var report = service.report(1L);
+
+        var reserved = report.getGroups().stream()
+                .filter(group -> FieldConflictType.RESERVED_WORD.equals(group.getConflictType()))
+                .filter(group -> group.getGroupKey().contains("order"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(FieldConflictSeverity.WARNING, reserved.getSeverity());
+        assertTrue(reserved.getEvidence().stream().anyMatch(item -> item.contains("PostgreSQL")));
+        assertTrue(reserved.getSuggestedAction().contains("order_value"));
+
+        var caseCollision = report.getGroups().stream()
+                .filter(group -> FieldConflictType.CASE_COLLISION.equals(group.getConflictType()))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(caseCollision.getEvidence().stream().anyMatch(item -> item.contains("大小写")));
+        assertEquals(2, caseCollision.getFields().size());
+
+        var ambiguousAlias = report.getGroups().stream()
+                .filter(group -> FieldConflictType.AMBIGUOUS_ALIAS.equals(group.getConflictType()))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(ambiguousAlias.getEvidence().stream().anyMatch(item -> item.contains("type")));
+        assertTrue(ambiguousAlias.getSuggestedAction().contains("不要直接使用该 alias"));
+    }
+
+    @Test
+    void report_ignoresCaseVariantAliasesOnSameField() {
+        FieldService fieldService = mock(FieldService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of(
+                field(1L, "user_id", "用户ID", "bigint", "UserID,userid", false, null)
+        ));
+        FieldConflictServiceImpl service = new FieldConflictServiceImpl(fieldService);
+
+        var report = service.report(1L);
+
+        assertTrue(report.getGroups().stream()
+                .noneMatch(group -> FieldConflictType.CASE_COLLISION.equals(group.getConflictType())));
+    }
+
     private Field field(Long id, String name, String displayName, String dataType,
                         String aliases, boolean sensitive, Long codeSetId) {
         Field field = new Field();

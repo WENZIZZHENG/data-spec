@@ -32,6 +32,10 @@ import java.util.Set;
 public class FieldConflictServiceImpl implements FieldConflictService {
 
     private static final Map<String, SemanticGroup> SEMANTIC_GROUPS = semanticGroups();
+    private static final Map<String, Set<String>> RESERVED_WORDS_BY_DIALECT = reservedWordsByDialect();
+    private static final Set<String> DANGEROUS_SQL_NAMES = Set.of(
+            "type", "status", "state", "key", "value", "desc", "comment", "level", "role", "rank"
+    );
 
     private final FieldService fieldService;
 
@@ -41,15 +45,27 @@ public class FieldConflictServiceImpl implements FieldConflictService {
             throw new BizException("项目ID不能为空");
         }
         List<Field> fields = fieldService.listByProject(projectId);
+        return report(projectId, fields);
+    }
+
+    @Override
+    public FieldConflictReport report(Long projectId, List<Field> fields) {
+        if (projectId == null) {
+            throw new BizException("项目ID不能为空");
+        }
+        List<Field> scopedFields = fields == null ? List.of() : fields;
         FieldConflictReport report = new FieldConflictReport();
         report.setProjectId(projectId);
-        report.getSummary().setTotalFieldCount(fields.size());
+        report.getSummary().setTotalFieldCount(scopedFields.size());
 
         List<FieldConflictGroup> groups = report.getGroups();
-        groups.addAll(detectNameDuplicates(fields));
-        groups.addAll(detectAliasConflicts(fields));
-        groups.addAll(detectDisplayNameDuplicates(fields));
-        groups.addAll(detectSemanticDuplicates(fields));
+        groups.addAll(detectNameDuplicates(scopedFields));
+        groups.addAll(detectAliasConflicts(scopedFields));
+        groups.addAll(detectDisplayNameDuplicates(scopedFields));
+        groups.addAll(detectSemanticDuplicates(scopedFields));
+        groups.addAll(detectSqlNamingRisks(scopedFields));
+        groups.addAll(detectCaseCollisions(scopedFields));
+        groups.addAll(detectAmbiguousAliases(scopedFields));
         groups.sort(Comparator
                 .comparing((FieldConflictGroup group) -> severityRank(group.getSeverity()))
                 .thenComparing(group -> nullToEmpty(group.getConflictType() == null ? null : group.getConflictType().name()))
@@ -77,6 +93,153 @@ public class FieldConflictServiceImpl implements FieldConflictService {
             ));
         }
         return groups;
+    }
+
+    private List<FieldConflictGroup> detectSqlNamingRisks(List<Field> fields) {
+        List<FieldConflictGroup> groups = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (Field field : fields) {
+            List<NamingToken> tokens = namingTokens(field);
+            for (NamingToken token : tokens) {
+                String normalized = normalizeSqlName(token.value());
+                if (normalized.isBlank()) {
+                    continue;
+                }
+                List<String> dialects = reservedDialects(normalized);
+                if (!dialects.isEmpty()) {
+                    String key = "reserved:" + normalized + ":" + field.getId() + ":" + token.source();
+                    if (seen.add(key)) {
+                        groups.add(namingRiskGroup(
+                                key,
+                                FieldConflictType.RESERVED_WORD,
+                                "SQL 保留字风险: " + token.value(),
+                                "字段名或别名命中 SQL 方言保留字，AI 生成 DDL/SQL 时容易需要引用或直接失败。",
+                                field,
+                                List.of(
+                                        "命中名称: " + token.value(),
+                                        "来源: " + token.sourceLabel(),
+                                        "保留字方言: " + String.join(", ", dialects),
+                                        "建议替代名: " + saferName(normalized, field)
+                                ),
+                                "新增字段请避让该名称，建议使用 `" + saferName(normalized, field) + "`；历史字段如必须保留，生成 SQL 时显式确认引用策略。"
+                        ));
+                    }
+                } else if (DANGEROUS_SQL_NAMES.contains(normalized)) {
+                    String key = "dangerous:" + normalized + ":" + field.getId() + ":" + token.source();
+                    if (seen.add(key)) {
+                        groups.add(namingRiskGroup(
+                                key,
+                                FieldConflictType.DANGEROUS_SQL_NAME,
+                                "SQL 危险命名: " + token.value(),
+                                "字段名或别名过于泛化，容易与方言关键字、函数名或业务语义混淆。",
+                                field,
+                                List.of(
+                                        "命中名称: " + token.value(),
+                                        "来源: " + token.sourceLabel(),
+                                        "危险词: " + normalized,
+                                        "建议替代名: " + saferName(normalized, field)
+                                ),
+                                "新增字段请改成更具体的 snake_case，例如 `" + saferName(normalized, field) + "`；AI 不应直接复用该泛化名称。"
+                        ));
+                    }
+                }
+            }
+        }
+        return groups;
+    }
+
+    private List<FieldConflictGroup> detectCaseCollisions(List<Field> fields) {
+        Map<String, List<TokenOwner>> byCaseKey = new LinkedHashMap<>();
+        for (Field field : fields) {
+            for (NamingToken token : namingTokens(field)) {
+                String key = caseCollisionKey(token.value());
+                if (!key.isBlank()) {
+                    byCaseKey.computeIfAbsent(key, ignored -> new ArrayList<>())
+                            .add(new TokenOwner(token.value(), token.sourceLabel(), field));
+                }
+            }
+        }
+
+        List<FieldConflictGroup> groups = new ArrayList<>();
+        for (Map.Entry<String, List<TokenOwner>> entry : byCaseKey.entrySet()) {
+            List<TokenOwner> owners = entry.getValue();
+            Set<String> rawTokens = new LinkedHashSet<>();
+            for (TokenOwner owner : owners) {
+                rawTokens.add(owner.value());
+            }
+            if (rawTokens.size() <= 1) {
+                continue;
+            }
+            List<Field> involved = dedup(owners.stream().map(TokenOwner::field).toList());
+            if (involved.size() <= 1) {
+                continue;
+            }
+            groups.add(group(
+                    "case:" + entry.getKey(),
+                    FieldConflictType.CASE_COLLISION,
+                    "大小写碰撞: " + entry.getKey(),
+                    "多个字段名或别名只在大小写上不同，跨数据库或生成 SQL 时容易被折叠成同一名称。",
+                    involved,
+                    List.of(
+                            "大小写归一后相同: " + entry.getKey(),
+                            "原始名称: " + String.join(", ", rawTokens)
+                    ),
+                    "统一使用一个 canonical snake_case 名称；AI 生成 SQL 时不要依赖大小写区分字段。"
+            ));
+        }
+        return groups;
+    }
+
+    private List<FieldConflictGroup> detectAmbiguousAliases(List<Field> fields) {
+        Map<String, List<Field>> aliasOwners = new LinkedHashMap<>();
+        Map<String, Field> nameOwners = new LinkedHashMap<>();
+        for (Field field : fields) {
+            String normalizedName = normalizeSqlName(field.getName());
+            if (!normalizedName.isBlank()) {
+                nameOwners.put(normalizedName, field);
+            }
+            for (String alias : splitCsv(field.getAliases())) {
+                String normalizedAlias = normalizeSqlName(alias);
+                if (!normalizedAlias.isBlank()) {
+                    aliasOwners.computeIfAbsent(normalizedAlias, ignored -> new ArrayList<>()).add(field);
+                }
+            }
+        }
+
+        List<FieldConflictGroup> groups = new ArrayList<>();
+        for (Map.Entry<String, List<Field>> entry : aliasOwners.entrySet()) {
+            LinkedHashSet<Field> involved = new LinkedHashSet<>(entry.getValue());
+            Field nameOwner = nameOwners.get(entry.getKey());
+            if (nameOwner != null) {
+                involved.add(nameOwner);
+            }
+            if (involved.size() <= 1) {
+                continue;
+            }
+            List<Field> fieldsInvolved = new ArrayList<>(involved);
+            groups.add(group(
+                    "ambiguous-alias:" + entry.getKey(),
+                    FieldConflictType.AMBIGUOUS_ALIAS,
+                    "Alias 歧义: " + entry.getKey(),
+                    "alias 可指向多个 canonical 字段，或 alias 与另一个字段名相同，AI 不能把它当成唯一标准字段。",
+                    fieldsInvolved,
+                    List.of("歧义 alias: " + entry.getKey(), "涉及字段: " + fieldNames(fieldsInvolved)),
+                    "不要直接使用该 alias 作为字段名；请选择明确 canonical 字段，或为其他字段改成更具体 alias。"
+            ));
+        }
+        return groups;
+    }
+
+    private FieldConflictGroup namingRiskGroup(
+            String groupKey,
+            FieldConflictType type,
+            String title,
+            String description,
+            Field field,
+            List<String> evidence,
+            String suggestedAction
+    ) {
+        return group(groupKey, type, title, description, List.of(field), evidence, suggestedAction);
     }
 
     private List<FieldConflictGroup> detectAliasConflicts(List<Field> fields) {
@@ -205,6 +368,12 @@ public class FieldConflictServiceImpl implements FieldConflictService {
         boolean hasMismatch = evidence.stream().anyMatch(item -> item.contains("不一致"));
         if (FieldConflictType.NAME_DUPLICATE.equals(type) || FieldConflictType.ALIAS_CONFLICT.equals(type)) {
             return FieldConflictSeverity.ERROR;
+        }
+        if (FieldConflictType.RESERVED_WORD.equals(type) || FieldConflictType.AMBIGUOUS_ALIAS.equals(type)) {
+            return FieldConflictSeverity.WARNING;
+        }
+        if (FieldConflictType.DANGEROUS_SQL_NAME.equals(type) || FieldConflictType.CASE_COLLISION.equals(type)) {
+            return FieldConflictSeverity.INFO;
         }
         if (hasMismatch) {
             return FieldConflictSeverity.WARNING;
@@ -352,6 +521,71 @@ public class FieldConflictServiceImpl implements FieldConflictService {
         return values;
     }
 
+    private List<NamingToken> namingTokens(Field field) {
+        List<NamingToken> tokens = new ArrayList<>();
+        if (field.getName() != null && !field.getName().isBlank()) {
+            tokens.add(new NamingToken(field.getName(), "name", "字段名"));
+        }
+        for (String alias : splitCsv(field.getAliases())) {
+            tokens.add(new NamingToken(alias, "alias", "别名"));
+        }
+        return tokens;
+    }
+
+    private List<String> reservedDialects(String normalized) {
+        List<String> dialects = new ArrayList<>();
+        for (Map.Entry<String, Set<String>> entry : RESERVED_WORDS_BY_DIALECT.entrySet()) {
+            if (entry.getValue().contains(normalized)) {
+                dialects.add(entry.getKey());
+            }
+        }
+        return dialects;
+    }
+
+    private String saferName(String normalized, Field field) {
+        if ("user".equals(normalized)) {
+            return "user_ref";
+        }
+        if ("order".equals(normalized)) {
+            return "order_value";
+        }
+        if ("type".equals(normalized) && field.getName() != null && field.getName().contains("_")) {
+            return field.getName();
+        }
+        return normalized + "_value";
+    }
+
+    private String fieldNames(List<Field> fields) {
+        List<String> names = new ArrayList<>();
+        for (Field field : fields) {
+            if (field.getName() != null && !field.getName().isBlank()) {
+                names.add(field.getName());
+            }
+        }
+        return String.join(", ", names);
+    }
+
+    private String normalizeSqlName(String value) {
+        if (value == null) {
+            return "";
+        }
+        String text = value.trim();
+        if ((text.startsWith("\"") && text.endsWith("\""))
+                || (text.startsWith("`") && text.endsWith("`"))
+                || (text.startsWith("[") && text.endsWith("]"))) {
+            text = text.substring(1, text.length() - 1);
+        }
+        return text.toLowerCase(Locale.ROOT);
+    }
+
+    private String caseCollisionKey(String value) {
+        String normalized = normalizeSqlName(value);
+        if (normalized.isBlank()) {
+            return "";
+        }
+        return normalized.replaceAll("[^\\p{IsHan}a-z0-9]+", "");
+    }
+
     private String normalize(String value) {
         if (value == null) {
             return "";
@@ -391,10 +625,47 @@ public class FieldConflictServiceImpl implements FieldConflictService {
         groups.put(canonical, new SemanticGroup(canonical, Set.of(keywords), generic));
     }
 
+    private static Map<String, Set<String>> reservedWordsByDialect() {
+        Map<String, Set<String>> words = new LinkedHashMap<>();
+        words.put("PostgreSQL", Set.of(
+                "all", "analyse", "analyze", "and", "any", "array", "as", "asc", "asymmetric",
+                "both", "case", "cast", "check", "collate", "column", "constraint", "create",
+                "current_date", "current_role", "current_time", "current_timestamp", "current_user",
+                "default", "deferrable", "desc", "distinct", "do", "else", "end", "except",
+                "false", "fetch", "for", "foreign", "from", "grant", "group", "having", "in",
+                "initially", "intersect", "into", "lateral", "leading", "limit", "localtime",
+                "localtimestamp", "not", "null", "offset", "on", "only", "or", "order", "placing",
+                "primary", "references", "returning", "select", "session_user", "some", "symmetric",
+                "table", "then", "to", "trailing", "true", "union", "unique", "user", "using",
+                "variadic", "when", "where", "window", "with"
+        ));
+        words.put("MySQL", Set.of(
+                "add", "all", "alter", "and", "as", "asc", "between", "by", "case", "check",
+                "column", "constraint", "create", "cross", "current_date", "current_time",
+                "current_timestamp", "database", "default", "delete", "desc", "distinct",
+                "drop", "else", "exists", "false", "for", "foreign", "from", "group", "having",
+                "in", "index", "inner", "insert", "interval", "into", "join", "key", "left",
+                "like", "limit", "not", "null", "on", "or", "order", "outer", "primary",
+                "references", "right", "select", "set", "table", "then", "to", "true", "union",
+                "unique", "update", "user", "using", "values", "when", "where"
+        ));
+        words.put("Common SQL", Set.of(
+                "select", "from", "where", "group", "order", "user", "table", "column", "index",
+                "primary", "foreign", "constraint", "default", "null", "true", "false"
+        ));
+        return words;
+    }
+
     private interface FieldValueGetter {
         String get(Field field);
     }
 
     private record SemanticGroup(String canonical, Set<String> keywords, boolean generic) {
+    }
+
+    private record NamingToken(String value, String source, String sourceLabel) {
+    }
+
+    private record TokenOwner(String value, String sourceLabel, Field field) {
     }
 }

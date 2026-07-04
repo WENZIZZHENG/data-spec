@@ -14,6 +14,7 @@ import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.field.service.impl.FieldServiceImpl;
+import com.dataspec.fieldconflict.service.impl.FieldConflictServiceImpl;
 import com.dataspec.lint.engine.FixedSqlGenerator;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.engine.SqlParserService;
@@ -174,7 +175,8 @@ class PerformanceBaselineTest {
                 null,
                 new SchemaRegistryServiceImpl(),
                 new AiCapabilityCatalogServiceImpl(),
-                glossaryService
+                glossaryService,
+                new FieldConflictServiceImpl(fieldService)
         );
     }
 

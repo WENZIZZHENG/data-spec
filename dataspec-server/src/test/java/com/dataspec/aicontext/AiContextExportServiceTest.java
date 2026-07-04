@@ -18,6 +18,7 @@ import com.dataspec.contract.service.impl.SchemaRegistryServiceImpl;
 import com.dataspec.enumdict.service.EnumDictService;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.fieldconflict.service.impl.FieldConflictServiceImpl;
 import com.dataspec.lint.engine.FixedSqlGenerator;
 import com.dataspec.lint.engine.SqlLintService;
 import com.dataspec.lint.engine.SqlParserService;
@@ -82,6 +83,7 @@ class AiContextExportServiceTest {
         assertTrue(entries.get(".dataspec/DATABASE_RULES.md").contains("table_naming_snake_case"));
         assertTrue(entries.get(".dataspec/field-catalog.json").contains("mobile_no"));
         assertTrue(entries.get(".dataspec/DATABASE_RULES.md").contains("值格式: type=mobile"));
+        assertFalse(entries.get(".dataspec/DATABASE_RULES.md").contains("## 字段命名风险"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("naming:"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("baseline:"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("key: personal_default"));
@@ -202,6 +204,22 @@ class AiContextExportServiceTest {
         assertTrue(fieldProperties.has("replacementFieldId"));
         assertTrue(fieldProperties.has("replacementReason"));
         assertTrue(fieldProperties.path("status").path("enum").toString().contains("draft"));
+    }
+
+    @Test
+    void generateDatabaseRules_exportsFieldNamingRisks() {
+        Field order = sampleField("order", "订单", "business", "core", null);
+        Field customerType = sampleField("customer_type", "客户类型", "business", "core", "type");
+        Field type = sampleField("type", "类型", "business", "core", null);
+        AiContextExportService service = createService(List.of(order, customerType, type));
+
+        String rules = service.generateDatabaseRules(PROJECT_ID);
+
+        assertTrue(rules.contains("## 字段命名风险"));
+        assertTrue(rules.contains("SQL 保留字风险: order"));
+        assertTrue(rules.contains("建议替代名: order_value"));
+        assertTrue(rules.contains("Alias 歧义: type"));
+        assertTrue(rules.contains("不要直接使用该 alias"));
     }
 
     @Test
@@ -499,6 +517,7 @@ class AiContextExportServiceTest {
         AiContextExportService service = createService(List.of(
                 sampleField("mobile_no", "手机号", "contact", "pii,customer", "phone, mobile"),
                 sampleField("email", "邮箱", "contact", "pii", "mail"),
+                sampleField("order", "订单", "business", "order", null),
                 sampleField("order_amount", "订单金额", "money", "order", "amount")
         ));
 
@@ -518,6 +537,10 @@ class AiContextExportServiceTest {
         var manifest = mapper.readTree(entries.get(".dataspec/manifest.json"));
         assertEquals("tag", manifest.path("contextScope").path("scope").asText());
         assertTrue(entries.get(".dataspec/README.md").contains("按需包"));
+
+        String databaseRules = entries.get(".dataspec/DATABASE_RULES.md");
+        assertFalse(databaseRules.contains("SQL 保留字风险: order"));
+        assertFalse(databaseRules.contains("## 字段命名风险"));
     }
 
     @Test
@@ -759,7 +782,8 @@ class AiContextExportServiceTest {
                 aiTaskProfileService,
                 new SchemaRegistryServiceImpl(),
                 new AiCapabilityCatalogServiceImpl(),
-                glossaryService
+                glossaryService,
+                new FieldConflictServiceImpl(fieldService)
         );
     }
 

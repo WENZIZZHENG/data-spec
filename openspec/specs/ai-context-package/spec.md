@@ -149,3 +149,15 @@ The AI Context package SHALL export field value-format constraints in AI-readabl
 - **WHEN** `DATABASE_RULES.md` is generated
 - **THEN** fields with format constraints SHALL include a concise value-format line or inline summary.
 - **AND** create-table/fix-sql prompts that embed AI Context SHALL allow the AI to read these constraints before generating DDL or SQL fixes.
+
+### Requirement: AI Context field naming risk export
+The AI Context package SHALL export concise field naming risks for AI clients.
+
+#### Scenario: Export naming risks
+- **WHEN** a project has field conflict groups for reserved words, dangerous SQL names, case collisions, or ambiguous aliases
+- **THEN** `.dataspec/DATABASE_RULES.md` includes a concise naming risk section with conflict type, field names, evidence, and suggested action.
+- **AND** the section tells AI clients to avoid using risky names directly for new DDL unless explicitly required.
+
+#### Scenario: No naming risks
+- **WHEN** a project has no naming risk conflict groups
+- **THEN** AI Context generation continues without adding empty or noisy naming risk content.

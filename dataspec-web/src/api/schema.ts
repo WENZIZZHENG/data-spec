@@ -4730,7 +4730,7 @@ export interface components {
         FieldConflictGroup: {
             groupKey?: string;
             /** @enum {string} */
-            conflictType?: "NAME_DUPLICATE" | "ALIAS_CONFLICT" | "DISPLAY_NAME_DUPLICATE" | "SEMANTIC_DUPLICATE";
+            conflictType?: "NAME_DUPLICATE" | "ALIAS_CONFLICT" | "DISPLAY_NAME_DUPLICATE" | "SEMANTIC_DUPLICATE" | "RESERVED_WORD" | "DANGEROUS_SQL_NAME" | "CASE_COLLISION" | "AMBIGUOUS_ALIAS";
             /** @enum {string} */
             severity?: "ERROR" | "WARNING" | "INFO";
             title?: string;

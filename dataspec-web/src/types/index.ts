@@ -204,6 +204,10 @@ export type FieldConflictType =
   | 'ALIAS_CONFLICT'
   | 'DISPLAY_NAME_DUPLICATE'
   | 'SEMANTIC_DUPLICATE'
+  | 'RESERVED_WORD'
+  | 'DANGEROUS_SQL_NAME'
+  | 'CASE_COLLISION'
+  | 'AMBIGUOUS_ALIAS'
 
 export interface FieldConflictField {
   fieldId?: number

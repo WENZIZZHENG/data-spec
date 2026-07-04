@@ -13,7 +13,26 @@ export function conflictTypeLabel(type?: FieldConflictType | string) {
   if (type === 'SEMANTIC_DUPLICATE') {
     return '语义疑似重复'
   }
+  if (type === 'RESERVED_WORD') {
+    return 'SQL 保留字'
+  }
+  if (type === 'DANGEROUS_SQL_NAME') {
+    return 'SQL 危险命名'
+  }
+  if (type === 'CASE_COLLISION') {
+    return '大小写碰撞'
+  }
+  if (type === 'AMBIGUOUS_ALIAS') {
+    return 'Alias 歧义'
+  }
   return '其他冲突'
+}
+
+export function isNamingRiskType(type?: FieldConflictType | string) {
+  return type === 'RESERVED_WORD'
+    || type === 'DANGEROUS_SQL_NAME'
+    || type === 'CASE_COLLISION'
+    || type === 'AMBIGUOUS_ALIAS'
 }
 
 export function conflictSeverityTagType(severity?: FieldConflictSeverity | string) {
