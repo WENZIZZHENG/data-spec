@@ -66,6 +66,11 @@ class SchemaRegistryServiceImplTest {
         SchemaContract evidence = service.getContract("ai-evidence-package");
         assertTrue(evidence.getStableFields().contains("validationSummary"));
         assertTrue(evidence.getStableFields().contains("suggestedCommands[]"));
+
+        SchemaContract fieldCatalog = service.getContract("ai-context-field-catalog");
+        assertTrue(fieldCatalog.getStableFields().contains("usageExamples[]"));
+        assertTrue(fieldCatalog.getStableFields().contains("usageExampleSummary"));
+        assertTrue(fieldCatalog.getJsonSchema().get("properties").toString().contains("usageExamples"));
     }
 
     @Test

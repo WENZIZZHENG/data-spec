@@ -18,6 +18,7 @@ test('keeps critical frontend routes and navigation entries wired', () => {
 
   const criticalRoutes = [
     { path: '/fields', view: 'FieldLibrary.vue', title: '标准字段库' },
+    { path: '/usage-examples', view: 'UsageExamples.vue', title: '示例与反例库' },
     { path: '/standard-candidates', view: 'StandardCandidate.vue', title: '标准候选' },
     { path: '/sql-lint', view: 'SqlLint.vue', title: 'SQL 校验' },
     { path: '/generator', view: 'Generator.vue', title: '生成器' },
@@ -246,6 +247,77 @@ test('keeps schema registry contract api and types wired', () => {
     'SchemaRegistryCatalog',
     'RSchemaContract'
   ], 'schema registry schema')
+})
+
+test('keeps standard usage examples library wired', () => {
+  const router = readSource('src/router/index.ts')
+  const app = readSource('src/App.vue')
+  const dashboard = readSource('src/views/Dashboard.vue')
+  const view = readSource('src/views/UsageExamples.vue')
+  const api = readSource('src/api/usageExample.ts')
+  const types = readSource('src/types/index.ts')
+  const schema = readSource('src/api/schema.ts')
+
+  assertContains(router, [
+    "path: '/usage-examples'",
+    '@/views/UsageExamples.vue',
+    "title: '示例与反例库'"
+  ], 'usage examples router')
+
+  assertContains(app, [
+    'index="/usage-examples"',
+    '示例与反例库'
+  ], 'usage examples navigation')
+
+  assertContains(dashboard, [
+    "key: 'usage-examples'",
+    "route: '/usage-examples'",
+    '维护示例'
+  ], 'usage examples dashboard task')
+
+  assertContains(view, [
+    "import ProjectRequired from '@/components/ProjectRequired.vue'",
+    "import { listFields } from '@/api/field'",
+    "import { listRuleConfigs } from '@/api/rule'",
+    "import { listTemplates } from '@/api/template'",
+    "import {",
+    'listUsageExamples',
+    'createUsageExample',
+    'updateUsageExample',
+    'deleteUsageExample',
+    'projectStore.currentProjectId',
+    'async function loadData()',
+    'async function handleSubmit()',
+    'async function handleDelete(row: StandardUsageExample)',
+    'handleScopeChange',
+    'targetLabel(row)',
+    'GOOD',
+    'BAD',
+    '示例与反例库',
+    '新建示例',
+    '暂无示例或反例',
+    '请先创建并选择项目'
+  ], 'UsageExamples.vue')
+
+  assertContains(api, [
+    "request.get<unknown, PageResult<StandardUsageExample>>('/usage-examples'",
+    "request.post<unknown, StandardUsageExample>('/usage-examples'",
+    'export function updateUsageExample',
+    'export function deleteUsageExample'
+  ], 'usage examples api')
+
+  assertContains(types, [
+    "export type StandardUsageExample = Schemas['StandardUsageExample']",
+    "export type StandardUsageExampleSaveReq = Schemas['StandardUsageExampleSaveReq']"
+  ], 'usage examples types')
+
+  assertContains(schema, [
+    '"/api/usage-examples"',
+    '"/api/usage-examples/{id}"',
+    'StandardUsageExampleSaveReq',
+    'StandardUsageExample',
+    'RPageResultStandardUsageExample'
+  ], 'usage examples schema')
 })
 
 test('keeps AI evidence package actions wired on high frequency result pages', () => {
@@ -576,6 +648,7 @@ test('keeps dashboard task entrypoints, recent tasks, and breadcrumbs wired', ()
     '检查 SQL',
     '生成覆盖率',
     '补标准字段',
+    '维护示例',
     '生成 DDL',
     '导出给 AI',
     '管理 Token',

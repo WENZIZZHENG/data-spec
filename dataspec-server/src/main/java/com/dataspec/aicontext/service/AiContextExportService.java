@@ -30,12 +30,15 @@ import com.dataspec.rulebaseline.model.RuleBaselineInfo;
 import com.dataspec.rulebaseline.service.RuleBaselineService;
 import com.dataspec.ruleexemption.entity.RuleExemption;
 import com.dataspec.ruleexemption.service.RuleExemptionService;
+import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.dto.StandardSnapshotPayload;
 import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.service.EnumDictService;
+import com.dataspec.standardusageexample.entity.StandardUsageExample;
+import com.dataspec.standardusageexample.service.StandardUsageExampleService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -78,6 +81,7 @@ public class AiContextExportService {
     private static final long FIELD_CATALOG_WARN_MS = 1_000;
     private static final long CONTEXT_PACKAGE_WARN_MS = 1_500;
     private static final int GLOSSARY_CONTEXT_LIMIT = 200;
+    private static final int USAGE_EXAMPLE_CONTEXT_LIMIT = 8;
     private static final List<String> DEFAULT_REQUIRED_COLUMNS = List.of("id", "created_at", "updated_at", "is_deleted");
     private static final List<String> DEFAULT_FORBIDDEN_NAMES = List.of(
             "uid", "create_time", "update_time", "del_flag", "ctime", "mtime", "is_del", "tmp", "test", "flag1", "type1"
@@ -117,6 +121,7 @@ public class AiContextExportService {
     private final AiCapabilityCatalogService capabilityCatalogService;
     private final BusinessGlossaryService businessGlossaryService;
     private final FieldConflictService fieldConflictService;
+    private final StandardUsageExampleService standardUsageExampleService;
 
     /**
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
@@ -327,6 +332,9 @@ public class AiContextExportService {
             }
             root.set("enums", enumsNode);
             root.set("glossary", glossaryNode(mapper, glossaryExport));
+            UsageExampleExport usageExamples = usageExampleExport(projectId, scopedFields, false);
+            root.set("usageExamples", usageExamplesNode(mapper, usageExamples.examples()));
+            root.set("usageExampleSummary", usageExampleSummaryNode(mapper, usageExamples.summary()));
 
             return mapper.writeValueAsString(root);
         } catch (Exception e) {
@@ -395,6 +403,9 @@ public class AiContextExportService {
                 enumsNode.add(en);
             }
             root.set("enums", enumsNode);
+            UsageExampleExport usageExamples = usageExampleExport(projectId, List.of(), null, ScopeSummary.full(), true);
+            root.set("usageExamples", usageExamplesNode(mapper, usageExamples.examples()));
+            root.set("usageExampleSummary", usageExampleSummaryNode(mapper, usageExamples.summary()));
             return mapper.writeValueAsString(root);
         } catch (Exception e) {
             throw new RuntimeException("生成历史 field-catalog.json 失败", e);
@@ -894,6 +905,7 @@ public class AiContextExportService {
                         addTextEntry(zip, ".dataspec/field-catalog.schema.json", generateFieldCatalogSchemaJson());
                         addTextEntry(zip, SchemaRegistryService.REGISTRY_FILE, generateSchemaRegistryJson());
                         addTextEntry(zip, ".dataspec/capabilities.json", generateCapabilitiesJson(projectId));
+                        addTextEntry(zip, ".dataspec/usage-examples.json", generateUsageExamplesJson(projectId, scopedFields, false));
                         addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId, snapshot, scopedFields.summary()));
                         addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId, scopedFields.summary()));
                         addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(projectId, snapshot));
@@ -934,6 +946,7 @@ public class AiContextExportService {
                         addTextEntry(zip, ".dataspec/field-catalog.schema.json", generateFieldCatalogSchemaJson());
                         addTextEntry(zip, SchemaRegistryService.REGISTRY_FILE, generateSchemaRegistryJson());
                         addTextEntry(zip, ".dataspec/capabilities.json", generateCapabilitiesJson(projectId));
+                        addTextEntry(zip, ".dataspec/usage-examples.json", generateUsageExamplesJson(projectId, List.of(), null, scopeSummary, true));
                         addTextEntry(zip, ".dataspec/manifest.json", generateManifestJson(projectId, snapshotPayload.standard(), scopeSummary));
                         addTextEntry(zip, ".dataspec/README.md", generateDataspecReadme(projectId, scopeSummary));
                         addTextEntry(zip, ".dataspec/rules.yaml", generateRulesYaml(snapshotPayload));
@@ -983,6 +996,7 @@ public class AiContextExportService {
             files.add(".dataspec/field-catalog.schema.json");
             files.add(SchemaRegistryService.REGISTRY_FILE);
             files.add(".dataspec/capabilities.json");
+            files.add(".dataspec/usage-examples.json");
             files.add(".dataspec/rules.yaml");
             files.add(".dataspec/prompts.md");
             files.add(".dataspec/workflows.md");
@@ -1020,6 +1034,160 @@ public class AiContextExportService {
         } catch (Exception e) {
             throw new RuntimeException("生成 .dataspec/capabilities.json 失败", e);
         }
+    }
+
+    private String generateUsageExamplesJson(Long projectId, ScopedFields scopedFields, boolean snapshotExport) {
+        return generateUsageExamplesJson(
+                projectId,
+                usageExampleFieldIds(scopedFields),
+                usageExampleQuery(scopedFields),
+                scopedFields.summary(),
+                snapshotExport);
+    }
+
+    private String generateUsageExamplesJson(Long projectId,
+                                             List<Long> fieldIds,
+                                             String query,
+                                             ScopeSummary scopeSummary,
+                                             boolean snapshotExport) {
+        try {
+            ObjectMapper mapper = objectMapper.copy()
+                    .enable(SerializationFeature.INDENT_OUTPUT);
+            UsageExampleExport export = usageExampleExport(projectId, fieldIds, query, scopeSummary, snapshotExport);
+            ObjectNode root = mapper.createObjectNode();
+            root.put("schemaVersion", DATASPEC_CONTEXT_SCHEMA_VERSION);
+            root.put("projectId", projectId);
+            root.put("generatedAt", Instant.now().toString());
+            root.put("snapshotBound", false);
+            root.put("source", snapshotExport ? "current_project_metadata_for_snapshot_context" : "current_project_metadata");
+            root.set("contextScope", contextScopeNode(mapper, scopeSummary));
+            root.set("summary", usageExampleSummaryNode(mapper, export.summary()));
+            root.set("examples", usageExamplesNode(mapper, export.examples()));
+            return mapper.writeValueAsString(root);
+        } catch (Exception e) {
+            throw new RuntimeException("生成 .dataspec/usage-examples.json 失败", e);
+        }
+    }
+
+    private UsageExampleExport usageExampleExport(Long projectId, ScopedFields scopedFields, boolean snapshotExport) {
+        return usageExampleExport(
+                projectId,
+                usageExampleFieldIds(scopedFields),
+                usageExampleQuery(scopedFields),
+                scopedFields.summary(),
+                snapshotExport);
+    }
+
+    private UsageExampleExport usageExampleExport(Long projectId,
+                                                  List<Long> fieldIds,
+                                                  String query,
+                                                  ScopeSummary scopeSummary,
+                                                  boolean snapshotExport) {
+        List<StandardUsageExample> selectedExamples = standardUsageExampleService == null
+                ? List.of()
+                : standardUsageExampleService.selectForAiContext(projectId, fieldIds, query, USAGE_EXAMPLE_CONTEXT_LIMIT + 1);
+        boolean truncated = selectedExamples.size() > USAGE_EXAMPLE_CONTEXT_LIMIT;
+        List<StandardUsageExample> examples = truncated
+                ? selectedExamples.subList(0, USAGE_EXAMPLE_CONTEXT_LIMIT)
+                : selectedExamples;
+        int good = 0;
+        int bad = 0;
+        for (StandardUsageExample example : examples) {
+            if ("GOOD".equalsIgnoreCase(example.getExampleType())) {
+                good++;
+            }
+            if ("BAD".equalsIgnoreCase(example.getExampleType())) {
+                bad++;
+            }
+        }
+        UsageExampleSummary summary = new UsageExampleSummary(
+                examples.size(),
+                good,
+                bad,
+                USAGE_EXAMPLE_CONTEXT_LIMIT,
+                truncated,
+                snapshotExport ? "current_project_metadata_for_snapshot_context" : "current_project_metadata",
+                scopeSummary.includeMetadata() ? scopeSummary.scope() : "all"
+        );
+        return new UsageExampleExport(List.copyOf(examples), summary);
+    }
+
+    private List<Long> usageExampleFieldIds(ScopedFields scopedFields) {
+        if (!scopedFields.summary().includeMetadata()) {
+            return List.of();
+        }
+        return scopedFields.fields().stream()
+                .map(FieldMatch::field)
+                .map(Field::getId)
+                .filter(id -> id != null)
+                .toList();
+    }
+
+    private String usageExampleQuery(ScopedFields scopedFields) {
+        return scopedFields.summary().includeMetadata() ? scopedFields.summary().query() : null;
+    }
+
+    private ArrayNode usageExamplesNode(ObjectMapper mapper, List<StandardUsageExample> examples) {
+        ArrayNode node = mapper.createArrayNode();
+        for (StandardUsageExample example : examples) {
+            ObjectNode item = mapper.createObjectNode();
+            if (example.getId() != null) {
+                item.put("id", example.getId());
+            }
+            item.put("scope", text(example.getScope()));
+            item.put("exampleType", text(example.getExampleType()));
+            if (example.getFieldId() != null) {
+                item.put("fieldId", example.getFieldId());
+            }
+            putSanitizedText(item, "ruleCode", example.getRuleCode());
+            if (example.getTemplateId() != null) {
+                item.put("templateId", example.getTemplateId());
+            }
+            putSanitizedText(item, "input", example.getInput());
+            putSanitizedText(item, "expectedOutput", example.getExpectedOutput());
+            putSanitizedText(item, "antiPattern", example.getAntiPattern());
+            putSanitizedText(item, "reason", example.getReason());
+            item.set("tags", stringsToArrayNode(mapper, splitCsv(example.getTags())));
+            if (example.getPriority() != null) {
+                item.put("priority", example.getPriority());
+            }
+            putSanitizedText(item, "status", example.getStatus());
+            node.add(item);
+        }
+        return node;
+    }
+
+    private ObjectNode usageExampleSummaryNode(ObjectMapper mapper, UsageExampleSummary summary) {
+        ObjectNode node = mapper.createObjectNode();
+        node.put("totalExamples", summary.totalExamples());
+        node.put("goodExamples", summary.goodExamples());
+        node.put("badExamples", summary.badExamples());
+        node.put("limit", summary.limit());
+        node.put("truncated", summary.truncated());
+        node.put("source", summary.source());
+        node.put("scope", summary.scope());
+        return node;
+    }
+
+    private void putSanitizedText(ObjectNode node, String fieldName, String value) {
+        if (value != null && !value.isBlank()) {
+            node.put(fieldName, SensitiveDataSanitizer.redactText(value));
+        }
+    }
+
+    private List<String> splitCsv(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private String text(String value) {
+        return value == null ? "" : value;
     }
 
     private String generateDataspecReadme(Long projectId, ScopeSummary scopeSummary) {
@@ -1067,6 +1235,7 @@ public class AiContextExportService {
                 - `.dataspec/field-catalog.schema.json`：字段目录 JSON Schema。
                 - `.dataspec/schema-registry.json`：AI 可消费输出契约 registry，包含契约版本、稳定字段、JSON Schema 和兼容策略。
                 - `.dataspec/capabilities.json`：DataSpec 面向 AI 的能力清单，说明 API/CLI/MCP/前端入口、前置检查、writeRisk 和下一步建议。
+                - `.dataspec/usage-examples.json`：标准字段、规则和模板的结构化正例/反例，AI 应优先模仿 `GOOD`，避开匹配 scope 的 `BAD`。
                 - `.dataspec/rules.yaml`：结构化命名规则和项目规则配置。
                 - `.dataspec/prompts.md`：建表和 SQL Review 的 AI prompt 模板。
                 - `.dataspec/workflows.md`：常见 AI/DataSpec 任务 recipe，说明输入、步骤、命令、产物和失败恢复。
@@ -1080,6 +1249,7 @@ public class AiContextExportService {
                 - 需要稳定字段名或兼容策略时，读取 `.dataspec/schema-registry.json`，不要依赖未列入 stableFields 的内部字段。
                 - 需要选择 API、CLI 或 MCP 入口时，优先读取 `.dataspec/capabilities.json` 的 writeRisk、preflightChecks 和 nextActions。
                 - 不确定任务步骤时，先读取 `.dataspec/workflows.md`，选择合适 recipe 后再显式执行其中的命令。
+                - 生成字段、DDL 或 prompt 前读取 `.dataspec/usage-examples.json`，优先模仿 `GOOD` 示例，避免复用 `BAD` 反例中的 antiPattern。
                 - 检查 SQL 时运行：
 
                 ```bash
@@ -1586,6 +1756,46 @@ public class AiContextExportService {
                         }
                       }
                     },
+                    "usageExampleSummary": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["totalExamples", "goodExamples", "badExamples", "limit", "truncated", "source", "scope"],
+                      "properties": {
+                        "totalExamples": { "type": "integer" },
+                        "goodExamples": { "type": "integer" },
+                        "badExamples": { "type": "integer" },
+                        "limit": { "type": "integer" },
+                        "truncated": { "type": "boolean" },
+                        "source": { "type": "string" },
+                        "scope": { "type": "string" }
+                      }
+                    },
+                    "usageExamples": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["scope", "exampleType", "input", "reason", "tags"],
+                        "properties": {
+                          "id": { "type": "integer" },
+                          "scope": { "type": "string", "enum": ["FIELD", "RULE", "TEMPLATE", "GENERAL"] },
+                          "exampleType": { "type": "string", "enum": ["GOOD", "BAD"] },
+                          "fieldId": { "type": "integer" },
+                          "ruleCode": { "type": "string" },
+                          "templateId": { "type": "integer" },
+                          "input": { "type": "string" },
+                          "expectedOutput": { "type": "string" },
+                          "antiPattern": { "type": "string" },
+                          "reason": { "type": "string" },
+                          "tags": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                          },
+                          "priority": { "type": "integer" },
+                          "status": { "type": "string" }
+                        }
+                      }
+                    },
                     "fields": {
                       "type": "array",
                       "items": {
@@ -1964,6 +2174,7 @@ public class AiContextExportService {
                 - `.dataspec/capabilities.json`
                 - `.dataspec/DATABASE_RULES.md`
                 - `.dataspec/field-catalog.json`
+                - `.dataspec/usage-examples.json`
                 - `.dataspec/schema-registry.json`
                 - `.dataspec/rules.yaml`
 
@@ -1972,6 +2183,7 @@ public class AiContextExportService {
                 - 先读取 `.dataspec/capabilities.json`，确认当前任务应使用的 API、CLI、MCP resource/tool、preflightChecks 和 writeRisk。
                 - 需要稳定输出字段或兼容策略时，读取 `.dataspec/schema-registry.json`，并以 stableFields/schemaVersion 为准。
                 - 优先使用 `.dataspec/field-catalog.json` 中已有标准字段。
+                - 字段、DDL 或 prompt 有相似 scope 时，优先模仿 `GOOD` 示例，避免复用 `.dataspec/usage-examples.json` 中的 `BAD` antiPattern。
                 - 新增表必须符合 `.dataspec/DATABASE_RULES.md` 的命名、类型、注释和公共字段规则。
                 - 生成 SQL 时参考 `.dataspec/examples/good.sql`，避免 `.dataspec/examples/bad.sql` 中的反例。
                 - 提交 SQL 变更前运行 `dataspec lint <path|-> --project %d --format json`，并修复 ERROR 级问题。
@@ -2181,5 +2393,19 @@ public class AiContextExportService {
         static ScopeSummary full() {
             return new ScopeSummary(false, "all", null, null, null, null, null, 0, 0, 0, List.of(), null);
         }
+    }
+
+    private record UsageExampleExport(List<StandardUsageExample> examples, UsageExampleSummary summary) {
+    }
+
+    private record UsageExampleSummary(
+            int totalExamples,
+            int goodExamples,
+            int badExamples,
+            int limit,
+            boolean truncated,
+            String source,
+            String scope
+    ) {
     }
 }

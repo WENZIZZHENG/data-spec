@@ -303,16 +303,25 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                 "AI Context Field Catalog",
                 "AI Context 中的字段目录和按需裁剪元数据。",
                 List.of("projectId", "standard", "contextScope", "fields[]", "enums[]",
-                        "fields[].name", "fields[].dataType", "fields[].status"),
+                        "fields[].name", "fields[].dataType", "fields[].status",
+                        "usageExamples[]", "usageExampleSummary"),
                 List.of(),
                 objectSchema("DataSpec AI Context Field Catalog", List.of("projectId", "fields", "enums"), orderedMap(
                         "projectId", integerProp(),
                         "standard", objectProp(),
                         "contextScope", objectProp(),
                         "fields", arrayOf(objectProp()),
-                        "enums", arrayOf(objectProp())
+                        "enums", arrayOf(objectProp()),
+                        "usageExamples", arrayOf(objectProp()),
+                        "usageExampleSummary", objectProp()
                 )),
-                List.of(orderedMap("projectId", 1, "fields", List.of(orderedMap("name", "mobile_no")), "enums", List.of()))
+                List.of(orderedMap(
+                        "projectId", 1,
+                        "fields", List.of(orderedMap("name", "mobile_no")),
+                        "enums", List.of(),
+                        "usageExamples", List.of(orderedMap("scope", "FIELD", "exampleType", "GOOD")),
+                        "usageExampleSummary", orderedMap("totalExamples", 1)
+                ))
         ));
         add(map, contract(
                 "ai-task-profile",

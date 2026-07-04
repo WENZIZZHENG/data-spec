@@ -197,6 +197,7 @@ import { useRouter } from 'vue-router'
 import {
   ArrowRight,
   Cpu,
+  Collection,
   DataAnalysis,
   Edit,
   Key,
@@ -247,6 +248,7 @@ const taskEntries: DashboardTask[] = [
   { key: 'sql-lint', title: '检查 SQL', meta: 'fixedSql', route: '/sql-lint', icon: Edit },
   { key: 'field-coverage', title: '生成覆盖率', meta: '未纳管字段', route: '/field-coverage', icon: DataAnalysis },
   { key: 'fields', title: '补标准字段', meta: '字段库', route: '/fields', icon: List },
+  { key: 'usage-examples', title: '维护示例', meta: 'Good/Bad', route: '/usage-examples', icon: Collection },
   { key: 'generator', title: '生成 DDL', meta: '表模板', route: '/generator', icon: MagicStick },
   { key: 'ai-export', title: '导出给 AI', meta: 'Context', route: '/ai-export', icon: Cpu },
   { key: 'tokens', title: '管理 Token', meta: 'CLI/MCP', route: '/tokens', icon: Key }
@@ -582,7 +584,7 @@ function activityTimelineType(value?: string) {
 
 .task-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   gap: 10px;
   margin-top: 14px;
 }

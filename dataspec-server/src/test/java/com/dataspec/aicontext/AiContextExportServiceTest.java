@@ -3,6 +3,7 @@ package com.dataspec.aicontext;
 import com.dataspec.aicontext.service.AiContextExportService;
 import com.dataspec.aicontext.model.AiContextScopeOptions;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.dataspec.common.result.PageResult;
 import com.dataspec.aireplay.entity.AiJobRecord;
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.model.AiJobRecordDetail;
@@ -35,6 +36,9 @@ import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.dto.StandardSnapshotPayload;
 import com.dataspec.standard.service.StandardSnapshotService;
+import com.dataspec.standardusageexample.entity.StandardUsageExample;
+import com.dataspec.standardusageexample.model.StandardUsageExampleSaveReq;
+import com.dataspec.standardusageexample.service.StandardUsageExampleService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
@@ -71,6 +75,7 @@ class AiContextExportServiceTest {
         assertTrue(entries.containsKey(".dataspec/field-catalog.schema.json"));
         assertTrue(entries.containsKey(".dataspec/schema-registry.json"));
         assertTrue(entries.containsKey(".dataspec/capabilities.json"));
+        assertTrue(entries.containsKey(".dataspec/usage-examples.json"));
         assertTrue(entries.containsKey(".dataspec/manifest.json"));
         assertTrue(entries.containsKey(".dataspec/README.md"));
         assertTrue(entries.containsKey(".dataspec/rules.yaml"));
@@ -101,11 +106,13 @@ class AiContextExportServiceTest {
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/manifest.json"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/schema-registry.json"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/capabilities.json"));
+        assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/usage-examples.json"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/workflows.md"));
         assertTrue(entries.get(".dataspec/README.md").contains("dataspec lint"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/field-catalog.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/schema-registry.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/capabilities.json"));
+        assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/usage-examples.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/manifest.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains("dataspec lint <path|-> --project 1 --format json"));
         assertTrue(entries.get(".dataspec/examples/good.sql").contains("CREATE TABLE users"));
@@ -120,6 +127,7 @@ class AiContextExportServiceTest {
         assertTrue(manifest.path("files").isArray());
         assertTrue(manifest.path("files").toString().contains(".dataspec/schema-registry.json"));
         assertTrue(manifest.path("files").toString().contains(".dataspec/capabilities.json"));
+        assertTrue(manifest.path("files").toString().contains(".dataspec/usage-examples.json"));
         assertTrue(manifest.path("files").toString().contains(".dataspec/workflows.md"));
         assertEquals(1, manifest.path("contracts").path("schemaVersion").asInt());
         assertEquals("2026.06.28", manifest.path("contracts").path("registryVersion").asText());
@@ -163,6 +171,15 @@ class AiContextExportServiceTest {
         assertEquals("12345", field.path("format").path("invalidExamples").get(0).asText());
         assertEquals("", field.path("format").path("invalidExamples").get(1).asText());
         assertTrue(entries.get(".dataspec/DATABASE_RULES.md").contains("invalidExamples=12345/\"\""));
+        assertTrue(catalog.path("usageExamples").isArray());
+        assertEquals(0, catalog.path("usageExampleSummary").path("totalExamples").asInt());
+
+        var usageExamples = new ObjectMapper().readTree(entries.get(".dataspec/usage-examples.json"));
+        assertEquals(PROJECT_ID.longValue(), usageExamples.path("projectId").asLong());
+        assertEquals(1, usageExamples.path("schemaVersion").asInt());
+        assertTrue(usageExamples.path("examples").isArray());
+        assertEquals(0, usageExamples.path("summary").path("totalExamples").asInt());
+        assertFalse(usageExamples.path("snapshotBound").asBoolean());
 
         var schema = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.schema.json"));
         assertTrue(schema.path("properties").has("projectId"));
@@ -179,6 +196,97 @@ class AiContextExportServiceTest {
         assertTrue(fieldProperties.path("format").path("properties").has("validExamples"));
         assertTrue(fieldProperties.path("format").path("properties").has("invalidExamples"));
         assertTrue(fieldProperties.has("starterKitSources"));
+    }
+
+    @Test
+    void generateAiContextPackage_exportsUsageExamplesAndAntiExamples() throws Exception {
+        Field mobile = sampleField();
+        mobile.setId(10L);
+        StaticUsageExampleService usageExampleService = new StaticUsageExampleService(List.of(
+                usageExample(1L, 10L, "FIELD", "GOOD", "使用 mobile_no 表达手机号", "mobile_no varchar(20) NOT NULL", null, "标准字段已包含手机号语义", "phone,ddl", 100),
+                usageExample(2L, 10L, "FIELD", "BAD", "使用 phone_number 另造字段", null, "phone_number varchar(20)", "不要绕开 mobile_no", "phone,bad", 90),
+                usageExample(3L, null, "RULE", "GOOD", "字段名必须 snake_case", "order_id", null, "命中命名规则", "rule", 80),
+                usageExample(4L, null, "TEMPLATE", "BAD", "订单表模板误用", null, "缺少审计字段", "模板必须保留审计列", "template", 70)
+        ));
+        AiContextExportService service = createService(List.of(mobile), usageExampleService);
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(PROJECT_ID));
+
+        var mapper = new ObjectMapper();
+        var usage = mapper.readTree(entries.get(".dataspec/usage-examples.json"));
+        assertEquals(PROJECT_ID.longValue(), usage.path("projectId").asLong());
+        assertEquals("all", usage.path("contextScope").path("scope").asText());
+        assertEquals(4, usage.path("summary").path("totalExamples").asInt());
+        assertEquals(2, usage.path("summary").path("goodExamples").asInt());
+        assertEquals(2, usage.path("summary").path("badExamples").asInt());
+        assertEquals("GOOD", usage.path("examples").get(0).path("exampleType").asText());
+        assertEquals("BAD", usage.path("examples").get(1).path("exampleType").asText());
+        assertEquals("phone_number varchar(20)", usage.path("examples").get(1).path("antiPattern").asText());
+        assertEquals("RULE", usage.path("examples").get(2).path("scope").asText());
+        assertEquals("TEMPLATE", usage.path("examples").get(3).path("scope").asText());
+        assertTrue(usageExampleService.lastFieldIds.isEmpty());
+        assertFalse(entries.get(".dataspec/usage-examples.json").contains("password="));
+
+        var catalog = mapper.readTree(entries.get(".dataspec/field-catalog.json"));
+        assertEquals(4, catalog.path("usageExamples").size());
+        assertEquals(4, catalog.path("usageExampleSummary").path("totalExamples").asInt());
+        assertTrue(entries.get(".dataspec/README.md").contains("优先模仿 `GOOD`"));
+        assertTrue(entries.get("AGENTS.md.fragment").contains("优先模仿 `GOOD`"));
+    }
+
+    @Test
+    void generateAiContextPackage_scopedUsageExamplesUseMatchedFieldsAndQuery() throws Exception {
+        Field mobile = sampleField();
+        mobile.setId(10L);
+        StaticUsageExampleService usageExampleService = new StaticUsageExampleService(List.of(
+                usageExample(1L, 10L, "FIELD", "GOOD", "手机号字段", "mobile_no varchar(20)", null, "命中字段", "phone", 100)
+        ));
+        AiContextExportService service = createService(List.of(mobile), usageExampleService);
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(
+                PROJECT_ID,
+                new AiContextScopeOptions("field", "手机号", "enabled", 1)
+        ));
+
+        assertEquals(List.of(10L), usageExampleService.lastFieldIds);
+        assertEquals("手机号", usageExampleService.lastQuery);
+        var usage = new ObjectMapper().readTree(entries.get(".dataspec/usage-examples.json"));
+        assertEquals("field", usage.path("contextScope").path("scope").asText());
+        assertEquals("手机号", usage.path("contextScope").path("query").asText());
+    }
+
+    @Test
+    void generateAiContextPackage_recordsUsageExampleTruncationWhenLimitReached() throws Exception {
+        Field mobile = sampleField();
+        mobile.setId(10L);
+        List<StandardUsageExample> examples = new ArrayList<>();
+        for (long i = 1; i <= 12; i++) {
+            examples.add(usageExample(i, 10L, "FIELD", i % 2 == 0 ? "BAD" : "GOOD", "输入" + i, "输出" + i, "反例" + i, "原因" + i, "tag", 100 - (int) i));
+        }
+        AiContextExportService service = createService(List.of(mobile), new StaticUsageExampleService(examples));
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(PROJECT_ID));
+
+        var usage = new ObjectMapper().readTree(entries.get(".dataspec/usage-examples.json"));
+        assertEquals(8, usage.path("examples").size());
+        assertTrue(usage.path("summary").path("truncated").asBoolean());
+    }
+
+    @Test
+    void generateAiContextPackage_doesNotMarkUsageExamplesTruncatedAtExactLimit() throws Exception {
+        Field mobile = sampleField();
+        mobile.setId(10L);
+        List<StandardUsageExample> examples = new ArrayList<>();
+        for (long i = 1; i <= 8; i++) {
+            examples.add(usageExample(i, 10L, "FIELD", "GOOD", "输入" + i, "输出" + i, null, "原因" + i, "tag", 100 - (int) i));
+        }
+        AiContextExportService service = createService(List.of(mobile), new StaticUsageExampleService(examples));
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(PROJECT_ID));
+
+        var usage = new ObjectMapper().readTree(entries.get(".dataspec/usage-examples.json"));
+        assertEquals(8, usage.path("examples").size());
+        assertFalse(usage.path("summary").path("truncated").asBoolean());
     }
 
     @Test
@@ -658,6 +766,21 @@ class AiContextExportServiceTest {
         return createService(standardSnapshotService, new NoopAiJobRecordService(), fields);
     }
 
+    private AiContextExportService createService(List<Field> fields, StandardUsageExampleService usageExampleService) {
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
+        when(glossaryService.contextExport(PROJECT_ID, 200)).thenReturn(BusinessGlossaryContextExport.empty());
+        return createService(
+                standardSnapshotService,
+                new NoopAiJobRecordService(),
+                fields,
+                mock(RuleExemptionService.class),
+                null,
+                glossaryService,
+                usageExampleService);
+    }
+
     private AiContextExportService createService(List<Field> fields, BusinessGlossaryService glossaryService) {
         StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
         when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
@@ -727,7 +850,8 @@ class AiContextExportServiceTest {
                 fields,
                 ruleExemptionService,
                 aiTaskProfileService,
-                glossaryService);
+                glossaryService,
+                new NoopStandardUsageExampleService());
     }
 
     private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
@@ -736,6 +860,23 @@ class AiContextExportServiceTest {
                                                  RuleExemptionService ruleExemptionService,
                                                  AiTaskProfileService aiTaskProfileService,
                                                  BusinessGlossaryService glossaryService) {
+        return createService(
+                standardSnapshotService,
+                aiJobRecordService,
+                fields,
+                ruleExemptionService,
+                aiTaskProfileService,
+                glossaryService,
+                new NoopStandardUsageExampleService());
+    }
+
+    private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
+                                                 AiJobRecordService aiJobRecordService,
+                                                 List<Field> fields,
+                                                 RuleExemptionService ruleExemptionService,
+                                                 AiTaskProfileService aiTaskProfileService,
+                                                 BusinessGlossaryService glossaryService,
+                                                 StandardUsageExampleService usageExampleService) {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
         FieldService fieldService = mock(FieldService.class);
@@ -783,7 +924,8 @@ class AiContextExportServiceTest {
                 new SchemaRegistryServiceImpl(),
                 new AiCapabilityCatalogServiceImpl(),
                 glossaryService,
-                new FieldConflictServiceImpl(fieldService)
+                new FieldConflictServiceImpl(fieldService),
+                usageExampleService
         );
     }
 
@@ -829,6 +971,32 @@ class AiContextExportServiceTest {
         return field;
     }
 
+    private StandardUsageExample usageExample(Long id,
+                                              Long fieldId,
+                                              String scope,
+                                              String exampleType,
+                                              String input,
+                                              String expectedOutput,
+                                              String antiPattern,
+                                              String reason,
+                                              String tags,
+                                              Integer priority) {
+        StandardUsageExample example = new StandardUsageExample();
+        example.setId(id);
+        example.setProjectId(PROJECT_ID);
+        example.setFieldId(fieldId);
+        example.setScope(scope);
+        example.setExampleType(exampleType);
+        example.setInput(input);
+        example.setExpectedOutput(expectedOutput);
+        example.setAntiPattern(antiPattern);
+        example.setReason(reason);
+        example.setTags(tags);
+        example.setPriority(priority);
+        example.setStatus("enabled");
+        return example;
+    }
+
     private Map<String, String> unzipTextEntries(byte[] zipBytes) throws Exception {
         Map<String, String> entries = new HashMap<>();
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(zipBytes), StandardCharsets.UTF_8)) {
@@ -870,6 +1038,55 @@ class AiContextExportServiceTest {
             AiJobRecord record = new AiJobRecord();
             record.setId((long) created.size());
             return record;
+        }
+    }
+
+    private static class NoopStandardUsageExampleService extends StaticUsageExampleService {
+        NoopStandardUsageExampleService() {
+            super(List.of());
+        }
+    }
+
+    private static class StaticUsageExampleService implements StandardUsageExampleService {
+        private final List<StandardUsageExample> examples;
+        private List<Long> lastFieldIds = List.of();
+        private String lastQuery;
+
+        StaticUsageExampleService(List<StandardUsageExample> examples) {
+            this.examples = examples;
+        }
+
+        @Override
+        public PageResult<StandardUsageExample> page(Long projectId,
+                                                     String scope,
+                                                     String exampleType,
+                                                     String status,
+                                                     String query,
+                                                     int current,
+                                                     int size) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public StandardUsageExample create(StandardUsageExampleSaveReq req) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public StandardUsageExample update(Long id, StandardUsageExampleSaveReq req) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void delete(Long projectId, Long id) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<StandardUsageExample> selectForAiContext(Long projectId, List<Long> fieldIds, String query, int limit) {
+            this.lastFieldIds = fieldIds == null ? List.of() : List.copyOf(fieldIds);
+            this.lastQuery = query;
+            return examples.stream().limit(limit).toList();
         }
     }
 }

@@ -683,6 +683,8 @@ export type StandardQualityGateResult = Schemas['StandardQualityGateResult']
 export type QualityGateCheckResult = Schemas['QualityGateCheckResult']
 export type QualityGateSummary = Schemas['QualityGateSummary']
 export type QualityGateLintSummary = Schemas['QualityGateLintSummary']
+export type StandardUsageExample = Schemas['StandardUsageExample']
+export type StandardUsageExampleSaveReq = Schemas['StandardUsageExampleSaveReq']
 
 export interface StandardCandidate {
   id?: number

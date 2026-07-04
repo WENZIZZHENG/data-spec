@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、统一前端数据状态、项目活动时间线、标准健康趋势、标准质量门禁、领域 Starter Kit、业务术语表、自然语言需求草案、Explain Trace、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 任务失败恢复、AI 执行证据包、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、统一前端数据状态、项目活动时间线、标准健康趋势、标准质量门禁、领域 Starter Kit、业务术语表、标准使用示例与反例库、自然语言需求草案、Explain Trace、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 任务失败恢复、AI 执行证据包、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -25,6 +25,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 字段质量评分，按注释、别名、示例、分类、敏感标识、代码集和废弃说明识别低质量字段。
 - 标准健康趋势，按项目保存健康快照，聚合字段质量、覆盖率摘要、AI 反馈、候选状态和 fixedSql 机会，展示本周/月变化、Top actions 和可复制的 AI 改进计划。
 - 标准质量门禁，按项目配置字段质量、覆盖率、lint error、未纳管字段和敏感标记阈值，输出 `PASS/FAIL/DISABLED`、失败项和 nextActions。
+- 标准使用示例与反例库，支持维护 `FIELD`、`RULE`、`TEMPLATE` 和 `GENERAL` 范围的 `GOOD/BAD` 示例、反模式、原因、标签、优先级和启停状态，用于告诉 AI 哪些写法应该模仿、哪些历史写法不要复用。
 - 字段冲突检测，识别别名冲突、显示名重复、语义疑似重复、关键属性不一致、SQL 保留字/危险命名、大小写碰撞和 alias 歧义。
 - 字段影响分析，展示字段被模板、导入来源、历史 SQL 检查、标准快照和代码集引用的范围。
 - 数据域、枚举字典、表模板、规则配置、规则基线套件和规则例外管理。
@@ -56,7 +57,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 
 ### AI 与自动化
 
-- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、项目级业务术语表、规则、项目规则例外、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包，也支持按历史标准快照导出可复现上下文，并可写入业务仓库 `.dataspec/context/` 离线缓存。字段目录会导出生命周期状态和可选替代字段/说明；来自 Starter Kit 的字段会在字段目录中暴露 kit key/version 来源，方便 AI 判断领域模板出处。
+- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、项目级业务术语表、规则、项目规则例外、标准使用示例/反例、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包，也支持按历史标准快照导出可复现上下文，并可写入业务仓库 `.dataspec/context/` 离线缓存。字段目录会导出生命周期状态和可选替代字段/说明；来自 Starter Kit 的字段会在字段目录中暴露 kit key/version 来源，方便 AI 判断领域模板出处。
 - AI 能力清单，提供只读 `/api/capabilities` 和 `/api/capabilities/{id}`，稳定描述 API/CLI/MCP/前端入口、输入输出契约、preflightChecks、writeRisk、示例和 nextActions；能力清单不会执行任务，也不替代鉴权或 dry-run。
 - AI Context manifest、字段目录和规则文件携带标准快照版本、hash 与来源 `source=current|snapshot|unversioned`；`rules.yaml` 还会标明当前规则基线 key/name/version/source/appliedAt；未创建快照时标记为 `unversioned`。
 - AI 任务模式，内置 `create-table`、`sql-fix`、`reverse-import`、`pr-review`、`minimal-context`，用于给 AI/CLI/MCP 提供上下文范围、fixedSql 策略、输出格式和推荐命令的默认建议。
@@ -174,13 +175,15 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1&scope
 curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1&snapshotId=42" -o dataspec-ai-context-snapshot-42.zip
 ```
 
-解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/schema-registry.json`、`.dataspec/capabilities.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/workflows.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前先读取能力清单、字段标准、契约和规则。
+解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/schema-registry.json`、`.dataspec/capabilities.json`、`.dataspec/usage-examples.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/workflows.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前先读取能力清单、字段标准、使用示例/反例、契约和规则。
 
 导出包的 `.dataspec/manifest.json`、`.dataspec/field-catalog.json` 和 `.dataspec/rules.yaml` 会包含 `specVersion` / `specHash` / `source` 元数据。若项目尚未创建标准快照，版本显示为 `unversioned`，不阻断导出；创建快照后，后续 SQL 检查记录和 DDL 生成结果会记录当前快照 ID、版本和 hash。需要复现历史任务时，可传 `snapshotId` 或 `snapshotVersion` 从已保存 payload 导出历史字段目录、规则和 zip 包；CLI 等价命令为 `node tools/dataspec-cli.mjs export-context --project 1 --snapshot-id 42 --output dataspec-ai-context-snapshot-42.zip`。
 
 按需导出支持 `scope=all|field|domain|tag|table|changed`，可叠加 `query`、`status` 和 `limit`。裁剪后的 `field-catalog.json` 会输出 `contextScope` 摘要和字段级 `matchReasons`，说明命中条件、字段总数、命中数量、返回数量和缺失或截断提示；`.dataspec/README.md` 会标明当前包是完整包还是按需包。前端“AI Context”页面也提供同样的范围、关键词、状态和上限筛选，并可选择“当前标准”或历史快照，预览与下载共用同一组条件。
 
 字段目录中的每个字段可选输出 `format` 对象，包含 `type`、`pattern`、`unit`、`precision`、`timezone`、`nullPolicy`、`validExamples`、`invalidExamples` 和 `notes`。这让 AI 在生成 DDL、SQL、DTO 或校验建议前能直接读取“金额按分存储”“手机号正则”“时间戳使用 UTC”“JSON 结构说明”等约束；第一版只导出人工维护的格式元数据，不扫描真实业务数据行，也不执行正则或 JSON Schema 校验。
+
+导出包还会包含 `.dataspec/usage-examples.json`，按优先级裁剪项目中启用的标准使用示例与反例。完整包会导出少量高价值 `FIELD/RULE/TEMPLATE/GENERAL` 示例；按需包会优先保留匹配字段的 `FIELD` 示例，并只带入命中 query 的通用、规则或模板示例。AI 应优先模仿 `GOOD` 示例，避开同 scope 的 `BAD` 反模式；历史快照导出仍使用当前项目的示例库元数据，并在文件中标记 `snapshotBound=false`。
 
 CLI 可把同一份 AI Context 写入业务仓库缓存，供服务不可用时 AI 只读使用：
 

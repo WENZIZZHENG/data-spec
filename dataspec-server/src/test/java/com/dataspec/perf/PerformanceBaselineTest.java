@@ -33,6 +33,7 @@ import com.dataspec.rulebaseline.service.RuleBaselineService;
 import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.service.StandardSnapshotService;
+import com.dataspec.standardusageexample.service.StandardUsageExampleService;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -137,6 +138,7 @@ class PerformanceBaselineTest {
         RuleExemptionService ruleExemptionService = mock(RuleExemptionService.class);
         RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
         BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        StandardUsageExampleService usageExampleService = mock(StandardUsageExampleService.class);
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
         when(ruleConfigService.listByProject(PROJECT_ID)).thenReturn(List.of());
@@ -148,6 +150,11 @@ class PerformanceBaselineTest {
         when(ruleBaselineService.currentBaseline(PROJECT_ID))
                 .thenReturn(new RuleBaselineInfo(PROJECT_ID, "custom", "自定义规则", "unversioned", "inferred", null, 0));
         when(glossaryService.contextExport(PROJECT_ID, 200)).thenReturn(BusinessGlossaryContextExport.empty());
+        when(usageExampleService.selectForAiContext(
+                org.mockito.ArgumentMatchers.eq(PROJECT_ID),
+                org.mockito.ArgumentMatchers.anyList(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyInt())).thenReturn(List.of());
 
         SqlLintService sqlLintService = new SqlLintService(
                 new SqlParserService(),
@@ -176,7 +183,8 @@ class PerformanceBaselineTest {
                 new SchemaRegistryServiceImpl(),
                 new AiCapabilityCatalogServiceImpl(),
                 glossaryService,
-                new FieldConflictServiceImpl(fieldService)
+                new FieldConflictServiceImpl(fieldService),
+                usageExampleService
         );
     }
 

@@ -37,6 +37,10 @@
             <el-icon><Collection /></el-icon>
             <span>业务术语表</span>
           </el-menu-item>
+          <el-menu-item index="/usage-examples">
+            <el-icon><Collection /></el-icon>
+            <span>示例与反例库</span>
+          </el-menu-item>
           <el-menu-item index="/standard-candidates">
             <el-icon><Collection /></el-icon>
             <span>标准候选</span>

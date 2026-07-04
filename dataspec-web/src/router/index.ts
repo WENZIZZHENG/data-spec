@@ -31,6 +31,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '业务术语表' }
   },
   {
+    path: '/usage-examples',
+    name: 'UsageExamples',
+    component: () => import('@/views/UsageExamples.vue'),
+    meta: { title: '示例与反例库' }
+  },
+  {
     path: '/standard-candidates',
     name: 'StandardCandidate',
     component: () => import('@/views/StandardCandidate.vue'),

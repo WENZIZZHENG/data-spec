@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/usage-examples/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update"];
+        post?: never;
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/templates/{id}": {
         parameters: {
             query?: never;
@@ -12,9 +28,9 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getById"];
-        put: operations["update"];
+        put: operations["update_1"];
         post?: never;
-        delete: operations["delete"];
+        delete: operations["delete_1"];
         options?: never;
         head?: never;
         patch?: never;
@@ -44,9 +60,9 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getById_1"];
-        put: operations["update_1"];
+        put: operations["update_2"];
         post?: never;
-        delete: operations["delete_1"];
+        delete: operations["delete_2"];
         options?: never;
         head?: never;
         patch?: never;
@@ -76,9 +92,9 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getById_3"];
-        put: operations["update_2"];
+        put: operations["update_3"];
         post?: never;
-        delete: operations["delete_3"];
+        delete: operations["delete_4"];
         options?: never;
         head?: never;
         patch?: never;
@@ -92,9 +108,9 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getById_4"];
-        put: operations["update_3"];
+        put: operations["update_4"];
         post?: never;
-        delete: operations["delete_4"];
+        delete: operations["delete_5"];
         options?: never;
         head?: never;
         patch?: never;
@@ -108,9 +124,9 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getById_5"];
-        put: operations["update_4"];
+        put: operations["update_5"];
         post?: never;
-        delete: operations["delete_5"];
+        delete: operations["delete_6"];
         options?: never;
         head?: never;
         patch?: never;
@@ -124,9 +140,9 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getById_6"];
-        put: operations["update_5"];
+        put: operations["update_6"];
         post?: never;
-        delete: operations["delete_6"];
+        delete: operations["delete_7"];
         options?: never;
         head?: never;
         patch?: never;
@@ -156,9 +172,9 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getById_7"];
-        put: operations["update_6"];
+        put: operations["update_7"];
         post?: never;
-        delete: operations["delete_7"];
+        delete: operations["delete_8"];
         options?: never;
         head?: never;
         patch?: never;
@@ -172,9 +188,25 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getById_8"];
-        put: operations["update_7"];
+        put: operations["update_8"];
         post?: never;
-        delete: operations["delete_8"];
+        delete: operations["delete_9"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/usage-examples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["page"];
+        put?: never;
+        post: operations["create"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -205,7 +237,7 @@ export interface paths {
         };
         get: operations["list"];
         put?: never;
-        post: operations["create"];
+        post: operations["create_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -315,9 +347,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["page"];
+        get: operations["page_1"];
         put?: never;
-        post: operations["create_1"];
+        post: operations["create_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -397,7 +429,7 @@ export interface paths {
         };
         get: operations["list_1"];
         put?: never;
-        post: operations["create_2"];
+        post: operations["create_3"];
         delete?: never;
         options?: never;
         head?: never;
@@ -413,7 +445,7 @@ export interface paths {
         };
         get: operations["list_2"];
         put?: never;
-        post: operations["create_3"];
+        post: operations["create_4"];
         delete?: never;
         options?: never;
         head?: never;
@@ -653,7 +685,7 @@ export interface paths {
         };
         get: operations["list_3"];
         put?: never;
-        post: operations["create_4"];
+        post: operations["create_5"];
         delete?: never;
         options?: never;
         head?: never;
@@ -795,9 +827,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["page_1"];
+        get: operations["page_2"];
         put?: never;
-        post: operations["create_5"];
+        post: operations["create_6"];
         delete?: never;
         options?: never;
         head?: never;
@@ -811,9 +843,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["page_2"];
+        get: operations["page_3"];
         put?: never;
-        post: operations["create_6"];
+        post: operations["create_7"];
         delete?: never;
         options?: never;
         head?: never;
@@ -925,7 +957,7 @@ export interface paths {
         };
         get: operations["list_5"];
         put?: never;
-        post: operations["create_7"];
+        post: operations["create_8"];
         delete?: never;
         options?: never;
         head?: never;
@@ -957,7 +989,7 @@ export interface paths {
         };
         get: operations["list_6"];
         put?: never;
-        post: operations["create_8"];
+        post: operations["create_9"];
         delete?: never;
         options?: never;
         head?: never;
@@ -973,7 +1005,7 @@ export interface paths {
         };
         get: operations["list_7"];
         put?: never;
-        post: operations["create_9"];
+        post: operations["create_10"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1198,7 +1230,7 @@ export interface paths {
         get: operations["getById_2"];
         put?: never;
         post?: never;
-        delete: operations["delete_2"];
+        delete: operations["delete_3"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1771,7 +1803,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["page_3"];
+        get: operations["page_4"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2120,12 +2152,24 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        TemplateReq: {
+        StandardUsageExampleSaveReq: {
             /** Format: int64 */
-            projectId: number;
-            name: string;
-            description?: string;
-            tablePrefix?: string;
+            projectId?: number;
+            /** Format: int64 */
+            fieldId?: number;
+            ruleCode?: string;
+            /** Format: int64 */
+            templateId?: number;
+            scope?: string;
+            exampleType?: string;
+            input?: string;
+            expectedOutput?: string;
+            antiPattern?: string;
+            reason?: string;
+            tags?: string;
+            /** Format: int32 */
+            priority?: number;
+            status?: string;
         };
         ErrorDetail: {
             code?: string;
@@ -2133,6 +2177,46 @@ export interface components {
             retryable?: boolean;
             suggestedAction?: string;
             docsRef?: string;
+        };
+        RStandardUsageExample: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardUsageExample"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardUsageExample: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int64 */
+            fieldId?: number;
+            ruleCode?: string;
+            /** Format: int64 */
+            templateId?: number;
+            scope?: string;
+            exampleType?: string;
+            input?: string;
+            expectedOutput?: string;
+            antiPattern?: string;
+            reason?: string;
+            tags?: string;
+            /** Format: int32 */
+            priority?: number;
+            status?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        TemplateReq: {
+            /** Format: int64 */
+            projectId: number;
+            name: string;
+            description?: string;
+            tablePrefix?: string;
         };
         RTemplate: {
             /** Format: int32 */
@@ -4268,6 +4352,24 @@ export interface components {
             data?: Record<string, never>;
             error?: components["schemas"]["ErrorDetail"];
         };
+        PageResultStandardUsageExample: {
+            records?: components["schemas"]["StandardUsageExample"][];
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            current?: number;
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            pages?: number;
+        };
+        RPageResultStandardUsageExample: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["PageResultStandardUsageExample"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
         RListApiTokenInfo: {
             /** Format: int32 */
             code?: number;
@@ -5663,6 +5765,56 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardUsageExampleSaveReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardUsageExample"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
     getById: {
         parameters: {
             query?: never;
@@ -5685,7 +5837,7 @@ export interface operations {
             };
         };
     };
-    update: {
+    update_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -5711,7 +5863,7 @@ export interface operations {
             };
         };
     };
-    delete: {
+    delete_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -5803,7 +5955,7 @@ export interface operations {
             };
         };
     };
-    update_1: {
+    update_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -5829,7 +5981,7 @@ export interface operations {
             };
         };
     };
-    delete_1: {
+    delete_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -5919,7 +6071,7 @@ export interface operations {
             };
         };
     };
-    update_2: {
+    update_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -5945,7 +6097,7 @@ export interface operations {
             };
         };
     };
-    delete_3: {
+    delete_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -5989,7 +6141,7 @@ export interface operations {
             };
         };
     };
-    update_3: {
+    update_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -6015,7 +6167,7 @@ export interface operations {
             };
         };
     };
-    delete_4: {
+    delete_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -6059,7 +6211,7 @@ export interface operations {
             };
         };
     };
-    update_4: {
+    update_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -6085,7 +6237,7 @@ export interface operations {
             };
         };
     };
-    delete_5: {
+    delete_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -6129,7 +6281,7 @@ export interface operations {
             };
         };
     };
-    update_5: {
+    update_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -6155,7 +6307,7 @@ export interface operations {
             };
         };
     };
-    delete_6: {
+    delete_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -6247,7 +6399,7 @@ export interface operations {
             };
         };
     };
-    update_6: {
+    update_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -6273,7 +6425,7 @@ export interface operations {
             };
         };
     };
-    delete_7: {
+    delete_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -6317,7 +6469,7 @@ export interface operations {
             };
         };
     };
-    update_7: {
+    update_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -6343,7 +6495,7 @@ export interface operations {
             };
         };
     };
-    delete_8: {
+    delete_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -6361,6 +6513,58 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    page: {
+        parameters: {
+            query: {
+                projectId: number;
+                scope?: string;
+                exampleType?: string;
+                status?: string;
+                query?: string;
+                current?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RPageResultStandardUsageExample"];
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardUsageExampleSaveReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardUsageExample"];
                 };
             };
         };
@@ -6431,7 +6635,7 @@ export interface operations {
             };
         };
     };
-    create: {
+    create_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -6628,7 +6832,7 @@ export interface operations {
             };
         };
     };
-    page: {
+    page_1: {
         parameters: {
             query: {
                 projectId: number;
@@ -6655,7 +6859,7 @@ export interface operations {
             };
         };
     };
-    create_1: {
+    create_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -6805,7 +7009,7 @@ export interface operations {
             };
         };
     };
-    create_2: {
+    create_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -6851,7 +7055,7 @@ export interface operations {
             };
         };
     };
-    create_3: {
+    create_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -7233,7 +7437,7 @@ export interface operations {
             };
         };
     };
-    create_4: {
+    create_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -7488,7 +7692,7 @@ export interface operations {
             };
         };
     };
-    page_1: {
+    page_2: {
         parameters: {
             query: {
                 projectId: number;
@@ -7514,7 +7718,7 @@ export interface operations {
             };
         };
     };
-    create_5: {
+    create_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -7538,7 +7742,7 @@ export interface operations {
             };
         };
     };
-    page_2: {
+    page_3: {
         parameters: {
             query: {
                 projectId: number;
@@ -7562,7 +7766,7 @@ export interface operations {
             };
         };
     };
-    create_6: {
+    create_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -7752,7 +7956,7 @@ export interface operations {
             };
         };
     };
-    create_7: {
+    create_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -7846,7 +8050,7 @@ export interface operations {
             };
         };
     };
-    create_8: {
+    create_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -7892,7 +8096,7 @@ export interface operations {
             };
         };
     };
-    create_9: {
+    create_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -8239,7 +8443,7 @@ export interface operations {
             };
         };
     };
-    delete_2: {
+    delete_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -9042,7 +9246,7 @@ export interface operations {
             };
         };
     };
-    page_3: {
+    page_4: {
         parameters: {
             query: {
                 projectId: number;
