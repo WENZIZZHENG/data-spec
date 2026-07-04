@@ -44,6 +44,11 @@ The system SHALL highlight metadata gaps that can mislead AI field reuse.
 - **AND** comment, aliases, or tags do not include replacement or migration guidance
 - **THEN** the report includes a `deprecated_without_replacement` issue.
 
+#### Scenario: Format-sensitive field lacks format examples
+- **WHEN** a field looks like an amount, phone, email, timestamp, date, JSON, status, enum, or code field
+- **AND** the field lacks both structured format constraints and valid examples
+- **THEN** the report includes a `format_examples_missing` issue with a machine-readable suggested action.
+
 ### Requirement: Frontend quality view
 The frontend SHALL provide a project-scoped field quality view.
 

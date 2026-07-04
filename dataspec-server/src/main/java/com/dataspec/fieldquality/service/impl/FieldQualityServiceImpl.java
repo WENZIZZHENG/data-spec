@@ -39,6 +39,13 @@ public class FieldQualityServiceImpl implements FieldQualityService {
             "replace", "replacement", "alternative", "migration", "migrate", "instead",
             "替代", "迁移", "改用", "使用", "新字段"
     );
+    private static final Set<String> FORMAT_SENSITIVE_KEYWORDS = Set.of(
+            "amount", "money", "price", "fee", "cent", "yuan", "currency",
+            "phone", "mobile", "tel", "email", "mail", "time", "timestamp", "date", "datetime",
+            "json", "status", "state", "type", "category", "kind", "flag", "level", "enum", "code",
+            "金额", "价格", "费用", "分", "元", "币种", "手机", "电话", "邮箱", "邮件",
+            "时间", "日期", "时区", "状态", "类型", "类别", "分类", "标记", "等级", "枚举", "编码"
+    );
 
     private final FieldService fieldService;
 
@@ -110,6 +117,12 @@ public class FieldQualityServiceImpl implements FieldQualityService {
                 FieldQualitySeverity.WARNING,
                 "字段已废弃或停用，但缺少替代字段或迁移说明",
                 "为废弃字段补充替代字段或迁移说明",
+                10));
+        addIf(issues, looksFormatSensitive(field) && lacksFormatExamples(field), issue(
+                "format_examples_missing",
+                FieldQualitySeverity.SUGGESTION,
+                "字段疑似需要稳定值格式，但缺少格式约束或正反例样例",
+                "补充格式类型、单位、正则、时区、空值策略或正反例样例",
                 10));
 
         int score = MAX_SCORE - issues.stream().mapToInt(FieldQualityIssue::getScorePenalty).sum();
@@ -202,6 +215,22 @@ public class FieldQualityServiceImpl implements FieldQualityService {
 
     private boolean looksCodeSetField(Field field) {
         return containsKeyword(combinedText(field), CODE_SET_KEYWORDS);
+    }
+
+    private boolean looksFormatSensitive(Field field) {
+        return containsKeyword(combinedText(field) + " " + nullToEmpty(field.getDataType()), FORMAT_SENSITIVE_KEYWORDS);
+    }
+
+    private boolean lacksFormatExamples(Field field) {
+        return isBlank(field.getFormatType())
+                && isBlank(field.getFormatPattern())
+                && isBlank(field.getFormatUnit())
+                && isBlank(field.getFormatPrecision())
+                && isBlank(field.getFormatTimezone())
+                && isBlank(field.getFormatNullPolicy())
+                && isBlank(field.getValidExamplesJson())
+                && isBlank(field.getInvalidExamplesJson())
+                && isBlank(field.getFormatNotes());
     }
 
     private boolean isDeprecatedOrDisabled(Field field) {

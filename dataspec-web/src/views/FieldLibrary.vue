@@ -112,6 +112,14 @@
               <span>{{ formatDataType(row) }}</span>
             </template>
           </el-table-column>
+          <el-table-column label="值格式" min-width="220">
+            <template #default="{ row }">
+              <div v-if="fieldFormatSummary(row)" class="format-summary">
+                {{ fieldFormatSummary(row) }}
+              </div>
+              <span v-else class="muted-text">-</span>
+            </template>
+          </el-table-column>
           <el-table-column label="分组" min-width="180">
             <template #default="{ row }">
               <div>{{ fieldGroupLabel(row) }}</div>
@@ -168,7 +176,7 @@
       </div>
     </template>
 
-    <el-dialog v-model="dialogVisible" :title="editingField ? '编辑字段' : '新建字段'" width="760px">
+    <el-dialog v-model="dialogVisible" :title="editingField ? '编辑字段' : '新建字段'" width="860px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="104px">
         <el-row :gutter="16">
           <el-col :span="12">
@@ -315,6 +323,89 @@
         </el-form-item>
         <el-form-item label="字段注释">
           <el-input v-model="form.comment" type="textarea" :rows="3" placeholder="请输入字段注释" />
+        </el-form-item>
+
+        <div class="format-section-title">值格式与样例</div>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="格式类型">
+              <el-select v-model="form.formatType" clearable filterable allow-create class="full-width">
+                <el-option
+                  v-for="option in formatTypeOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="单位">
+              <el-input v-model="form.formatUnit" placeholder="cent / yuan / ms" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="值精度">
+              <el-input v-model="form.formatPrecision" placeholder="scale=2 / millisecond" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="时区">
+              <el-input v-model="form.formatTimezone" placeholder="UTC / Asia/Shanghai" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="空值策略">
+              <el-select v-model="form.formatNullPolicy" clearable filterable allow-create class="full-width">
+                <el-option
+                  v-for="option in formatNullPolicyOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="格式模式">
+              <el-input v-model="form.formatPattern" placeholder="^1\\d{10}$" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="正例">
+              <el-input
+                v-model="formatExamplesForm.validExamplesText"
+                type="textarea"
+                :rows="3"
+                placeholder="每行一个合法示例；空字符串可写 &quot;&quot;"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="反例">
+              <el-input
+                v-model="formatExamplesForm.invalidExamplesText"
+                type="textarea"
+                :rows="3"
+                placeholder="每行一个非法示例；空字符串可写 &quot;&quot;"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="格式备注">
+          <el-input
+            v-model="form.formatNotes"
+            type="textarea"
+            :rows="2"
+            placeholder="例如：金额以分为单位存储，展示时除以 100"
+          />
         </el-form-item>
       </el-form>
 
@@ -728,6 +819,11 @@ const bulkForm = reactive({
   aliases: ''
 })
 
+const formatExamplesForm = reactive({
+  validExamplesText: '',
+  invalidExamplesText: ''
+})
+
 const changeLogCurrent = ref(1)
 const changeLogSize = 10
 const changeLogTotal = ref(0)
@@ -752,6 +848,25 @@ const lifecycleStatusOptions = [
   { label: '停用', value: 'disabled' }
 ]
 
+const formatTypeOptions = [
+  { label: '手机号', value: 'mobile' },
+  { label: '邮箱', value: 'email' },
+  { label: '金额', value: 'money' },
+  { label: '时间戳', value: 'timestamp' },
+  { label: '日期', value: 'date' },
+  { label: 'JSON', value: 'json' },
+  { label: '状态码', value: 'status' },
+  { label: '编码', value: 'code' },
+  { label: '文本', value: 'text' }
+]
+
+const formatNullPolicyOptions = [
+  { label: '不允许空字符串', value: 'not_blank' },
+  { label: '空字符串视为空', value: 'empty_string_as_null' },
+  { label: '不适用', value: 'not_applicable' },
+  { label: '保留原值', value: 'preserve' }
+]
+
 const form = reactive<FieldReq>({
   projectId: 0,
   name: '',
@@ -772,7 +887,16 @@ const form = reactive<FieldReq>({
   status: 'enabled',
   replacementFieldId: undefined,
   replacementReason: '',
-  exampleValue: ''
+  exampleValue: '',
+  formatType: '',
+  formatPattern: '',
+  formatUnit: '',
+  formatPrecision: '',
+  formatTimezone: '',
+  formatNullPolicy: '',
+  validExamplesJson: '',
+  invalidExamplesJson: '',
+  formatNotes: ''
 })
 
 const rules: FormRules<FieldReq> = {
@@ -833,6 +957,14 @@ const filteredFields = computed(() => {
         field.tags,
         field.comment,
         field.replacementReason,
+        field.formatType,
+        field.formatPattern,
+        field.formatUnit,
+        field.formatPrecision,
+        field.formatTimezone,
+        field.formatNullPolicy,
+        field.formatNotes,
+        fieldFormatSummary(field),
         field.dataType,
         fieldGroupLabel(field)
       ]
@@ -1206,6 +1338,17 @@ function resetForm(field?: Field) {
   form.replacementFieldId = field?.replacementFieldId
   form.replacementReason = field?.replacementReason ?? ''
   form.exampleValue = field?.exampleValue ?? ''
+  form.formatType = field?.formatType ?? ''
+  form.formatPattern = field?.formatPattern ?? ''
+  form.formatUnit = field?.formatUnit ?? ''
+  form.formatPrecision = field?.formatPrecision ?? ''
+  form.formatTimezone = field?.formatTimezone ?? ''
+  form.formatNullPolicy = field?.formatNullPolicy ?? ''
+  form.validExamplesJson = field?.validExamplesJson ?? ''
+  form.invalidExamplesJson = field?.invalidExamplesJson ?? ''
+  form.formatNotes = field?.formatNotes ?? ''
+  formatExamplesForm.validExamplesText = examplesJsonToLines(field?.validExamplesJson)
+  formatExamplesForm.invalidExamplesText = examplesJsonToLines(field?.invalidExamplesJson)
   formRef.value?.clearValidate()
 }
 
@@ -1383,7 +1526,9 @@ async function handleSubmit() {
   try {
     const payload: FieldReq = {
       ...form,
-      projectId: projectStore.currentProjectId
+      projectId: projectStore.currentProjectId,
+      validExamplesJson: examplesLinesToJson(formatExamplesForm.validExamplesText),
+      invalidExamplesJson: examplesLinesToJson(formatExamplesForm.invalidExamplesText)
     }
     if (editingField.value?.id) {
       await updateField(editingField.value.id, payload)
@@ -1407,7 +1552,9 @@ async function confirmImpactBeforeSave() {
   }
   const payload: FieldReq = {
     ...form,
-    projectId
+    projectId,
+    validExamplesJson: examplesLinesToJson(formatExamplesForm.validExamplesText),
+    invalidExamplesJson: examplesLinesToJson(formatExamplesForm.invalidExamplesText)
   }
   let preview: StandardChangePreview
   try {
@@ -1534,6 +1681,45 @@ function replacementFieldLabel(field: Field) {
   return `${field.name ?? '-'}${field.displayName ? `（${field.displayName}）` : ''}`
 }
 
+function fieldFormatSummary(field: Field) {
+  const parts = [
+    formatPart('类型', field.formatType),
+    formatPart('单位', field.formatUnit),
+    formatPart('精度', field.formatPrecision),
+    formatPart('时区', field.formatTimezone),
+    formatPart('空值', field.formatNullPolicy),
+    formatPart('正例', examplesJsonPreview(field.validExamplesJson)),
+    formatPart('反例', examplesJsonPreview(field.invalidExamplesJson))
+  ].filter(Boolean)
+  if (parts.length === 0 && !field.formatPattern && !field.formatNotes) {
+    return ''
+  }
+  if (field.formatPattern) {
+    parts.push(`模式 ${field.formatPattern}`)
+  }
+  if (field.formatNotes) {
+    parts.push(field.formatNotes)
+  }
+  return parts.join(' / ')
+}
+
+function formatPart(label: string, value?: string | null) {
+  return value?.trim() ? `${label} ${value.trim()}` : ''
+}
+
+function examplesJsonPreview(value?: string | null) {
+  const examples = parseExamplesJson(value)
+  if (examples.length === 0) {
+    return ''
+  }
+  const visible = examples.slice(0, 2).map(formatExampleForPreview).join(', ')
+  return examples.length > 2 ? `${visible} 等 ${examples.length} 个` : visible
+}
+
+function formatExampleForPreview(value: string) {
+  return value.trim() === value && value.length > 0 ? value : JSON.stringify(value)
+}
+
 function replacementSummary(field: Field) {
   if (field.replacementFieldId) {
     const replacement = fields.value.find((item) => item.id === field.replacementFieldId)
@@ -1558,6 +1744,52 @@ function splitTags(value?: string) {
     .map((item) => item.trim())
     .filter(Boolean)))
     .sort()
+}
+
+function parseExamplesJson(value?: string | null) {
+  if (!value?.trim()) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
+function examplesJsonToLines(value?: string | null) {
+  return parseExamplesJson(value).map(formatExampleForLineEdit).join('\n')
+}
+
+function formatExampleForLineEdit(value: string) {
+  return value.trim() === value && value.length > 0 ? value : JSON.stringify(value)
+}
+
+function examplesLinesToJson(value: string) {
+  const examples = value
+    .split(/\r?\n/)
+    .map(parseExampleLine)
+    .filter((item): item is string => item !== null)
+  return examples.length > 0 ? JSON.stringify(examples) : ''
+}
+
+function parseExampleLine(line: string) {
+  const text = line.trim()
+  if (!text) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(text)
+    if (typeof parsed === 'string') {
+      return parsed
+    }
+  } catch {
+    // 普通示例按原有每行文本处理；JSON 字符串行只用于表达空串或保留首尾空格。
+  }
+  return text
 }
 
 function isUngrouped(field: Field) {
@@ -1617,7 +1849,16 @@ function bulkAttributeText(attribute?: string) {
     domainId: '数据域',
     replacementFieldId: '替代字段',
     replacementReason: '替代说明',
-    exampleValue: '示例'
+    exampleValue: '示例',
+    formatType: '格式类型',
+    formatPattern: '格式模式',
+    formatUnit: '单位',
+    formatPrecision: '值精度',
+    formatTimezone: '时区',
+    formatNullPolicy: '空值策略',
+    validExamplesJson: '正例',
+    invalidExamplesJson: '反例',
+    formatNotes: '格式备注'
   }
   return attribute ? labels[attribute] ?? attribute : '-'
 }
@@ -1692,7 +1933,16 @@ function changeLogSummary(log: StandardChangeLog) {
     'sensitive',
     'codeSetId',
     'aliases',
-    'domainId'
+    'domainId',
+    'formatType',
+    'formatPattern',
+    'formatUnit',
+    'formatPrecision',
+    'formatTimezone',
+    'formatNullPolicy',
+    'validExamplesJson',
+    'invalidExamplesJson',
+    'formatNotes'
   ]
   const changedLabels = keys
     .filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
@@ -1800,6 +2050,13 @@ function routeFieldId() {
 .search-reason {
   margin-top: 3px;
   color: #6b7280;
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.format-summary {
+  color: #303133;
   font-size: 12px;
   line-height: 1.45;
   word-break: break-word;
@@ -1916,6 +2173,15 @@ function routeFieldId() {
 
 .full-width {
   width: 100%;
+}
+
+.format-section-title {
+  margin: 12px 0 10px;
+  padding-top: 12px;
+  border-top: 1px solid #ebeef5;
+  color: #303133;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .batch-input {

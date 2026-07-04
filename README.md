@@ -177,6 +177,8 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1&snaps
 
 按需导出支持 `scope=all|field|domain|tag|table|changed`，可叠加 `query`、`status` 和 `limit`。裁剪后的 `field-catalog.json` 会输出 `contextScope` 摘要和字段级 `matchReasons`，说明命中条件、字段总数、命中数量、返回数量和缺失或截断提示；`.dataspec/README.md` 会标明当前包是完整包还是按需包。前端“AI Context”页面也提供同样的范围、关键词、状态和上限筛选，并可选择“当前标准”或历史快照，预览与下载共用同一组条件。
 
+字段目录中的每个字段可选输出 `format` 对象，包含 `type`、`pattern`、`unit`、`precision`、`timezone`、`nullPolicy`、`validExamples`、`invalidExamples` 和 `notes`。这让 AI 在生成 DDL、SQL、DTO 或校验建议前能直接读取“金额按分存储”“手机号正则”“时间戳使用 UTC”“JSON 结构说明”等约束；第一版只导出人工维护的格式元数据，不扫描真实业务数据行，也不执行正则或 JSON Schema 校验。
+
 CLI 可把同一份 AI Context 写入业务仓库缓存，供服务不可用时 AI 只读使用：
 
 ```bash
@@ -231,7 +233,7 @@ curl -X POST "http://localhost:8090/api/projects/1/standard-snapshots" \
 
 ## 标准字段模型
 
-标准字段支持 `aliases`、`category`、`domainId`、`tags`、`codeSetId`、`sensitive`、`status=draft|enabled|deprecated|disabled`、`replacementFieldId`、`replacementReason`、`exampleValue` 等个人版元数据。字段库支持按数据域、分类、标签、生命周期状态和未分组状态浏览字段；编辑字段时可维护替代字段或替代说明，并可对选中字段批量设置或清空数据域、分类和标签。批量维护支持状态、分类、标签、敏感标记、代码集和别名，提交前会先展示后端预览。每次批量维护和字段更新都会写入字段变更日志，字段行内“变更”入口可查看最近日志，并对带 before 快照的更新记录执行确认回退。AI 导出的 `field-catalog.json` 会把 `aliases` 转成数组，并输出敏感标记、字段状态、替代字段/说明、代码集关联、示例值和可选 `contextScope.groupSummary`，方便 AI 按业务语义复用标准字段、避开草稿/废弃/停用字段并识别未分组字段。
+标准字段支持 `aliases`、`category`、`domainId`、`tags`、`codeSetId`、`sensitive`、`status=draft|enabled|deprecated|disabled`、`replacementFieldId`、`replacementReason`、`exampleValue`、`formatType`、`formatPattern`、`formatUnit`、`formatPrecision`、`formatTimezone`、`formatNullPolicy`、`validExamplesJson`、`invalidExamplesJson` 和 `formatNotes` 等个人版元数据。字段库支持按数据域、分类、标签、生命周期状态和未分组状态浏览字段；编辑字段时可维护替代字段、替代说明和值格式约束，正例/反例在前端按“每行一个示例”编辑，保存为 JSON 字符串数组。批量维护支持状态、分类、标签、敏感标记、代码集和别名，提交前会先展示后端预览。每次批量维护和字段更新都会写入字段变更日志，字段行内“变更”入口可查看最近日志，并对带 before 快照的更新记录执行确认回退。AI 导出的 `field-catalog.json` 会把 `aliases` 转成数组，并输出敏感标记、字段状态、替代字段/说明、代码集关联、示例值、字段 `format` 对象和可选 `contextScope.groupSummary`，方便 AI 按业务语义复用标准字段、避开草稿/废弃/停用字段、识别未分组字段，并读取金额单位、手机号/邮箱格式、时间时区、JSON/状态码样例等值形态约束。
 
 前端“基础数据 / 业务术语表”提供项目级 glossary 维护入口。每条术语可配置主术语、同义词、英文词根、拼音或历史缩写、禁用词、推荐 canonical 字段、适用范围、示例字段和状态；后端提供 `/api/glossary` 分页、`/api/glossary/all`、`/api/glossary/conflicts`、创建、更新和软删除接口。第一版只做确定性匹配和轻量冲突检测，不做企业级本体、知识图谱、向量检索或自动覆盖字段已有别名。
 
@@ -434,7 +436,7 @@ curl -X POST "http://localhost:8090/api/coverage/sql" \
 curl "http://localhost:8090/api/fields/quality?projectId=1"
 ```
 
-第一版实时计算，不新增质量评分表，不自动修改字段标准，不调用外部 LLM。当前检查项覆盖缺注释、缺别名、缺示例值、缺分类/标签、疑似敏感未标记、枚举/状态字段未关联代码集、废弃/停用字段缺少替代说明；若字段已配置结构化 `replacementFieldId` 或 `replacementReason`，不会再按“缺少替代说明”报问题。
+第一版实时计算，不新增质量评分表，不自动修改字段标准，不调用外部 LLM。当前检查项覆盖缺注释、缺别名、缺示例值、缺分类/标签、疑似敏感未标记、枚举/状态字段未关联代码集、废弃/停用字段缺少替代说明，以及金额、手机号、邮箱、时间戳、日期、JSON、状态/枚举/编码等格式敏感字段缺少格式约束或正例样例；若字段已配置结构化 `replacementFieldId` 或 `replacementReason`，不会再按“缺少替代说明”报问题。
 
 ## 字段冲突检测
 
@@ -841,6 +843,7 @@ data-spec/
 - [x] 个人版字段模型：别名、数据域、分类、标签、代码集、敏感标记、状态、示例值
 - [x] 字段库分组视图与批量归组，支持按数据域、分类、标签和未分组字段筛选维护
 - [x] 字段库批量维护和单条变更回退，支持状态、分类、标签、敏感标记、代码集、别名的预览式批量更新
+- [x] 字段值格式与校验样例库，支持格式类型、pattern、单位、精度、时区、空值策略、正例/反例和 AI Context `format` 导出
 - [x] 业务术语表与同义词词根库，支持项目级术语维护、冲突检测、字段推荐/检索增强和 AI Context glossary 导出
 - [x] 标准候选 Inbox，支持候选新建、筛选、采纳、合并、忽略、延后和决策记录
 - [x] 自然语言需求草案，支持从建表描述输出标准字段、缺失候选、歧义点、推荐模板、下一步和可复制 Prompt

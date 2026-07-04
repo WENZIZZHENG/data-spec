@@ -99,6 +99,55 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void create_preservesFieldFormatExampleText() throws Exception {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.existsByNameInProject("mobile_no", 1L)).thenReturn(false);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        Field field = new Field();
+        field.setProjectId(1L);
+        field.setName("mobile_no");
+        field.setDataType("varchar(20)");
+        field.setFormatType(" mobile ");
+        field.setFormatPattern(" ^1\\d{10}$ ");
+        field.setFormatUnit(" string ");
+        field.setFormatNullPolicy(" not_blank ");
+        field.setValidExamplesJson("[\" 13800138000 \", \"\"]");
+        field.setInvalidExamplesJson("[\"12345\"]");
+
+        Field created = service.create(field);
+
+        assertEquals("mobile", created.getFormatType());
+        assertEquals("^1\\d{10}$", created.getFormatPattern());
+        assertEquals("string", created.getFormatUnit());
+        assertEquals("not_blank", created.getFormatNullPolicy());
+        JsonNode validExamples = objectMapper.readTree(created.getValidExamplesJson());
+        assertEquals(2, validExamples.size());
+        assertEquals(" 13800138000 ", validExamples.get(0).asText());
+        assertEquals("", validExamples.get(1).asText());
+        assertEquals("12345", objectMapper.readTree(created.getInvalidExamplesJson()).get(0).asText());
+        verify(repository).insert(created);
+    }
+
+    @Test
+    void create_rejectsNonStringFormatExamples() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.existsByNameInProject("mobile_no", 1L)).thenReturn(false);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        Field field = new Field();
+        field.setProjectId(1L);
+        field.setName("mobile_no");
+        field.setDataType("varchar(20)");
+        field.setValidExamplesJson("[\"13800138000\", 123]");
+
+        BizException ex = assertThrows(BizException.class, () -> service.create(field));
+
+        assertTrue(ex.getMessage().contains("validExamplesJson"));
+        verify(repository, never()).insert(any());
+    }
+
+    @Test
     void create_rejectsCrossProjectReplacementField() {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.existsByNameInProject("old_mobile_no", 1L)).thenReturn(false);
@@ -147,6 +196,15 @@ class FieldServiceImplTest {
         incoming.setExampleValue("13800138000");
         incoming.setReplacementFieldId(12L);
         incoming.setReplacementReason("历史字段，改用 user_mobile_no");
+        incoming.setFormatType("mobile");
+        incoming.setFormatPattern("^1\\d{10}$");
+        incoming.setFormatUnit("string");
+        incoming.setFormatPrecision("11 digits");
+        incoming.setFormatTimezone("Asia/Shanghai");
+        incoming.setFormatNullPolicy("not_blank");
+        incoming.setValidExamplesJson("[\"13800138000\"]");
+        incoming.setInvalidExamplesJson("[\"12345\"]");
+        incoming.setFormatNotes("中国大陆手机号");
 
         Field updated = service.update(9L, incoming);
 
@@ -158,6 +216,15 @@ class FieldServiceImplTest {
         assertEquals("13800138000", updated.getExampleValue());
         assertEquals(12L, updated.getReplacementFieldId());
         assertEquals("历史字段，改用 user_mobile_no", updated.getReplacementReason());
+        assertEquals("mobile", updated.getFormatType());
+        assertEquals("^1\\d{10}$", updated.getFormatPattern());
+        assertEquals("string", updated.getFormatUnit());
+        assertEquals("11 digits", updated.getFormatPrecision());
+        assertEquals("Asia/Shanghai", updated.getFormatTimezone());
+        assertEquals("not_blank", updated.getFormatNullPolicy());
+        assertEquals("[\"13800138000\"]", updated.getValidExamplesJson());
+        assertEquals("[\"12345\"]", updated.getInvalidExamplesJson());
+        assertEquals("中国大陆手机号", updated.getFormatNotes());
         verify(repository).update(updated);
     }
 

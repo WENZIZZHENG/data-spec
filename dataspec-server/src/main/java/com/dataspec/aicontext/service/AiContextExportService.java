@@ -172,6 +172,10 @@ public class AiContextExportService {
                     md.append(" — ").append(f.getComment());
                 }
                 md.append("\n");
+                String formatSummary = fieldFormatSummary(f);
+                if (formatSummary != null) {
+                    md.append("  - 值格式: ").append(formatSummary).append("\n");
+                }
             }
             md.append("\n");
         }
@@ -239,6 +243,8 @@ public class AiContextExportService {
                 if (f.getExampleValue() != null) fn.put("example", f.getExampleValue());
                 if (f.getReplacementFieldId() != null) fn.put("replacementFieldId", f.getReplacementFieldId());
                 if (f.getReplacementReason() != null) fn.put("replacementReason", f.getReplacementReason());
+                ObjectNode formatNode = formatNode(mapper, f);
+                if (formatNode.size() > 0) fn.set("format", formatNode);
                 ArrayNode aliasesNode = aliasesToArrayNode(mapper, f.getAliases());
                 if (!aliasesNode.isEmpty()) fn.set("aliases", aliasesNode);
                 if (scopedFields.summary().includeMetadata() && !match.reasons().isEmpty()) {
@@ -311,6 +317,10 @@ public class AiContextExportService {
                 copyText(fn, field, "exampleValue", "example");
                 copyLong(fn, field, "replacementFieldId", "replacementFieldId");
                 copyText(fn, field, "replacementReason", "replacementReason");
+                ObjectNode formatNode = formatNode(mapper, field);
+                if (formatNode.size() > 0) {
+                    fn.set("format", formatNode);
+                }
                 ArrayNode aliasesNode = aliasesToArrayNode(mapper, field.path("aliases").asText(null));
                 if (!aliasesNode.isEmpty()) {
                     fn.set("aliases", aliasesNode);
@@ -1573,7 +1583,28 @@ public class AiContextExportService {
                             "type": "array",
                             "items": { "type": "string" }
                           },
-                          "example": { "type": "string" }
+                          "example": { "type": "string" },
+                          "format": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "type": { "type": "string" },
+                              "pattern": { "type": "string" },
+                              "unit": { "type": "string" },
+                              "precision": { "type": "string" },
+                              "timezone": { "type": "string" },
+                              "nullPolicy": { "type": "string" },
+                              "validExamples": {
+                                "type": "array",
+                                "items": { "type": "string" }
+                              },
+                              "invalidExamples": {
+                                "type": "array",
+                                "items": { "type": "string" }
+                              },
+                              "notes": { "type": "string" }
+                            }
+                          }
                         }
                       }
                     },
@@ -1652,6 +1683,160 @@ public class AiContextExportService {
                 .distinct()
                 .forEach(node::add);
         return node;
+    }
+
+    private ObjectNode formatNode(ObjectMapper mapper, Field field) {
+        ObjectNode node = mapper.createObjectNode();
+        putText(node, "type", field.getFormatType());
+        putText(node, "pattern", field.getFormatPattern());
+        putText(node, "unit", field.getFormatUnit());
+        putText(node, "precision", field.getFormatPrecision());
+        putText(node, "timezone", field.getFormatTimezone());
+        putText(node, "nullPolicy", field.getFormatNullPolicy());
+        putText(node, "notes", field.getFormatNotes());
+        putExamples(node, "validExamples", field.getValidExamplesJson());
+        putExamples(node, "invalidExamples", field.getInvalidExamplesJson());
+        return node;
+    }
+
+    private ObjectNode formatNode(ObjectMapper mapper, JsonNode field) {
+        ObjectNode node = mapper.createObjectNode();
+        copyText(node, field, "formatType", "type");
+        copyText(node, field, "formatPattern", "pattern");
+        copyText(node, field, "formatUnit", "unit");
+        copyText(node, field, "formatPrecision", "precision");
+        copyText(node, field, "formatTimezone", "timezone");
+        copyText(node, field, "formatNullPolicy", "nullPolicy");
+        copyText(node, field, "formatNotes", "notes");
+        putExamples(node, "validExamples", field.path("validExamplesJson").asText(null));
+        putExamples(node, "invalidExamples", field.path("invalidExamplesJson").asText(null));
+        return node;
+    }
+
+    private void putText(ObjectNode node, String fieldName, String value) {
+        if (value != null && !value.isBlank()) {
+            node.put(fieldName, value);
+        }
+    }
+
+    private void putExamples(ObjectNode node, String fieldName, String examplesJson) {
+        ArrayNode examples = examplesToArrayNode(objectMapper.createArrayNode(), examplesJson);
+        if (!examples.isEmpty()) {
+            node.set(fieldName, examples);
+        }
+    }
+
+    private ArrayNode examplesToArrayNode(ArrayNode node, String examplesJson) {
+        if (examplesJson == null || examplesJson.isBlank()) {
+            return node;
+        }
+        try {
+            JsonNode parsed = objectMapper.readTree(examplesJson);
+            if (!parsed.isArray()) {
+                return node;
+            }
+            for (JsonNode item : parsed) {
+                if (item.isTextual()) {
+                    node.add(item.asText());
+                }
+            }
+        } catch (Exception ignored) {
+            // 历史快照可能来自旧版本或人工导入，格式样例解析失败时只跳过该可选字段。
+        }
+        return node;
+    }
+
+    private String fieldFormatSummary(Field field) {
+        return fieldFormatSummary(
+                field.getFormatType(),
+                field.getFormatPattern(),
+                field.getFormatUnit(),
+                field.getFormatPrecision(),
+                field.getFormatTimezone(),
+                field.getFormatNullPolicy(),
+                field.getValidExamplesJson(),
+                field.getInvalidExamplesJson(),
+                field.getFormatNotes());
+    }
+
+    private String fieldFormatSummary(JsonNode field) {
+        return fieldFormatSummary(
+                field.path("formatType").asText(null),
+                field.path("formatPattern").asText(null),
+                field.path("formatUnit").asText(null),
+                field.path("formatPrecision").asText(null),
+                field.path("formatTimezone").asText(null),
+                field.path("formatNullPolicy").asText(null),
+                field.path("validExamplesJson").asText(null),
+                field.path("invalidExamplesJson").asText(null),
+                field.path("formatNotes").asText(null));
+    }
+
+    private String fieldFormatSummary(
+            String type,
+            String pattern,
+            String unit,
+            String precision,
+            String timezone,
+            String nullPolicy,
+            String validExamplesJson,
+            String invalidExamplesJson,
+            String notes
+    ) {
+        List<String> parts = new ArrayList<>();
+        addFormatPart(parts, "type", type);
+        addFormatPart(parts, "pattern", pattern);
+        addFormatPart(parts, "unit", unit);
+        addFormatPart(parts, "precision", precision);
+        addFormatPart(parts, "timezone", timezone);
+        addFormatPart(parts, "nullPolicy", nullPolicy);
+        List<String> validExamples = exampleTexts(validExamplesJson);
+        if (!validExamples.isEmpty()) {
+            parts.add("validExamples=" + joinExampleTexts(validExamples));
+        }
+        List<String> invalidExamples = exampleTexts(invalidExamplesJson);
+        if (!invalidExamples.isEmpty()) {
+            parts.add("invalidExamples=" + joinExampleTexts(invalidExamples));
+        }
+        addFormatPart(parts, "notes", notes);
+        return parts.isEmpty() ? null : String.join("; ", parts);
+    }
+
+    private String joinExampleTexts(List<String> values) {
+        List<String> formatted = new ArrayList<>();
+        for (String value : values) {
+            formatted.add(formatExampleText(value));
+        }
+        return String.join("/", formatted);
+    }
+
+    private String formatExampleText(String value) {
+        return value != null && !value.isEmpty() && value.equals(value.trim())
+                ? value
+                : toJsonString(value);
+    }
+
+    private String toJsonString(String value) {
+        try {
+            return objectMapper.writeValueAsString(value == null ? "" : value);
+        } catch (Exception ignored) {
+            return "\"\"";
+        }
+    }
+
+    private void addFormatPart(List<String> parts, String label, String value) {
+        if (value != null && !value.isBlank()) {
+            parts.add(label + "=" + value);
+        }
+    }
+
+    private List<String> exampleTexts(String examplesJson) {
+        ArrayNode node = examplesToArrayNode(objectMapper.createArrayNode(), examplesJson);
+        List<String> values = new ArrayList<>();
+        for (JsonNode item : node) {
+            values.add(item.asText());
+        }
+        return values;
     }
 
     private ArrayNode starterKitSourcesToArrayNode(ObjectMapper mapper, String tags) {
@@ -1896,6 +2081,10 @@ public class AiContextExportService {
                     md.append(" — ").append(field.path("comment").asText());
                 }
                 md.append("\n");
+                String formatSummary = fieldFormatSummary(field);
+                if (formatSummary != null) {
+                    md.append("  - 值格式: ").append(formatSummary).append("\n");
+                }
             }
             md.append("\n");
         }

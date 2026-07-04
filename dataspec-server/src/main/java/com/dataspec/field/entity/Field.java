@@ -81,6 +81,42 @@ public class Field {
     @TableField("example_value")
     private String exampleValue;
 
+    /** 字段值格式类型，如 money/mobile/email/timestamp/json/status */
+    @TableField("format_type")
+    private String formatType;
+
+    /** 字段值格式正则或轻量模式说明 */
+    @TableField("format_pattern")
+    private String formatPattern;
+
+    /** 字段值单位，如 cent/yuan/ms/UTC */
+    @TableField("format_unit")
+    private String formatUnit;
+
+    /** 字段值精度说明，如 scale=2/millisecond/6dp */
+    @TableField("format_precision")
+    private String formatPrecision;
+
+    /** 时间类字段时区说明 */
+    @TableField("format_timezone")
+    private String formatTimezone;
+
+    /** 字段值空值策略说明，不改变 nullable 数据库约束 */
+    @TableField("format_null_policy")
+    private String formatNullPolicy;
+
+    /** 字段值正例 JSON 字符串数组 */
+    @TableField("valid_examples_json")
+    private String validExamplesJson;
+
+    /** 字段值反例 JSON 字符串数组 */
+    @TableField("invalid_examples_json")
+    private String invalidExamplesJson;
+
+    /** 字段值格式补充说明 */
+    @TableField("format_notes")
+    private String formatNotes;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

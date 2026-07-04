@@ -153,6 +153,15 @@ public class FieldController {
         field.setReplacementFieldId(req.replacementFieldId());
         field.setReplacementReason(req.replacementReason());
         field.setExampleValue(req.exampleValue());
+        field.setFormatType(req.formatType());
+        field.setFormatPattern(req.formatPattern());
+        field.setFormatUnit(req.formatUnit());
+        field.setFormatPrecision(req.formatPrecision());
+        field.setFormatTimezone(req.formatTimezone());
+        field.setFormatNullPolicy(req.formatNullPolicy());
+        field.setValidExamplesJson(req.validExamplesJson());
+        field.setInvalidExamplesJson(req.invalidExamplesJson());
+        field.setFormatNotes(req.formatNotes());
         return R.ok(fieldService.create(field));
     }
 
@@ -180,6 +189,15 @@ public class FieldController {
         field.setReplacementFieldId(req.replacementFieldId());
         field.setReplacementReason(req.replacementReason());
         field.setExampleValue(req.exampleValue());
+        field.setFormatType(req.formatType());
+        field.setFormatPattern(req.formatPattern());
+        field.setFormatUnit(req.formatUnit());
+        field.setFormatPrecision(req.formatPrecision());
+        field.setFormatTimezone(req.formatTimezone());
+        field.setFormatNullPolicy(req.formatNullPolicy());
+        field.setValidExamplesJson(req.validExamplesJson());
+        field.setInvalidExamplesJson(req.invalidExamplesJson());
+        field.setFormatNotes(req.formatNotes());
         return R.ok(fieldService.update(id, field));
     }
 
@@ -211,6 +229,15 @@ public class FieldController {
             String status,
             Long replacementFieldId,
             String replacementReason,
-            String exampleValue
+            String exampleValue,
+            String formatType,
+            String formatPattern,
+            String formatUnit,
+            String formatPrecision,
+            String formatTimezone,
+            String formatNullPolicy,
+            String validExamplesJson,
+            String invalidExamplesJson,
+            String formatNotes
     ) {}
 }

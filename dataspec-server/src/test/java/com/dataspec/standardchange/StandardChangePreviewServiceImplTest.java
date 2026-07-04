@@ -58,11 +58,21 @@ class StandardChangePreviewServiceImplTest {
                 "enabled",
                 null,
                 null,
+                null,
+                "identifier",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "[\"u_10001\"]",
+                null,
                 null));
 
         assertThat(preview.riskLevel()).isEqualTo("HIGH");
         assertThat(preview.requiresConfirmation()).isTrue();
-        assertThat(preview.changes()).extracting("attribute").contains("name", "dataType", "nullable", "aliases");
+        assertThat(preview.changes()).extracting("attribute")
+                .contains("name", "dataType", "nullable", "aliases", "formatType", "validExamplesJson");
         assertThat(preview.impacts()).extracting("impactType").contains("TEMPLATE", "STANDARD_SNAPSHOT");
         assertThat(preview.validationCommands()).anySatisfy(command -> assertThat(command).contains("dataspec-cli.mjs lint"));
         assertThat(preview.rollbackHints()).extracting("type").contains("CHANGE_LOG", "SNAPSHOT");

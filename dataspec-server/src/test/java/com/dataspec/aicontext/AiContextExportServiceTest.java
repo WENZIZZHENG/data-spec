@@ -81,6 +81,7 @@ class AiContextExportServiceTest {
 
         assertTrue(entries.get(".dataspec/DATABASE_RULES.md").contains("table_naming_snake_case"));
         assertTrue(entries.get(".dataspec/field-catalog.json").contains("mobile_no"));
+        assertTrue(entries.get(".dataspec/DATABASE_RULES.md").contains("值格式: type=mobile"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("naming:"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("baseline:"));
         assertTrue(entries.get(".dataspec/rules.yaml").contains("key: personal_default"));
@@ -152,6 +153,14 @@ class AiContextExportServiceTest {
         assertEquals("contact", field.path("category").asText());
         assertEquals(10L, field.path("codeSetId").asLong());
         assertEquals("13800138000", field.path("example").asText());
+        assertEquals("mobile", field.path("format").path("type").asText());
+        assertEquals("^1\\d{10}$", field.path("format").path("pattern").asText());
+        assertEquals("string", field.path("format").path("unit").asText());
+        assertEquals("not_blank", field.path("format").path("nullPolicy").asText());
+        assertEquals("13800138000", field.path("format").path("validExamples").get(0).asText());
+        assertEquals("12345", field.path("format").path("invalidExamples").get(0).asText());
+        assertEquals("", field.path("format").path("invalidExamples").get(1).asText());
+        assertTrue(entries.get(".dataspec/DATABASE_RULES.md").contains("invalidExamples=12345/\"\""));
 
         var schema = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.schema.json"));
         assertTrue(schema.path("properties").has("projectId"));
@@ -164,6 +173,9 @@ class AiContextExportServiceTest {
         assertTrue(fieldProperties.has("status"));
         assertTrue(fieldProperties.has("codeSetId"));
         assertTrue(fieldProperties.has("example"));
+        assertTrue(fieldProperties.has("format"));
+        assertTrue(fieldProperties.path("format").path("properties").has("validExamples"));
+        assertTrue(fieldProperties.path("format").path("properties").has("invalidExamples"));
         assertTrue(fieldProperties.has("starterKitSources"));
     }
 
@@ -782,6 +794,14 @@ class AiContextExportServiceTest {
         field.setStatus("enabled");
         field.setCodeSetId(10L);
         field.setExampleValue("13800138000");
+        field.setFormatType("mobile");
+        field.setFormatPattern("^1\\d{10}$");
+        field.setFormatUnit("string");
+        field.setFormatPrecision("11 digits");
+        field.setFormatNullPolicy("not_blank");
+        field.setValidExamplesJson("[\"13800138000\"]");
+        field.setInvalidExamplesJson("[\"12345\",\"\"]");
+        field.setFormatNotes("中国大陆手机号");
         return field;
     }
 

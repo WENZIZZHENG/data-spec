@@ -37,6 +37,11 @@ The AI Context package SHALL include a JSON Schema describing the generated fiel
 - **WHEN** the AI Context package is generated
 - **THEN** `.dataspec/field-catalog.schema.json` allows field aliases, category, codeSetId, sensitive, status, and example
 
+#### Scenario: Schema contains field format constraints
+- **WHEN** the AI Context package is generated
+- **THEN** `.dataspec/field-catalog.schema.json` allows each field to include a `format` object with type, pattern, unit, precision, timezone, nullPolicy, validExamples, invalidExamples, and notes.
+- **AND** `validExamples` and `invalidExamples` are arrays of strings.
+
 ### Requirement: AI Usage Guidance
 The AI Context package SHALL include concise guidance for coding agents and prompts.
 
@@ -131,3 +136,16 @@ The AI Context package SHALL include the DataSpec capability catalog so offline 
 - **WHEN** CLI export-context writes an offline `.dataspec/context/` cache
 - **THEN** the cache includes the capability catalog file from the exported package
 - **AND** the file does not contain secrets or business data rows.
+
+### Requirement: AI Context Field Format Export
+The AI Context package SHALL export field value-format constraints in AI-readable context.
+
+#### Scenario: Field catalog exports format constraints
+- **WHEN** a field has format constraints
+- **THEN** `.dataspec/field-catalog.json` SHALL include a `format` object for that field.
+- **AND** the object SHALL preserve unit, timezone, precision, valid examples, invalid examples, and notes without exposing business data rows.
+
+#### Scenario: Database rules mention format constraints
+- **WHEN** `DATABASE_RULES.md` is generated
+- **THEN** fields with format constraints SHALL include a concise value-format line or inline summary.
+- **AND** create-table/fix-sql prompts that embed AI Context SHALL allow the AI to read these constraints before generating DDL or SQL fixes.

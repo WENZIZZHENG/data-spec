@@ -34,7 +34,8 @@ class StandardChangePreviewControllerTest {
                 null);
         FieldChangePreviewReq req = new FieldChangePreviewReq(
                 1L, "user_id", null, "bigint", null, null, null, true,
-                null, null, null, null, null, null, null, false, "enabled", null, null, null);
+                null, null, null, null, null, null, null, false, "enabled", null, null, null,
+                null, null, null, null, null, null, null, null, null);
         when(service.previewFieldUpdate(10L, req)).thenReturn(preview);
         StandardChangePreviewController controller = new StandardChangePreviewController(service);
 

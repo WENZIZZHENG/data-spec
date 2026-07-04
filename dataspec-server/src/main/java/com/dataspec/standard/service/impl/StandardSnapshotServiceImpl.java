@@ -179,6 +179,15 @@ public class StandardSnapshotServiceImpl implements StandardSnapshotService {
         item.put("replacementFieldId", field.getReplacementFieldId());
         item.put("replacementReason", field.getReplacementReason());
         item.put("exampleValue", field.getExampleValue());
+        item.put("formatType", field.getFormatType());
+        item.put("formatPattern", field.getFormatPattern());
+        item.put("formatUnit", field.getFormatUnit());
+        item.put("formatPrecision", field.getFormatPrecision());
+        item.put("formatTimezone", field.getFormatTimezone());
+        item.put("formatNullPolicy", field.getFormatNullPolicy());
+        item.put("validExamplesJson", field.getValidExamplesJson());
+        item.put("invalidExamplesJson", field.getInvalidExamplesJson());
+        item.put("formatNotes", field.getFormatNotes());
         return item;
     }
 

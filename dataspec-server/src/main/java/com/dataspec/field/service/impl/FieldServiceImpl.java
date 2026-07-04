@@ -28,6 +28,7 @@ import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.security.context.ProjectAccessGuard;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -206,6 +207,8 @@ public class FieldServiceImpl implements FieldService {
         existing.setReplacementFieldId(field.getReplacementFieldId());
         existing.setReplacementReason(FieldGroupingSummaries.normalizeText(field.getReplacementReason()));
         existing.setExampleValue(field.getExampleValue());
+        copyFormatConstraints(field, existing);
+        applyFieldFormatDefaults(existing);
         validateLifecycleReplacement(existing, id);
         fieldRepository.update(existing);
         changeLogService.recordChange(
@@ -618,6 +621,56 @@ public class FieldServiceImpl implements FieldService {
         field.setSensitive(field.getSensitive() != null ? field.getSensitive() : false);
         field.setStatus(normalizeStatus(field.getStatus()));
         field.setReplacementReason(FieldGroupingSummaries.normalizeText(field.getReplacementReason()));
+        applyFieldFormatDefaults(field);
+    }
+
+    private void copyFormatConstraints(Field source, Field target) {
+        target.setFormatType(source.getFormatType());
+        target.setFormatPattern(source.getFormatPattern());
+        target.setFormatUnit(source.getFormatUnit());
+        target.setFormatPrecision(source.getFormatPrecision());
+        target.setFormatTimezone(source.getFormatTimezone());
+        target.setFormatNullPolicy(source.getFormatNullPolicy());
+        target.setValidExamplesJson(source.getValidExamplesJson());
+        target.setInvalidExamplesJson(source.getInvalidExamplesJson());
+        target.setFormatNotes(source.getFormatNotes());
+    }
+
+    private void applyFieldFormatDefaults(Field field) {
+        field.setFormatType(FieldGroupingSummaries.normalizeText(field.getFormatType()));
+        field.setFormatPattern(FieldGroupingSummaries.normalizeText(field.getFormatPattern()));
+        field.setFormatUnit(FieldGroupingSummaries.normalizeText(field.getFormatUnit()));
+        field.setFormatPrecision(FieldGroupingSummaries.normalizeText(field.getFormatPrecision()));
+        field.setFormatTimezone(FieldGroupingSummaries.normalizeText(field.getFormatTimezone()));
+        field.setFormatNullPolicy(FieldGroupingSummaries.normalizeText(field.getFormatNullPolicy()));
+        field.setFormatNotes(FieldGroupingSummaries.normalizeText(field.getFormatNotes()));
+        field.setValidExamplesJson(normalizeExamplesJson(field.getValidExamplesJson(), "validExamplesJson"));
+        field.setInvalidExamplesJson(normalizeExamplesJson(field.getInvalidExamplesJson(), "invalidExamplesJson"));
+    }
+
+    private String normalizeExamplesJson(String value, String label) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String text = value.trim();
+        try {
+            JsonNode root = objectMapper.readTree(text);
+            if (!root.isArray()) {
+                throw new BizException(label + " 必须是 JSON 字符串数组");
+            }
+            List<String> examples = new ArrayList<>();
+            for (JsonNode item : root) {
+                if (!item.isTextual()) {
+                    throw new BizException(label + " 仅支持字符串示例");
+                }
+                examples.add(item.asText());
+            }
+            return examples.isEmpty() ? null : objectMapper.writeValueAsString(examples);
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(label + " 必须是 JSON 字符串数组: " + e.getMessage());
+        }
     }
 
     private void validateLifecycleReplacement(Field field, Long currentFieldId) {
@@ -831,6 +884,8 @@ public class FieldServiceImpl implements FieldService {
         target.setReplacementFieldId(snapshot.getReplacementFieldId());
         target.setReplacementReason(FieldGroupingSummaries.normalizeText(snapshot.getReplacementReason()));
         target.setExampleValue(snapshot.getExampleValue());
+        copyFormatConstraints(snapshot, target);
+        applyFieldFormatDefaults(target);
     }
 
     private Long parseOptionalLong(Object value, String label) {

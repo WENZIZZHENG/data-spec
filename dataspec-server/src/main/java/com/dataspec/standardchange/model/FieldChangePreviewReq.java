@@ -23,6 +23,15 @@ public record FieldChangePreviewReq(
         String status,
         Long replacementFieldId,
         String replacementReason,
-        String exampleValue
+        String exampleValue,
+        String formatType,
+        String formatPattern,
+        String formatUnit,
+        String formatPrecision,
+        String formatTimezone,
+        String formatNullPolicy,
+        String validExamplesJson,
+        String invalidExamplesJson,
+        String formatNotes
 ) {
 }

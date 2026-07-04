@@ -15,9 +15,10 @@ test('formats standard change risk and attributes', () => {
   assert.equal(standardChangeRiskTagType('INFO'), 'info')
   assert.equal(standardChangeRiskText('HIGH'), '高风险')
   assert.equal(standardChangeAttributeLabel('dataType'), '数据类型')
+  assert.equal(standardChangeAttributeLabel('formatUnit'), '单位')
   assert.deepEqual(
-    standardChangeChangedAttributes([{ attribute: 'name' }, { attribute: 'paramsJson' }]),
-    ['字段名', '规则参数']
+    standardChangeChangedAttributes([{ attribute: 'name' }, { attribute: 'validExamplesJson' }, { attribute: 'paramsJson' }]),
+    ['字段名', '正例', '规则参数']
   )
 })
 

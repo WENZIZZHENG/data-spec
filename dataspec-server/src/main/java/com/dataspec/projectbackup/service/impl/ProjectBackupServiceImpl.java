@@ -764,6 +764,15 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
         target.setSensitive(source.getSensitive());
         target.setStatus(source.getStatus());
         target.setExampleValue(source.getExampleValue());
+        target.setFormatType(source.getFormatType());
+        target.setFormatPattern(source.getFormatPattern());
+        target.setFormatUnit(source.getFormatUnit());
+        target.setFormatPrecision(source.getFormatPrecision());
+        target.setFormatTimezone(source.getFormatTimezone());
+        target.setFormatNullPolicy(source.getFormatNullPolicy());
+        target.setValidExamplesJson(source.getValidExamplesJson());
+        target.setInvalidExamplesJson(source.getInvalidExamplesJson());
+        target.setFormatNotes(source.getFormatNotes());
     }
 
     private RuleConfig copyForRestore(RuleConfig source, Long projectId) {

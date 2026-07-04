@@ -2230,6 +2230,15 @@ export interface components {
             replacementFieldId?: number;
             replacementReason?: string;
             exampleValue?: string;
+            formatType?: string;
+            formatPattern?: string;
+            formatUnit?: string;
+            formatPrecision?: string;
+            formatTimezone?: string;
+            formatNullPolicy?: string;
+            validExamplesJson?: string;
+            invalidExamplesJson?: string;
+            formatNotes?: string;
         };
         Field: {
             /** Format: int64 */
@@ -2261,6 +2270,15 @@ export interface components {
             replacementFieldId?: number;
             replacementReason?: string;
             exampleValue?: string;
+            formatType?: string;
+            formatPattern?: string;
+            formatUnit?: string;
+            formatPrecision?: string;
+            formatTimezone?: string;
+            formatNullPolicy?: string;
+            validExamplesJson?: string;
+            invalidExamplesJson?: string;
+            formatNotes?: string;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -2648,6 +2666,15 @@ export interface components {
             replacementFieldId?: number;
             replacementReason?: string;
             exampleValue?: string;
+            formatType?: string;
+            formatPattern?: string;
+            formatUnit?: string;
+            formatPrecision?: string;
+            formatTimezone?: string;
+            formatNullPolicy?: string;
+            validExamplesJson?: string;
+            invalidExamplesJson?: string;
+            formatNotes?: string;
         };
         StandardCandidateCreateReq: {
             /** Format: int64 */

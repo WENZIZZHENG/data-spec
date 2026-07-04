@@ -152,6 +152,15 @@ public class StandardChangePreviewServiceImpl implements StandardChangePreviewSe
         addChange(changes, "replacementFieldId", existing.getReplacementFieldId(), req.replacementFieldId(), "替代字段会影响 AI 是否采用废弃或停用字段");
         addChange(changes, "replacementReason", existing.getReplacementReason(), req.replacementReason(), "替代说明会影响 AI 对历史字段的迁移判断");
         addChange(changes, "exampleValue", existing.getExampleValue(), req.exampleValue(), "示例值会影响 AI 示例和数据字典");
+        addChange(changes, "formatType", existing.getFormatType(), req.formatType(), "格式类型会影响 AI 对字段值形态的判断");
+        addChange(changes, "formatPattern", existing.getFormatPattern(), req.formatPattern(), "格式模式会影响 AI 生成校验和样例");
+        addChange(changes, "formatUnit", existing.getFormatUnit(), req.formatUnit(), "单位会影响金额、时间戳等字段的 SQL/DDL 说明");
+        addChange(changes, "formatPrecision", existing.getFormatPrecision(), req.formatPrecision(), "值精度会影响 AI 生成数值和时间样例");
+        addChange(changes, "formatTimezone", existing.getFormatTimezone(), req.formatTimezone(), "时区会影响时间字段的 AI 输出");
+        addChange(changes, "formatNullPolicy", existing.getFormatNullPolicy(), req.formatNullPolicy(), "空值策略会影响 AI 对缺失值的处理说明");
+        addChange(changes, "validExamplesJson", existing.getValidExamplesJson(), req.validExamplesJson(), "正例会影响 AI 生成字段值样例");
+        addChange(changes, "invalidExamplesJson", existing.getInvalidExamplesJson(), req.invalidExamplesJson(), "反例会影响 AI 避免错误字段值");
+        addChange(changes, "formatNotes", existing.getFormatNotes(), req.formatNotes(), "格式备注会影响 AI Context 的补充说明");
         return changes;
     }
 

@@ -103,6 +103,45 @@ class FieldQualityServiceImplTest {
     }
 
     @Test
+    void report_detectsFormatSensitiveFieldWithoutExamples() {
+        FieldService fieldService = mock(FieldService.class);
+        Field field = completeField("pay_amount_cent", "支付金额", "bigint");
+        field.setFormatType(null);
+        field.setFormatUnit(null);
+        field.setValidExamplesJson(null);
+        when(fieldService.listByProject(1L)).thenReturn(List.of(field));
+        FieldQualityServiceImpl service = new FieldQualityServiceImpl(fieldService);
+
+        var item = service.report(1L).getFields().getFirst();
+
+        assertThat(item.getIssues()).extracting("code")
+                .contains("format_examples_missing");
+        assertThat(item.getSuggestions()).contains("补充格式类型、单位、正则、时区、空值策略或正反例样例");
+    }
+
+    @Test
+    void report_acceptsNullPolicyOrInvalidExamplesAsFormatConstraint() {
+        FieldService fieldService = mock(FieldService.class);
+        Field nullPolicyOnly = completeField("pay_amount_cent", "支付金额", "bigint");
+        nullPolicyOnly.setFormatType(null);
+        nullPolicyOnly.setValidExamplesJson(null);
+        nullPolicyOnly.setFormatNullPolicy("empty_string_as_null");
+        Field invalidExampleOnly = completeField("user_phone", "用户手机号", "varchar(20)");
+        invalidExampleOnly.setFormatType(null);
+        invalidExampleOnly.setValidExamplesJson(null);
+        invalidExampleOnly.setInvalidExamplesJson("[\"\"]");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(nullPolicyOnly, invalidExampleOnly));
+        FieldQualityServiceImpl service = new FieldQualityServiceImpl(fieldService);
+
+        var report = service.report(1L);
+
+        assertThat(report.getFields().get(0).getIssues()).extracting("code")
+                .doesNotContain("format_examples_missing");
+        assertThat(report.getFields().get(1).getIssues()).extracting("code")
+                .doesNotContain("format_examples_missing");
+    }
+
+    @Test
     void report_usesStructuredReplacementGuidance() {
         FieldService fieldService = mock(FieldService.class);
         Field field = completeField("old_user_id", "旧用户ID", "bigint");
@@ -126,6 +165,8 @@ class FieldQualityServiceImplTest {
         field.setTags("core");
         field.setExampleValue("demo");
         field.setStatus("enabled");
+        field.setFormatType("text");
+        field.setValidExamplesJson("[\"demo\"]");
         return field;
     }
 
