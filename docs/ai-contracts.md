@@ -1,6 +1,6 @@
 # AI 输出契约
 
-本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、AI Context、AI capability catalog、版本兼容握手、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、标准字段合并和 DDL 预览的自动化使用场景。
+本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、CLI/MCP contract fixtures、AI Context、AI capability catalog、版本兼容握手、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、标准字段合并和 DDL 预览的自动化使用场景。
 
 ## 兼容策略
 
@@ -336,6 +336,10 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 稳定字段：
 
+- `tools/fixtures/cli-mcp-contracts.json` 是 CLI/MCP contract fixture 的稳定入口，顶层字段包含 `kind`、`schemaVersion`、`description`、`compatibilityPolicy`、`cliCommands[]`、`mcpTools[]`、`mcpResources[]` 和 `mcpPrompts[]`。
+- Contract fixture entry 稳定描述命令或工具的 `id/name`、`description`、输入边界、`outputShape[]`、成功示例、失败示例、`safety` metadata 和 `recommendedNextActions[]`；示例必须使用占位符或脱敏 marker，不得包含 raw token、password、Authorization、完整 JDBC URL、DSN 或连接串。
+- `node tools/dataspec-cli-mcp-contract-check.mjs --format json` 输出 `dataspec.cli-mcp-contract-fixtures.check`，稳定包含 `ok`、`fixtureKind`、`summary`、`diagnostics[]` 和 `nextActions[]`；该命令只读取本地 fixture 和本地 MCP descriptors，不调用后端、不连接数据库、不执行 MCP tool。
+- Contract fixture 的兼容策略是 additive-friendly：新增可选 entry 字段或说明文本默认兼容；删除或重命名稳定 command/tool/resource/prompt、输入字段、输出 shape、安全 metadata、退出码或错误语义时，必须同步 fixture、OpenSpec 和测试。
 - CLI `lint`、`lint-files`、`suggest-field`、`search-fields`、`generate-ddl` 透传后端稳定字段。
 - CLI `profile list/show` 输出 AI Task Profiles 稳定字段；未知 profile 或 taskType 返回参数错误退出码。
 - CLI `contract list/show/check` 输出 Schema Registry 稳定字段；`check` 失败时退出码为 `2`，并返回 `diagnostics[]`。

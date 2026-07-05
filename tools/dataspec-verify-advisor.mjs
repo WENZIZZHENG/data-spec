@@ -56,11 +56,26 @@ const VALIDATION_RULES = [
   {
     id: 'cli-contract-tests',
     category: 'cli',
-    command: 'node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs',
+    command: 'node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs',
     cwd: '.',
     estimatedSeconds: 15,
     reason: 'CLI/MCP、配置读取或 AI 可读 JSON 契约改动需要跑 Node 契约测试。',
-    patterns: [/^tools\/dataspec-(config|cli|mcp)\.(mjs|test\.mjs)$/]
+    patterns: [
+      /^tools\/dataspec-(config|cli|mcp|cli-mcp-contract-check)\.(mjs|test\.mjs)$/,
+      /^tools\/fixtures\/cli-mcp-contracts\.json$/
+    ]
+  },
+  {
+    id: 'cli-mcp-contract-fixture-check',
+    category: 'cli',
+    command: 'node tools/dataspec-cli-mcp-contract-check.mjs --format json',
+    cwd: '.',
+    estimatedSeconds: 5,
+    reason: 'CLI/MCP contract fixture 或本地契约验收脚本改动需要确认 fixture、MCP descriptors 和安全 metadata 对齐。',
+    patterns: [
+      /^tools\/dataspec-cli-mcp-contract-check\.(mjs|test\.mjs)$/,
+      /^tools\/fixtures\/cli-mcp-contracts\.json$/
+    ]
   },
   {
     id: 'verify-advisor-tests',

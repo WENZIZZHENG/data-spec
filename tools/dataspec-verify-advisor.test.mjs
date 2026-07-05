@@ -63,14 +63,33 @@ test('deduplicates CLI recommendations and renders readable text', () => {
   const advice = buildValidationAdvice([
     'tools/dataspec-cli.mjs',
     'tools/dataspec-cli.test.mjs',
-    'tools/dataspec-mcp.mjs'
+    'tools/dataspec-mcp.mjs',
+    'tools/fixtures/cli-mcp-contracts.json'
   ])
 
   const commandIds = advice.commands.map((command) => command.id)
   assert.equal(commandIds.filter((id) => id === 'cli-contract-tests').length, 1)
+  assert.ok(commandIds.includes('cli-mcp-contract-fixture-check'))
   assert.ok(commandIds.includes('diff-check'))
   assert.match(formatValidationAdviceText(advice), /CLI\/MCP/)
   assert.match(formatValidationAdviceText(advice), /git diff --check/)
+})
+
+test('recommends fixture checker for CLI/MCP contract fixture paths', () => {
+  const advice = buildValidationAdvice([
+    'tools/dataspec-cli-mcp-contract-check.mjs',
+    'tools/dataspec-cli-mcp-contract-check.test.mjs',
+    'tools/fixtures/cli-mcp-contracts.json'
+  ])
+
+  assert.ok(advice.commands.some((command) => command.id === 'cli-contract-tests'))
+  assert.match(
+    advice.commands.find((command) => command.id === 'cli-contract-tests').command,
+    /dataspec-cli-mcp-contract-check\.test\.mjs/
+  )
+  const fixtureCheck = advice.commands.find((command) => command.id === 'cli-mcp-contract-fixture-check')
+  assert.equal(fixtureCheck.command, 'node tools/dataspec-cli-mcp-contract-check.mjs --format json')
+  assert.match(fixtureCheck.reason, /contract fixture/)
 })
 
 test('recommends TODO handoff tests for handoff tool paths', () => {
