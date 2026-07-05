@@ -5,8 +5,8 @@
 ## 下一步顺序
 
 1. 当前状态：P6-1 到 P6-70 已完成第一版；2026-07-05 已归档 6 个已完成 active OpenSpec change（P6-63、P6-64、P6-65、P6-68、P6-69、P6-70），active change 队列恢复为空。
-2. 近期只保留 12 个优先行动项，后续开发默认从这里选，不再从 P6-71 到 P6-188 全量顺扫：P6-71、P6-72、P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-83、P6-87、P6-88、P6-89。
-3. 效率优先顺序：先做 P6-83 文档状态一致性检查；再做 P6-72/P6-75/P6-89 这组 CLI/MCP/AI 契约效率包；浏览器级或数据库级验证（P6-81/P6-82）按风险触发，不默认阻塞小任务。
+2. 近期只保留 11 个优先行动项，后续开发默认从这里选，不再从 P6-71 到 P6-188 全量顺扫：P6-71、P6-72、P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89。
+3. 效率优先顺序：先做 P6-72/P6-75/P6-89 这组 CLI/MCP/AI 契约效率包；浏览器级或数据库级验证（P6-81/P6-82）按风险触发，不默认阻塞小任务。
 4. 暂缓池：P6-90 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
 5. 每次开工先按任务类型决定快速/常规/SDD：文档与小前端走快速；单模块功能走常规；API/CLI/MCP/AI 外部协议、安全、存储或数据库写入才进入 SDD standard/full。
 
@@ -42,7 +42,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
 - 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，P6-10 已完成数据库直连配置预设第一版，P6-11 已完成 MCP/CLI 任务化工作流模板第一版，P6-12 已完成 AI 输出契约稳定性第一版，P6-13 已完成 GitHub inline review 第一版，P6-14 已完成字段分组体验第一版，P6-15 已完成字段批量维护与回退第一版，P6-16 已完成性能基线第一版，P6-17 已完成前端冒烟门禁第一版，P6-18 已完成 AI 可读错误诊断第一版，P6-19 已完成字段标准检索第一版，P6-20 已完成 OpenSpec 归档收口第一版，P6-21 已完成历史快照导出与记录回放第一版，P6-22 已完成 SQL/DDL 多方言兼容矩阵与诊断第一版，P6-23 已完成规则模板库与项目基线套件第一版，P6-24 已完成项目备份恢复迁移包第一版，P6-25 已完成数据库直连只读安全诊断第一版，P6-26 已完成 AI 批量任务交付包第一版，P6-27 已完成 AI 使用反馈与标准改进闭环第一版，P6-28 已完成标准候选 Inbox 与采纳工作台第一版，P6-29 已完成离线 AI Context 缓存第一版，P6-30 已完成数据库 schema dump 第一版，P6-31 已完成 Prompt 模板版本化与效果评测第一版，P6-32 已完成项目活动时间线第一版，P6-33 已完成前端任务式导航第一版，P6-34 已完成本地启动包第一版，P6-35 已完成 fixedSql 策略第一版，P6-36 已完成 AI 使用画像与任务模式配置第一版，P6-37 已完成标准契约 Registry 第一版，P6-38 已完成执行证据包和交付归档第一版，P6-39 已完成前端统一状态第一版，P6-40 已完成并发幂等和任务锁第一版，P6-41 已完成标准变更 What-if 预览第一版，P6-42 已完成领域 Starter Kit 第一版，P6-43 已完成 AI 能力清单第一版，P6-44 已完成前端 URL 状态与可复现操作链接第一版，P6-45 已完成敏感信息脱敏与日志输出边界第一版，P6-46 已完成按变更范围推荐验证命令第一版，P6-47 已完成 TODO 到 OpenSpec 的实施交接助手第一版，P6-48 已完成业务术语表与同义词词根库第一版，P6-49 已完成自然语言需求到标准候选草案第一版，P6-50 已完成 AI 输出引用证据与 Explain Trace 第一版，P6-51 已完成标准字段生命周期状态机第一版，P6-52 已完成业务仓库变更感知扫描与最小上下文第一版，P6-53 已完成标准健康趋势与改进计划第一版，P6-54 已完成数据库连接健康探测与方言能力画像第一版，P6-55 已完成字段值格式与校验样例库第一版，P6-56 已完成标准字段别名冲突与命名保留字检测第一版，P6-57 已完成反向导入字段映射策略与确认理由第一版，P6-58 已完成 AI 任务失败重试与断点续跑第一版，P6-59 已完成标准质量门禁与阈值策略第一版，P6-60 已完成标准字段使用示例与反例库第一版，P6-61 已完成 AI 会话启动包与当前上下文握手第一版，P6-62 已完成 AI 任务卡与单步可恢复执行协议第一版，P6-63 已完成数据库直连元数据浏览器与候选选择页第一版，P6-64 已完成大库扫描计划、分页预览与取消恢复第一版，P6-65 已完成标准字段智能合并向导第一版，P6-66 已完成前端命令面板与最近操作续跑第一版，P6-67 已完成 AI 交接证据看板第一版，P6-68 已完成多项目标准复用包与轻量继承第一版，后续再推进 P6-69 AI 写入安全策略与 dry-run 协议。
-- 最新收束状态（2026-07-05）：P6-69 AI 写入安全策略与 dry-run 协议、P6-70 SQL 规则调试器与可解释匹配面板已完成第一版；近期开发按顶部 12 项优先行动队列推进，不再默认从完整 P6 候选池线性顺扫。
+- 最新收束状态（2026-07-05）：P6-69 AI 写入安全策略与 dry-run 协议、P6-70 SQL 规则调试器与可解释匹配面板已完成第一版；近期开发按顶部 11 项优先行动队列推进，不再默认从完整 P6 候选池线性顺扫。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -657,7 +657,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 状态：已完成第一版。
 - 为什么做：数据库直连反向导入当前以“连接 -> 选表 -> 预览 -> 导入”为主，用户和 AI 在导入前缺少一个只读浏览真实 schema/table/column/comment/index 的轻量视图。
 - 已有基础：已有 PostgreSQL/MySQL 直连、表列表、metadata 预览、覆盖率报告、连接预设、字段来源追踪和反向导入前端页。
-- 缺口：第一版已补只读 metadata browser；后续大库分页、scan plan 和取消恢复归入 P6-64。
+- 已完成能力：第一版已补只读 metadata browser；后续大库分页、scan plan 和取消恢复归入 P6-64。
 - 落地产物：新增 `/api/reverse-import/database/browser` 聚合接口和反向导入页元数据浏览子视图；支持按 schema/table/column/comment/type/index/标准匹配搜索，展示字段标准匹配、缺注释、属性差异、未纳管和可加入导入候选的勾选状态；schema dump 增加 index metadata；浏览结果提供 AI schema-only 摘要并复用 preview/compare/coverage 结果。
 - 验收标准：连接数据库后无需导入即可浏览元数据；AI 可读取选中表的结构摘要并继续生成候选导入或覆盖率报告；全流程只读且不采样业务数据行。第一版已覆盖。
 - 边界：不做通用 SQL 客户端，不执行任意查询，不保存数据库密码。
@@ -711,7 +711,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 状态：已完成第一版，已新增 AI capability `safety` metadata、CLI/MCP safety 展示与校验、缺幂等 key 的结构化诊断、签名 dry-run 证据和前端 dry-run 摘要。
 - 为什么做：DataSpec 越来越多入口会被 AI 通过 CLI/MCP 调用，个人工具也需要避免“AI 一次误写很多标准字段、规则或导入记录”；安全策略应偏产品内建约束，而不是企业审批流。
 - 已有基础：已有 API Token、`doctor`、workflow recipes、AI 能力清单、AI 任务卡、幂等写保护和敏感信息脱敏。
-- 缺口：CLI/MCP/API 对写操作缺少统一 machine-readable safety metadata；AI 不容易判断哪些操作只读、哪些需要 dry-run、哪些必须带 idempotency key 或可撤销证据。
+- 已完成能力：CLI/MCP/API 已补统一 machine-readable safety metadata；AI 可判断哪些操作只读、哪些需要 dry-run、哪些必须带 idempotency key 或可撤销证据。
 - 落地产物：为高风险写操作定义 safety metadata，包含 `readOnly`、`writesProject`、`requiresDryRun`、`supportsUndo`、`requiresIdempotencyKey`、`sensitiveInputs` 和 `nextActions`；反向导入和项目恢复确认写入要求预览返回的签名 `dryRunToken`，CLI/MCP 输出并校验该协议，前端批量写入前展示 dry-run 摘要。
 - 验收标准：AI 能先枚举安全等级再执行写操作；反向导入和项目恢复等高风险确认写入必须先 dry-run，AI 批量 SQL lint 等重复写操作必须带幂等 key；标准复用等仅建议预览的能力不伪装成服务端强校验；缺少必要安全参数时返回结构化错误；日志不输出 password/token/Authorization/JDBC URL/DSN。已通过后端、CLI/MCP、前端和 OpenSpec 目标验证，完整证据见本次 OpenSpec 变更记录。
 - 边界：不做组织审批、多人审核或复杂 RBAC；不阻塞单条低风险个人 CRUD。
@@ -833,12 +833,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不替代数据库供应商完整兼容认证，不把 Docker 作为所有开发环境的必需前提，不扫描业务数据行。
 
 ### P6-83：README/TODO/OpenSpec 状态一致性检查
-- 状态：待办。
+- 状态：已完成第一版，新增 `tools/dataspec-status-check.mjs` 与目标单测，README 已补验证入口。
 - 为什么做：项目能力迭代很快，README、TODO、OpenSpec active/archive 和实际代码容易出现“文档说已完成但入口不可用”或“待办仍写缺口但功能已实现”的漂移。
 - 已有基础：已有 README 功能清单、TODO 状态行、OpenSpec change、OpenSpec validate、AI 输出契约测试和完成项归档习惯。
-- 缺口：缺少自动检查文档状态一致性的脚本；AI agent 接手时仍需要人工比对多个入口，容易基于过期上下文继续开发。
-- 落地产物：新增 docs/status-check 脚本或等价验证入口；扫描 TODO 状态、README 已完成功能清单、OpenSpec active/archive、关键 API/页面入口和参考链接，输出 mismatch、missingEvidence 和 suggestedFix。
-- 验收标准：文档改动后能一条命令检查明显状态漂移；新增完成项时会提示补 README/TODO/OpenSpec 入口；检查结果不依赖外部网络。
+- 已完成能力：状态检查工具可扫描 TODO 近期队列、完成态残留“缺口”、OpenSpec active/archive/main spec、README 工具入口和 Markdown 相对链接，并输出 `severity/code/message/file/line/suggestedFix` 等机器可读问题。
+- 验收标准：文档改动后能运行 `node tools/dataspec-status-check.mjs --format json` 检查明显状态漂移；新增完成项时会提示补 README/TODO/OpenSpec 入口；检查结果不依赖外部网络。
 - 边界：不做自然语言完美理解，不强制阻断所有文档变更；第一版只覆盖编号、状态、标题、链接和关键入口的确定性规则。
 
 ### P6-84：前端可访问性与键盘操作基线
@@ -1507,13 +1506,13 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不重做整个前端设计系统，不一次性迁移所有表格，不牺牲简单项目的轻量体验；第一版聚焦字段库和候选 Inbox 高频表格。
 
 ### P6-152：P6 待办里程碑收束与实施队列
-- 状态：已完成快速收束第一版；顶部“下一步顺序”已压缩为近期 12 项队列，6 个已完成 active OpenSpec change 已归档，P6-70 状态已同步。
+- 状态：已完成快速收束第一版；顶部“下一步顺序”已压缩为近期 11 项队列，6 个已完成 active OpenSpec change 已归档，P6-70 状态已同步。
 - 为什么做：P6 待办已经覆盖大量增强方向，如果只按编号线性追加，AI 和用户都容易在“下一个最该做什么”上迷路；需要把待办转成更可执行的 Now/Next/Later 和 OpenSpec 输入队列。
 - 已有基础：已有 TODO 路线图、OpenSpec change 流程、归档记录、README 当前功能摘要、执行证据包和 TODO 到 OpenSpec 交接助手待办。
 - 已完成能力：当前 active change 队列已清空为 `archive`，主 TODO 顶部不再把 P6-71 到 P6-188 当作默认线性实施顺序；近期任务、暂缓池和 SDD 触发边界已显式写入。
 - 参考项目：`backstage/backstage` 的开发者入口、`changesets/changesets` 的变更组织和 OpenSpec tasks 的可验证清单；只借鉴规划方式，不引入外部项目管理系统。
 - 后续增强：完整拆分 P6-71 到 P6-188 到子路线、归档已完成 P5/P6 长段内容、自动状态检查脚本由 P6-83 承接。
-- 验收标准：AI 打开项目后能先看到近期 12 项队列和效率优先顺序；已完成 active OpenSpec change 不再残留在 `openspec/changes` 根目录；新增建议能先归并到已有主题而不是继续追加新编号。
+- 验收标准：AI 打开项目后能先看到近期 11 项队列和效率优先顺序；已完成 active OpenSpec change 不再残留在 `openspec/changes` 根目录；新增建议能先归并到已有主题而不是继续追加新编号。
 - 边界：不删除历史任务，不改变已完成事实，不要求一次性重写所有 P6 内容；第一版先收束当前 P6 队列和新增任务入口。
 
 ### P6-153：AI Context 注入防护与不可信文本隔离

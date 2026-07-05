@@ -81,6 +81,29 @@ const VALIDATION_RULES = [
     patterns: [/^tools\/dataspec-todo-openspec-handoff\.(mjs|test\.mjs)$/]
   },
   {
+    id: 'status-check',
+    category: 'docs',
+    command: 'node tools/dataspec-status-check.mjs --format json',
+    cwd: '.',
+    estimatedSeconds: 5,
+    reason: 'README/TODO/OpenSpec 状态、完成项或状态检查工具改动需要检查文档与规格入口是否漂移。',
+    patterns: [
+      /^README\.md$/,
+      /^TODO\.md$/,
+      /^openspec\//,
+      /^tools\/dataspec-status-check\.(mjs|test\.mjs)$/
+    ]
+  },
+  {
+    id: 'status-check-tests',
+    category: 'tooling',
+    command: 'node --test tools/dataspec-status-check.test.mjs',
+    cwd: '.',
+    estimatedSeconds: 5,
+    reason: '状态一致性检查工具或测试改动需要跑 status-check 单测，确认漂移规则和 CLI 输出稳定。',
+    patterns: [/^tools\/dataspec-status-check\.(mjs|test\.mjs)$/]
+  },
+  {
     id: 'prompt-eval-tests',
     category: 'prompt',
     command: 'node --test tools/prompt-template-eval.test.mjs',

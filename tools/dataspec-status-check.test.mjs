@@ -1,0 +1,176 @@
+import assert from 'node:assert/strict'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { test } from 'node:test'
+import {
+  buildStatusReport,
+  formatStatusReportText,
+  runStatusCheckCli
+} from './dataspec-status-check.mjs'
+
+const CLEAN_TODO = `# DataSpec 待办路线图
+
+## 下一步顺序
+
+1. 当前状态：P6-1 到 P6-70 已完成第一版；2026-07-05 已归档 1 个已完成 active OpenSpec change（P6-70），active change 队列恢复为空。
+2. 近期只保留 2 个优先行动项，后续开发默认从这里选，不再从 P6-71 到 P6-188 全量顺扫：P6-71、P6-72。
+
+## 说明
+
+参考 [归档](docs/archive/example.md)。
+
+### P6-70：SQL 规则调试器与可解释匹配面板
+- 状态：已完成第一版，commit \`9bd40c9\`；OpenSpec change \`add-sql-rule-debugger\` 已于 2026-07-05 归档并同步主规格。
+- 已完成能力：只读调试入口。
+- 后续增强：更深 trace。
+- 边界：不改变现有 lint 结果兼容字段。
+
+### P6-71：数据库元数据增量缓存与变更指纹
+- 状态：待办。
+- 缺口：缺少 fingerprint。
+- 验收标准：能输出变更摘要。
+- 边界：不实时同步。
+
+### P6-72：CLI/MCP 与服务端版本兼容握手
+- 状态：待办。
+- 缺口：缺少版本握手。
+- 验收标准：版本不兼容时有诊断。
+- 边界：不自动升级。
+`
+
+const CLEAN_README = `# DataSpec 数标
+
+## 开发验证
+
+文档状态检查：
+
+\`\`\`bash
+node tools/dataspec-status-check.mjs --format json
+\`\`\`
+`
+
+test('buildStatusReport passes for a self-consistent TODO/OpenSpec snapshot', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: CLEAN_README,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  assert.equal(report.kind, 'dataspec.status-check')
+  assert.equal(report.schemaVersion, 1)
+  assert.equal(report.status, 'pass')
+  assert.equal(report.summary.todoItems, 3)
+  assert.deepEqual(report.summary.queueItems, ['P6-71', 'P6-72'])
+  assert.equal(report.issues.length, 0)
+})
+
+test('buildStatusReport reports deterministic TODO and OpenSpec drift', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO.replace('P6-71、P6-72', 'P6-70、P6-404').replace('- 后续增强：更深 trace。', '- 缺口：旧缺口仍残留。'),
+    readmeText: '# Missing tool entry\n',
+    relativeFiles: new Set(['README.md', 'TODO.md', 'tools/dataspec-status-check.mjs']),
+    openSpecChangeEntries: ['archive', 'add-sql-rule-debugger'],
+    openSpecSpecEntries: []
+  })
+
+  const codes = report.issues.map((issue) => issue.code)
+  assert.equal(report.status, 'fail')
+  assert.ok(codes.includes('TODO_QUEUE_ITEM_NOT_PENDING'))
+  assert.ok(codes.includes('TODO_QUEUE_ITEM_MISSING'))
+  assert.ok(codes.includes('TODO_COMPLETED_HAS_GAP'))
+  assert.ok(codes.includes('OPENSPEC_ACTIVE_CHANGE_LEFTOVER'))
+  assert.ok(codes.includes('README_STATUS_CHECK_MISSING'))
+  assert.ok(codes.includes('MARKDOWN_LINK_MISSING'))
+  assert.ok(codes.includes('OPENSPEC_ARCHIVE_MISSING'))
+  assert.ok(codes.includes('OPENSPEC_MAIN_SPEC_MISSING'))
+  assert.match(formatStatusReportText(report), /状态：fail/)
+})
+
+test('buildStatusReport reports queue count drift in queue line and summaries', () => {
+  const todoText = CLEAN_TODO
+    .replace('近期只保留 2 个优先行动项', '近期只保留 3 个优先行动项')
+    .replace('## 说明', '## 说明\n\n顶部 3 项队列仍需同步。\n')
+  const report = buildStatusReport({
+    todoText,
+    readmeText: CLEAN_README,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const codes = report.issues.map((issue) => issue.code)
+  assert.equal(report.status, 'fail')
+  assert.ok(codes.includes('TODO_QUEUE_COUNT_MISMATCH'))
+  assert.ok(codes.includes('TODO_QUEUE_SUMMARY_COUNT_MISMATCH'))
+})
+
+test('buildStatusReport treats active changes as warning unless TODO claims queue is empty', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO.replace('active change 队列恢复为空。', 'active change 队列保留正在实施项。'),
+    readmeText: CLEAN_README,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive', 'add-working-change'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  assert.equal(report.status, 'warn')
+  assert.deepEqual(report.issues.map((issue) => issue.code), ['OPENSPEC_ACTIVE_CHANGE_PRESENT'])
+  assert.equal(report.issues[0].severity, 'warning')
+})
+
+test('runStatusCheckCli supports json output and returns non-zero on errors', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO.replace('P6-71、P6-72', 'P6-404'), 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    assert.equal(code, 1)
+    assert.equal(output.status, 'fail')
+    assert.ok(output.issues.some((issue) => issue.code === 'TODO_QUEUE_ITEM_MISSING'))
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+function createIo() {
+  return {
+    stdout: '',
+    stderr: '',
+    writeOut(text) {
+      this.stdout += text
+    },
+    writeErr(text) {
+      this.stderr += text
+    }
+  }
+}

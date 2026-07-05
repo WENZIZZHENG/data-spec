@@ -24,9 +24,25 @@ test('recommends backend, openspec, docs and diff checks from paths', () => {
   ])
   assert.ok(commandIds.indexOf('backend-tests') < commandIds.indexOf('diff-check'))
   assert.ok(commandIds.includes('openspec-validate'))
+  assert.ok(commandIds.includes('status-check'))
   assert.ok(commandIds.includes('diff-check'))
   assert.match(advice.commands.find((command) => command.id === 'backend-tests').reason, /后端/)
   assert.equal(advice.summary.totalCommands, advice.commands.length)
+})
+
+test('recommends status check for TODO and status-check tool paths', () => {
+  const advice = buildValidationAdvice([
+    'TODO.md',
+    'tools/dataspec-status-check.mjs',
+    'tools/dataspec-status-check.test.mjs'
+  ])
+
+  const statusCheck = advice.commands.find((command) => command.id === 'status-check')
+  const statusCheckTests = advice.commands.find((command) => command.id === 'status-check-tests')
+  assert.equal(statusCheck.command, 'node tools/dataspec-status-check.mjs --format json')
+  assert.equal(statusCheckTests.command, 'node --test tools/dataspec-status-check.test.mjs')
+  assert.equal(statusCheck.cwd, '.')
+  assert.match(statusCheck.reason, /README\/TODO\/OpenSpec/)
 })
 
 test('recommends frontend tests, build and OpenAPI check for frontend contract paths', () => {

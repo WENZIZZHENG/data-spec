@@ -816,6 +816,9 @@ node tools/dataspec-cli.mjs contract check --format json --server http://localho
 node tools/dataspec-verify-advisor.mjs --changed
 node tools/dataspec-verify-advisor.mjs --changed --format json
 
+# 检查 README/TODO/OpenSpec 状态、完成项和链接是否漂移
+node tools/dataspec-status-check.mjs --format json
+
 # 从 TODO 条目生成 OpenSpec change 草稿；先 dry-run 再写入
 node tools/dataspec-todo-openspec-handoff.mjs --item P6-48 --dry-run --format json
 node tools/dataspec-todo-openspec-handoff.mjs --item P6-48
@@ -837,7 +840,7 @@ pnpm check:api -- --source ./api-docs.json
 
 # CLI/MCP 单元测试
 cd ..
-node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-todo-openspec-handoff.test.mjs
+node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-status-check.test.mjs tools/dataspec-todo-openspec-handoff.test.mjs
 
 # 本地启动包与 smoke 脚本契约测试
 node --test tools/dataspec-local-smoke.test.mjs
@@ -849,7 +852,7 @@ docker compose -f docker-compose.local.yml config
 npx openspec validate --all
 ```
 
-`node tools/dataspec-verify-advisor.mjs --changed --format json` 会按变更路径推荐最小验证集，输出命令、原因、工作目录、预计耗时和下一步动作；它只给建议，不自动执行命令。`node tools/dataspec-todo-openspec-handoff.mjs --item P6-48 --dry-run --format json` 会从 TODO 条目生成 OpenSpec 草稿计划，确认后去掉 `--dry-run` 写入 `openspec/changes/<change-id>/`；它只生成 proposal/design/spec/tasks 草稿，不实现代码、不提交、不归档。后端 `mvn test` 已包含核心 fixture/golden 回归测试、Prompt 模板 registry/eval、AI contract fixtures、AI evidence package、AI 可读错误诊断、幂等写保护、标准变更 What-if 预览和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、Prompt golden 输出、反向导入 metadata 预览摘要、Schema Registry、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览、执行证据包稳定字段与脱敏、写入重复 key/任务锁冲突/AI job 去重、字段/规则变更预览风险与回退提示，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、统一请求状态、SQL 校验 fixedSql/记录/evidence 入口、数据库反向导入、字段库检索命中原因、标准变更预览确认、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告 evidence 入口、AI 回放、AI 反馈、AI 批量任务 evidence 入口和项目备份恢复的核心页面/API 耦合，以及关键按钮、空状态和失败重试入口；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约、Prompt fixture 脚本、本地 smoke 脚本、验证建议工具和 TODO 到 OpenSpec 交接助手，包括 contract list/show/check、evidence export、schema-registry resource、workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容、Prompt golden marker、Idempotency-Key 透传、API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传、变更路径到验证命令的推荐规则、TODO 条目到 OpenSpec 草稿的字段保留和覆盖保护，以及本地启动包的参数解析、输出结构、敏感信息脱敏和 compose/Vite 代理契约。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
+`node tools/dataspec-verify-advisor.mjs --changed --format json` 会按变更路径推荐最小验证集，输出命令、原因、工作目录、预计耗时和下一步动作；它只给建议，不自动执行命令。`node tools/dataspec-status-check.mjs --format json` 会检查 README/TODO/OpenSpec 状态漂移、完成项残留缺口、active/archive/main spec 同步和 Markdown 相对链接；它只做确定性本地检查，不联网、不读取业务数据。`node tools/dataspec-todo-openspec-handoff.mjs --item P6-48 --dry-run --format json` 会从 TODO 条目生成 OpenSpec 草稿计划，确认后去掉 `--dry-run` 写入 `openspec/changes/<change-id>/`；它只生成 proposal/design/spec/tasks 草稿，不实现代码、不提交、不归档。后端 `mvn test` 已包含核心 fixture/golden 回归测试、Prompt 模板 registry/eval、AI contract fixtures、AI evidence package、AI 可读错误诊断、幂等写保护、标准变更 What-if 预览和合成性能基线，覆盖 PostgreSQL/MySQL SQL 样例、fixedSql golden 输出、Prompt golden 输出、反向导入 metadata 预览摘要、Schema Registry、AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览、执行证据包稳定字段与脱敏、写入重复 key/任务锁冲突/AI job 去重、字段/规则变更预览风险与回退提示，以及千级字段库下的字段分组、字段推荐、AI Context 字段目录和反向导入 compare。前端 `pnpm test` 已包含关键流程源码级冒烟门禁，覆盖路由导航、项目选择、统一请求状态、SQL 校验 fixedSql/记录/evidence 入口、数据库反向导入、字段库检索命中原因、标准变更预览确认、标准候选、筛选与批量维护、DDL 生成、AI Context、覆盖率报告 evidence 入口、AI 回放、AI 反馈、AI 批量任务 evidence 入口和项目备份恢复的核心页面/API 耦合，以及关键按钮、空状态和失败重试入口；它不需要浏览器、后端服务或截图依赖。`node --test` 覆盖 CLI/MCP JSON 契约、Prompt fixture 脚本、本地 smoke 脚本、验证建议工具、状态一致性检查和 TODO 到 OpenSpec 交接助手，包括 contract list/show/check、evidence export、schema-registry resource、workflow recipes、resource/tool `structuredContent`、字段标准检索、可解析文本内容、Prompt golden marker、Idempotency-Key 透传、API 失败时的 `DataSpecError` / `error.data.dataspecError` 诊断透传、变更路径到验证命令的推荐规则、README/TODO/OpenSpec 状态漂移检测、TODO 条目到 OpenSpec 草稿的字段保留和覆盖保护，以及本地启动包的参数解析、输出结构、敏感信息脱敏和 compose/Vite 代理契约。`npx openspec validate --all` 用于校验当前 `openspec/specs/` 主规格和仍处于 active 状态的 change；已完成 change 应归档到 `openspec/changes/archive/`，主规格作为后续开发的权威入口。
 
 ## 性能基线
 
