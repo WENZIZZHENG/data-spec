@@ -21,5 +21,10 @@ public class DatabaseSchemaTable {
 
     private List<DatabaseSchemaColumn> columns = new ArrayList<>();
 
+    /**
+     * 表索引 metadata；只用于结构浏览和 AI schema-only 分析，不参与字段标准写入。
+     */
+    private List<DatabaseSchemaIndex> indexes = new ArrayList<>();
+
     private List<String> warnings = new ArrayList<>();
 }

@@ -1037,6 +1037,80 @@ export interface DatabaseTableInfo {
   comment?: string
 }
 
+export interface DatabaseSchemaIndex {
+  schemaName?: string
+  tableName?: string
+  indexName?: string
+  columnName?: string
+  nonUnique?: boolean
+  ordinalPosition?: number
+}
+
+export interface DatabaseMetadataBrowserSummary {
+  tableCount?: number
+  columnCount?: number
+  indexCount?: number
+  candidateCount?: number
+  missingCommentCount?: number
+  changedCount?: number
+  unmanagedCount?: number
+}
+
+export interface DatabaseMetadataBrowserColumn {
+  schemaName?: string
+  tableName?: string
+  columnName?: string
+  dataType?: string
+  nullable?: boolean
+  defaultValue?: string
+  comment?: string
+  standardFieldName?: string
+  standardDisplayName?: string
+  matchStatus?: string
+  matchReason?: string
+  candidateKey?: string
+  importCandidate?: boolean
+  selectedByDefault?: boolean
+  missingComment?: boolean
+  typeChanged?: boolean
+  unmanaged?: boolean
+  indexNames?: string[]
+  changes?: ReverseImportFieldChange[]
+}
+
+export interface DatabaseMetadataBrowserTable {
+  schemaName?: string
+  tableName?: string
+  tableType?: string
+  comment?: string
+  columnCount?: number
+  indexCount?: number
+  candidateCount?: number
+  missingCommentCount?: number
+  changedCount?: number
+  unmanagedCount?: number
+  indexes?: DatabaseSchemaIndex[]
+  columns?: DatabaseMetadataBrowserColumn[]
+  warnings?: string[]
+}
+
+export interface DatabaseMetadataBrowser {
+  kind?: string
+  schemaVersion?: number
+  projectId?: number
+  databaseType?: string
+  databaseName?: string
+  schemaName?: string
+  selectedTableNames?: string[]
+  summary?: DatabaseMetadataBrowserSummary
+  tables?: DatabaseMetadataBrowserTable[]
+  aiReadableSummary?: string
+  nextActions?: string[]
+  preview?: ReverseImportPreview
+  compare?: ReverseImportCompareResult
+  coverage?: FieldCoverageReport
+}
+
 export interface DatabaseImportResult {
   batchId?: number
   importedCount?: number

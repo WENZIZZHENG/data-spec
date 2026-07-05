@@ -3,6 +3,7 @@ package com.dataspec.reverseimport;
 import com.dataspec.reverseimport.controller.ReverseImportController;
 import com.dataspec.reverseimport.entity.ReverseImportDecision;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
+import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
@@ -30,17 +31,21 @@ class ReverseImportControllerTest {
         DatabaseSchemaDumpReq dumpReq = new DatabaseSchemaDumpReq();
         ReverseImportPreview preview = new ReverseImportPreview();
         ReverseImportCompareResult compare = new ReverseImportCompareResult();
+        DatabaseMetadataBrowser browser = new DatabaseMetadataBrowser();
         when(databaseService.exportDump(connectionReq)).thenReturn(dump);
         when(databaseService.previewDump(dumpReq)).thenReturn(preview);
         when(databaseService.compareDump(dumpReq)).thenReturn(compare);
+        when(databaseService.browse(connectionReq)).thenReturn(browser);
 
         assertThat(controller.exportDatabaseDump(connectionReq).getData()).isSameAs(dump);
         assertThat(controller.previewDump(dumpReq).getData()).isSameAs(preview);
         assertThat(controller.compareDump(dumpReq).getData()).isSameAs(compare);
+        assertThat(controller.browseDatabaseMetadata(connectionReq).getData()).isSameAs(browser);
 
         verify(databaseService).exportDump(connectionReq);
         verify(databaseService).previewDump(dumpReq);
         verify(databaseService).compareDump(dumpReq);
+        verify(databaseService).browse(connectionReq);
     }
 
     @Test

@@ -564,6 +564,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reverse-import/database/browser": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["browseDatabaseMetadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reverse-import/database/preview": {
         parameters: {
             query?: never;
@@ -3175,6 +3191,15 @@ export interface components {
             /** Format: int32 */
             ordinalPosition?: number;
         };
+        DatabaseSchemaIndex: {
+            schemaName?: string;
+            tableName?: string;
+            indexName?: string;
+            columnName?: string;
+            nonUnique?: boolean;
+            /** Format: int32 */
+            ordinalPosition?: number;
+        };
         DatabaseSchemaDump: {
             kind?: string;
             /** Format: int32 */
@@ -3210,6 +3235,83 @@ export interface components {
             tableType?: string;
             comment?: string;
             columns?: components["schemas"]["DatabaseSchemaColumn"][];
+            indexes?: components["schemas"]["DatabaseSchemaIndex"][];
+            warnings?: string[];
+        };
+        DatabaseMetadataBrowser: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: int64 */
+            projectId?: number;
+            databaseType?: string;
+            databaseName?: string;
+            schemaName?: string;
+            selectedTableNames?: string[];
+            summary?: components["schemas"]["DatabaseMetadataBrowserSummary"];
+            tables?: components["schemas"]["DatabaseMetadataBrowserTable"][];
+            aiReadableSummary?: string;
+            nextActions?: string[];
+            preview?: components["schemas"]["ReverseImportPreview"];
+            compare?: components["schemas"]["ReverseImportCompareResult"];
+            coverage?: components["schemas"]["FieldCoverageReport"];
+        };
+        DatabaseMetadataBrowserColumn: {
+            schemaName?: string;
+            tableName?: string;
+            columnName?: string;
+            dataType?: string;
+            nullable?: boolean;
+            defaultValue?: string;
+            comment?: string;
+            standardFieldName?: string;
+            standardDisplayName?: string;
+            matchStatus?: string;
+            matchReason?: string;
+            candidateKey?: string;
+            importCandidate?: boolean;
+            selectedByDefault?: boolean;
+            missingComment?: boolean;
+            typeChanged?: boolean;
+            unmanaged?: boolean;
+            indexNames?: string[];
+            changes?: components["schemas"]["ReverseImportFieldChange"][];
+        };
+        DatabaseMetadataBrowserSummary: {
+            /** Format: int32 */
+            tableCount?: number;
+            /** Format: int32 */
+            columnCount?: number;
+            /** Format: int32 */
+            indexCount?: number;
+            /** Format: int32 */
+            candidateCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            changedCount?: number;
+            /** Format: int32 */
+            unmanagedCount?: number;
+        };
+        DatabaseMetadataBrowserTable: {
+            schemaName?: string;
+            tableName?: string;
+            tableType?: string;
+            comment?: string;
+            /** Format: int32 */
+            columnCount?: number;
+            /** Format: int32 */
+            indexCount?: number;
+            /** Format: int32 */
+            candidateCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            changedCount?: number;
+            /** Format: int32 */
+            unmanagedCount?: number;
+            indexes?: components["schemas"]["DatabaseSchemaIndex"][];
+            columns?: components["schemas"]["DatabaseMetadataBrowserColumn"][];
             warnings?: string[];
         };
         RReverseImportCompareResult: {
@@ -3374,6 +3476,13 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["DatabaseSchemaDump"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RDatabaseMetadataBrowser: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseMetadataBrowser"];
             error?: components["schemas"]["ErrorDetail"];
         };
         RequirementDraftReq: {
@@ -7322,6 +7431,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RListDatabaseTableInfo"];
+                };
+            };
+        };
+    };
+    browseDatabaseMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseConnectionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDatabaseMetadataBrowser"];
                 };
             };
         };

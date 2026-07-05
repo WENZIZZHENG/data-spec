@@ -9,6 +9,7 @@ import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseConnectionSecurityDiagnostic;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
+import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
 import com.dataspec.reverseimport.model.FieldCandidate;
@@ -18,6 +19,7 @@ import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.reverseimport.service.impl.DatabaseReverseImportServiceImpl;
 import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
@@ -43,6 +45,8 @@ import static org.mockito.Mockito.when;
  * 数据库直连反向导入测试。
  */
 class DatabaseReverseImportServiceTest {
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void testConnectionAndListTables_readJdbcMetadata() throws Exception {
@@ -364,6 +368,83 @@ class DatabaseReverseImportServiceTest {
     }
 
     @Test
+    void exportDumpAndBrowse_redactsSensitiveMetadataText() throws Exception {
+        prepareSensitiveMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseConnectionReq req = connectionReq();
+        req.setPassword("top-secret");
+        req.setTableNames(List.of("SECRET_ORDER"));
+
+        var dump = service.exportDump(req);
+        DatabaseMetadataBrowser browser = service.browse(req);
+
+        String dumpJson = objectMapper.writeValueAsString(dump);
+        String browserJson = objectMapper.writeValueAsString(browser);
+        assertThat(dumpJson).contains("[REDACTED]");
+        assertThat(browserJson).contains("[REDACTED]");
+        assertThat(dumpJson).doesNotContain("top-secret", "token123", "jdbc:postgresql://localhost:5432/demo");
+        assertThat(browserJson).doesNotContain("top-secret", "token123", "jdbc:postgresql://localhost:5432/demo");
+        assertThat(browser.getAiReadableSummary())
+                .doesNotContain("top-secret", "token123", "jdbc:postgresql://localhost:5432/demo");
+        assertThat(browser.getPreview().getFieldCandidates())
+                .filteredOn(candidate -> candidate.getDefaultValue() != null)
+                .extracting(FieldCandidate::getDefaultValue)
+                .allSatisfy(defaultValue -> assertThat(defaultValue).doesNotContain("top-secret"));
+    }
+
+    @Test
+    void browseMetadata_returnsAiSummaryIndexesAndCandidateSelectionWithoutImporting() throws Exception {
+        prepareMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        Field id = standardField("id", null);
+        Field mobileNo = standardField("mobile_no", "phone,mobile");
+        mobileNo.setDataType("VARCHAR");
+        mobileNo.setLength(30);
+        mobileNo.setNullable(true);
+        mobileNo.setComment("手机号");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(id, mobileNo));
+        when(fieldService.suggest(1L, "USER_NAME", 1)).thenReturn(List.of(new com.dataspec.field.model.FieldSuggestion(
+                null,
+                0,
+                "未命中已有标准字段",
+                "user_name",
+                false)));
+        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseConnectionReq req = connectionReq();
+        req.setPassword("top-secret");
+        req.setTableNames(List.of("USER_ORDER"));
+
+        DatabaseMetadataBrowser browser = service.browse(req);
+
+        assertThat(browser.getKind()).isEqualTo("dataspec-database-metadata-browser");
+        assertThat(browser.getSummary().getTableCount()).isEqualTo(1);
+        assertThat(browser.getSummary().getColumnCount()).isEqualTo(3);
+        assertThat(browser.getSummary().getIndexCount()).isGreaterThanOrEqualTo(1);
+        assertThat(browser.getSummary().getCandidateCount()).isEqualTo(1);
+        assertThat(browser.getSummary().getChangedCount()).isGreaterThanOrEqualTo(1);
+        assertThat(browser.getSelectedTableNames()).containsExactly("USER_ORDER");
+        assertThat(browser.getTables()).hasSize(1);
+        assertThat(browser.getTables().get(0).getIndexes()).extracting("indexName")
+                .contains("IDX_USER_ORDER_PHONE");
+        assertThat(browser.getTables().get(0).getColumns())
+                .filteredOn(column -> "USER_NAME".equals(column.getColumnName()))
+                .singleElement()
+                .satisfies(column -> {
+                    assertThat(column.isImportCandidate()).isTrue();
+                    assertThat(column.isSelectedByDefault()).isTrue();
+                    assertThat(column.getCandidateKey()).isEqualTo("USER_ORDER.USER_NAME");
+                });
+        assertThat(browser.getAiReadableSummary()).contains("USER_ORDER", "USER_NAME", "IDX_USER_ORDER_PHONE");
+        assertThat(browser.getAiReadableSummary()).doesNotContain("top-secret", "jdbc:");
+        assertThat(browser.getPreview().getFieldCandidates()).extracting(FieldCandidate::getColumnName)
+                .containsExactly("USER_NAME");
+        assertThat(browser.getCoverage().getSummary().getColumnCount()).isEqualTo(3);
+        verify(fieldService, never()).create(any(Field.class));
+    }
+
+    @Test
     void dumpInput_replaysPreviewCompareAndCoverage() throws Exception {
         prepareMetadataDatabase();
         FieldService fieldService = mock(FieldService.class);
@@ -526,6 +607,30 @@ class DatabaseReverseImportServiceTest {
                         user_name VARCHAR(50)
                     )
                     """);
+            statement.execute("CREATE INDEX idx_user_order_phone ON user_order(phone)");
+        }
+    }
+
+    private void prepareSensitiveMetadataDatabase() throws Exception {
+        try (Connection connection = openMetadataConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS secret_order");
+            statement.execute("""
+                    CREATE TABLE secret_order (
+                        id BIGINT NOT NULL,
+                        api_token VARCHAR(100) DEFAULT 'top-secret',
+                        connection_note VARCHAR(200)
+                    )
+                    """);
+            statement.execute("""
+                    COMMENT ON TABLE secret_order
+                    IS 'jdbc:postgresql://localhost:5432/demo password=top-secret'
+                    """);
+            statement.execute("""
+                    COMMENT ON COLUMN secret_order.api_token
+                    IS 'Bearer token123 uses top-secret'
+                    """);
+            statement.execute("CREATE INDEX idx_secret_order_token ON secret_order(api_token)");
         }
     }
 

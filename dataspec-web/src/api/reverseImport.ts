@@ -4,6 +4,7 @@ import type {
   DatabaseImportSourceContext,
   DatabaseConnectionResult,
   DatabaseImportResult,
+  DatabaseMetadataBrowser,
   DatabaseTableInfo,
   FieldCandidate,
   ReverseImportDecision,
@@ -24,6 +25,10 @@ export function testDatabaseConnection(data: DatabaseConnectionReq) {
 
 export function listDatabaseTables(data: DatabaseConnectionReq) {
   return request.post<unknown, DatabaseTableInfo[]>('/reverse-import/database/tables', data)
+}
+
+export function browseDatabaseMetadata(data: DatabaseConnectionReq) {
+  return request.post<unknown, DatabaseMetadataBrowser>('/reverse-import/database/browser', data)
 }
 
 export function previewDatabaseReverseImport(data: DatabaseConnectionReq) {

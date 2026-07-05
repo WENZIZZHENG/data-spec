@@ -229,6 +229,17 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 字段检索是只读能力。AI 可依赖 `matchReasons[]` 和 `evidence[]` 判断命中来源，依赖 `recommendedUse` 和 `nextActions[]` 决定收窄检索、采用标准字段或进入候选补全流程。默认检索只返回 `enabled` 字段；显式传入非 enabled `status` 时，返回项必须说明状态、替代字段或替代原因。不得把 `score` 当作跨版本绝对分值，只能用于同一次结果内排序参考。Explain Trace 不包含业务数据行、token、password 或完整 JDBC URL。
 
+## 数据库 Metadata Browser
+
+稳定字段：
+
+- `DatabaseMetadataBrowser`: `kind`、`schemaVersion`、`projectId`、`databaseType`、`databaseName`、`schemaName`、`selectedTableNames[]`、`summary`、`tables[]`、`aiReadableSummary`、`nextActions[]`、`preview`、`compare`、`coverage`。
+- `DatabaseMetadataBrowserSummary`: `tableCount`、`columnCount`、`indexCount`、`candidateCount`、`missingCommentCount`、`changedCount`、`unmanagedCount`。
+- `DatabaseMetadataBrowserTable`: `schemaName`、`tableName`、`tableType`、`comment`、`columnCount`、`indexCount`、`candidateCount`、`missingCommentCount`、`changedCount`、`unmanagedCount`、`indexes[]`、`columns[]`、`warnings[]`。
+- `DatabaseMetadataBrowserColumn`: `schemaName`、`tableName`、`columnName`、`dataType`、`nullable`、`defaultValue`、`comment`、`standardFieldName`、`standardDisplayName`、`matchStatus`、`matchReason`、`candidateKey`、`importCandidate`、`selectedByDefault`、`missingComment`、`typeChanged`、`unmanaged`、`indexNames[]`、`changes[]`。
+
+该能力只读取 schema metadata，不执行任意 SQL、不采样源库业务数据行、不保存数据库密码。`aiReadableSummary` 用于 AI 继续生成候选导入计划或覆盖率说明；其中不得包含 password、token、Authorization、完整 JDBC URL 或业务数据行。候选写入仍必须走既有显式确认导入接口。
+
 ## 自然语言需求草案
 
 稳定字段：

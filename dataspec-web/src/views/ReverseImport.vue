@@ -149,6 +149,10 @@
                     <el-icon><Refresh /></el-icon>
                     加载表
                   </el-button>
+                  <el-button :disabled="!canBrowseMetadata" :loading="metadataLoading" @click="handleBrowseMetadata">
+                    <el-icon><View /></el-icon>
+                    浏览元数据
+                  </el-button>
                 </div>
                 <div v-if="connectionSecurity || connectionHealth" class="security-diagnostic">
                   <div v-if="connectionHealth" class="security-section">
@@ -253,6 +257,83 @@
                   </el-checkbox>
                 </el-checkbox-group>
               </div>
+            </div>
+
+            <div v-if="metadataBrowser" class="metadata-browser">
+              <div class="section-header compact-header">
+                <h3>元数据浏览</h3>
+                <div class="inline-actions">
+                  <el-tag type="info" effect="plain">只读 schema metadata</el-tag>
+                  <el-button size="small" plain @click="handleCopyMetadataSummary">
+                    <el-icon><Link /></el-icon>
+                    复制 AI 摘要
+                  </el-button>
+                </div>
+              </div>
+              <div class="summary-grid metadata-summary">
+                <div v-for="item in metadataSummaryItems" :key="item.key" class="summary-item">
+                  <div class="summary-label">{{ item.label }}</div>
+                  <div class="summary-value">{{ item.value }}</div>
+                </div>
+              </div>
+              <div class="metadata-tools">
+                <el-input
+                  v-model="metadataSearch"
+                  :prefix-icon="Search"
+                  clearable
+                  placeholder="搜索 schema、表、字段、注释、类型、索引或标准字段"
+                />
+                <el-button size="small" :disabled="candidateTotal === 0" @click="selectAllCandidates">全选候选</el-button>
+                <el-button size="small" :disabled="selectedCandidateCount === 0" @click="clearSelectedCandidates">清空候选</el-button>
+              </div>
+              <pre class="metadata-ai-summary">{{ metadataAiSummary }}</pre>
+              <el-table :data="filteredMetadataRows" size="small" stripe empty-text="当前筛选下暂无 metadata">
+                <el-table-column label="" width="52">
+                  <template #default="{ row }">
+                    <el-checkbox
+                      v-if="row.importCandidate"
+                      :model-value="selectedCandidateKeys.has(row.candidateKey || `${row.tableName}.${row.columnName}`)"
+                      @change="handleMetadataCandidateCheck(row, $event)"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column label="状态" width="120">
+                  <template #default="{ row }">
+                    <el-tag size="small" :type="metadataBrowserStatusTagType(row.matchStatus)" effect="plain">
+                      {{ metadataBrowserStatusLabel(row.matchStatus) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="字段" min-width="210">
+                  <template #default="{ row }">
+                    <div class="metadata-field-name">{{ row.schemaName ? `${row.schemaName}.` : '' }}{{ row.tableName }}.{{ row.columnName }}</div>
+                    <div v-if="row.tableComment" class="muted-text">{{ row.tableComment }}</div>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="dataType" label="类型" min-width="120" />
+                <el-table-column label="标准字段" min-width="150">
+                  <template #default="{ row }">
+                    <span>{{ row.standardFieldName || '-' }}</span>
+                    <div v-if="row.standardDisplayName" class="muted-text">{{ row.standardDisplayName }}</div>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="comment" label="注释" min-width="180" show-overflow-tooltip />
+                <el-table-column label="索引" min-width="180">
+                  <template #default="{ row }">
+                    <el-tag
+                      v-for="indexName in row.indexNames"
+                      :key="`${row.tableName}.${row.columnName}.${indexName}`"
+                      size="small"
+                      effect="plain"
+                      class="field-chip"
+                    >
+                      {{ indexName }}
+                    </el-tag>
+                    <span v-if="!row.indexNames?.length" class="empty-inline">无</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="matchReason" label="命中说明" min-width="220" show-overflow-tooltip />
+              </el-table>
             </div>
 
             <el-alert
@@ -568,6 +649,7 @@ import {
   listDatabaseConnectionPresets
 } from '@/api/databaseConnectionPreset'
 import {
+  browseDatabaseMetadata,
   compareDatabaseReverseImport,
   importDatabaseCandidates,
   listDatabaseTables,
@@ -586,6 +668,15 @@ import {
   mergeSelectedTableNames,
   pickSelectedCandidates
 } from '@/utils/reverseImportSelection'
+import {
+  buildBrowserCandidateKeySet,
+  buildMetadataBrowserAiSummary,
+  filterMetadataBrowserRows,
+  flattenMetadataBrowserRows,
+  metadataBrowserStatusLabel,
+  metadataBrowserStatusTagType,
+  type DatabaseMetadataBrowserRow
+} from '@/utils/databaseMetadataBrowser'
 import {
   fieldLibraryQueryForImportResult,
   loadReverseImportMemory,
@@ -625,6 +716,7 @@ import type {
   DatabaseConnectionPresetReq,
   DatabaseConnectionSecurityDiagnostic,
   DatabaseImportResult,
+  DatabaseMetadataBrowser,
   DatabaseTableInfo,
   FieldCandidate,
   ReverseImportDecision,
@@ -655,13 +747,16 @@ const previewLoading = ref(false)
 const compareLoading = ref(false)
 const testLoading = ref(false)
 const tableLoading = ref(false)
+const metadataLoading = ref(false)
 const importLoading = ref(false)
 const presetLoading = ref(false)
 const presetSaving = ref(false)
 const presetDialogVisible = ref(false)
 const restoringMemory = ref(false)
 const databaseTables = ref<DatabaseTableInfo[]>([])
+const metadataBrowser = ref<DatabaseMetadataBrowser | null>(null)
 const tableSearch = ref('')
+const metadataSearch = ref('')
 const connectionStatus = ref<ConnectionStatus>('idle')
 const connectionMessage = ref('')
 const connectionSecurity = ref<DatabaseConnectionSecurityDiagnostic | null>(null)
@@ -712,11 +807,17 @@ const canGeneratePreview = computed(() =>
 const canGenerateCompare = computed(() =>
   activeMode.value === 'database' && canPreviewDatabase.value
 )
-const canImportCandidates = computed(() =>
-  activeMode.value === 'database' && selectedCandidateCount.value > 0
+const canBrowseMetadata = computed(() =>
+  activeMode.value === 'database' && canPreviewDatabase.value
 )
 const filteredDatabaseTables = computed(() =>
   filterDatabaseTables(databaseTables.value, tableSearch.value)
+)
+const metadataRows = computed<DatabaseMetadataBrowserRow[]>(() =>
+  flattenMetadataBrowserRows(metadataBrowser.value)
+)
+const filteredMetadataRows = computed(() =>
+  filterMetadataBrowserRows(metadataRows.value, metadataSearch.value)
 )
 const presetOptions = computed<Array<DatabaseConnectionPreset & { id: number }>>(() =>
   presets.value.filter((preset): preset is DatabaseConnectionPreset & { id: number } => typeof preset.id === 'number')
@@ -735,6 +836,9 @@ const selectedFieldCandidates = computed(() =>
     pickSelectedCandidates(preview.value?.fieldCandidates ?? [], selectedCandidateKeys.value),
     candidateConfirmReasons.value
   )
+)
+const canImportCandidates = computed(() =>
+  activeMode.value === 'database' && selectedFieldCandidates.value.length > 0
 )
 const ignoredFieldCandidates = computed(() =>
   buildIgnoredCandidates(preview.value?.fieldCandidates ?? [], selectedCandidateKeys.value)
@@ -780,6 +884,18 @@ const summaryItems = computed(() => [
   { key: 'comments', label: '缺注释', value: preview.value?.summary?.missingCommentCount ?? 0 },
   { key: 'nonStandard', label: '非标准字段', value: preview.value?.summary?.nonStandardFieldCount ?? 0 }
 ])
+const metadataSummaryItems = computed(() => [
+  { key: 'tables', label: '表', value: metadataBrowser.value?.summary?.tableCount ?? 0 },
+  { key: 'columns', label: '字段', value: metadataBrowser.value?.summary?.columnCount ?? 0 },
+  { key: 'indexes', label: '索引', value: metadataBrowser.value?.summary?.indexCount ?? 0 },
+  { key: 'candidates', label: '候选', value: metadataBrowser.value?.summary?.candidateCount ?? 0 },
+  { key: 'comments', label: '缺注释', value: metadataBrowser.value?.summary?.missingCommentCount ?? 0 },
+  { key: 'changed', label: '类型差异', value: metadataBrowser.value?.summary?.changedCount ?? 0 },
+  { key: 'unmanaged', label: '未纳管', value: metadataBrowser.value?.summary?.unmanagedCount ?? 0 }
+])
+const metadataAiSummary = computed(() =>
+  buildMetadataBrowserAiSummary(metadataBrowser.value)
+)
 const previewDialectDiagnostics = computed(() => preview.value?.dialectDiagnostics ?? [])
 const compareSummaryItems = computed(() => [
   { key: 'tables', label: '表', value: compareResult.value?.summary?.tableCount ?? 0 },
@@ -841,6 +957,7 @@ watch(
     databaseTables.value = []
     dbForm.tableNames = []
     tableSearch.value = ''
+    metadataSearch.value = ''
     presetId.value = null
     presets.value = []
     resetConnectionStatus()
@@ -885,6 +1002,7 @@ watch(
     databaseTables.value = []
     dbForm.tableNames = []
     tableSearch.value = ''
+    metadataSearch.value = ''
     resetResults()
   }
 )
@@ -924,6 +1042,8 @@ function resetResults() {
   preview.value = null
   compareResult.value = null
   importResult.value = null
+  metadataBrowser.value = null
+  metadataSearch.value = ''
   selectedCandidateKeys.value = new Set()
   candidateConfirmReasons.value = {}
 }
@@ -1163,6 +1283,27 @@ async function handleLoadTables() {
   }
 }
 
+async function handleBrowseMetadata() {
+  if (!canBrowseMetadata.value) {
+    return
+  }
+  metadataLoading.value = true
+  try {
+    const browser = await browseDatabaseMetadata(databaseRequest())
+    metadataBrowser.value = browser
+    preview.value = browser.preview ?? null
+    compareResult.value = browser.compare ?? null
+    importResult.value = null
+    selectedCandidateKeys.value = buildBrowserCandidateKeySet(browser)
+    candidateConfirmReasons.value = {}
+    connectionStatus.value = 'success'
+    connectionMessage.value = `已浏览 ${browser.summary?.tableCount ?? 0} 张表 metadata`
+    ElMessage.success('元数据浏览已生成')
+  } finally {
+    metadataLoading.value = false
+  }
+}
+
 async function handleImportCandidates() {
   if (!projectStore.currentProjectId || selectedFieldCandidates.value.length === 0) {
     ElMessage.warning('请选择要导入的字段候选')
@@ -1198,6 +1339,11 @@ async function handleImportCandidates() {
   } finally {
     importLoading.value = false
   }
+}
+
+async function handleCopyMetadataSummary() {
+  await navigator.clipboard.writeText(metadataAiSummary.value)
+  ElMessage.success('AI 摘要已复制')
 }
 
 function handleFileChange(uploadFile: UploadFile) {
@@ -1262,6 +1408,17 @@ function isCandidateSelected(candidate: FieldCandidate) {
 
 function handleCandidateCheck(candidate: FieldCandidate, checked: boolean | string | number) {
   toggleCandidate(candidate, Boolean(checked))
+}
+
+function handleMetadataCandidateCheck(row: DatabaseMetadataBrowserRow, checked: boolean | string | number) {
+  const key = row.candidateKey || `${row.tableName ?? ''}.${row.columnName ?? ''}`
+  const next = new Set(selectedCandidateKeys.value)
+  if (Boolean(checked)) {
+    next.add(key)
+  } else {
+    next.delete(key)
+  }
+  selectedCandidateKeys.value = next
 }
 
 function candidateReasonValue(candidate: FieldCandidate) {
@@ -1849,6 +2006,44 @@ function browserStorage() {
   margin-top: 0;
 }
 
+.metadata-browser {
+  padding: 14px;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.metadata-summary {
+  margin-bottom: 12px;
+}
+
+.metadata-tools {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.metadata-ai-summary {
+  max-height: 180px;
+  margin: 0 0 12px;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.metadata-field-name {
+  color: #1f2937;
+  font-weight: 600;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -2015,6 +2210,7 @@ function browserStorage() {
   }
 
   .table-tools,
+  .metadata-tools,
   .preset-bar,
   .import-lists {
     grid-template-columns: 1fr;

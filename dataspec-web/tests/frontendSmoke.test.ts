@@ -864,6 +864,7 @@ test('keeps database reverse import and comparison flow wired', () => {
 
   assertContains(view, [
     'previewReverseImport',
+    'browseDatabaseMetadata',
     'previewDatabaseReverseImport',
     'compareDatabaseReverseImport',
     'importDatabaseCandidates',
@@ -873,6 +874,7 @@ test('keeps database reverse import and comparison flow wired', () => {
     'saveReverseImportMemory',
     'projectStore.currentProjectId',
     'async function handleLoadTables()',
+    'async function handleBrowseMetadata()',
     'async function handleGenerateCompare()',
     'async function handleImportCandidates()',
     'previewDialectDiagnostics',
@@ -884,6 +886,10 @@ test('keeps database reverse import and comparison flow wired', () => {
     'failureCategoryLabel(connectionHealth.failureCategory)',
     'connectionHealth.nextActions',
     '连接健康画像',
+    '元数据浏览',
+    'metadataBrowserStatusLabel(row.matchStatus)',
+    'handleMetadataCandidateCheck(row, $event)',
+    '复制 AI 摘要',
     'securityRiskLabel(connectionSecurity.riskLevel)',
     'connectionSecurity.recommendedSql',
     '只读安全诊断',
@@ -898,6 +904,7 @@ test('keeps database reverse import and comparison flow wired', () => {
     "request.post<unknown, ReverseImportPreview>('/reverse-import/preview'",
     "request.post<unknown, DatabaseConnectionResult>('/reverse-import/database/test'",
     "request.post<unknown, DatabaseTableInfo[]>('/reverse-import/database/tables'",
+    "request.post<unknown, DatabaseMetadataBrowser>('/reverse-import/database/browser'",
     "request.post<unknown, ReverseImportPreview>('/reverse-import/database/preview'",
     "request.post<unknown, ReverseImportCompareResult>('/reverse-import/database/compare'",
     "request.post<unknown, DatabaseImportResult>('/reverse-import/database/import'",
@@ -1215,7 +1222,7 @@ test('keeps critical action labels and empty states visible', () => {
     },
     {
       path: 'src/views/ReverseImport.vue',
-      snippets: ['生成预览', '生成差异', '确认导入', '方言诊断', '只读安全诊断', '请先创建并选择项目', '暂无表，请先加载', '当前筛选下暂无差异']
+      snippets: ['生成预览', '浏览元数据', '生成差异', '确认导入', '方言诊断', '只读安全诊断', '请先创建并选择项目', '暂无表，请先加载', '当前筛选下暂无差异']
     },
     {
       path: 'src/views/FieldLibrary.vue',

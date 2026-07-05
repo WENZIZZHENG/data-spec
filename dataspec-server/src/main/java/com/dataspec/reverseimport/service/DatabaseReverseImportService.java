@@ -3,6 +3,7 @@ package com.dataspec.reverseimport.service;
 import com.dataspec.coverage.model.FieldCoverageReport;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
+import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
@@ -21,6 +22,11 @@ public interface DatabaseReverseImportService {
     List<DatabaseTableInfo> listTables(DatabaseConnectionReq req);
 
     DatabaseSchemaDump exportDump(DatabaseConnectionReq req);
+
+    /**
+     * 只读读取所选表 schema metadata，并复用预览、比对和覆盖率逻辑生成候选浏览结果；不得写入源库或标准库。
+     */
+    DatabaseMetadataBrowser browse(DatabaseConnectionReq req);
 
     ReverseImportPreview preview(DatabaseConnectionReq req);
 

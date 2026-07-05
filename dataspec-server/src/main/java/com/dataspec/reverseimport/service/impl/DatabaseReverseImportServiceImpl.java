@@ -2,7 +2,10 @@ package com.dataspec.reverseimport.service.impl;
 
 import com.dataspec.common.exception.BizException;
 import com.dataspec.common.sanitize.SensitiveDataSanitizer;
+import com.dataspec.coverage.model.FieldCoverageItem;
 import com.dataspec.coverage.model.FieldCoverageReport;
+import com.dataspec.coverage.model.FieldCoverageStatus;
+import com.dataspec.coverage.model.FieldCoverageTable;
 import com.dataspec.coverage.service.FieldCoverageService;
 import com.dataspec.dialect.service.SqlDialectCompatibilityService;
 import com.dataspec.reverseimport.model.DatabaseConnectionHealthDiagnostic;
@@ -12,9 +15,23 @@ import com.dataspec.reverseimport.model.DatabaseConnectionSecurityDiagnostic;
 import com.dataspec.reverseimport.model.DatabaseDialectCapability;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
+import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
+import com.dataspec.reverseimport.model.DatabaseMetadataBrowserColumn;
+import com.dataspec.reverseimport.model.DatabaseMetadataBrowserSummary;
+import com.dataspec.reverseimport.model.DatabaseMetadataBrowserTable;
+import com.dataspec.reverseimport.model.DatabaseSchemaColumn;
+import com.dataspec.reverseimport.model.DatabaseSchemaIndex;
+import com.dataspec.reverseimport.model.DatabaseSchemaSource;
+import com.dataspec.reverseimport.model.DatabaseSchemaTable;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
+import com.dataspec.reverseimport.model.FieldCandidate;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
+import com.dataspec.reverseimport.model.ReverseImportCompareSummary;
+import com.dataspec.reverseimport.model.ReverseImportFieldDiff;
+import com.dataspec.reverseimport.model.ReverseImportFieldStatus;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
+import com.dataspec.reverseimport.model.ReverseImportSummary;
+import com.dataspec.reverseimport.model.ReverseImportTableDiff;
 import com.dataspec.reverseimport.service.DatabaseMetadataAdapter;
 import com.dataspec.reverseimport.service.DatabaseReverseImportService;
 import com.dataspec.reverseimport.service.ReverseImportService;
@@ -110,7 +127,7 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     public List<DatabaseTableInfo> listTables(DatabaseConnectionReq req) {
         validateConnectionReq(req);
         try (Connection connection = connectionProvider.open(req)) {
-            return metadataAdapter.listTables(connection, req);
+            return sanitizeTableInfos(metadataAdapter.listTables(connection, req), req);
         } catch (SQLException e) {
             throw new BizException("读取数据库表失败: " + e.getMessage());
         }
@@ -123,10 +140,22 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
             throw new BizException("请至少选择一张表");
         }
         try (Connection connection = connectionProvider.open(req)) {
-            return metadataAdapter.exportDump(connection, req);
+            return sanitizeDump(metadataAdapter.exportDump(connection, req), req);
         } catch (SQLException e) {
             throw new BizException("读取数据库表结构失败: " + e.getMessage());
         }
+    }
+
+    @Override
+    public DatabaseMetadataBrowser browse(DatabaseConnectionReq req) {
+        DatabaseSchemaDump dump = exportDump(req);
+        DatabaseSchemaDumpReq dumpReq = new DatabaseSchemaDumpReq();
+        dumpReq.setProjectId(req.getProjectId());
+        dumpReq.setDump(dump);
+        ReverseImportPreview preview = previewDump(dumpReq);
+        ReverseImportCompareResult compare = compareDump(dumpReq);
+        FieldCoverageReport coverage = coverageDump(dumpReq);
+        return buildBrowser(req, dump, preview, compare, coverage);
     }
 
     @Override
@@ -168,6 +197,410 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
             throw new BizException("字段覆盖率服务未初始化");
         }
         return fieldCoverageService.reportTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), req.getDump()));
+    }
+
+    private DatabaseMetadataBrowser buildBrowser(DatabaseConnectionReq req,
+                                                  DatabaseSchemaDump dump,
+                                                  ReverseImportPreview preview,
+                                                  ReverseImportCompareResult compare,
+                                                  FieldCoverageReport coverage) {
+        Map<String, FieldCandidate> candidates = candidateByColumn(preview);
+        Map<String, ReverseImportFieldDiff> diffs = diffByColumn(compare);
+        Map<String, FieldCoverageItem> coverageItems = coverageByColumn(coverage);
+
+        DatabaseMetadataBrowser browser = new DatabaseMetadataBrowser();
+        browser.setProjectId(req.getProjectId());
+        browser.setDatabaseType(dump.getDatabaseType());
+        browser.setDatabaseName(dump.getDatabaseName());
+        browser.setSchemaName(dump.getSchemaName());
+        browser.setSelectedTableNames(dump.getSource() == null
+                ? List.of()
+                : new ArrayList<>(dump.getSource().getSelectedTableNames() == null
+                ? List.of()
+                : dump.getSource().getSelectedTableNames()));
+        browser.setPreview(preview);
+        browser.setCompare(compare);
+        browser.setCoverage(coverage);
+
+        for (DatabaseSchemaTable table : dump.getTables()) {
+            browser.getTables().add(buildBrowserTable(table, candidates, diffs, coverageItems));
+        }
+        browser.setSummary(buildBrowserSummary(browser.getTables(), preview, compare, coverage));
+        browser.setNextActions(browserNextActions(browser.getSummary()));
+        browser.setAiReadableSummary(buildAiReadableSummary(browser, req));
+        return browser;
+    }
+
+    private DatabaseMetadataBrowserTable buildBrowserTable(DatabaseSchemaTable table,
+                                                           Map<String, FieldCandidate> candidates,
+                                                           Map<String, ReverseImportFieldDiff> diffs,
+                                                           Map<String, FieldCoverageItem> coverageItems) {
+        DatabaseMetadataBrowserTable browserTable = new DatabaseMetadataBrowserTable();
+        browserTable.setSchemaName(table.getSchemaName());
+        browserTable.setTableName(table.getTableName());
+        browserTable.setTableType(table.getTableType());
+        browserTable.setComment(table.getComment());
+        browserTable.setIndexes(new ArrayList<>(table.getIndexes()));
+        browserTable.setWarnings(new ArrayList<>(table.getWarnings()));
+
+        for (DatabaseSchemaColumn column : table.getColumns()) {
+            String key = metadataKey(table.getTableName(), column.getColumnName());
+            DatabaseMetadataBrowserColumn browserColumn = buildBrowserColumn(
+                    table,
+                    column,
+                    candidates.get(key),
+                    diffs.get(key),
+                    coverageItems.get(key));
+            browserTable.getColumns().add(browserColumn);
+        }
+        browserTable.setColumnCount(browserTable.getColumns().size());
+        browserTable.setIndexCount(browserTable.getIndexes().size());
+        browserTable.setCandidateCount((int) browserTable.getColumns().stream()
+                .filter(DatabaseMetadataBrowserColumn::isImportCandidate)
+                .count());
+        browserTable.setMissingCommentCount((int) browserTable.getColumns().stream()
+                .filter(DatabaseMetadataBrowserColumn::isMissingComment)
+                .count());
+        browserTable.setChangedCount((int) browserTable.getColumns().stream()
+                .filter(DatabaseMetadataBrowserColumn::isTypeChanged)
+                .count());
+        browserTable.setUnmanagedCount((int) browserTable.getColumns().stream()
+                .filter(DatabaseMetadataBrowserColumn::isUnmanaged)
+                .count());
+        return browserTable;
+    }
+
+    private DatabaseMetadataBrowserColumn buildBrowserColumn(DatabaseSchemaTable table,
+                                                             DatabaseSchemaColumn column,
+                                                             FieldCandidate candidate,
+                                                             ReverseImportFieldDiff diff,
+                                                             FieldCoverageItem coverageItem) {
+        DatabaseMetadataBrowserColumn browserColumn = new DatabaseMetadataBrowserColumn();
+        browserColumn.setSchemaName(table.getSchemaName());
+        browserColumn.setTableName(table.getTableName());
+        browserColumn.setColumnName(column.getColumnName());
+        browserColumn.setDataType(column.getDataType());
+        browserColumn.setNullable(column.getNullable());
+        browserColumn.setDefaultValue(column.getDefaultValue());
+        browserColumn.setComment(column.getComment());
+        browserColumn.setIndexNames(indexNamesForColumn(table.getIndexes(), column.getColumnName()));
+        if (diff != null) {
+            browserColumn.setStandardFieldName(diff.getStandardFieldName());
+            browserColumn.setStandardDisplayName(diff.getStandardDisplayName());
+            browserColumn.setMatchReason(diff.getReason());
+            browserColumn.setChanges(new ArrayList<>(diff.getChanges()));
+        }
+        if (coverageItem != null) {
+            if (isBlank(browserColumn.getStandardFieldName())) {
+                browserColumn.setStandardFieldName(coverageItem.getStandardFieldName());
+            }
+            if (isBlank(browserColumn.getStandardDisplayName())) {
+                browserColumn.setStandardDisplayName(coverageItem.getStandardDisplayName());
+            }
+            if (isBlank(browserColumn.getMatchReason())) {
+                browserColumn.setMatchReason(coverageItem.getReason());
+            }
+        }
+        if (candidate != null) {
+            browserColumn.setImportCandidate(true);
+            browserColumn.setSelectedByDefault(true);
+            browserColumn.setCandidateKey(candidateKey(candidate));
+            browserColumn.setMatchReason(firstNonBlank(candidate.getMatchReason(), browserColumn.getMatchReason()));
+        }
+        browserColumn.setMissingComment(isBlank(column.getComment())
+                || statusEquals(diff, ReverseImportFieldStatus.MISSING_COMMENT)
+                || coverageStatusEquals(coverageItem, FieldCoverageStatus.MISSING_COMMENT));
+        browserColumn.setTypeChanged(hasChangedDataType(diff));
+        browserColumn.setUnmanaged(candidate != null
+                || Boolean.TRUE.equals(diff == null ? null : diff.getNonStandard())
+                || coverageStatusEquals(coverageItem, FieldCoverageStatus.UNMANAGED));
+        browserColumn.setMatchStatus(resolveBrowserStatus(candidate, diff, coverageItem, browserColumn));
+        if (isBlank(browserColumn.getCandidateKey())) {
+            browserColumn.setCandidateKey(table.getTableName() + "." + column.getColumnName());
+        }
+        return browserColumn;
+    }
+
+    private DatabaseMetadataBrowserSummary buildBrowserSummary(List<DatabaseMetadataBrowserTable> tables,
+                                                               ReverseImportPreview preview,
+                                                               ReverseImportCompareResult compare,
+                                                               FieldCoverageReport coverage) {
+        DatabaseMetadataBrowserSummary summary = new DatabaseMetadataBrowserSummary();
+        summary.setTableCount(tables.size());
+        summary.setColumnCount(tables.stream().mapToInt(DatabaseMetadataBrowserTable::getColumnCount).sum());
+        summary.setIndexCount(tables.stream().mapToInt(DatabaseMetadataBrowserTable::getIndexCount).sum());
+        ReverseImportSummary previewSummary = preview == null ? null : preview.getSummary();
+        ReverseImportCompareSummary compareSummary = compare == null ? null : compare.getSummary();
+        summary.setCandidateCount(valueOrZero(previewSummary == null ? null : previewSummary.getCandidateCount()));
+        summary.setMissingCommentCount(valueOrZero(compareSummary == null ? null : compareSummary.getMissingCommentCount()));
+        summary.setChangedCount(valueOrZero(compareSummary == null ? null : compareSummary.getChangedCount()));
+        summary.setUnmanagedCount(coverage == null ? 0 : coverage.getSummary().getUnmanagedCount());
+        return summary;
+    }
+
+    private Map<String, FieldCandidate> candidateByColumn(ReverseImportPreview preview) {
+        Map<String, FieldCandidate> values = new LinkedHashMap<>();
+        if (preview == null || preview.getFieldCandidates() == null) {
+            return values;
+        }
+        for (FieldCandidate candidate : preview.getFieldCandidates()) {
+            values.put(metadataKey(candidate.getTableName(), candidate.getColumnName()), candidate);
+        }
+        return values;
+    }
+
+    private Map<String, ReverseImportFieldDiff> diffByColumn(ReverseImportCompareResult compare) {
+        Map<String, ReverseImportFieldDiff> values = new LinkedHashMap<>();
+        if (compare == null || compare.getTableDiffs() == null) {
+            return values;
+        }
+        for (ReverseImportTableDiff tableDiff : compare.getTableDiffs()) {
+            for (ReverseImportFieldDiff diff : tableDiff.getFieldDiffs()) {
+                values.put(metadataKey(diff.getTableName(), diff.getColumnName()), diff);
+            }
+        }
+        return values;
+    }
+
+    private Map<String, FieldCoverageItem> coverageByColumn(FieldCoverageReport coverage) {
+        Map<String, FieldCoverageItem> values = new LinkedHashMap<>();
+        if (coverage == null || coverage.getTables() == null) {
+            return values;
+        }
+        for (FieldCoverageTable table : coverage.getTables()) {
+            for (FieldCoverageItem item : table.getFields()) {
+                values.put(metadataKey(item.getTableName(), item.getColumnName()), item);
+            }
+        }
+        return values;
+    }
+
+    private List<String> indexNamesForColumn(List<DatabaseSchemaIndex> indexes, String columnName) {
+        List<String> names = new ArrayList<>();
+        for (DatabaseSchemaIndex index : indexes) {
+            if (equalsIgnoreCase(index.getColumnName(), columnName) && !isBlank(index.getIndexName())) {
+                names.add(index.getIndexName());
+            }
+        }
+        return names;
+    }
+
+    private String resolveBrowserStatus(FieldCandidate candidate,
+                                        ReverseImportFieldDiff diff,
+                                        FieldCoverageItem coverageItem,
+                                        DatabaseMetadataBrowserColumn column) {
+        if (candidate != null) {
+            return "NEW";
+        }
+        if (diff != null && diff.getStatus() != null) {
+            return diff.getStatus().name();
+        }
+        if (coverageItem != null && coverageItem.getStatus() != null) {
+            return coverageItem.getStatus().name();
+        }
+        if (column.isMissingComment()) {
+            return "MISSING_COMMENT";
+        }
+        return "UNKNOWN";
+    }
+
+    private List<String> browserNextActions(DatabaseMetadataBrowserSummary summary) {
+        List<String> actions = new ArrayList<>();
+        actions.add("可继续生成候选导入预览、标准差异比对或覆盖率报告。");
+        if (summary.getCandidateCount() > 0) {
+            actions.add("确认候选字段后，可使用既有反向导入确认流程写入标准字段库。");
+        }
+        if (summary.getMissingCommentCount() > 0) {
+            actions.add("建议优先补齐缺失注释，提升 AI Context 和数据字典可读性。");
+        }
+        return actions;
+    }
+
+    private String buildAiReadableSummary(DatabaseMetadataBrowser browser, DatabaseConnectionReq req) {
+        StringBuilder text = new StringBuilder();
+        text.append("DataSpec database metadata browser\n");
+        text.append("projectId=").append(browser.getProjectId()).append('\n');
+        text.append("database=").append(browser.getDatabaseType()).append('/')
+                .append(browser.getDatabaseName()).append('/')
+                .append(browser.getSchemaName()).append('\n');
+        DatabaseMetadataBrowserSummary summary = browser.getSummary();
+        text.append("summary: tables=").append(summary.getTableCount())
+                .append(", columns=").append(summary.getColumnCount())
+                .append(", indexes=").append(summary.getIndexCount())
+                .append(", candidates=").append(summary.getCandidateCount())
+                .append(", missingComments=").append(summary.getMissingCommentCount())
+                .append(", changed=").append(summary.getChangedCount())
+                .append(", unmanaged=").append(summary.getUnmanagedCount())
+                .append('\n');
+        for (DatabaseMetadataBrowserTable table : browser.getTables()) {
+            text.append("- table ").append(table.getTableName());
+            if (!isBlank(table.getComment())) {
+                text.append(" # ").append(table.getComment());
+            }
+            text.append('\n');
+            if (!table.getIndexes().isEmpty()) {
+                text.append("  indexes: ");
+                text.append(String.join(", ", table.getIndexes().stream()
+                        .map(index -> index.getIndexName() + "(" + index.getColumnName() + ")")
+                        .toList()));
+                text.append('\n');
+            }
+            for (DatabaseMetadataBrowserColumn column : table.getColumns()) {
+                text.append("  - ").append(column.getColumnName())
+                        .append(' ').append(column.getDataType())
+                        .append(" status=").append(column.getMatchStatus());
+                if (!isBlank(column.getStandardFieldName())) {
+                    text.append(" standard=").append(column.getStandardFieldName());
+                }
+                if (column.isImportCandidate()) {
+                    text.append(" candidateKey=").append(column.getCandidateKey());
+                }
+                if (!isBlank(column.getComment())) {
+                    text.append(" comment=").append(column.getComment());
+                }
+                text.append('\n');
+            }
+        }
+        return SensitiveDataSanitizer.redactText(text.toString(), 8000, req == null ? null : req.getPassword());
+    }
+
+    private List<DatabaseTableInfo> sanitizeTableInfos(List<DatabaseTableInfo> tables, DatabaseConnectionReq req) {
+        if (tables == null) {
+            return List.of();
+        }
+        List<DatabaseTableInfo> sanitized = new ArrayList<>(tables.size());
+        for (DatabaseTableInfo table : tables) {
+            sanitized.add(new DatabaseTableInfo(
+                    sanitizeMetadataText(table.schemaName(), req),
+                    sanitizeMetadataText(table.tableName(), req),
+                    sanitizeMetadataText(table.tableType(), req),
+                    sanitizeMetadataText(table.comment(), req)));
+        }
+        return sanitized;
+    }
+
+    private DatabaseSchemaDump sanitizeDump(DatabaseSchemaDump dump, DatabaseConnectionReq req) {
+        if (dump == null) {
+            return null;
+        }
+        dump.setDatabaseType(sanitizeMetadataText(dump.getDatabaseType(), req));
+        dump.setDatabaseName(sanitizeMetadataText(dump.getDatabaseName(), req));
+        dump.setSchemaName(sanitizeMetadataText(dump.getSchemaName(), req));
+        sanitizeDumpSource(dump.getSource(), req);
+        for (DatabaseSchemaTable table : dump.getTables()) {
+            sanitizeDumpTable(table, req);
+        }
+        dump.setWarnings(sanitizeMetadataTexts(dump.getWarnings(), req));
+        return dump;
+    }
+
+    private void sanitizeDumpSource(DatabaseSchemaSource source, DatabaseConnectionReq req) {
+        if (source == null) {
+            return;
+        }
+        source.setSourceType(sanitizeMetadataText(source.getSourceType(), req));
+        source.setDatabaseProductName(sanitizeMetadataText(source.getDatabaseProductName(), req));
+        source.setDatabaseProductVersion(sanitizeMetadataText(source.getDatabaseProductVersion(), req));
+        source.setCatalogName(sanitizeMetadataText(source.getCatalogName(), req));
+        source.setSchemaName(sanitizeMetadataText(source.getSchemaName(), req));
+        source.setSelectedTableNames(sanitizeMetadataTexts(source.getSelectedTableNames(), req));
+    }
+
+    private void sanitizeDumpTable(DatabaseSchemaTable table, DatabaseConnectionReq req) {
+        if (table == null) {
+            return;
+        }
+        table.setSchemaName(sanitizeMetadataText(table.getSchemaName(), req));
+        table.setTableName(sanitizeMetadataText(table.getTableName(), req));
+        table.setTableType(sanitizeMetadataText(table.getTableType(), req));
+        table.setComment(sanitizeMetadataText(table.getComment(), req));
+        for (DatabaseSchemaColumn column : table.getColumns()) {
+            sanitizeDumpColumn(column, req);
+        }
+        for (DatabaseSchemaIndex index : table.getIndexes()) {
+            sanitizeDumpIndex(index, req);
+        }
+        table.setWarnings(sanitizeMetadataTexts(table.getWarnings(), req));
+    }
+
+    private void sanitizeDumpColumn(DatabaseSchemaColumn column, DatabaseConnectionReq req) {
+        if (column == null) {
+            return;
+        }
+        column.setColumnName(sanitizeMetadataText(column.getColumnName(), req));
+        column.setDataType(sanitizeMetadataText(column.getDataType(), req));
+        column.setDefaultValue(sanitizeMetadataText(column.getDefaultValue(), req));
+        column.setComment(sanitizeMetadataText(column.getComment(), req));
+    }
+
+    private void sanitizeDumpIndex(DatabaseSchemaIndex index, DatabaseConnectionReq req) {
+        if (index == null) {
+            return;
+        }
+        index.setSchemaName(sanitizeMetadataText(index.getSchemaName(), req));
+        index.setTableName(sanitizeMetadataText(index.getTableName(), req));
+        index.setIndexName(sanitizeMetadataText(index.getIndexName(), req));
+        index.setColumnName(sanitizeMetadataText(index.getColumnName(), req));
+    }
+
+    private List<String> sanitizeMetadataTexts(List<String> values, DatabaseConnectionReq req) {
+        if (values == null) {
+            return new ArrayList<>();
+        }
+        List<String> sanitized = new ArrayList<>(values.size());
+        for (String value : values) {
+            sanitized.add(sanitizeMetadataText(value, req));
+        }
+        return sanitized;
+    }
+
+    private String sanitizeMetadataText(String value, DatabaseConnectionReq req) {
+        return SensitiveDataSanitizer.redactText(value, 1000, req == null ? null : req.getPassword());
+    }
+
+    private String metadataKey(String tableName, String columnName) {
+        return normalizeKeyPart(tableName) + "." + normalizeKeyPart(columnName);
+    }
+
+    private String normalizeKeyPart(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String candidateKey(FieldCandidate candidate) {
+        return (candidate.getTableName() == null ? "" : candidate.getTableName())
+                + "."
+                + (candidate.getColumnName() == null ? "" : candidate.getColumnName());
+    }
+
+    private boolean statusEquals(ReverseImportFieldDiff diff, ReverseImportFieldStatus status) {
+        return diff != null && diff.getStatus() == status;
+    }
+
+    private boolean coverageStatusEquals(FieldCoverageItem item, FieldCoverageStatus status) {
+        return item != null && item.getStatus() == status;
+    }
+
+    private boolean hasChangedDataType(ReverseImportFieldDiff diff) {
+        if (diff == null) {
+            return false;
+        }
+        if (diff.getStatus() == ReverseImportFieldStatus.CHANGED) {
+            return true;
+        }
+        return diff.getChanges().stream()
+                .anyMatch(change -> "dataType".equalsIgnoreCase(change.getProperty()));
+    }
+
+    private boolean equalsIgnoreCase(String left, String right) {
+        return left != null && right != null && left.equalsIgnoreCase(right);
+    }
+
+    private int valueOrZero(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private String firstNonBlank(String first, String second) {
+        return isBlank(first) ? second : first;
     }
 
     private DatabaseConnectionSecurityDiagnostic diagnoseConnectionSecurity(Connection connection,

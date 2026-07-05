@@ -6,6 +6,7 @@ import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
 import com.dataspec.reverseimport.model.DatabaseImportResult;
+import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
@@ -59,6 +60,14 @@ public class ReverseImportController {
     @PostMapping("/database/dump")
     public R<DatabaseSchemaDump> exportDatabaseDump(@Valid @RequestBody DatabaseConnectionReq req) {
         return R.ok(databaseReverseImportService.exportDump(req));
+    }
+
+    /**
+     * 只读浏览所选数据库表的 schema metadata，返回结构摘要、候选状态和 AI 可读上下文；不写源库或标准字段库。
+     */
+    @PostMapping("/database/browser")
+    public R<DatabaseMetadataBrowser> browseDatabaseMetadata(@Valid @RequestBody DatabaseConnectionReq req) {
+        return R.ok(databaseReverseImportService.browse(req));
     }
 
     @PostMapping("/database/preview")

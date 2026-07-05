@@ -7,6 +7,7 @@ import com.dataspec.lint.model.TableDef;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseSchemaColumn;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
+import com.dataspec.reverseimport.model.DatabaseSchemaIndex;
 import com.dataspec.reverseimport.model.DatabaseSchemaSource;
 import com.dataspec.reverseimport.model.DatabaseSchemaTable;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
@@ -120,6 +121,7 @@ public class JdbcDatabaseMetadataAdapter implements DatabaseMetadataAdapter {
         table.setTableType(safeText(tableInfo.tableType()));
         table.setComment(safeText(tableInfo.comment()));
         table.setColumns(readColumns(metaData, req, tableInfo));
+        table.setIndexes(readIndexes(metaData, req, tableInfo));
         return table;
     }
 
@@ -140,6 +142,31 @@ public class JdbcDatabaseMetadataAdapter implements DatabaseMetadataAdapter {
             }
         }
         return columns;
+    }
+
+    private List<DatabaseSchemaIndex> readIndexes(DatabaseMetaData metaData,
+                                                  DatabaseConnectionReq req,
+                                                  DatabaseTableInfo tableInfo) throws SQLException {
+        List<DatabaseSchemaIndex> indexes = new ArrayList<>();
+        String tableSchema = TYPE_MYSQL.equals(databaseType(req)) ? null : firstNonBlank(tableInfo.schemaName(), schemaPattern(req));
+        try (ResultSet rs = metaData.getIndexInfo(catalog(req), tableSchema, tableInfo.tableName(), false, false)) {
+            while (rs.next()) {
+                String indexName = safeText(rs.getString("INDEX_NAME"));
+                String columnName = safeText(rs.getString("COLUMN_NAME"));
+                if (isBlank(indexName) || isBlank(columnName)) {
+                    continue;
+                }
+                DatabaseSchemaIndex index = new DatabaseSchemaIndex();
+                index.setSchemaName(safeText(tableInfo.schemaName()));
+                index.setTableName(safeText(tableInfo.tableName()));
+                index.setIndexName(indexName);
+                index.setColumnName(columnName);
+                index.setNonUnique(rs.getBoolean("NON_UNIQUE"));
+                index.setOrdinalPosition((int) rs.getShort("ORDINAL_POSITION"));
+                indexes.add(index);
+            }
+        }
+        return indexes;
     }
 
     private void validateDump(Long projectId, DatabaseSchemaDump dump) {
