@@ -33,6 +33,7 @@ import com.dataspec.rulebaseline.service.RuleBaselineService;
 import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.service.StandardSnapshotService;
+import com.dataspec.standardreuse.service.StandardReusePackService;
 import com.dataspec.standardusageexample.service.StandardUsageExampleService;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -184,7 +185,8 @@ class PerformanceBaselineTest {
                 new AiCapabilityCatalogServiceImpl(),
                 glossaryService,
                 new FieldConflictServiceImpl(fieldService),
-                usageExampleService
+                usageExampleService,
+                mock(StandardReusePackService.class)
         );
     }
 

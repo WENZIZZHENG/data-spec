@@ -324,6 +324,210 @@ export type ProjectRestorePlan = Schemas['ProjectRestorePlan']
 export type ProjectRestoreRecord = Schemas['ProjectRestoreRecord']
 export type ProjectRestoreResult = Schemas['ProjectRestoreResult']
 
+/** 标准复用包字段来源，用于 AI Context 和前端展示字段来自哪个共享包版本。 */
+export interface StandardPackSource {
+  /** 复用包 key。 */
+  packKey?: string
+  /** 复用包版本。 */
+  basePackVersion?: string
+}
+
+/** 标准复用包资产数量摘要。 */
+export interface StandardReusePackAssetCounts {
+  /** 数据域数量。 */
+  domains?: number
+  /** 标准字段数量。 */
+  fields?: number
+  /** 枚举字典数量。 */
+  enums?: number
+  /** 枚举值数量。 */
+  enumValues?: number
+  /** 规则配置数量。 */
+  rules?: number
+  /** 表模板数量。 */
+  templates?: number
+  /** 模板字段数量。 */
+  templateFields?: number
+}
+
+/** 创建标准复用包请求，只从当前项目导出标准资产，不包含凭据或源库行值。 */
+export interface StandardReusePackCreateReq {
+  /** 源项目 ID。 */
+  projectId?: number
+  /** 项目内稳定包 key，如 shared_core。 */
+  packKey?: string
+  /** 用户可读包名称。 */
+  packName?: string
+  /** 用户定义共享包版本。 */
+  basePackVersion?: string
+  /** 包说明。 */
+  description?: string | null
+}
+
+/** 标准复用包应用请求，第一版仅创建缺失资产，不覆盖本地资产。 */
+export interface StandardReusePackApplyReq {
+  /** 标准复用包 ID。 */
+  packId?: number
+  /** 目标项目 ID。 */
+  targetProjectId?: number
+  /** 覆盖开关，第一版仅用于报告覆盖项，不执行破坏性覆盖。 */
+  overwrite?: boolean
+}
+
+/** 标准复用包列表摘要。 */
+export interface StandardReusePackInfo {
+  /** 标准复用包 ID。 */
+  packId?: number
+  /** 源项目 ID。 */
+  projectId?: number
+  /** 源项目名称快照。 */
+  sourceProjectName?: string
+  /** 复用包 key。 */
+  packKey?: string
+  /** 复用包名称。 */
+  packName?: string
+  /** 复用包版本。 */
+  basePackVersion?: string
+  /** 包说明。 */
+  description?: string | null
+  /** 复用包内容 hash。 */
+  packageHash?: string
+  /** 资产数量摘要。 */
+  assetCounts?: StandardReusePackAssetCounts
+  /** 创建时间。 */
+  createdAt?: string
+}
+
+/** 标准复用包详情。 */
+export interface StandardReusePackDetail {
+  /** 复用包摘要。 */
+  info?: StandardReusePackInfo
+  /** 确定性 payload JSON。 */
+  payloadJson?: string
+}
+
+/** 标准复用包应用计划计数。 */
+export interface StandardReusePackPlanCounts {
+  /** 将创建的顶层资产数量。 */
+  created?: number
+  /** 将跳过的顶层资产数量。 */
+  skipped?: number
+  /** 本地覆盖项数量。 */
+  overridden?: number
+  /** 漂移项数量。 */
+  drifted?: number
+  /** 阻塞项数量。 */
+  blocked?: number
+  /** 警告数量。 */
+  warnings?: number
+}
+
+/** 标准复用包计划或漂移明细。 */
+export interface StandardReusePackPlanItem {
+  /** 资产类型，如 field、enum_dict、rule、template。 */
+  assetType?: string
+  /** 项目内自然键。 */
+  key?: string
+  /** 动作，如 CREATE、SKIP、DRIFTED、BLOCKED。 */
+  action?: string
+  /** 动作原因。 */
+  reason?: string
+}
+
+/** 标准复用包漂移计数。 */
+export interface StandardReusePackDriftCounts {
+  /** 内容一致数量。 */
+  matched?: number
+  /** 目标项目缺失数量。 */
+  missing?: number
+  /** 本地覆盖数量。 */
+  overridden?: number
+  /** 内容漂移数量。 */
+  drifted?: number
+}
+
+/** 目标项目相对某个标准复用包的漂移报告。 */
+export interface StandardReusePackDriftReport {
+  /** 漂移报告 schema 版本。 */
+  schemaVersion?: number
+  /** 标准复用包 ID。 */
+  packId?: number
+  /** 目标项目 ID。 */
+  targetProjectId?: number
+  /** 复用包 key。 */
+  packKey?: string
+  /** 复用包版本。 */
+  basePackVersion?: string
+  /** 漂移计数。 */
+  counts?: StandardReusePackDriftCounts
+  /** 漂移明细。 */
+  items?: StandardReusePackPlanItem[]
+}
+
+/** 标准复用包应用预览计划。 */
+export interface StandardReusePackPlan {
+  /** 响应类型标识。 */
+  kind?: string
+  /** 响应 schema 版本。 */
+  schemaVersion?: number
+  /** 标准复用包 ID。 */
+  packId?: number
+  /** 目标项目 ID。 */
+  targetProjectId?: number
+  /** 复用包 key。 */
+  packKey?: string
+  /** 复用包版本。 */
+  basePackVersion?: string
+  /** 是否可确认应用。 */
+  canApply?: boolean
+  /** 动作计数。 */
+  counts?: StandardReusePackPlanCounts
+  /** 计划明细。 */
+  items?: StandardReusePackPlanItem[]
+  /** 非阻断警告。 */
+  warnings?: string[]
+  /** 漂移报告。 */
+  driftReport?: StandardReusePackDriftReport
+}
+
+/** 标准复用包应用记录。 */
+export interface StandardReusePackApplicationInfo {
+  /** 应用记录 ID。 */
+  applicationId?: number
+  /** 目标项目 ID。 */
+  projectId?: number
+  /** 复用包 ID。 */
+  packId?: number
+  /** 复用包 key 快照。 */
+  packKey?: string
+  /** 复用包名称快照。 */
+  packName?: string
+  /** 复用包版本快照。 */
+  basePackVersion?: string
+  /** 复用包 hash 快照。 */
+  packageHash?: string
+  /** 源项目 ID 快照。 */
+  sourceProjectId?: number
+  /** 源项目名称快照。 */
+  sourceProjectName?: string
+  /** 创建资产计数。 */
+  createdCounts?: StandardReusePackAssetCounts
+  /** 跳过资产计数。 */
+  skippedCounts?: StandardReusePackAssetCounts
+  /** 漂移计数。 */
+  driftCounts?: StandardReusePackDriftCounts
+  /** 应用时间。 */
+  appliedAt?: string
+}
+
+/** 标准复用包确认应用结果。 */
+export interface StandardReusePackApplyResult {
+  /** 实际应用计划。 */
+  plan?: StandardReusePackPlan
+  /** 落库后的应用摘要。 */
+  application?: StandardReusePackApplicationInfo
+}
+
 export type FieldQualitySeverity = 'ERROR' | 'WARNING' | 'SUGGESTION'
 export type FieldQualityLevel = 'GOOD' | 'WARNING' | 'POOR'
 

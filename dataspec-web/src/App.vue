@@ -145,6 +145,10 @@
             <el-icon><Files /></el-icon>
             <span>项目备份</span>
           </el-menu-item>
+          <el-menu-item index="/standard-reuse-packs">
+            <el-icon><Files /></el-icon>
+            <span>标准复用包</span>
+          </el-menu-item>
           <el-menu-item index="/reverse-import">
             <el-icon><Search /></el-icon>
             <span>反向导入</span>

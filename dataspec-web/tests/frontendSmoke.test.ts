@@ -29,6 +29,7 @@ test('keeps critical frontend routes and navigation entries wired', () => {
     { path: '/ai-batches', view: 'AiBatch.vue', title: 'AI 批量任务' },
     { path: '/ai-feedback', view: 'AiFeedback.vue', title: 'AI 反馈' },
     { path: '/project-backup', view: 'ProjectBackup.vue', title: '项目备份' },
+    { path: '/standard-reuse-packs', view: 'StandardReusePack.vue', title: '标准复用包' },
     { path: '/reverse-import', view: 'ReverseImport.vue', title: '反向导入' },
     { path: '/field-conflicts', view: 'FieldConflicts.vue', title: '字段冲突' },
     { path: '/field-coverage', view: 'FieldCoverage.vue', title: '覆盖率报告' }
@@ -1401,6 +1402,10 @@ test('keeps critical action labels and empty states visible', () => {
     {
       path: 'src/views/ProjectBackup.vue',
       snippets: ['导出备份 JSON', '预览恢复', '确认恢复', 'password/token/source rows', '暂无恢复记录']
+    },
+    {
+      path: 'src/views/StandardReusePack.vue',
+      snippets: ['标准复用包', '创建复用包', '预览应用', '确认应用', '漂移报告', '暂无复用包']
     }
   ]
 

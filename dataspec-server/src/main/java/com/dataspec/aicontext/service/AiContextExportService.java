@@ -34,6 +34,8 @@ import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.dto.StandardSnapshotPayload;
 import com.dataspec.standard.service.StandardSnapshotService;
+import com.dataspec.standardreuse.model.StandardReusePackApplicationInfo;
+import com.dataspec.standardreuse.service.StandardReusePackService;
 import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.service.EnumDictService;
@@ -75,6 +77,7 @@ import java.util.zip.ZipOutputStream;
 public class AiContextExportService {
 
     private static final String STARTER_KIT_TAG_PREFIX = "starter:";
+    private static final String STANDARD_PACK_TAG_PREFIX = "pack:";
 
     private static final String PACKAGE_FILE_NAME = "dataspec-ai-context.zip";
     private static final int DATASPEC_CONTEXT_SCHEMA_VERSION = 1;
@@ -122,6 +125,7 @@ public class AiContextExportService {
     private final BusinessGlossaryService businessGlossaryService;
     private final FieldConflictService fieldConflictService;
     private final StandardUsageExampleService standardUsageExampleService;
+    private final StandardReusePackService standardReusePackService;
 
     /**
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
@@ -290,6 +294,8 @@ public class AiContextExportService {
                 if (f.getTags() != null) fn.put("tags", f.getTags());
                 ArrayNode starterKitSourcesNode = starterKitSourcesToArrayNode(mapper, f.getTags());
                 if (!starterKitSourcesNode.isEmpty()) fn.set("starterKitSources", starterKitSourcesNode);
+                ArrayNode standardPackSourcesNode = standardPackSourcesToArrayNode(mapper, f.getTags());
+                if (!standardPackSourcesNode.isEmpty()) fn.set("standardPackSources", standardPackSourcesNode);
                 if (f.getCodeSetId() != null) fn.put("codeSetId", f.getCodeSetId());
                 if (f.getExampleValue() != null) fn.put("example", f.getExampleValue());
                 if (f.getReplacementFieldId() != null) fn.put("replacementFieldId", f.getReplacementFieldId());
@@ -366,6 +372,10 @@ public class AiContextExportService {
                 ArrayNode starterKitSourcesNode = starterKitSourcesToArrayNode(mapper, field.path("tags").asText(null));
                 if (!starterKitSourcesNode.isEmpty()) {
                     fn.set("starterKitSources", starterKitSourcesNode);
+                }
+                ArrayNode standardPackSourcesNode = standardPackSourcesToArrayNode(mapper, field.path("tags").asText(null));
+                if (!standardPackSourcesNode.isEmpty()) {
+                    fn.set("standardPackSources", standardPackSourcesNode);
                 }
                 copyLong(fn, field, "codeSetId", "codeSetId");
                 copyText(fn, field, "exampleValue", "example");
@@ -982,6 +992,10 @@ public class AiContextExportService {
             root.put("kind", "dataspec-ai-context");
             root.put("projectId", projectId);
             root.set("standard", standardNode(objectMapper, snapshot));
+            ArrayNode standardPacks = standardPackApplicationsNode(objectMapper, projectId);
+            if (!standardPacks.isEmpty()) {
+                root.set("standardPacks", standardPacks);
+            }
             root.put("generatedAt", Instant.now().toString());
             root.set("contracts", objectMapper.valueToTree(schemaRegistryService.manifestSummary()));
             if (scopeSummary.includeMetadata()) {
@@ -1835,6 +1849,18 @@ public class AiContextExportService {
                               }
                             }
                           },
+                          "standardPackSources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": ["packKey", "basePackVersion"],
+                              "properties": {
+                                "packKey": { "type": "string" },
+                                "basePackVersion": { "type": "string" }
+                              }
+                            }
+                          },
                           "matchReasons": {
                             "type": "array",
                             "items": { "type": "string" }
@@ -2118,6 +2144,64 @@ public class AiContextExportService {
         source.put("kitKey", marker.substring(0, versionSeparator));
         source.put("kitVersion", marker.substring(versionSeparator + 1));
         node.add(source);
+    }
+
+    private ArrayNode standardPackSourcesToArrayNode(ObjectMapper mapper, String tags) {
+        ArrayNode node = mapper.createArrayNode();
+        if (tags == null || tags.isBlank()) {
+            return node;
+        }
+        Arrays.stream(tags.split("[,，]"))
+                .map(String::trim)
+                .filter(tag -> tag.startsWith(STANDARD_PACK_TAG_PREFIX))
+                .distinct()
+                .forEach(tag -> addStandardPackSource(node, tag));
+        return node;
+    }
+
+    private void addStandardPackSource(ArrayNode node, String tag) {
+        String marker = tag.substring(STANDARD_PACK_TAG_PREFIX.length());
+        int versionSeparator = marker.lastIndexOf('@');
+        if (versionSeparator <= 0 || versionSeparator == marker.length() - 1) {
+            return;
+        }
+        ObjectNode source = node.objectNode();
+        source.put("packKey", marker.substring(0, versionSeparator));
+        source.put("basePackVersion", marker.substring(versionSeparator + 1));
+        node.add(source);
+    }
+
+    private <T> List<T> safeList(List<T> items) {
+        return items == null ? List.of() : items;
+    }
+
+    private ArrayNode standardPackApplicationsNode(ObjectMapper mapper, Long projectId) {
+        ArrayNode node = mapper.createArrayNode();
+        List<StandardReusePackApplicationInfo> applications;
+        try {
+            applications = standardReusePackService.listApplications(projectId);
+        } catch (Exception e) {
+            applications = List.of();
+        }
+        for (StandardReusePackApplicationInfo application : safeList(applications).stream().limit(5).toList()) {
+            ObjectNode item = mapper.createObjectNode();
+            item.put("applicationId", application.applicationId());
+            item.put("packId", application.packId());
+            item.put("packKey", application.packKey());
+            item.put("packName", application.packName());
+            item.put("basePackVersion", application.basePackVersion());
+            item.put("packageHash", application.packageHash());
+            item.put("sourceProjectId", application.sourceProjectId());
+            item.put("sourceProjectName", application.sourceProjectName());
+            if (application.appliedAt() != null) {
+                item.put("appliedAt", application.appliedAt().toString());
+            }
+            item.set("createdCounts", mapper.valueToTree(application.createdCounts()));
+            item.set("skippedCounts", mapper.valueToTree(application.skippedCounts()));
+            item.set("driftCounts", mapper.valueToTree(application.driftCounts()));
+            node.add(item);
+        }
+        return node;
     }
 
     private String fieldStatusForExport(String status) {

@@ -157,6 +157,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '项目备份' }
   },
   {
+    path: '/standard-reuse-packs',
+    name: 'StandardReusePack',
+    component: () => import('@/views/StandardReusePack.vue'),
+    meta: { title: '标准复用包' }
+  },
+  {
     path: '/reverse-import',
     name: 'ReverseImport',
     component: () => import('@/views/ReverseImport.vue'),

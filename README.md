@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、全局命令面板、最近操作续跑、统一前端数据状态、项目活动时间线、标准健康趋势、标准质量门禁、领域 Starter Kit、业务术语表、标准使用示例与反例库、自然语言需求草案、Explain Trace、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 会话启动包、AI 任务卡、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 任务失败恢复、AI 执行证据包、AI 交接证据看板、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、全局命令面板、最近操作续跑、统一前端数据状态、项目活动时间线、标准健康趋势、标准质量门禁、领域 Starter Kit、业务术语表、标准使用示例与反例库、自然语言需求草案、Explain Trace、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、标准复用包、AI Context、AI 会话启动包、AI 任务卡、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 任务失败恢复、AI 执行证据包、AI 交接证据看板、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -33,6 +33,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 标准快照，支持为当前项目字段、枚举和规则生成版本号、内容 hash 和可追溯 payload。
 - Excel `.xlsx` 模板下载、字段/代码集导出、导入预览和确认导入。
 - 项目备份恢复，支持导出项目标准资产 JSON 包、恢复 dry-run、冲突预览、确认恢复和恢复摘要记录。
+- 标准复用包，支持从源项目创建版本化共享包，把字段、枚举、规则和表模板 dry-run 到目标项目；确认应用只创建缺失资产，不覆盖本地修改，并保留应用摘要和漂移报告。
 - 标准变更日志和 What-if 预览，记录字段、代码集、规则的新增、修改、删除、启停 before/after 和操作者；字段/规则保存前可预览 diff、影响、验证命令、当前快照和回退提示，字段库可基于最近字段变更执行确认回退。
 
 ### SQL 规范闭环
@@ -58,7 +59,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 
 ### AI 与自动化
 
-- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、项目级业务术语表、规则、项目规则例外、标准使用示例/反例、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包，也支持按历史标准快照导出可复现上下文，并可写入业务仓库 `.dataspec/context/` 离线缓存。字段目录会导出生命周期状态和可选替代字段/说明；来自 Starter Kit 的字段会在字段目录中暴露 kit key/version 来源，方便 AI 判断领域模板出处。
+- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、项目级业务术语表、规则、项目规则例外、标准使用示例/反例、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包，也支持按历史标准快照导出可复现上下文，并可写入业务仓库 `.dataspec/context/` 离线缓存。字段目录会导出生命周期状态和可选替代字段/说明；来自 Starter Kit 的字段会暴露 kit key/version 来源，来自标准复用包的字段会暴露 pack key/basePackVersion 来源，manifest 会携带最近标准包应用摘要和漂移计数。
 - AI 会话启动包，提供只读 `/api/bootstrap/session`、CLI `bootstrap` 和 MCP `session-bootstrap` resource/tool，聚合 projectId、server、authMode、specVersion、availableCapabilities、recommendedCommands、knownRisks、docsRefs 和结构化 nextActions；服务不可达时 CLI 仍返回本地 BLOCKED JSON。
 - AI 任务卡，提供本地 `dataspec-ai-task-card` JSON/Markdown 协议、CLI `task-card create/show/update`、MCP `create_task_card/render_task_card` 和前端展示工具，用于记录 goal、currentStep、allowedActions、artifacts、resumeCommand、validationCommands 和 stopConditions。
 - AI 能力清单，提供只读 `/api/capabilities` 和 `/api/capabilities/{id}`，稳定描述 API/CLI/MCP/前端入口、输入输出契约、preflightChecks、writeRisk、示例和 nextActions；能力清单不会执行任务，也不替代鉴权或 dry-run。
@@ -550,6 +551,8 @@ curl "http://localhost:8090/api/fields/1/impact?projectId=1"
 
 恢复默认写入新项目；也可选择恢复到当前项目。`overwrite=false` 时已有同名/同编码资产会跳过或标记冲突，显式开启覆盖后才更新支持覆盖的资产。确认恢复后会写入恢复摘要记录，记录 packageHash、来源项目、目标项目、覆盖模式、计数、warning 和操作者，但不保存完整备份包。
 
+前端“数据管理 / 标准复用包”可从当前项目创建共享标准包，并选择目标项目进行应用预览。第一版支持字段、枚举、规则和表模板的轻量复用：目标项目缺失的资产会被创建，已有同自然键资产会被跳过或标记为漂移，不会自动覆盖本地修改。应用记录保存 pack key、basePackVersion、packageHash、创建/跳过计数和 driftReport；AI Context 的字段目录和 manifest 会同步输出共享包来源，便于 AI 判断字段来自共享包还是项目覆盖。
+
 后端 API：
 
 ```bash
@@ -558,6 +561,18 @@ curl -X POST "http://localhost:8090/api/project-backups/restore/preview" \
   -H "Content-Type: application/json" \
   -d '{"overwrite":false,"backupPackage":{"schemaVersion":1,"assets":{},"packageHash":"..."}}'
 curl "http://localhost:8090/api/project-backups/restore/records?projectId=1"
+```
+
+标准复用包 API：
+
+```bash
+curl -X POST "http://localhost:8090/api/standard-reuse-packs" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"packKey":"shared_core","packName":"通用标准包","basePackVersion":"2026.07"}'
+curl -X POST "http://localhost:8090/api/standard-reuse-packs/apply/preview" \
+  -H "Content-Type: application/json" \
+  -d '{"packId":1,"targetProjectId":2,"overwrite":false}'
+curl "http://localhost:8090/api/standard-reuse-packs/1/drift?projectId=2"
 ```
 
 第一版面向个人/小团队迁移标准资产，不做源数据库物理备份、不保存数据库密码或 API token、不自动删除目标项目已有资产，也不做定时备份或远程对象存储。

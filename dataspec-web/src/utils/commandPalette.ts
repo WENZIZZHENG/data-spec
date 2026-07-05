@@ -207,6 +207,7 @@ function navigationCommands(projectId: number | null): CommandPaletteItem[] {
     requiresProject({ id: 'page.reverse-import', title: '反向导入', description: '从 SQL 或数据库 metadata 生成标准候选', group: 'navigation', keywords: ['reverse', 'database', 'metadata', '导入'], route: { path: '/reverse-import', query: projectQuery } }),
     requiresProject({ id: 'page.field-quality', title: '字段质量', description: '查看低质量字段和修复建议', group: 'navigation', keywords: ['quality', '字段质量'], route: { path: '/field-quality', query: projectQuery } }),
     requiresProject({ id: 'page.field-coverage', title: '覆盖率报告', description: '恢复字段覆盖率报告入口', group: 'navigation', keywords: ['coverage', '覆盖率'], route: { path: '/field-coverage', query: projectQuery } }),
+    requiresProject({ id: 'page.standard-reuse-packs', title: '标准复用包', description: '创建共享标准包并查看应用漂移', group: 'navigation', keywords: ['pack', 'reuse', '复用包', '漂移'], route: { path: '/standard-reuse-packs', query: projectQuery } }),
     requiresProject({ id: 'page.ai-export', title: 'AI Context', description: '导出当前项目 AI 上下文', group: 'action', keywords: ['context', 'ai', '导出'], route: { path: '/ai-export', query: projectQuery } }),
     requiresProject({ id: 'page.ai-replay', title: 'AI 回放', description: '查看 AI 作业和重放上下文', group: 'navigation', keywords: ['replay', '回放'], route: { path: '/ai-replay', query: projectQuery } }),
     requiresProject({ id: 'page.ai-handoff', title: 'AI 交接证据', description: '聚合任务交接记录和证据包', group: 'navigation', keywords: ['handoff', 'evidence', '交接', '证据'], route: { path: '/ai-handoff', query: projectQuery } }),

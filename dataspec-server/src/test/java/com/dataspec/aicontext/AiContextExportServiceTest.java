@@ -36,6 +36,10 @@ import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.dto.StandardSnapshotPayload;
 import com.dataspec.standard.service.StandardSnapshotService;
+import com.dataspec.standardreuse.model.StandardReusePackApplicationInfo;
+import com.dataspec.standardreuse.model.StandardReusePackAssetCounts;
+import com.dataspec.standardreuse.model.StandardReusePackDriftCounts;
+import com.dataspec.standardreuse.service.StandardReusePackService;
 import com.dataspec.standardusageexample.entity.StandardUsageExample;
 import com.dataspec.standardusageexample.model.StandardUsageExampleSaveReq;
 import com.dataspec.standardusageexample.service.StandardUsageExampleService;
@@ -45,6 +49,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -196,6 +201,7 @@ class AiContextExportServiceTest {
         assertTrue(fieldProperties.path("format").path("properties").has("validExamples"));
         assertTrue(fieldProperties.path("format").path("properties").has("invalidExamples"));
         assertTrue(fieldProperties.has("starterKitSources"));
+        assertTrue(fieldProperties.has("standardPackSources"));
     }
 
     @Test
@@ -527,6 +533,43 @@ class AiContextExportServiceTest {
     }
 
     @Test
+    void generateAiContextPackage_exportsStandardReusePackSourcesAndManifestSummary() throws Exception {
+        StandardReusePackService standardReusePackService = mock(StandardReusePackService.class);
+        when(standardReusePackService.listApplications(PROJECT_ID)).thenReturn(List.of(new StandardReusePackApplicationInfo(
+                7L,
+                PROJECT_ID,
+                10L,
+                "shared_core",
+                "通用交易标准",
+                "2026.07",
+                "pack-hash",
+                2L,
+                "源项目",
+                new StandardReusePackAssetCounts(0, 1, 0, 0, 0, 0, 0),
+                StandardReusePackAssetCounts.empty(),
+                new StandardReusePackDriftCounts(1, 0, 0, 1),
+                LocalDateTime.parse("2026-07-05T10:00:00")
+        )));
+        AiContextExportService service = createService(List.of(
+                sampleField("order_no", "订单号", "order", "order,pack:shared_core@2026.07", "order_code")
+        ), standardReusePackService);
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(PROJECT_ID));
+
+        var mapper = new ObjectMapper();
+        var catalog = mapper.readTree(entries.get(".dataspec/field-catalog.json"));
+        var source = catalog.path("fields").get(0).path("standardPackSources").get(0);
+        assertEquals("shared_core", source.path("packKey").asText());
+        assertEquals("2026.07", source.path("basePackVersion").asText());
+
+        var manifest = mapper.readTree(entries.get(".dataspec/manifest.json"));
+        var standardPack = manifest.path("standardPacks").get(0);
+        assertEquals("shared_core", standardPack.path("packKey").asText());
+        assertEquals("2026.07", standardPack.path("basePackVersion").asText());
+        assertEquals(1, standardPack.path("driftCounts").path("drifted").asInt());
+    }
+
+    @Test
     void generateFieldCatalogJson_exportsBusinessGlossary() throws Exception {
         BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
         when(glossaryService.contextExport(PROJECT_ID, 200)).thenReturn(new BusinessGlossaryContextExport(
@@ -766,6 +809,22 @@ class AiContextExportServiceTest {
         return createService(standardSnapshotService, new NoopAiJobRecordService(), fields);
     }
 
+    private AiContextExportService createService(List<Field> fields, StandardReusePackService standardReusePackService) {
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
+        when(glossaryService.contextExport(PROJECT_ID, 200)).thenReturn(BusinessGlossaryContextExport.empty());
+        return createService(
+                standardSnapshotService,
+                new NoopAiJobRecordService(),
+                fields,
+                mock(RuleExemptionService.class),
+                null,
+                glossaryService,
+                new NoopStandardUsageExampleService(),
+                standardReusePackService);
+    }
+
     private AiContextExportService createService(List<Field> fields, StandardUsageExampleService usageExampleService) {
         StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
         BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
@@ -877,6 +936,25 @@ class AiContextExportServiceTest {
                                                  AiTaskProfileService aiTaskProfileService,
                                                  BusinessGlossaryService glossaryService,
                                                  StandardUsageExampleService usageExampleService) {
+        return createService(
+                standardSnapshotService,
+                aiJobRecordService,
+                fields,
+                ruleExemptionService,
+                aiTaskProfileService,
+                glossaryService,
+                usageExampleService,
+                mock(StandardReusePackService.class));
+    }
+
+    private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
+                                                 AiJobRecordService aiJobRecordService,
+                                                 List<Field> fields,
+                                                 RuleExemptionService ruleExemptionService,
+                                                 AiTaskProfileService aiTaskProfileService,
+                                                 BusinessGlossaryService glossaryService,
+                                                 StandardUsageExampleService usageExampleService,
+                                                 StandardReusePackService standardReusePackService) {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
         FieldService fieldService = mock(FieldService.class);
@@ -925,7 +1003,8 @@ class AiContextExportServiceTest {
                 new AiCapabilityCatalogServiceImpl(),
                 glossaryService,
                 new FieldConflictServiceImpl(fieldService),
-                usageExampleService
+                usageExampleService,
+                standardReusePackService
         );
     }
 
