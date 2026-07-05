@@ -5,17 +5,25 @@ import com.dataspec.capability.model.AiCapabilityDiagnostic;
 import com.dataspec.capability.model.AiCapabilityEntry;
 import com.dataspec.capability.model.AiCapabilityExample;
 import com.dataspec.capability.model.AiWriteSafetyMetadata;
+import com.dataspec.capability.model.VersionCompatibilityResponse;
+import com.dataspec.capability.model.VersionCompatibilityStatus;
+import com.dataspec.capability.model.VersionSupportedCapability;
 import com.dataspec.capability.service.AiCapabilityCatalogService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.security.context.ProjectAccessGuard;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 面向 AI agent 的内置能力清单。
@@ -28,6 +36,10 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
     public static final String KIND = "dataspec-ai-capability-catalog";
     public static final int SCHEMA_VERSION = 1;
     public static final String CATALOG_VERSION = "2026.07.05";
+    public static final String VERSION_COMPATIBILITY_KIND = "dataspec-version-compatibility";
+    public static final int VERSION_COMPATIBILITY_SCHEMA_VERSION = 1;
+    public static final String SERVER_VERSION = "0.1.0-SNAPSHOT";
+    public static final String MIN_CLI_VERSION = "0.1.0";
 
     private final Map<String, AiCapabilityEntry> capabilities = builtIns();
 
@@ -59,6 +71,22 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
         return entry;
     }
 
+    @Override
+    public VersionCompatibilityResponse getVersionCompatibility(String client, String clientVersion) {
+        return new VersionCompatibilityResponse(
+                VERSION_COMPATIBILITY_KIND,
+                VERSION_COMPATIBILITY_SCHEMA_VERSION,
+                SERVER_VERSION,
+                apiSchemaHash(),
+                MIN_CLI_VERSION,
+                supportedCapabilities(),
+                List.of(),
+                compatibility(client, clientVersion),
+                upgradeHints(client),
+                LocalDateTime.now()
+        );
+    }
+
     private void validateProjectAccess(Long projectId) {
         if (projectId != null) {
             ProjectAccessGuard.requireProjectAccess(projectId);
@@ -72,12 +100,14 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
     private List<String> recommendedFirstActions(Long projectId) {
         if (projectId == null) {
             return List.of(
+                    "先运行 dataspec compat check --format json 确认 CLI/MCP 与服务端兼容。",
                     "先运行 dataspec doctor --format json 确认服务、token 和项目配置。",
                     "读取 capability-catalog 后，根据任务选择 workflow/profile/context/lint 等能力。",
                     "需要项目数据的能力应先确定 projectId。"
             );
         }
         return List.of(
+                "先运行 dataspec compat check --format json 确认 CLI/MCP 与服务端兼容。",
                 "先运行 dataspec doctor --project " + projectId + " --format json。",
                 "需要建表或修 SQL 时先读取 export-ai-context、workflow-recipes 和 ai-task-profiles。",
                 "执行写入型能力前确认 writeRisk、preflightChecks 和人工确认步骤。"
@@ -124,14 +154,29 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
                 "README.md#ai-会话启动包"
         ));
         add(map, cap(
+                "version-compatibility", "discovery", "版本兼容握手",
+                "只读返回服务端版本、API schema hash、最小 CLI 版本、支持能力、废弃字段和升级建议。",
+                false, "READ_ONLY",
+                list(), list("client", "clientVersion"),
+                list("version-compatibility-handshake"),
+                list("GET /api/capabilities/version"),
+                list("dataspec compat check --format json"),
+                list("dataspec://version-compatibility"),
+                list(), list(), list("version-compatibility-handshake"), list(), list(),
+                examples("CLI", "dataspec compat check --format json", null),
+                list("服务可访问", "缺少 clientVersion 时返回 UNKNOWN 且不误判失败"),
+                list("关键 CLI/MCP 工作流前先读取版本兼容握手；INCOMPATIBLE 时先升级或降级客户端。"),
+                "README.md#版本兼容握手"
+        ));
+        add(map, cap(
                 "capability-catalog", "discovery", "AI 能力清单",
                 "列出 DataSpec 面向 AI/CLI/MCP 的稳定能力、入口、契约和下一步建议。",
                 false, "READ_ONLY",
                 list(), list("projectId"),
                 list("ai-capability-catalog"),
-                list("GET /api/capabilities", "GET /api/capabilities/{id}"),
+                list("GET /api/capabilities", "GET /api/capabilities/{id}", "GET /api/capabilities/version"),
                 list("dataspec capability list --format json", "dataspec capability show lint-sql --format json"),
-                list("dataspec://project/<id>/capability-catalog"),
+                list("dataspec://project/<id>/capability-catalog", "dataspec://version-compatibility"),
                 list(), list(), list(), list(), list(),
                 examples("CLI", "dataspec capability list --project 1 --format json", null),
                 list("服务可访问", "如传 projectId，token 需有项目访问权"),
@@ -583,5 +628,132 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
             return null;
         }
         return value.trim().toLowerCase(Locale.ROOT).replace('_', '-');
+    }
+
+    private List<VersionSupportedCapability> supportedCapabilities() {
+        return capabilities.values().stream()
+                .map(entry -> new VersionSupportedCapability(entry.id(), entry.status(), MIN_CLI_VERSION))
+                .toList();
+    }
+
+    private VersionCompatibilityStatus compatibility(String client, String clientVersion) {
+        String normalizedClient = normalizeClient(client);
+        String normalizedVersion = trimToNull(clientVersion);
+        if (normalizedVersion == null) {
+            return unknownStatus(null, "未提供 " + normalizedClient + " clientVersion，服务端无法确认客户端兼容性。");
+        }
+        Integer comparison = compareSemverish(normalizedVersion, MIN_CLI_VERSION);
+        if (comparison == null) {
+            return unknownStatus(normalizedVersion, "无法解析 " + normalizedClient + " clientVersion=" + normalizedVersion + "。");
+        }
+        if (comparison < 0) {
+            return new VersionCompatibilityStatus(
+                    "INCOMPATIBLE",
+                    normalizedVersion,
+                    false,
+                    list("当前 " + normalizedClient + " 版本 " + normalizedVersion
+                            + " 低于服务端最小 CLI 版本 " + MIN_CLI_VERSION + "。"),
+                    list("升级 dataspec CLI/MCP 脚本到 " + MIN_CLI_VERSION + " 或更高版本。",
+                            "升级前停止执行会依赖服务端能力的自动化任务。")
+            );
+        }
+        return new VersionCompatibilityStatus(
+                "COMPATIBLE",
+                normalizedVersion,
+                true,
+                list("当前 " + normalizedClient + " 版本 " + normalizedVersion
+                        + " 满足服务端最小 CLI 版本 " + MIN_CLI_VERSION + "。"),
+                list("继续执行后续 DataSpec CLI/MCP 工作流；如仍失败，再运行 dataspec doctor --format json。")
+        );
+    }
+
+    private VersionCompatibilityStatus unknownStatus(String clientVersion, String reason) {
+        return new VersionCompatibilityStatus(
+                "UNKNOWN",
+                clientVersion,
+                true,
+                list(reason),
+                list("运行 dataspec compat check --format json 让 CLI/MCP 自动携带可比较的 clientVersion。",
+                        "如兼容状态仍未知，再运行 dataspec doctor --format json 检查服务、token 和 OpenAPI。")
+        );
+    }
+
+    private List<String> upgradeHints(String client) {
+        String normalizedClient = normalizeClient(client);
+        return list(
+                "推荐在关键 " + normalizedClient + " 工作流前运行 dataspec compat check --format json。",
+                "当 compatibility.status=INCOMPATIBLE 时，先升级 CLI/MCP 或降级到兼容服务端后再继续。",
+                "当 apiSchemaHash 与本地缓存不一致时，重新生成前端类型或刷新 AI capability catalog。"
+        );
+    }
+
+    private String apiSchemaHash() {
+        String contractSurface = capabilities.values().stream()
+                .map(entry -> entry.id() + "|" + entry.status() + "|"
+                        + String.join(",", entry.apiEndpoints()) + "|"
+                        + String.join(",", entry.cliCommands()) + "|"
+                        + String.join(",", entry.mcpResources()))
+                .collect(Collectors.joining("\n", SERVER_VERSION + "|" + CATALOG_VERSION + "\n", ""));
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(contractSurface.getBytes(StandardCharsets.UTF_8));
+            return "sha256:" + HexFormat.of().formatHex(bytes);
+        } catch (NoSuchAlgorithmException e) {
+            return "unknown";
+        }
+    }
+
+    private static String normalizeClient(String client) {
+        String value = trimToNull(client);
+        if (value == null) {
+            return "client";
+        }
+        String sanitized = value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "");
+        return sanitized.isBlank() ? "client" : sanitized;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private static Integer compareSemverish(String left, String right) {
+        int[] leftVersion = parseSemverish(left);
+        int[] rightVersion = parseSemverish(right);
+        if (leftVersion == null || rightVersion == null) {
+            return null;
+        }
+        for (int i = 0; i < leftVersion.length; i++) {
+            int comparison = Integer.compare(leftVersion[i], rightVersion[i]);
+            if (comparison != 0) {
+                return comparison;
+            }
+        }
+        return 0;
+    }
+
+    private static int[] parseSemverish(String version) {
+        String normalized = trimToNull(version);
+        if (normalized == null) {
+            return null;
+        }
+        String[] parts = normalized.replaceFirst("^[vV]", "").split("[^0-9]+");
+        if (parts.length == 0 || parts[0].isBlank()) {
+            return null;
+        }
+        int[] numbers = new int[] {0, 0, 0};
+        try {
+            for (int i = 0; i < Math.min(3, parts.length); i++) {
+                if (parts[i].isBlank()) {
+                    return i == 0 ? null : numbers;
+                }
+                numbers[i] = Integer.parseInt(parts[i]);
+            }
+            return numbers;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

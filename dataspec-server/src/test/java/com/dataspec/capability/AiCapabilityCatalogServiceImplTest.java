@@ -2,6 +2,7 @@ package com.dataspec.capability;
 
 import com.dataspec.capability.model.AiCapabilityCatalog;
 import com.dataspec.capability.model.AiCapabilityEntry;
+import com.dataspec.capability.model.VersionCompatibilityResponse;
 import com.dataspec.capability.service.impl.AiCapabilityCatalogServiceImpl;
 import com.dataspec.common.exception.BizException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -70,6 +71,58 @@ class AiCapabilityCatalogServiceImplTest {
         assertEquals("CATALOG_READY", projectCatalog.diagnostics().get(0).code());
         assertEquals("pass", projectCatalog.diagnostics().get(0).status());
         assertTrue(projectCatalog.recommendedFirstActions().toString().contains("--project 1"));
+    }
+
+    @Test
+    void versionCompatibilityEvaluatesClientVersionsWithoutSecrets() throws Exception {
+        VersionCompatibilityResponse compatible = service.getVersionCompatibility("cli", "0.1.0");
+
+        assertEquals("dataspec-version-compatibility", compatible.kind());
+        assertEquals(1, compatible.schemaVersion());
+        assertEquals("0.1.0-SNAPSHOT", compatible.serverVersion());
+        assertTrue(compatible.apiSchemaHash().startsWith("sha256:"));
+        assertEquals("0.1.0", compatible.minCliVersion());
+        assertEquals("COMPATIBLE", compatible.compatibility().status());
+        assertTrue(compatible.compatibility().compatible());
+        assertTrue(compatible.supportedCapabilities().stream()
+                .anyMatch(capability -> "version-compatibility".equals(capability.id())));
+
+        VersionCompatibilityResponse incompatible = service.getVersionCompatibility("cli", "0.0.1");
+        assertEquals("INCOMPATIBLE", incompatible.compatibility().status());
+        assertFalse(incompatible.compatibility().compatible());
+        assertTrue(incompatible.compatibility().reasons().toString().contains("0.1.0"));
+
+        VersionCompatibilityResponse unknown = service.getVersionCompatibility("mcp", "legacy");
+        assertEquals("UNKNOWN", unknown.compatibility().status());
+        assertTrue(unknown.compatibility().compatible());
+        assertTrue(unknown.compatibility().nextActions().toString().contains("compat check"));
+
+        VersionCompatibilityResponse defaulted = service.getVersionCompatibility("cli", null);
+        assertEquals("UNKNOWN", defaulted.compatibility().status());
+        assertTrue(defaulted.compatibility().compatible());
+
+        String json = objectMapper.writeValueAsString(compatible);
+        assertFalse(json.contains("Authorization"));
+        assertFalse(json.contains("password"));
+        assertFalse(json.contains("jdbc:"));
+        assertFalse(json.contains("dsn"));
+    }
+
+    @Test
+    void catalogExposesVersionCompatibilityCapability() {
+        AiCapabilityCatalog catalog = service.getCatalog(null);
+        AiCapabilityEntry entry = service.getCapability("version_compatibility", null);
+        JsonNode safety = objectMapper.valueToTree(entry).path("safety");
+
+        assertTrue(catalog.requiredCapabilityIds().contains("version-compatibility"));
+        assertTrue(catalog.recommendedFirstActions().toString().contains("compat check"));
+        assertEquals("version-compatibility", entry.id());
+        assertEquals("READ_ONLY", entry.writeRisk());
+        assertTrue(entry.apiEndpoints().contains("GET /api/capabilities/version"));
+        assertTrue(entry.cliCommands().contains("dataspec compat check --format json"));
+        assertTrue(entry.mcpResources().contains("dataspec://version-compatibility"));
+        assertTrue(safety.path("readOnly").asBoolean(false));
+        assertFalse(safety.path("writesProject").asBoolean(true));
     }
 
     @Test

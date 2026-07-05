@@ -22,6 +22,7 @@ import {
 } from './dataspec-task-card.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
+const CLI_VERSION = '0.1.0'
 const DEFAULT_GITHUB_API = 'https://api.github.com'
 const DATASPEC_REVIEW_MARKER = '<!-- dataspec-sql-review -->'
 const DATASPEC_INLINE_REVIEW_PREFIX = 'dataspec-inline-review'
@@ -105,6 +106,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'doctor') {
       return await runDoctor(rest, io, fetchFn)
+    }
+    if (command === 'compat' || command === 'compatibility') {
+      return await runCompat(rest, io, fetchFn)
     }
     if (command === 'evidence') {
       return await runEvidence(rest, io, fetchFn)
@@ -752,6 +756,59 @@ async function runDoctor(args, io, fetchFn) {
     io.writeOut(formatDoctorText(result))
   }
   return result.ok ? 0 : 1
+}
+
+async function runCompat(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (!subcommand || subcommand === 'check' || subcommand.startsWith('--')) {
+    const { positional, options } = parseArgs(subcommand === 'check' ? rest : args, ['format', 'server', 'dataspec-token'])
+    if (positional.length > 0) {
+      throw new Error(`compat check 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (format !== 'json' && format !== 'text') {
+      throw new Error('compat check 当前仅支持 --format text 或 json')
+    }
+    const server = normalizeServer(options.server ?? config.server)
+    const apiToken = resolveDataSpecToken(options, config)
+    try {
+      const payload = await fetchVersionCompatibility({
+        server,
+        apiToken,
+        fetchFn,
+        client: 'cli',
+        clientVersion: CLI_VERSION
+      })
+      const result = {
+        ...payload,
+        localCliVersion: CLI_VERSION,
+        server
+      }
+      if (format === 'json') {
+        io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+      } else {
+        io.writeOut(formatCompatibilityText(result))
+      }
+      return result.compatibility?.compatible === false ? 1 : 0
+    } catch (error) {
+      const diagnostic = normalizeVersionCompatibilityFetchError(error)
+      const result = {
+        kind: 'dataspec.version-compatibility-check',
+        ok: false,
+        localCliVersion: CLI_VERSION,
+        server,
+        diagnostic
+      }
+      if (format === 'json') {
+        io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+      } else {
+        io.writeErr(formatCompatibilityErrorText(result))
+      }
+      return 2
+    }
+  }
+  throw new Error(`未知 compat 子命令: ${subcommand}。支持: check`)
 }
 
 async function runProfile(args, io, fetchFn) {
@@ -1569,6 +1626,12 @@ async function buildDoctorResult({ config, options, io, fetchFn }) {
   checks.push(apiDocsResult.check)
   checks.push(await checkAuth(server, fetchFn, apiToken))
   checks.push(await checkProject(server, fetchFn, projectId, apiToken))
+  checks.push(await checkVersionCompatibility({
+    server,
+    apiToken,
+    fetchFn,
+    serverReachable: apiDocsResult.check.status === 'pass'
+  }))
   checks.push(await checkDefaultPaths(config))
   checks.push(await checkAiProfile({
     config,
@@ -1660,6 +1723,53 @@ async function checkProject(server, fetchFn, projectId, apiToken) {
   }
 }
 
+async function checkVersionCompatibility({ server, apiToken, fetchFn, serverReachable }) {
+  const details = {
+    localCliVersion: CLI_VERSION
+  }
+  if (!serverReachable) {
+    return warnCheck('compatibility', 'DataSpec 服务不可用，跳过版本兼容检查', {
+      ...details,
+      status: 'UNKNOWN',
+      nextActions: ['服务恢复后运行 dataspec compat check --format json。']
+    })
+  }
+  try {
+    const payload = await fetchVersionCompatibility({
+      server,
+      apiToken,
+      fetchFn,
+      client: 'cli',
+      clientVersion: CLI_VERSION
+    })
+    const compatibility = payload.compatibility ?? {}
+    const checkDetails = {
+      ...details,
+      serverVersion: payload.serverVersion ?? null,
+      apiSchemaHash: payload.apiSchemaHash ?? null,
+      minCliVersion: payload.minCliVersion ?? null,
+      status: compatibility.status ?? 'UNKNOWN',
+      compatible: compatibility.compatible ?? null,
+      nextActions: compatibility.nextActions ?? payload.upgradeHints ?? []
+    }
+    if (compatibility.compatible === false) {
+      return failCheck('compatibility', 'CLI/MCP 与服务端版本不兼容', checkDetails)
+    }
+    if (compatibility.status === 'UNKNOWN') {
+      return warnCheck('compatibility', '服务端无法确认 CLI/MCP 版本兼容性', checkDetails)
+    }
+    return passCheck('compatibility', `版本兼容: server=${payload.serverVersion ?? '未知'}, minCli=${payload.minCliVersion ?? '未知'}`, checkDetails)
+  } catch (error) {
+    const diagnostic = normalizeVersionCompatibilityFetchError(error)
+    return warnCheck('compatibility', `版本兼容检查不可用: ${diagnostic.message}`, {
+      ...details,
+      status: 'UNKNOWN',
+      diagnostic,
+      nextActions: [diagnostic.suggestedAction]
+    })
+  }
+}
+
 async function checkDefaultPaths(config) {
   if (config.defaultPaths.length === 0) {
     return warnCheck('defaultPaths', '未配置 defaultPaths；lint-files 未传路径时仍需手动提供')
@@ -1735,6 +1845,16 @@ async function fetchProfileDetail({ server, projectId, apiToken, fetchFn, profil
   appendOptionalParam(params, 'projectId', projectId)
   const suffix = params.toString() ? `?${params.toString()}` : ''
   const response = await fetchFn(`${server}/api/ai-profiles/${encodeURIComponent(profileKey)}${suffix}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  return unwrapResponse(await readJsonResponse(response))
+}
+
+async function fetchVersionCompatibility({ server, apiToken, fetchFn, client, clientVersion }) {
+  const params = new URLSearchParams()
+  params.set('client', client)
+  params.set('clientVersion', clientVersion)
+  const response = await fetchFn(`${server}/api/capabilities/version?${params.toString()}`, {
     headers: dataSpecHeaders(apiToken)
   })
   return unwrapResponse(await readJsonResponse(response))
@@ -2239,6 +2359,23 @@ function normalizeCapabilityFetchError(error, options = {}) {
   )
 }
 
+function normalizeVersionCompatibilityFetchError(error) {
+  const message = sanitizeSecretText(error?.message ?? 'DataSpec 服务不可用')
+  const base = error instanceof DataSpecCliError && error.diagnostic
+    ? sanitizeSecretValue(error.diagnostic)
+    : {}
+  return {
+    ...base,
+    code: 'VERSION_COMPATIBILITY_UNAVAILABLE',
+    category: base.category ?? 'NETWORK',
+    retryable: base.retryable ?? true,
+    message: `版本兼容检查失败: ${message}`,
+    suggestedAction: '先确认 DataSpec 服务地址和 token；必要时运行 dataspec doctor --format json。',
+    docsRef: 'README.md#版本兼容握手',
+    httpStatus: base.httpStatus ?? null
+  }
+}
+
 function normalizeTaskRunFetchError(error) {
   if (error instanceof DataSpecCliError) {
     return error
@@ -2506,6 +2643,39 @@ function formatDoctorText(result) {
   }
   lines.push('', result.ok ? '结果: 可用' : '结果: 存在需要处理的问题', '')
   return lines.join('\n')
+}
+
+function formatCompatibilityText(result) {
+  const compatibility = result.compatibility ?? {}
+  const lines = [
+    'DataSpec Version Compatibility',
+    `server: ${result.server}`,
+    `serverVersion: ${result.serverVersion ?? '未知'}`,
+    `localCliVersion: ${result.localCliVersion}`,
+    `minCliVersion: ${result.minCliVersion ?? '未知'}`,
+    `apiSchemaHash: ${result.apiSchemaHash ?? '未知'}`,
+    `status: ${compatibility.status ?? 'UNKNOWN'}`,
+    ''
+  ]
+  for (const reason of compatibility.reasons ?? []) {
+    lines.push(`- ${reason}`)
+  }
+  for (const action of compatibility.nextActions ?? result.upgradeHints ?? []) {
+    lines.push(`next: ${action}`)
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+function formatCompatibilityErrorText(result) {
+  return [
+    'DataSpec Version Compatibility',
+    `server: ${result.server}`,
+    `localCliVersion: ${result.localCliVersion}`,
+    `错误: ${result.diagnostic.message}`,
+    `next: ${result.diagnostic.suggestedAction}`,
+    ''
+  ].join('\n')
 }
 
 function formatProfileCatalogText(catalog) {
@@ -4310,6 +4480,7 @@ Usage:
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
   node tools/dataspec-cli.mjs bootstrap [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs doctor [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
+  node tools/dataspec-cli.mjs compat check [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs evidence export --source-type <AI_JOB|SQL_CHECK|COVERAGE_REPORT|AI_BATCH_RUN|AI_TASK_RUN> [--source-id <id>] [--payload <json>] [--format json|zip] [--output <path>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs task list [--project <id>] [--status <status>] [--task-type <type>] [--current <n>] [--size <n>] [--format json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs task failures [--project <id>] [--limit <n>] [--format json] [--server <url>] [--dataspec-token <token>]
@@ -4345,6 +4516,7 @@ Options:
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   bootstrap 是 AI 新会话第一跳；服务可达时读取后端启动包，服务不可达时仍输出本地 BLOCKED JSON 和 nextActions
   doctor 默认做轻量 OpenAPI 状态和 AI Context 缓存检查；传 --check-openapi 时执行完整 schema 漂移检查
+  compat check 读取 /api/capabilities/version；兼容返回 0，不兼容返回 1，服务不可达或响应错误返回 2
   evidence export 生成只读 AI 执行证据包；zip 输出必须显式指定 --output，证据包不是审批、审计或写入权限
   contract 用于读取和检查 AI 可消费输出契约 registry，不代表权限或发布审批
   capability 用于读取和检查 AI 可用能力清单，只描述入口和前置检查，不会自动执行能力

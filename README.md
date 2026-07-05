@@ -62,7 +62,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、项目级业务术语表、规则、项目规则例外、标准使用示例/反例、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、状态和关键词导出按需包，也支持按历史标准快照导出可复现上下文，并可写入业务仓库 `.dataspec/context/` 离线缓存。字段目录会导出生命周期状态和可选替代字段/说明；来自 Starter Kit 的字段会暴露 kit key/version 来源，来自标准复用包的字段会暴露 pack key/basePackVersion 来源，manifest 会携带最近标准包应用摘要和漂移计数。
 - AI 会话启动包，提供只读 `/api/bootstrap/session`、CLI `bootstrap` 和 MCP `session-bootstrap` resource/tool，聚合 projectId、server、authMode、specVersion、availableCapabilities、recommendedCommands、knownRisks、docsRefs 和结构化 nextActions；服务不可达时 CLI 仍返回本地 BLOCKED JSON。
 - AI 任务卡，提供本地 `dataspec-ai-task-card` JSON/Markdown 协议、CLI `task-card create/show/update`、MCP `create_task_card/render_task_card` 和前端展示工具，用于记录 goal、currentStep、allowedActions、artifacts、resumeCommand、validationCommands 和 stopConditions。
-- AI 能力清单，提供只读 `/api/capabilities` 和 `/api/capabilities/{id}`，稳定描述 API/CLI/MCP/前端入口、输入输出契约、preflightChecks、writeRisk、示例和 nextActions；能力清单不会执行任务，也不替代鉴权或 dry-run。
+- AI 能力清单与版本兼容握手，提供只读 `/api/capabilities`、`/api/capabilities/{id}` 和 `/api/capabilities/version`，稳定描述 API/CLI/MCP/前端入口、输入输出契约、preflightChecks、writeRisk、服务端版本、API schema hash、最小 CLI 版本、示例和 nextActions；能力清单不会执行任务，也不替代鉴权或 dry-run。
 - AI Context manifest、字段目录和规则文件携带标准快照版本、hash 与来源 `source=current|snapshot|unversioned`；`rules.yaml` 还会标明当前规则基线 key/name/version/source/appliedAt；未创建快照时标记为 `unversioned`。
 - AI 任务模式，内置 `create-table`、`sql-fix`、`reverse-import`、`pr-review`、`minimal-context`，用于给 AI/CLI/MCP 提供上下文范围、fixedSql 策略、输出格式和推荐命令的默认建议。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
@@ -79,8 +79,8 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 字段推荐与字段标准检索 API/CLI/MCP；启用的业务术语表会参与“会员手机号”“订单费用”等自然语言 query 的确定性匹配，并在命中原因中标记 `术语表`；推荐和检索结果包含轻量 evidence 数组，便于 AI 读取来源、置信度和文档引用。
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
-- CLI 支持业务仓库初始化 `init`、AI 会话启动包 `bootstrap`、AI 任务卡 `task-card`、环境自检 `doctor`、capability catalog、workflow recipes、AI task run 查询、质量门禁检查、单文件 lint、批量 `lint-files`、变更感知 `changed/lint-changed`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、历史快照 Context 导出、字段推荐、字段标准检索和 DDL 生成。
-- MCP Server 暴露 DataSpec resources、session bootstrap、task card tools、capability catalog、workflow recipes、AI task runs、prompts、核心 tools 和 evidence package 导出 tool。
+- CLI 支持业务仓库初始化 `init`、AI 会话启动包 `bootstrap`、AI 任务卡 `task-card`、环境自检 `doctor`、版本兼容检查 `compat check`、capability catalog、workflow recipes、AI task run 查询、质量门禁检查、单文件 lint、批量 `lint-files`、变更感知 `changed/lint-changed`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、历史快照 Context 导出、字段推荐、字段标准检索和 DDL 生成。
+- MCP Server 暴露 DataSpec resources、version compatibility、session bootstrap、task card tools、capability catalog、workflow recipes、AI task runs、prompts、核心 tools 和 evidence package 导出 tool。
 - GitHub Actions 示例支持 SQL 批量校验、PR diff inline 评论和 fallback 汇总评论。
 - 本地 Docker Compose 一键启动和 demo smoke 验证，适合个人试用、演示和 AI agent 启动前检查。
 
@@ -240,7 +240,20 @@ node tools/dataspec-cli.mjs capability show lint-sql --project 1 --format json
 node tools/dataspec-cli.mjs capability check --project 1 --format json
 ```
 
-第一版内置 `session-bootstrap`、`capability-catalog`、`doctor`、`export-ai-context`、`lint-sql`、`sql-rule-debugger`、`search-fields`、`suggest-fields`、`merge-standard-fields`、`generate-ddl`、`reverse-import`、`project-backup-restore`、`standard-reuse-packs`、`ai-batch-sql-lint`、`coverage-report`、`schema-registry`、`export-evidence-package`、`workflow-recipes`、`ai-task-profiles` 和 `domain-starter-kits`。每项能力都会返回兼容新增的 `safety` 对象，字段包括 `readOnly`、`writesProject`、`requiresDryRun`、`supportsUndo`、`requiresIdempotencyKey`、`sensitiveInputs` 和 `nextActions`；旧版 `writeRisk` 和 `preflightChecks` 仍保留，方便旧客户端继续读取摘要风险。写入型能力应先按 `safety.nextActions` 执行预览、dry-run、幂等 key 或证据导出步骤，再执行实际工具。
+第一版内置 `session-bootstrap`、`version-compatibility`、`capability-catalog`、`doctor`、`export-ai-context`、`lint-sql`、`sql-rule-debugger`、`search-fields`、`suggest-fields`、`merge-standard-fields`、`generate-ddl`、`reverse-import`、`project-backup-restore`、`standard-reuse-packs`、`ai-batch-sql-lint`、`coverage-report`、`schema-registry`、`export-evidence-package`、`workflow-recipes`、`ai-task-profiles` 和 `domain-starter-kits`。每项能力都会返回兼容新增的 `safety` 对象，字段包括 `readOnly`、`writesProject`、`requiresDryRun`、`supportsUndo`、`requiresIdempotencyKey`、`sensitiveInputs` 和 `nextActions`；旧版 `writeRisk` 和 `preflightChecks` 仍保留，方便旧客户端继续读取摘要风险。写入型能力应先按 `safety.nextActions` 执行预览、dry-run、幂等 key 或证据导出步骤，再执行实际工具。
+
+## 版本兼容握手
+
+版本兼容握手是 AI/CLI/MCP 的只读 preflight 入口，用来判断本地客户端是否能安全消费当前服务端能力。后端提供 `GET /api/capabilities/version?client=cli&clientVersion=0.1.0`，返回 `serverVersion`、`apiSchemaHash`、`minCliVersion`、`supportedCapabilities`、`deprecatedFields`、`compatibility`、`upgradeHints` 和 `generatedAt`；接口不读取项目业务数据、不连接数据库、不写入 DataSpec 状态，也不返回 token、password、Authorization、JDBC URL 或 DSN。
+
+```bash
+curl "http://localhost:8090/api/capabilities/version?client=cli&clientVersion=0.1.0"
+
+node tools/dataspec-cli.mjs compat check --format json
+node tools/dataspec-cli.mjs doctor --format json
+```
+
+CLI `compat check` 在兼容时返回 `0`，服务端报告 `compatibility.compatible=false` 时返回 `1`，服务不可达或响应错误时返回 `2` 并输出脱敏 JSON 诊断。`doctor --format json` 会包含 `compatibility` 检查项，但兼容 endpoint 不可用时仍保留既有 server、auth、project、defaultPaths、OpenAPI 和 context-cache 检查。MCP 可读取全局 resource `dataspec://version-compatibility`，返回同一份 JSON text 和 `structuredContent`，建议 AI 在版本敏感 workflow 前先读取。
 
 ## AI 任务模式
 
@@ -727,6 +740,9 @@ node tools/dataspec-cli.mjs doctor --project 1
 # 输出 AI/CI 可解析的 JSON 自检结果
 node tools/dataspec-cli.mjs doctor --format json
 
+# 检查本地 CLI/MCP 与服务端版本兼容性；不兼容返回 1，服务不可达返回 2
+node tools/dataspec-cli.mjs compat check --format json
+
 # 执行完整 OpenAPI schema 漂移检查
 node tools/dataspec-cli.mjs doctor --check-openapi --format json
 
@@ -769,7 +785,7 @@ node tools/dataspec-mcp.mjs
 
 可在 MCP client 中按本地 stdio server 配置。当前暴露能力：
 
-- resources：`capability-catalog`、`session-bootstrap`、`field-catalog`、`database-rules`、`rules-yaml`、`workflow-recipes`、`ai-task-profiles`、`schema-registry`、`ai-task-runs`，URI 形如 `dataspec://project/1/session-bootstrap`；也支持只读全局能力清单 `dataspec://capability-catalog`。
+- resources：`version-compatibility`、`capability-catalog`、`session-bootstrap`、`field-catalog`、`database-rules`、`rules-yaml`、`workflow-recipes`、`ai-task-profiles`、`schema-registry`、`ai-task-runs`，URI 形如 `dataspec://project/1/session-bootstrap`；也支持只读全局版本兼容握手 `dataspec://version-compatibility` 和全局能力清单 `dataspec://capability-catalog`。
 - prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`，并提示 agent 先读取 capability catalog、schema registry 和 profile resource，再选择稳定字段名、兼容策略、上下文范围、fixedSql 模式和输出格式。
 - tools：`get_session_bootstrap`、`create_task_card`、`render_task_card`、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`search_fields`、`generate_table_ddl`、`get_ai_task_run`、`export_evidence_package`；`tools/list` 会在每个工具描述中暴露本地 `safety` metadata，MCP client 可先判断只读、写项目、dry-run、幂等 key 和敏感输入边界；`get_session_bootstrap` 返回与 API/CLI 一致的启动包，未配置默认项目时也可先返回 `SELECT_PROJECT` nextAction；`create_task_card` 和 `render_task_card` 只生成或渲染本地任务卡，不执行 workflow；`lint_sql`、`get_field_catalog` 和 `search_field_catalog` 可接收 `profileId/taskType` hint，显式工具参数仍优先于默认 profile；`get_field_catalog` 可传 `scope/query/status/limit`，`search_field_catalog` 默认按当前关键词读取较小字段目录，`search_fields` 调用 `/api/fields/search` 并返回字段、分数、命中原因和下一步建议；`get_ai_task_run` 按项目读取任务详情和恢复命令；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功；`export_evidence_package` 返回 `structuredContent` 与可解析 JSON text，用于交付前导出只读证据包。
 
@@ -1016,8 +1032,8 @@ data-spec/
 - [x] 前端反向导入高频流程记忆，按项目恢复非敏感连接信息、表选择、筛选状态和字段库关键词跳转
 - [x] 数据库直连非敏感连接预设，支持项目级保存、选择复用和表选择恢复，不持久化用户名、密码、token 或 JDBC URL
 - [x] 数据库连接健康探测与方言能力画像，连接测试返回健康状态、失败分类、重试建议、metadata capability、只读权限提示和前端诊断展示
-- [x] DataSpec CLI：`bootstrap`、`task-card create/show/update`、`doctor`、`profile list/show`、`workflow list/show`、`task list/failures/show`、`quality-gate check`、`contract list/show/check`、`evidence export`、`lint`、`lint-files`、`changed`、`lint-changed`、`review-pr`、`export-context`、`suggest-field`、`search-fields`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置、AI profile 默认值、业务仓库 git 变更感知、标准质量门禁检查、AI task card 本地交接、AI batch delivery package 文件输出、AI task run 恢复诊断、按需/历史快照 Context 导出、AI evidence package 导出和 PR diff inline/fallback SQL Review
-- [x] DataSpec MCP Server：resources、`session-bootstrap`、`ai-task-profiles`、`ai-task-runs`、`workflow-recipes`、`schema-registry`、prompts、`get_session_bootstrap`、`create_task_card`、`render_task_card`、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`search_fields`、`suggest_fields`、`generate_table_ddl`、`get_ai_task_run`、`export_evidence_package`，支持 `.dataspec/config.json` 默认项目配置、task card 本地交接和 profile hint
+- [x] DataSpec CLI：`bootstrap`、`task-card create/show/update`、`doctor`、`compat check`、`profile list/show`、`workflow list/show`、`task list/failures/show`、`quality-gate check`、`contract list/show/check`、`evidence export`、`lint`、`lint-files`、`changed`、`lint-changed`、`review-pr`、`export-context`、`suggest-field`、`search-fields`、`generate-ddl`，支持 `.dataspec/config.json` 默认项目配置、AI profile 默认值、业务仓库 git 变更感知、版本兼容诊断、标准质量门禁检查、AI task card 本地交接、AI batch delivery package 文件输出、AI task run 恢复诊断、按需/历史快照 Context 导出、AI evidence package 导出和 PR diff inline/fallback SQL Review
+- [x] DataSpec MCP Server：resources、`version-compatibility`、`session-bootstrap`、`ai-task-profiles`、`ai-task-runs`、`workflow-recipes`、`schema-registry`、prompts、`get_session_bootstrap`、`create_task_card`、`render_task_card`、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`search_fields`、`suggest_fields`、`generate_table_ddl`、`get_ai_task_run`、`export_evidence_package`，支持 `.dataspec/config.json` 默认项目配置、task card 本地交接和 profile hint
 - [x] GitHub Actions 示例和 PR inline/fallback 评论式 SQL Review
 - [x] 本地 Docker Compose 一键启动包和 demo smoke 验证，支持 PostgreSQL/后端/前端联动、端口覆盖、依赖缓存、text/json 输出和敏感信息脱敏
 - [x] 前端统一数据状态第一版，Dashboard、AI 批量任务、覆盖率报告和 SQL 校验记录区支持一致的项目缺失、空数据、失败建议和重试入口

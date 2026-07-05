@@ -11,7 +11,7 @@ import {
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const SERVER_NAME = 'dataspec-mcp'
-const SERVER_VERSION = '0.1.0'
+const MCP_VERSION = '0.1.0'
 const EVIDENCE_SOURCE_TYPES = ['AI_JOB', 'SQL_CHECK', 'COVERAGE_REPORT', 'AI_BATCH_RUN', 'AI_TASK_RUN']
 
 const READ_ONLY_TOOL_SAFETY = {
@@ -55,6 +55,13 @@ const TOOL_SAFETY = {
 }
 
 const RESOURCE_DEFS = {
+  'version-compatibility': {
+    name: 'DataSpec Version Compatibility',
+    description: '只读版本兼容握手，建议 AI 在运行版本敏感的 CLI/MCP 工作流前先读取。',
+    mimeType: 'application/json',
+    globalResource: true,
+    versionCompatibilityResource: true
+  },
   'capability-catalog': {
     name: 'DataSpec AI Capability Catalog',
     description: '只读自描述能力清单，说明 DataSpec 可供 AI 使用的 API、CLI、MCP 入口、前置检查和 writeRisk。',
@@ -275,7 +282,7 @@ async function dispatch(method, params, context) {
       },
       serverInfo: {
         name: SERVER_NAME,
-        version: SERVER_VERSION
+        version: MCP_VERSION
       }
     }
   }
@@ -304,10 +311,19 @@ async function dispatch(method, params, context) {
 }
 
 function listResources(projectId) {
+  const globalResources = Object.entries(RESOURCE_DEFS)
+    .filter(([, def]) => def.globalResource)
+    .map(([key, def]) => ({
+      uri: `dataspec://${key}`,
+      name: def.name,
+      description: def.description,
+      mimeType: def.mimeType
+    }))
   if (projectId === undefined) {
     const def = RESOURCE_DEFS['capability-catalog']
     return {
       resources: [
+        ...globalResources,
         {
           uri: 'dataspec://capability-catalog',
           name: def.name,
@@ -318,12 +334,17 @@ function listResources(projectId) {
     }
   }
   return {
-    resources: Object.entries(RESOURCE_DEFS).map(([key, def]) => ({
-      uri: resourceUri(projectId, key),
-      name: def.name,
-      description: def.description,
-      mimeType: def.mimeType
-    }))
+    resources: [
+      ...globalResources,
+      ...Object.entries(RESOURCE_DEFS)
+        .filter(([, def]) => !def.globalResource)
+        .map(([key, def]) => ({
+          uri: resourceUri(projectId, key),
+          name: def.name,
+          description: def.description,
+          mimeType: def.mimeType
+        }))
+    ]
   }
 }
 
@@ -340,17 +361,19 @@ async function readResource(params, context) {
   let structuredContent
   const text = typeof def.localContent === 'function'
     ? def.localContent(projectId)
-    : def.profileResource
-      ? JSON.stringify(await fetchProfileResource(context, projectId), null, 2)
-      : def.contractResource
-        ? JSON.stringify(await fetchContractResource(context), null, 2)
-        : def.capabilityResource
-          ? JSON.stringify(structuredContent = await fetchCapabilityResource(context, projectId), null, 2)
-          : def.bootstrapResource
-            ? JSON.stringify(structuredContent = await fetchSessionBootstrapResource(context, projectId), null, 2)
-            : def.taskRunResource
-              ? JSON.stringify(structuredContent = await fetchTaskRunResource(context, projectId), null, 2)
-              : await fetchAiContextText(context, def.path, projectId)
+    : def.versionCompatibilityResource
+      ? JSON.stringify(structuredContent = await fetchVersionCompatibilityResource(context), null, 2)
+      : def.profileResource
+        ? JSON.stringify(await fetchProfileResource(context, projectId), null, 2)
+        : def.contractResource
+          ? JSON.stringify(await fetchContractResource(context), null, 2)
+          : def.capabilityResource
+            ? JSON.stringify(structuredContent = await fetchCapabilityResource(context, projectId), null, 2)
+            : def.bootstrapResource
+              ? JSON.stringify(structuredContent = await fetchSessionBootstrapResource(context, projectId), null, 2)
+              : def.taskRunResource
+                ? JSON.stringify(structuredContent = await fetchTaskRunResource(context, projectId), null, 2)
+                : await fetchAiContextText(context, def.path, projectId)
   const result = {
     contents: [
       {
@@ -1014,6 +1037,38 @@ async function fetchCapabilityResource(context, projectId) {
   }
 }
 
+async function fetchVersionCompatibilityResource(context) {
+  try {
+    const params = new URLSearchParams()
+    params.set('client', 'mcp')
+    params.set('clientVersion', MCP_VERSION)
+    const response = await context.fetchFn(`${context.server}/api/capabilities/version?${params.toString()}`, {
+      headers: dataSpecHeaders(context.apiToken)
+    })
+    return await readDataSpecJson(response)
+  } catch (error) {
+    throw versionCompatibilityRpcError(error)
+  }
+}
+
+function versionCompatibilityRpcError(error) {
+  const upstreamDiagnostic = error instanceof JsonRpcError && error.data?.dataspecError
+    ? sanitizeSecretValue(error.data.dataspecError)
+    : {}
+  const httpStatus = Number.isInteger(upstreamDiagnostic.httpStatus) ? upstreamDiagnostic.httpStatus : null
+  const retryable = typeof upstreamDiagnostic.retryable === 'boolean' ? upstreamDiagnostic.retryable : true
+  return new JsonRpcError(-32000, `读取版本兼容握手失败: ${sanitizeSecretText(error?.message ?? 'DataSpec 服务不可用')}`, {
+    dataspecError: {
+      code: 'VERSION_COMPATIBILITY_UNAVAILABLE',
+      category: upstreamDiagnostic.category ?? 'NETWORK',
+      retryable,
+      suggestedAction: '先运行 dataspec compat check --format json 或 dataspec doctor --format json 检查服务、server URL、token 和版本兼容状态。',
+      docsRef: 'README.md#版本兼容握手',
+      httpStatus
+    }
+  })
+}
+
 async function fetchSessionBootstrapResource(context, projectId) {
   try {
     const params = new URLSearchParams()
@@ -1344,6 +1399,12 @@ function isSensitiveTaskCardKey(key) {
 }
 
 function parseResourceUri(uri) {
+  if (uri === 'dataspec://version-compatibility') {
+    return {
+      projectId: undefined,
+      resourceKey: 'version-compatibility'
+    }
+  }
   if (uri === 'dataspec://capability-catalog') {
     return {
       projectId: undefined,

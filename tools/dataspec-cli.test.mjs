@@ -2723,6 +2723,94 @@ test('cli ai contract keeps stable json fields while allowing additive fields', 
   assert.equal(output.futureResultField, 'compatible-addition')
 })
 
+test('compat check prints version payload json and returns 0 when compatible', async () => {
+  const calls = []
+  const fetchFn = async (url, options = {}) => {
+    calls.push({ url, options })
+    if (url === 'http://dataspec.local/api/capabilities/version?client=cli&clientVersion=0.1.0') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: versionCompatibilityPayload()
+        })
+      }
+    }
+    throw new Error(`unexpected fetch: ${url}`)
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'compat',
+    'check',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local',
+    '--dataspec-token',
+    'ds_cli_token'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(output.localCliVersion, '0.1.0')
+  assert.equal(output.compatibility.status, 'COMPATIBLE')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_cli_token')
+  assert.equal(io.stderr, '')
+})
+
+test('compat check returns 1 when server reports incompatible client', async () => {
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 200,
+      data: versionCompatibilityPayload({
+        compatibility: {
+          status: 'INCOMPATIBLE',
+          clientVersion: '0.1.0',
+          compatible: false,
+          reasons: ['CLI 版本过旧'],
+          nextActions: ['升级 dataspec CLI']
+        }
+      })
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli(['compat', 'check', '--format', 'json'], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 1)
+  assert.equal(output.compatibility.compatible, false)
+  assert.match(output.compatibility.nextActions.join('\n'), /升级/)
+  assert.equal(io.stderr, '')
+})
+
+test('compat check returns 2 and redacts diagnostics when server is unreachable', async () => {
+  const fetchFn = async () => {
+    throw new Error('connect failed token=raw-secret jdbc:postgresql://localhost/db')
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'compat',
+    'check',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 2)
+  assert.equal(output.ok, false)
+  assert.equal(output.diagnostic.code, 'VERSION_COMPATIBILITY_UNAVAILABLE')
+  assert.doesNotMatch(JSON.stringify(output), /raw-secret|jdbc:postgresql:\/\/localhost\/db/)
+  assert.equal(io.stderr, '')
+})
+
 test('doctor prints json checks from local config and returns 0 when ready', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {
@@ -2776,6 +2864,16 @@ test('doctor prints json checks from local config and returns 0 when ready', asy
           })
         }
       }
+      if (url === 'http://dataspec.local/api/capabilities/version?client=cli&clientVersion=0.1.0') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: versionCompatibilityPayload()
+          })
+        }
+      }
       if (url === 'http://dataspec.local/api/ai-context/package/download?projectId=7') {
         const zip = makeZip({
           '.dataspec/manifest.json': JSON.stringify({
@@ -2804,12 +2902,14 @@ test('doctor prints json checks from local config and returns 0 when ready', asy
       'server',
       'auth',
       'project',
+      'compatibility',
       'defaultPaths',
       'ai-profile',
       'openapi',
       'context-cache'
     ])
     assert.equal(output.checks.every((check) => check.status === 'pass'), true)
+    assert.equal(output.checks.find((check) => check.name === 'compatibility').details.localCliVersion, '0.1.0')
     assert.equal(calls[0].url, 'http://dataspec.local/api-docs')
     assert.equal(calls[1].options.headers.Authorization, 'Bearer ds_config_token')
     assert.equal(io.stderr, '')
@@ -3729,6 +3829,16 @@ function createReadyDoctorFetch(server, projectId) {
         })
       }
     }
+    if (url === `${server}/api/capabilities/version?client=cli&clientVersion=0.1.0`) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: versionCompatibilityPayload()
+        })
+      }
+    }
     throw new Error(`unexpected fetch: ${url}`)
   }
 }
@@ -4085,6 +4195,30 @@ function qualityGateResultFixture(overrides = {}) {
     failedChecks: [],
     nextActions: ['质量门禁通过，可继续当前交付'],
     evaluatedAt: '2026-07-04T10:00:00',
+    ...overrides
+  }
+}
+
+function versionCompatibilityPayload(overrides = {}) {
+  return {
+    kind: 'dataspec-version-compatibility',
+    schemaVersion: 1,
+    serverVersion: '0.1.0-SNAPSHOT',
+    apiSchemaHash: 'sha256:test',
+    minCliVersion: '0.1.0',
+    supportedCapabilities: [
+      { id: 'version-compatibility', status: 'AVAILABLE', minClientVersion: '0.1.0' }
+    ],
+    deprecatedFields: [],
+    compatibility: {
+      status: 'COMPATIBLE',
+      clientVersion: '0.1.0',
+      compatible: true,
+      reasons: ['兼容'],
+      nextActions: ['继续执行']
+    },
+    upgradeHints: ['先运行 dataspec compat check --format json'],
+    generatedAt: '2026-07-05T10:00:00',
     ...overrides
   }
 }

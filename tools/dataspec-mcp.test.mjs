@@ -40,6 +40,7 @@ test('resources list and read use configured project', async () => {
 
   const listed = await handler({ jsonrpc: '2.0', id: 2, method: 'resources/list' })
   assert.deepEqual(listed.result.resources.map((resource) => resource.uri), [
+    'dataspec://version-compatibility',
     'dataspec://project/7/capability-catalog',
     'dataspec://project/7/session-bootstrap',
     'dataspec://project/7/field-catalog',
@@ -62,6 +63,85 @@ test('resources list and read use configured project', async () => {
   assert.equal(read.result.contents[0].uri, 'dataspec://project/7/field-catalog')
   assert.equal(read.result.contents[0].mimeType, 'application/json')
   assert.equal(read.result.contents[0].text, '{"fields":[]}')
+})
+
+test('version compatibility resource is listed and read as structured content', async () => {
+  const calls = []
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local',
+    apiToken: 'ds_mcp_token'
+  }, async (url, options = {}) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: versionCompatibilityFixture()
+    })
+  })
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 39,
+    method: 'resources/read',
+    params: { uri: 'dataspec://version-compatibility' }
+  })
+
+  const payload = JSON.parse(read.result.contents[0].text)
+  assert.equal(calls[0].url, 'http://dataspec.local/api/capabilities/version?client=mcp&clientVersion=0.1.0')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_mcp_token')
+  assert.equal(read.result.contents[0].uri, 'dataspec://version-compatibility')
+  assert.equal(payload.kind, 'dataspec-version-compatibility')
+  assert.equal(read.result.structuredContent.compatibility.status, 'COMPATIBLE')
+})
+
+test('version compatibility resource failure returns AI-readable DataSpec error', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async () => {
+    throw new Error('ECONNREFUSED token=raw-secret jdbc:postgresql://localhost/db')
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 40,
+    method: 'resources/read',
+    params: { uri: 'dataspec://version-compatibility' }
+  })
+
+  assert.equal(response.error.code, -32000)
+  assert.equal(response.error.data.dataspecError.code, 'VERSION_COMPATIBILITY_UNAVAILABLE')
+  assert.match(response.error.data.dataspecError.suggestedAction, /compat check/)
+  assert.doesNotMatch(JSON.stringify(response.error), /raw-secret|jdbc:postgresql:\/\/localhost\/db/)
+})
+
+test('version compatibility resource wraps backend errors with stable compatibility code', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async () => ({
+    ok: false,
+    status: 500,
+    json: async () => ({
+      code: 500,
+      message: 'server failed token=raw-secret',
+      error: {
+        code: 'INTERNAL_ERROR',
+        category: 'SERVER',
+        retryable: true,
+        suggestedAction: 'retry token=raw-secret',
+        docsRef: 'README.md#验证'
+      }
+    })
+  }))
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 41,
+    method: 'resources/read',
+    params: { uri: 'dataspec://version-compatibility' }
+  })
+
+  assert.equal(response.error.code, -32000)
+  assert.equal(response.error.data.dataspecError.code, 'VERSION_COMPATIBILITY_UNAVAILABLE')
+  assert.equal(response.error.data.dataspecError.category, 'SERVER')
+  assert.equal(response.error.data.dataspecError.httpStatus, 500)
+  assert.match(response.error.data.dataspecError.suggestedAction, /compat check/)
+  assert.doesNotMatch(JSON.stringify(response.error), /raw-secret/)
 })
 
 test('session bootstrap resource is read from backend with structured content', async () => {
@@ -1104,6 +1184,30 @@ function jsonResponse(payload) {
     ok: true,
     status: 200,
     json: async () => payload
+  }
+}
+
+function versionCompatibilityFixture(overrides = {}) {
+  return {
+    kind: 'dataspec-version-compatibility',
+    schemaVersion: 1,
+    serverVersion: '0.1.0-SNAPSHOT',
+    apiSchemaHash: 'sha256:test',
+    minCliVersion: '0.1.0',
+    supportedCapabilities: [
+      { id: 'version-compatibility', status: 'AVAILABLE', minClientVersion: '0.1.0' }
+    ],
+    deprecatedFields: [],
+    compatibility: {
+      status: 'COMPATIBLE',
+      clientVersion: '0.1.0',
+      compatible: true,
+      reasons: ['兼容'],
+      nextActions: ['继续执行']
+    },
+    upgradeHints: ['先运行 dataspec compat check --format json'],
+    generatedAt: '2026-07-05T10:00:00',
+    ...overrides
   }
 }
 

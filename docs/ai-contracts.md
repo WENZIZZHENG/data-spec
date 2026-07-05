@@ -1,6 +1,6 @@
 # AI 输出契约
 
-本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、AI Context、AI capability catalog、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、标准字段合并和 DDL 预览的自动化使用场景。
+本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、AI Context、AI capability catalog、版本兼容握手、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、标准字段合并和 DDL 预览的自动化使用场景。
 
 ## 兼容策略
 
@@ -54,8 +54,11 @@ Capability catalog 是 DataSpec 面向 AI agent 的只读能力目录，不是�
 
 - API `GET /api/capabilities`: 返回能力清单，可带 `projectId` 获取项目级诊断。
 - API `GET /api/capabilities/{id}`: 返回单个能力条目。
+- API `GET /api/capabilities/version`: 返回只读版本兼容握手。
 - CLI `capability list|show|check`: 读取 catalog 并做轻量 invariants 检查。
+- CLI `compat check`: 读取版本兼容握手并输出本地 CLI 版本、服务端版本和兼容状态。
 - MCP `capability-catalog` resource: URI 形如 `dataspec://project/{projectId}/capability-catalog`，也支持全局只读 `dataspec://capability-catalog`。
+- MCP `version-compatibility` resource: URI 为 `dataspec://version-compatibility`，返回同一份兼容握手。
 - AI Context `.dataspec/capabilities.json`: 离线包内的 capability catalog。
 
 Catalog 稳定字段：
@@ -100,6 +103,32 @@ Capability entry 稳定字段：
 `safety` 是 AI 写入安全 metadata，稳定字段包括 `readOnly`、`writesProject`、`requiresDryRun`、`supportsUndo`、`requiresIdempotencyKey`、`sensitiveInputs[]` 和 `nextActions[]`。`writeRisk` 继续作为旧客户端可读的摘要风险字段保留；新客户端应优先读取 `safety` 判断是否需要 dry-run、幂等 key、证据导出或人工确认。
 
 `capability check` 的成功只说明 catalog 结构、核心能力条目和必需 `safety` 字段存在；它不会执行这些能力，也不会验证当前项目标准质量。
+
+## 版本兼容握手
+
+版本兼容握手是只读 preflight 契约，用于 AI、CLI 和 MCP 判断当前客户端是否能安全消费服务端能力。它不读取业务项目数据、不连接源数据库、不写入 DataSpec 状态，也不得返回 token、password、Authorization、JDBC URL、DSN 或 source row。
+
+稳定入口：
+
+- API `GET /api/capabilities/version?client=cli&clientVersion=0.1.0`
+- CLI `compat check --format json`
+- CLI `doctor --format json` 的 `compatibility` check
+- MCP resource `dataspec://version-compatibility`
+
+稳定字段：
+
+- `kind`: 固定为 `dataspec-version-compatibility`。
+- `schemaVersion`: 握手响应结构版本。
+- `serverVersion`: 当前服务端版本。
+- `apiSchemaHash`: 当前公开 API/AI capability 契约摘要 hash。
+- `minCliVersion`: 服务端推荐的最小 CLI 版本。
+- `supportedCapabilities[]`: 稳定包含 `id`、`status` 和 `minClientVersion`。
+- `deprecatedFields[]`: 稳定包含 `contractId`、`field`、`deprecatedSince`、`replacement`、`removeAfter` 和 `note`。
+- `compatibility`: 稳定包含 `status`、`clientVersion`、`compatible`、`reasons[]` 和 `nextActions[]`；`status` 稳定值为 `COMPATIBLE`、`INCOMPATIBLE` 或 `UNKNOWN`。
+- `upgradeHints[]`
+- `generatedAt`
+
+CLI `compat check` 兼容时退出码为 `0`，服务端报告 `compatibility.compatible=false` 时退出码为 `1`，服务不可达或响应错误时退出码为 `2` 并输出脱敏 JSON 诊断。MCP resource 失败时通过 JSON-RPC `error.data.dataspecError` 返回 `VERSION_COMPATIBILITY_UNAVAILABLE`。
 
 ### field
 
@@ -311,11 +340,14 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - CLI `profile list/show` 输出 AI Task Profiles 稳定字段；未知 profile 或 taskType 返回参数错误退出码。
 - CLI `contract list/show/check` 输出 Schema Registry 稳定字段；`check` 失败时退出码为 `2`，并返回 `diagnostics[]`。
 - CLI `capability list/show/check` 输出 AI Capability Catalog 稳定字段和 `safety` metadata；`show --format text` 展示安全摘要，`check` 失败时退出码为 `2`，并返回 `diagnostics[]`。
+- CLI `compat check` 输出版本兼容握手稳定字段，并额外包含 `localCliVersion` 和 `server`。
+- CLI `doctor --format json` 包含 `compatibility` check，稳定 details 包括 `localCliVersion`、`serverVersion`、`apiSchemaHash`、`minCliVersion`、`status`、`compatible` 和 `nextActions[]`。
 - CLI `workflow list/show` 输出 `kind`、`schemaVersion`、`recipes[]`、`recipe`；recipe 保留 `id`、`title`、`goal`、`requiredInputs`、`prechecks`、`steps`、`expectedArtifacts`、`failureHandling`、`nextActions`。
 - CLI `evidence export` 输出 `AiEvidencePackage` JSON 或 zip；失败时返回参数错误退出码并输出脱敏错误。
 - MCP resources/tools 返回 `structuredContent` 和 `content[].text`；`content[].text` 应保持可解析 JSON 或明确文本 fallback。
 - MCP `ai-task-profiles` resource 输出 `AiTaskProfileCatalog` 兼容结构。
 - MCP `capability-catalog` resource 输出 AI Capability Catalog，并为该 resource 返回 `structuredContent` 和可解析 JSON text；MCP `tools/list` 的本地工具描述同步包含 `safety` metadata 或等价安全引用。
+- MCP `version-compatibility` resource 输出版本兼容握手，并返回 `structuredContent` 和可解析 JSON text。
 - MCP `schema-registry` resource 输出 Schema Registry catalog。
 - MCP `workflow-recipes` resource 输出 `kind`、`schemaVersion`、`projectId`、`recipes[]`。
 - MCP `search_fields` tool 返回字段检索稳定字段，`content[].text` 保持可解析 JSON。

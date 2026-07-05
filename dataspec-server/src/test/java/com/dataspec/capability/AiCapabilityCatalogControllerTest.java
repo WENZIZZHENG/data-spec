@@ -5,16 +5,24 @@ import com.dataspec.capability.model.AiCapabilityCatalog;
 import com.dataspec.capability.model.AiCapabilityDiagnostic;
 import com.dataspec.capability.model.AiCapabilityEntry;
 import com.dataspec.capability.model.AiWriteSafetyMetadata;
+import com.dataspec.capability.model.VersionCompatibilityResponse;
+import com.dataspec.capability.model.VersionCompatibilityStatus;
+import com.dataspec.capability.model.VersionSupportedCapability;
 import com.dataspec.capability.service.AiCapabilityCatalogService;
 import com.dataspec.capability.service.impl.AiCapabilityCatalogServiceImpl;
 import com.dataspec.common.result.R;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class AiCapabilityCatalogControllerTest {
 
@@ -44,11 +52,41 @@ class AiCapabilityCatalogControllerTest {
         assertEquals("lint-sql", response.getData().id());
     }
 
+    @Test
+    void versionCompatibilityDelegatesClientIdentityToService() {
+        RecordingCapabilityCatalogService service = new RecordingCapabilityCatalogService();
+        AiCapabilityCatalogController controller = new AiCapabilityCatalogController(service);
+
+        R<VersionCompatibilityResponse> response = controller.versionCompatibility("cli", "0.1.0");
+
+        assertEquals(200, response.getCode());
+        assertEquals("cli", service.lastCompatibilityClient);
+        assertEquals("0.1.0", service.lastCompatibilityClientVersion);
+        assertEquals("dataspec-version-compatibility", response.getData().kind());
+        assertEquals("COMPATIBLE", response.getData().compatibility().status());
+    }
+
+    @Test
+    void versionCompatibilityHttpRouteUsesExactMappingAndDefaultsMissingClientVersion() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(new AiCapabilityCatalogController(new AiCapabilityCatalogServiceImpl()))
+                .build();
+
+        mockMvc.perform(get("/api/capabilities/version").param("client", "cli"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.kind").value("dataspec-version-compatibility"))
+                .andExpect(jsonPath("$.data.compatibility.status").value("UNKNOWN"))
+                .andExpect(jsonPath("$.data.compatibility.compatible").value(true));
+    }
+
     private static class RecordingCapabilityCatalogService implements AiCapabilityCatalogService {
         private boolean catalogCalled;
         private Long lastCatalogProjectId;
         private String lastCapabilityId;
         private Long lastCapabilityProjectId;
+        private String lastCompatibilityClient;
+        private String lastCompatibilityClientVersion;
 
         @Override
         public AiCapabilityCatalog getCatalog(Long projectId) {
@@ -72,6 +110,24 @@ class AiCapabilityCatalogControllerTest {
             lastCapabilityId = capabilityId;
             lastCapabilityProjectId = projectId;
             return capability(capabilityId);
+        }
+
+        @Override
+        public VersionCompatibilityResponse getVersionCompatibility(String client, String clientVersion) {
+            lastCompatibilityClient = client;
+            lastCompatibilityClientVersion = clientVersion;
+            return new VersionCompatibilityResponse(
+                    "dataspec-version-compatibility",
+                    1,
+                    "0.1.0-SNAPSHOT",
+                    "sha256:test",
+                    "0.1.0",
+                    List.of(new VersionSupportedCapability("version-compatibility", "AVAILABLE", "0.1.0")),
+                    List.of(),
+                    new VersionCompatibilityStatus("COMPATIBLE", clientVersion, true, List.of(), List.of("继续执行。")),
+                    List.of("先运行 dataspec compat check --format json。"),
+                    LocalDateTime.now()
+            );
         }
 
         private AiCapabilityEntry capability(String id) {
