@@ -181,6 +181,10 @@
           </el-breadcrumb>
         </div>
         <div class="header-right">
+          <el-button size="small" @click="openCommandPalette">
+            <el-icon><Search /></el-icon>
+            <span>命令面板</span>
+          </el-button>
           <el-tag v-if="authStore.operatorName" effect="plain" type="success">
             {{ authStore.operatorName }}
           </el-tag>
@@ -214,6 +218,11 @@
       </el-main>
     </el-container>
 
+    <CommandPaletteDialog
+      v-model="commandPaletteVisible"
+      :project-id="projectStore.currentProjectId"
+    />
+
     <el-dialog v-model="authStore.loginDialogVisible" title="API Token" width="420px">
       <el-form @submit.prevent="handleLogin">
         <el-form-item label="Token">
@@ -242,12 +251,14 @@ import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
 import { AUTH_CLEARED_EVENT } from '@/api/authStorage'
 import { readPositiveIntQuery, replaceRouteQuery } from '@/utils/urlState'
+import CommandPaletteDialog from '@/components/CommandPaletteDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
 const projectStore = useProjectStore()
 const authStore = useAuthStore()
 const tokenInput = ref('')
+const commandPaletteVisible = ref(false)
 
 // 当前激活的菜单项，与路由路径同步
 const activeMenu = computed(() => route.path)
@@ -258,10 +269,12 @@ onMounted(async () => {
   await projectStore.loadProjects()
   applyRouteProjectId()
   window.addEventListener(AUTH_CLEARED_EVENT, authStore.handleAuthCleared)
+  window.addEventListener('keydown', handleCommandPaletteShortcut)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener(AUTH_CLEARED_EVENT, authStore.handleAuthCleared)
+  window.removeEventListener('keydown', handleCommandPaletteShortcut)
 })
 
 // 切换项目
@@ -293,6 +306,17 @@ function applyRouteProjectId() {
 
 async function syncProjectQuery(projectId: number | null) {
   await replaceRouteQuery(router, route, { projectId })
+}
+
+function openCommandPalette() {
+  commandPaletteVisible.value = true
+}
+
+function handleCommandPaletteShortcut(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    openCommandPalette()
+  }
 }
 
 const handleLogin = async () => {

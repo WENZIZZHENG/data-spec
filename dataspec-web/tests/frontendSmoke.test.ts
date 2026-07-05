@@ -538,6 +538,62 @@ test('keeps global project selector backed by the project store', () => {
   ], 'project store')
 })
 
+test('keeps global command palette and recent resume commands wired', () => {
+  const app = readSource('src/App.vue')
+  const dialog = readSource('src/components/CommandPaletteDialog.vue')
+  const utils = readSource('src/utils/commandPalette.ts')
+  const commandTest = readSource('tests/commandPaletteDisplay.test.ts')
+  const packageJson = readSource('package.json')
+
+  assertContains(app, [
+    "import CommandPaletteDialog from '@/components/CommandPaletteDialog.vue'",
+    'commandPaletteVisible',
+    'openCommandPalette',
+    'handleCommandPaletteShortcut',
+    '<CommandPaletteDialog',
+    ':project-id="projectStore.currentProjectId"',
+    '命令面板'
+  ], 'App command palette')
+
+  assertContains(dialog, [
+    "import { listLintRecords } from '@/api/lint'",
+    "import { listReverseImportDecisions } from '@/api/reverseImport'",
+    "import { listAiJobs } from '@/api/aiJob'",
+    'readRecentCommandEntries',
+    'writeRecentCommandEntry',
+    'commandToLocalRecentEntry',
+    'filterCommandPaletteItems',
+    'groupLabel(item.group)',
+    'recentRequestSeq',
+    'const requestSeq = ++recentRequestSeq.value',
+    'recentRequestSeq.value !== requestSeq || props.projectId !== projectId',
+    '未选择项目'
+  ], 'CommandPaletteDialog.vue')
+
+  assertContains(utils, [
+    'export interface CommandPaletteItem',
+    'export interface RecentCommandEntry',
+    'buildCommandPaletteItems',
+    'commandMatchesKeyword',
+    'normalizeRecentCommandEntries',
+    '最近操作',
+    'sanitizeQuery',
+    "'/sql-lint'",
+    "'/reverse-import'",
+    "'/ai-replay'",
+    'sourceBatchId',
+    'recordId',
+    'aiJobId'
+  ], 'command palette utils')
+
+  assertContains(commandTest, [
+    'builds project-scoped command routes',
+    'builds recent SQL, reverse import, and AI job resume commands',
+    'normalizes and persists safe recent command entries'
+  ], 'command palette tests')
+  assertContains(packageJson, ['tests/commandPaletteDisplay.test.ts'], 'frontend test script command palette')
+})
+
 test('keeps reproducible URL state links wired on core workflow pages', () => {
   const packageJson = readSource('package.json')
   const urlState = readSource('src/utils/urlState.ts')
