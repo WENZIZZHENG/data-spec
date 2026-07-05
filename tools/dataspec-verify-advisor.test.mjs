@@ -92,6 +92,13 @@ test('recommends fixture checker for CLI/MCP contract fixture paths', () => {
   assert.match(fixtureCheck.reason, /contract fixture/)
 })
 
+test('recommends fixture checker when MCP descriptors change', () => {
+  const advice = buildValidationAdvice(['tools/dataspec-mcp.mjs'])
+
+  assert.ok(advice.commands.some((command) => command.id === 'cli-contract-tests'))
+  assert.ok(advice.commands.some((command) => command.id === 'cli-mcp-contract-fixture-check'))
+})
+
 test('recommends TODO handoff tests for handoff tool paths', () => {
   const advice = buildValidationAdvice([
     'tools/dataspec-todo-openspec-handoff.mjs',

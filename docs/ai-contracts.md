@@ -1,6 +1,6 @@
 # AI 输出契约
 
-本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、CLI/MCP contract fixtures、AI Context、AI capability catalog、版本兼容握手、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、标准字段合并和 DDL 预览的自动化使用场景。
+本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、MCP agent guidance pack、CLI/MCP contract fixtures、AI Context、AI capability catalog、版本兼容握手、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、标准字段合并和 DDL 预览的自动化使用场景。
 
 ## 兼容策略
 
@@ -336,8 +336,11 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 稳定字段：
 
-- `tools/fixtures/cli-mcp-contracts.json` 是 CLI/MCP contract fixture 的稳定入口，顶层字段包含 `kind`、`schemaVersion`、`description`、`compatibilityPolicy`、`cliCommands[]`、`mcpTools[]`、`mcpResources[]` 和 `mcpPrompts[]`。
+- `tools/fixtures/cli-mcp-contracts.json` 是 CLI/MCP contract fixture 的稳定入口，顶层字段包含 `kind`、`schemaVersion`、`description`、`compatibilityPolicy`、`cliCommands[]`、`mcpTools[]`、`mcpResources[]`、`mcpResourceTemplates[]` 和 `mcpPrompts[]`。
 - Contract fixture entry 稳定描述命令或工具的 `id/name`、`description`、输入边界、`outputShape[]`、成功示例、失败示例、`safety` metadata 和 `recommendedNextActions[]`；示例必须使用占位符或脱敏 marker，不得包含 raw token、password、Authorization、完整 JDBC URL、DSN 或连接串。
+- MCP agent guidance pack resource `dataspec://project/{projectId}/agent-guidance-pack` 输出 `dataspec-mcp-agent-guidance-pack`，稳定包含 `schemaVersion`、`projectId`、`compatibilityPolicy`、`templates[]` 和 `nextActions[]`；每个 template 稳定包含 `id`、`title`、`description`、`requiredInputs[]`、`safeDefaults`、`resourceSequence[]`、`resourceUris[]`、`toolSequence[]`、`stopConditions[]`、`evidenceRequirements[]` 和 `nextActions[]`。
+- MCP `resources/templates/list` 输出 `resourceTemplates[]`，每项稳定包含 `uriTemplate`、`name`、`description` 和 `mimeType`；第一版覆盖 session bootstrap、capability catalog、schema registry、field catalog、workflow recipes、AI task profiles 和 agent guidance pack。
+- MCP first-class agent prompts 稳定包含 `create_table_with_dataspec`、`review_sql_with_dataspec`、`reverse_import_standards` 和 `answer_field_standard_question`；`prompts/list` 会在这些 prompt descriptor 上提供 `safety` 和 `dataspecGuidance`，其中 `dataspecGuidance` 包含 required inputs、safe defaults、resource sequence、tool sequence、stop conditions、evidence requirements 和 next actions；旧 prompt 名称继续兼容保留。
 - `node tools/dataspec-cli-mcp-contract-check.mjs --format json` 输出 `dataspec.cli-mcp-contract-fixtures.check`，稳定包含 `ok`、`fixtureKind`、`summary`、`diagnostics[]` 和 `nextActions[]`；该命令只读取本地 fixture 和本地 MCP descriptors，不调用后端、不连接数据库、不执行 MCP tool。
 - Contract fixture 的兼容策略是 additive-friendly：新增可选 entry 字段或说明文本默认兼容；删除或重命名稳定 command/tool/resource/prompt、输入字段、输出 shape、安全 metadata、退出码或错误语义时，必须同步 fixture、OpenSpec 和测试。
 - CLI `lint`、`lint-files`、`suggest-field`、`search-fields`、`generate-ddl` 透传后端稳定字段。

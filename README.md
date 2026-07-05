@@ -64,7 +64,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI 任务卡，提供本地 `dataspec-ai-task-card` JSON/Markdown 协议、CLI `task-card create/show/update`、MCP `create_task_card/render_task_card` 和前端展示工具，用于记录 goal、currentStep、allowedActions、artifacts、resumeCommand、validationCommands 和 stopConditions。
 - AI 能力清单、版本兼容握手与 CLI/MCP 契约 fixtures，提供只读 `/api/capabilities`、`/api/capabilities/{id}`、`/api/capabilities/version` 和本地 `tools/fixtures/cli-mcp-contracts.json`，稳定描述 API/CLI/MCP/前端入口、输入输出契约、preflightChecks、writeRisk、服务端版本、API schema hash、最小 CLI 版本、示例、安全 metadata 和 nextActions；能力清单与 fixture 不会执行任务，也不替代鉴权或 dry-run。
 - AI Context manifest、字段目录和规则文件携带标准快照版本、hash 与来源 `source=current|snapshot|unversioned`；`rules.yaml` 还会标明当前规则基线 key/name/version/source/appliedAt；未创建快照时标记为 `unversioned`。
-- AI 任务模式，内置 `create-table`、`sql-fix`、`reverse-import`、`pr-review`、`minimal-context`，用于给 AI/CLI/MCP 提供上下文范围、fixedSql 策略、输出格式和推荐命令的默认建议。
+- AI 任务模式与 MCP agent 引导包，内置 `create-table`、`sql-fix`、`reverse-import`、`pr-review`、`minimal-context`，并通过 MCP `agent-guidance-pack` resource 暴露常用任务的 requiredInputs、safeDefaults、resourceSequence、toolSequence、stopConditions 和 evidenceRequirements，用于给 AI/CLI/MCP 提供上下文范围、fixedSql 策略、输出格式、工具顺序和推荐命令的默认建议。
 - AI 建表 Prompt 和 SQL 修正 Prompt 生成。
 - AI 回放记录，支持查看 Prompt、SQL 检查修正和 DDL 预览的输入输出、promptVersion 与标准快照。
 - AI 反馈报告，按项目聚合已有 AI job、SQL 检查记录、fixedSql、规则例外、反向导入来源和字段元数据，输出字段/规则/fixedSql/未纳管信号和下一步维护动作。
@@ -80,7 +80,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
 - CLI 支持业务仓库初始化 `init`、AI 会话启动包 `bootstrap`、AI 任务卡 `task-card`、环境自检 `doctor`、版本兼容检查 `compat check`、capability catalog、workflow recipes、AI task run 查询、质量门禁检查、单文件 lint、批量 `lint-files`、变更感知 `changed/lint-changed`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、历史快照 Context 导出、字段推荐、字段标准检索和 DDL 生成。
-- MCP Server 暴露 DataSpec resources、version compatibility、session bootstrap、task card tools、capability catalog、workflow recipes、AI task runs、prompts、核心 tools 和 evidence package 导出 tool。
+- MCP Server 暴露 DataSpec resources、resource templates、version compatibility、session bootstrap、agent guidance pack、task card tools、capability catalog、workflow recipes、AI task runs、prompts、核心 tools 和 evidence package 导出 tool。
 - GitHub Actions 示例支持 SQL 批量校验、PR diff inline 评论和 fallback 汇总评论。
 - 本地 Docker Compose 一键启动和 demo smoke 验证，适合个人试用、演示和 AI agent 启动前检查。
 
@@ -785,20 +785,21 @@ node tools/dataspec-mcp.mjs
 
 可在 MCP client 中按本地 stdio server 配置。当前暴露能力：
 
-- resources：`version-compatibility`、`capability-catalog`、`session-bootstrap`、`field-catalog`、`database-rules`、`rules-yaml`、`workflow-recipes`、`ai-task-profiles`、`schema-registry`、`ai-task-runs`，URI 形如 `dataspec://project/1/session-bootstrap`；也支持只读全局版本兼容握手 `dataspec://version-compatibility` 和全局能力清单 `dataspec://capability-catalog`。
-- prompts：`dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`，并提示 agent 先读取 capability catalog、schema registry 和 profile resource，再选择稳定字段名、兼容策略、上下文范围、fixedSql 模式和输出格式。
+- resources：`version-compatibility`、`capability-catalog`、`session-bootstrap`、`field-catalog`、`database-rules`、`rules-yaml`、`workflow-recipes`、`agent-guidance-pack`、`ai-task-profiles`、`schema-registry`、`ai-task-runs`，URI 形如 `dataspec://project/1/session-bootstrap`；也支持只读全局版本兼容握手 `dataspec://version-compatibility` 和全局能力清单 `dataspec://capability-catalog`。
+- resource templates：`resources/templates/list` 返回 `dataspec://project/{projectId}/...` 模板，覆盖 session bootstrap、capability catalog、schema registry、field catalog、workflow recipes、AI task profiles 和 agent guidance pack，便于未固定项目的 MCP client 先发现可读资源。
+- prompts：`create_table_with_dataspec`、`review_sql_with_dataspec`、`reverse_import_standards`、`answer_field_standard_question` 作为一等化 agent prompt，在 descriptor 中返回 safety、requiredInputs、safeDefaults、resourceSequence、toolSequence、stopConditions 和 evidenceRequirements；兼容保留 `dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`，并提示 agent 先读取 capability catalog、schema registry 和 profile resource，再选择稳定字段名、兼容策略、上下文范围、fixedSql 模式和输出格式。
 - tools：`get_session_bootstrap`、`create_task_card`、`render_task_card`、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`suggest_fields`、`search_fields`、`generate_table_ddl`、`get_ai_task_run`、`export_evidence_package`；`tools/list` 会在每个工具描述中暴露本地 `safety` metadata，MCP client 可先判断只读、写项目、dry-run、幂等 key 和敏感输入边界；`get_session_bootstrap` 返回与 API/CLI 一致的启动包，未配置默认项目时也可先返回 `SELECT_PROJECT` nextAction；`create_task_card` 和 `render_task_card` 只生成或渲染本地任务卡，不执行 workflow；`lint_sql`、`get_field_catalog` 和 `search_field_catalog` 可接收 `profileId/taskType` hint，显式工具参数仍优先于默认 profile；`get_field_catalog` 可传 `scope/query/status/limit`，`search_field_catalog` 默认按当前关键词读取较小字段目录，`search_fields` 调用 `/api/fields/search` 并返回字段、分数、命中原因和下一步建议；`get_ai_task_run` 按项目读取任务详情和恢复命令；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功；`export_evidence_package` 返回 `structuredContent` 与可解析 JSON text，用于交付前导出只读证据包。
 
 ## CLI/MCP 契约 Fixture
 
-`tools/fixtures/cli-mcp-contracts.json` 是给 AI 和开发者读取的本地契约库，覆盖高频 CLI commands、MCP tools、resources 和 prompts 的名称、输入边界、输出 shape、成功/失败示例、安全 metadata 和推荐下一步。它只描述契约，不调用后端、不连接数据库、不执行工具，也不得包含 raw token、password、Authorization、完整 JDBC URL、DSN 或连接串。
+`tools/fixtures/cli-mcp-contracts.json` 是给 AI 和开发者读取的本地契约库，覆盖高频 CLI commands、MCP tools、resources、resource templates 和 prompts 的名称、输入边界、输出 shape、成功/失败示例、安全 metadata 和推荐下一步。它只描述契约，不调用后端、不连接数据库、不执行工具，也不得包含 raw token、password、Authorization、完整 JDBC URL、DSN 或连接串。
 
 ```bash
 node tools/dataspec-cli-mcp-contract-check.mjs
 node tools/dataspec-cli-mcp-contract-check.mjs --format json
 ```
 
-该检查会读取 fixture 并对齐本地 MCP `tools/list`、`resources/list`、`prompts/list` 描述；删除/重命名稳定入口、输入字段、输出 shape 或安全 metadata 时应同步 fixture、OpenSpec 和测试。
+该检查会读取 fixture 并对齐本地 MCP `tools/list`、`resources/list`、`resources/templates/list`、`prompts/list` 描述；删除/重命名稳定入口、输入字段、输出 shape、resource template 或安全 metadata 时应同步 fixture、OpenSpec 和测试。
 
 ## AI 输出契约
 

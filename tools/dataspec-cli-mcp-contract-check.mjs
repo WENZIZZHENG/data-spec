@@ -46,11 +46,30 @@ const REQUIRED_MCP_RESOURCES = [
   'session-bootstrap',
   'field-catalog',
   'workflow-recipes',
+  'agent-guidance-pack',
   'ai-task-profiles',
   'schema-registry'
 ]
 
+const REQUIRED_MCP_RESOURCE_TEMPLATES = [
+  'dataspec://project/{projectId}/session-bootstrap',
+  'dataspec://project/{projectId}/capability-catalog',
+  'dataspec://project/{projectId}/schema-registry',
+  'dataspec://project/{projectId}/field-catalog',
+  'dataspec://project/{projectId}/workflow-recipes',
+  'dataspec://project/{projectId}/ai-task-profiles',
+  'dataspec://project/{projectId}/agent-guidance-pack'
+]
+
+const REQUIRED_FIRST_CLASS_MCP_PROMPTS = [
+  'create_table_with_dataspec',
+  'review_sql_with_dataspec',
+  'reverse_import_standards',
+  'answer_field_standard_question'
+]
+
 const REQUIRED_MCP_PROMPTS = [
+  ...REQUIRED_FIRST_CLASS_MCP_PROMPTS,
   'dataspec_create_table',
   'dataspec_review_sql',
   'dataspec_design_fields'
@@ -101,6 +120,7 @@ export async function validateContractFixtures(options = {}) {
       cliCommands: Array.isArray(fixture?.cliCommands) ? fixture.cliCommands.length : 0,
       mcpTools: Array.isArray(fixture?.mcpTools) ? fixture.mcpTools.length : 0,
       mcpResources: Array.isArray(fixture?.mcpResources) ? fixture.mcpResources.length : 0,
+      mcpResourceTemplates: Array.isArray(fixture?.mcpResourceTemplates) ? fixture.mcpResourceTemplates.length : 0,
       mcpPrompts: Array.isArray(fixture?.mcpPrompts) ? fixture.mcpPrompts.length : 0,
       diagnostics: diagnostics.length
     },
@@ -155,7 +175,7 @@ function validateRoot(fixture, diagnostics) {
   if (typeof fixture.schemaVersion !== 'number') {
     diagnostics.push(diagnosticOf('INVALID_SCHEMA_VERSION', 'schemaVersion', 'schemaVersion 必须是 number。'))
   }
-  for (const key of ['cliCommands', 'mcpTools', 'mcpResources', 'mcpPrompts']) {
+  for (const key of ['cliCommands', 'mcpTools', 'mcpResources', 'mcpResourceTemplates', 'mcpPrompts']) {
     if (!Array.isArray(fixture[key])) {
       diagnostics.push(diagnosticOf('INVALID_COLLECTION', key, `${key} 必须是数组。`))
     }
@@ -191,12 +211,13 @@ function validateCliCommands(commands, diagnostics) {
 }
 
 async function validateMcpContracts(fixture, diagnostics) {
-  if (!Array.isArray(fixture?.mcpTools) || !Array.isArray(fixture?.mcpResources) || !Array.isArray(fixture?.mcpPrompts)) {
+  if (!Array.isArray(fixture?.mcpTools) || !Array.isArray(fixture?.mcpResources) || !Array.isArray(fixture?.mcpResourceTemplates) || !Array.isArray(fixture?.mcpPrompts)) {
     return
   }
   const descriptors = await listLocalMcpDescriptors()
   validateMcpTools(fixture.mcpTools, descriptors.tools, diagnostics)
   validateMcpResources(fixture.mcpResources, descriptors.resources, diagnostics)
+  validateMcpResourceTemplates(fixture.mcpResourceTemplates, descriptors.resourceTemplates, diagnostics)
   validateMcpPrompts(fixture.mcpPrompts, descriptors.prompts, diagnostics)
 }
 
@@ -209,10 +230,12 @@ async function listLocalMcpDescriptors() {
   })
   const tools = await handler({ jsonrpc: '2.0', id: 1, method: 'tools/list' })
   const resources = await handler({ jsonrpc: '2.0', id: 2, method: 'resources/list' })
-  const prompts = await handler({ jsonrpc: '2.0', id: 3, method: 'prompts/list' })
+  const resourceTemplates = await handler({ jsonrpc: '2.0', id: 3, method: 'resources/templates/list' })
+  const prompts = await handler({ jsonrpc: '2.0', id: 4, method: 'prompts/list' })
   return {
     tools: tools.result.tools,
     resources: resources.result.resources,
+    resourceTemplates: resourceTemplates.result.resourceTemplates,
     prompts: prompts.result.prompts
   }
 }
@@ -289,6 +312,38 @@ function validateMcpResources(fixtures, liveResources, diagnostics) {
   })
 }
 
+function validateMcpResourceTemplates(fixtures, liveResourceTemplates, diagnostics) {
+  const fixtureByUriTemplate = mapBy(fixtures, 'uriTemplate')
+  const liveByUriTemplate = mapBy(liveResourceTemplates, 'uriTemplate')
+  for (const uriTemplate of REQUIRED_MCP_RESOURCE_TEMPLATES) {
+    if (!fixtureByUriTemplate.has(uriTemplate)) {
+      diagnostics.push(diagnosticOf('MISSING_REQUIRED_MCP_RESOURCE_TEMPLATE', `mcpResourceTemplates.${uriTemplate}`, `缺少 MCP resource template fixture: ${uriTemplate}`))
+    }
+  }
+  fixtures.forEach((template, index) => {
+    const basePath = `mcpResourceTemplates[${index}]`
+    requireString(template.uriTemplate, `${basePath}.uriTemplate`, diagnostics)
+    requireString(template.name, `${basePath}.name`, diagnostics)
+    requireString(template.description, `${basePath}.description`, diagnostics)
+    requireString(template.mimeType, `${basePath}.mimeType`, diagnostics)
+    requireNonEmptyArray(template.outputShape, `${basePath}.outputShape`, diagnostics)
+    requireObject(template.successExample, `${basePath}.successExample`, diagnostics)
+    validateSafety(template.safety, `${basePath}.safety`, diagnostics)
+    requireNonEmptyArray(template.recommendedNextActions, `${basePath}.recommendedNextActions`, diagnostics)
+    const liveTemplate = liveByUriTemplate.get(template.uriTemplate)
+    if (!liveTemplate) {
+      diagnostics.push(diagnosticOf('UNKNOWN_MCP_RESOURCE_TEMPLATE', `${basePath}.uriTemplate`, `MCP resources/templates/list 中不存在 ${template.uriTemplate}。`))
+      return
+    }
+    if (liveTemplate.description !== template.description) {
+      diagnostics.push(diagnosticOf('MCP_RESOURCE_TEMPLATE_DESCRIPTION_MISMATCH', `${basePath}.description`, 'fixture 与 MCP resources/templates/list 的 description 不一致。'))
+    }
+    if (liveTemplate.mimeType !== template.mimeType) {
+      diagnostics.push(diagnosticOf('MCP_RESOURCE_TEMPLATE_MIME_TYPE_MISMATCH', `${basePath}.mimeType`, 'fixture 与 MCP resources/templates/list 的 mimeType 不一致。'))
+    }
+  })
+}
+
 function validateMcpPrompts(fixtures, livePrompts, diagnostics) {
   const fixtureByName = mapBy(fixtures, 'name')
   const liveByName = mapBy(livePrompts, 'name')
@@ -314,14 +369,87 @@ function validateMcpPrompts(fixtures, livePrompts, diagnostics) {
     if (livePrompt.description !== prompt.description) {
       diagnostics.push(diagnosticOf('MCP_PROMPT_DESCRIPTION_MISMATCH', `${basePath}.description`, 'fixture 与 MCP prompts/list 的 description 不一致。'))
     }
-    compareStringSets(
-      (livePrompt.arguments ?? []).map((argument) => argument.name),
-      prompt.arguments ?? [],
-      `${basePath}.arguments`,
-      'MCP_PROMPT_ARGUMENTS_MISMATCH',
-      diagnostics
-    )
+    validateMcpPromptArguments(prompt, livePrompt, basePath, diagnostics)
+    if (REQUIRED_FIRST_CLASS_MCP_PROMPTS.includes(prompt.name)) {
+      validateMcpPromptGuidance(prompt, livePrompt, basePath, diagnostics)
+      validateMcpPromptSafety(prompt, livePrompt, basePath, diagnostics)
+    }
   })
+}
+
+function validateMcpPromptArguments(prompt, livePrompt, basePath, diagnostics) {
+  const fixtureArguments = normalizePromptArguments(prompt.arguments ?? [], `${basePath}.arguments`, diagnostics)
+  const liveArguments = normalizePromptArguments(livePrompt.arguments ?? [], `${basePath}.liveArguments`, diagnostics)
+  compareStringSets(
+    liveArguments.map((argument) => argument.name),
+    fixtureArguments.map((argument) => argument.name),
+    `${basePath}.arguments`,
+    'MCP_PROMPT_ARGUMENTS_MISMATCH',
+    diagnostics
+  )
+  const liveByName = mapBy(liveArguments, 'name')
+  for (const argument of fixtureArguments) {
+    const liveArgument = liveByName.get(argument.name)
+    if (!liveArgument) {
+      continue
+    }
+    if (argument.description !== undefined && liveArgument.description !== argument.description) {
+      diagnostics.push(diagnosticOf('MCP_PROMPT_ARGUMENT_DESCRIPTION_MISMATCH', `${basePath}.arguments.${argument.name}.description`, 'fixture 与 MCP prompts/list 的 argument description 不一致。'))
+    }
+    if (argument.required !== undefined && Boolean(liveArgument.required) !== Boolean(argument.required)) {
+      diagnostics.push(diagnosticOf('MCP_PROMPT_ARGUMENT_REQUIRED_MISMATCH', `${basePath}.arguments.${argument.name}.required`, 'fixture 与 MCP prompts/list 的 argument required 不一致。'))
+    }
+  }
+}
+
+function normalizePromptArguments(argumentsValue, pathName, diagnostics) {
+  return argumentsValue.map((argument, index) => {
+    if (typeof argument === 'string') {
+      return { name: argument }
+    }
+    if (argument && typeof argument === 'object' && !Array.isArray(argument) && typeof argument.name === 'string') {
+      return {
+        name: argument.name,
+        description: typeof argument.description === 'string' ? argument.description : undefined,
+        required: typeof argument.required === 'boolean' ? argument.required : undefined
+      }
+    }
+    diagnostics.push(diagnosticOf('INVALID_PROMPT_ARGUMENT', `${pathName}[${index}]`, 'prompt argument 必须是 string 或包含 name 的 object。'))
+    return { name: '' }
+  })
+}
+
+function validateMcpPromptGuidance(prompt, livePrompt, basePath, diagnostics) {
+  const guidance = livePrompt.dataspecGuidance
+  if (!guidance || typeof guidance !== 'object') {
+    diagnostics.push(diagnosticOf('MCP_PROMPT_GUIDANCE_MISSING', `${basePath}.dataspecGuidance`, '一等化 MCP prompt descriptor 缺少 dataspecGuidance。'))
+    return
+  }
+  const fixtureGuidance = prompt.dataspecGuidance
+  if (!fixtureGuidance || typeof fixtureGuidance !== 'object' || Array.isArray(fixtureGuidance)) {
+    diagnostics.push(diagnosticOf('MCP_PROMPT_FIXTURE_GUIDANCE_MISSING', `${basePath}.dataspecGuidance`, '一等化 MCP prompt fixture 必须保存 dataspecGuidance 契约。'))
+    return
+  }
+  if (!(prompt.outputShape ?? []).includes('dataspecGuidance')) {
+    diagnostics.push(diagnosticOf('MCP_PROMPT_OUTPUT_SHAPE_MISSING_GUIDANCE', `${basePath}.outputShape`, '一等化 MCP prompt fixture 必须声明 dataspecGuidance 输出。'))
+  }
+  compareJsonValue(guidance.templateId, fixtureGuidance.templateId, `${basePath}.dataspecGuidance.templateId`, 'MCP_PROMPT_GUIDANCE_MISMATCH', diagnostics)
+  compareJsonValue(guidance.requiredInputs ?? [], fixtureGuidance.requiredInputs ?? [], `${basePath}.dataspecGuidance.requiredInputs`, 'MCP_PROMPT_GUIDANCE_MISMATCH', diagnostics)
+  compareJsonValue(guidance.safeDefaults ?? {}, fixtureGuidance.safeDefaults ?? {}, `${basePath}.dataspecGuidance.safeDefaults`, 'MCP_PROMPT_GUIDANCE_MISMATCH', diagnostics)
+  compareJsonValue(guidance.resourceSequence ?? [], fixtureGuidance.resourceSequence ?? [], `${basePath}.dataspecGuidance.resourceSequence`, 'MCP_PROMPT_GUIDANCE_MISMATCH', diagnostics)
+  compareJsonValue(guidance.toolSequence ?? [], fixtureGuidance.toolSequence ?? [], `${basePath}.dataspecGuidance.toolSequence`, 'MCP_PROMPT_GUIDANCE_MISMATCH', diagnostics)
+  compareJsonValue(guidance.stopConditions ?? [], fixtureGuidance.stopConditions ?? [], `${basePath}.dataspecGuidance.stopConditions`, 'MCP_PROMPT_GUIDANCE_MISMATCH', diagnostics)
+  compareJsonValue(guidance.evidenceRequirements ?? [], fixtureGuidance.evidenceRequirements ?? [], `${basePath}.dataspecGuidance.evidenceRequirements`, 'MCP_PROMPT_GUIDANCE_MISMATCH', diagnostics)
+  compareJsonValue(guidance.nextActions ?? [], fixtureGuidance.nextActions ?? [], `${basePath}.dataspecGuidance.nextActions`, 'MCP_PROMPT_GUIDANCE_MISMATCH', diagnostics)
+  compareJsonValue(guidance.nextActions ?? [], prompt.recommendedNextActions ?? [], `${basePath}.recommendedNextActions`, 'MCP_PROMPT_RECOMMENDED_NEXT_ACTIONS_MISMATCH', diagnostics)
+}
+
+function validateMcpPromptSafety(prompt, livePrompt, basePath, diagnostics) {
+  if (!livePrompt.safety || typeof livePrompt.safety !== 'object' || Array.isArray(livePrompt.safety)) {
+    diagnostics.push(diagnosticOf('MCP_PROMPT_SAFETY_MISSING', `${basePath}.safety`, '一等化 MCP prompt descriptor 缺少 safety metadata。'))
+    return
+  }
+  compareSafety(livePrompt.safety, prompt.safety, `${basePath}.safety`, diagnostics, 'MCP_PROMPT_SAFETY_MISMATCH')
 }
 
 function validateSafety(safety, pathName, diagnostics) {
@@ -347,22 +475,35 @@ function validateSafety(safety, pathName, diagnostics) {
   }
 }
 
-function compareSafety(liveSafety, fixtureSafety, pathName, diagnostics) {
+function compareSafety(liveSafety, fixtureSafety, pathName, diagnostics, code = 'MCP_TOOL_SAFETY_MISMATCH') {
   if (!liveSafety || !fixtureSafety) {
     return
   }
   for (const field of ['readOnly', 'writesProject', 'requiresDryRun', 'requiresIdempotencyKey']) {
     if (liveSafety[field] !== fixtureSafety[field]) {
-      diagnostics.push(diagnosticOf('MCP_TOOL_SAFETY_MISMATCH', `${pathName}.${field}`, `fixture 与 MCP tools/list 的 ${field} 不一致。`))
+      diagnostics.push(diagnosticOf(code, `${pathName}.${field}`, `fixture 与 MCP descriptor 的 ${field} 不一致。`))
     }
   }
   compareStringSets(
     liveSafety.sensitiveInputs ?? [],
     fixtureSafety.sensitiveInputs ?? [],
     `${pathName}.sensitiveInputs`,
-    'MCP_TOOL_SAFETY_MISMATCH',
+    code,
     diagnostics
   )
+  compareStringSets(
+    liveSafety.nextActions ?? [],
+    fixtureSafety.nextActions ?? [],
+    `${pathName}.nextActions`,
+    code,
+    diagnostics
+  )
+}
+
+function compareJsonValue(expected, actual, pathName, code, diagnostics) {
+  if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+    diagnostics.push(diagnosticOf(code, pathName, 'fixture 与 MCP descriptor 的结构化值不一致。'))
+  }
 }
 
 function compareStringSets(expected, actual, pathName, code, diagnostics) {

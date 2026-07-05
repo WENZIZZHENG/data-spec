@@ -74,6 +74,7 @@ const VALIDATION_RULES = [
     reason: 'CLI/MCP contract fixture 或本地契约验收脚本改动需要确认 fixture、MCP descriptors 和安全 metadata 对齐。',
     patterns: [
       /^tools\/dataspec-cli-mcp-contract-check\.(mjs|test\.mjs)$/,
+      /^tools\/dataspec-mcp\.mjs$/,
       /^tools\/fixtures\/cli-mcp-contracts\.json$/
     ]
   },

@@ -19,6 +19,7 @@ test('bundled CLI/MCP contract fixtures validate against local MCP descriptors',
   assert.ok(result.summary.mcpTools >= 8)
   assert.ok(result.summary.mcpResources >= 6)
   assert.ok(result.summary.mcpPrompts >= 3)
+  assert.ok(result.summary.mcpResourceTemplates >= 1)
 })
 
 test('fixture checker reports missing MCP tool and safety metadata drift', async () => {
@@ -50,6 +51,82 @@ test('fixture checker reports MCP resource and prompt descriptor drift', async (
   assert.equal(result.ok, false)
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'MCP_RESOURCE_DESCRIPTION_MISMATCH'))
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'MCP_PROMPT_DESCRIPTION_MISMATCH'))
+})
+
+test('fixture checker reports MCP resource template descriptor drift', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  fixture.mcpResourceTemplates = fixture.mcpResourceTemplates.map((template) =>
+    template.uriTemplate === 'dataspec://project/{projectId}/agent-guidance-pack'
+      ? { ...template, description: 'drifted description' }
+      : template)
+
+  const result = await validateContractFixtures({ fixture })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'MCP_RESOURCE_TEMPLATE_DESCRIPTION_MISMATCH'))
+})
+
+test('fixture checker reports MCP first-class prompt guidance drift', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  fixture.mcpPrompts = fixture.mcpPrompts.map((prompt) =>
+    prompt.name === 'answer_field_standard_question'
+      ? { ...prompt, recommendedNextActions: ['drifted next action'] }
+      : prompt)
+
+  const result = await validateContractFixtures({ fixture })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'MCP_PROMPT_RECOMMENDED_NEXT_ACTIONS_MISMATCH'))
+})
+
+test('fixture checker reports MCP first-class prompt argument and safety drift', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  fixture.mcpPrompts = fixture.mcpPrompts.map((prompt) =>
+    prompt.name === 'create_table_with_dataspec'
+      ? {
+          ...prompt,
+          arguments: prompt.arguments.map((argument) =>
+            argument.name === 'businessDescription'
+              ? { ...argument, required: true }
+              : argument),
+          safety: { ...prompt.safety, writesProject: true }
+        }
+      : prompt)
+
+  const result = await validateContractFixtures({ fixture })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'MCP_PROMPT_ARGUMENT_REQUIRED_MISMATCH'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'MCP_PROMPT_SAFETY_MISMATCH'))
+})
+
+test('fixture checker reports MCP first-class prompt full guidance drift', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  fixture.mcpPrompts = fixture.mcpPrompts.map((prompt) =>
+    prompt.name === 'review_sql_with_dataspec'
+      ? {
+          ...prompt,
+          dataspecGuidance: {
+            ...prompt.dataspecGuidance,
+            safeDefaults: { ...prompt.dataspecGuidance.safeDefaults, executeWorkflow: true },
+            toolSequence: ['search_fields'],
+            stopConditions: ['drifted stop condition'],
+            evidenceRequirements: ['drifted evidence requirement']
+          }
+        }
+      : prompt)
+
+  const result = await validateContractFixtures({ fixture })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === 'MCP_PROMPT_GUIDANCE_MISMATCH' && diagnostic.path.includes('safeDefaults')))
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === 'MCP_PROMPT_GUIDANCE_MISMATCH' && diagnostic.path.includes('toolSequence')))
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === 'MCP_PROMPT_GUIDANCE_MISMATCH' && diagnostic.path.includes('stopConditions')))
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === 'MCP_PROMPT_GUIDANCE_MISMATCH' && diagnostic.path.includes('evidenceRequirements')))
 })
 
 test('fixture checker rejects incomplete stable fixture entries', async () => {
@@ -125,7 +202,8 @@ test('contract check cli prints json diagnostics for invalid fixture', async () 
       cliCommands: [],
       mcpTools: [],
       mcpResources: [],
-      mcpPrompts: []
+      mcpPrompts: [],
+      mcpResourceTemplates: []
     }), 'utf8')
     const io = createIo()
 

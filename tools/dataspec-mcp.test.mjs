@@ -47,6 +47,7 @@ test('resources list and read use configured project', async () => {
     'dataspec://project/7/database-rules',
     'dataspec://project/7/rules-yaml',
     'dataspec://project/7/workflow-recipes',
+    'dataspec://project/7/agent-guidance-pack',
     'dataspec://project/7/ai-task-profiles',
     'dataspec://project/7/schema-registry',
     'dataspec://project/7/ai-task-runs'
@@ -63,6 +64,33 @@ test('resources list and read use configured project', async () => {
   assert.equal(read.result.contents[0].uri, 'dataspec://project/7/field-catalog')
   assert.equal(read.result.contents[0].mimeType, 'application/json')
   assert.equal(read.result.contents[0].text, '{"fields":[]}')
+})
+
+test('agent guidance pack resource and templates are served locally', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
+
+  const templates = await handler({ jsonrpc: '2.0', id: 201, method: 'resources/templates/list' })
+  assert.ok(templates.result.resourceTemplates.some((template) =>
+    template.uriTemplate === 'dataspec://project/{projectId}/agent-guidance-pack'))
+  assert.ok(templates.result.resourceTemplates.some((template) =>
+    template.uriTemplate === 'dataspec://project/{projectId}/session-bootstrap'))
+
+  const projectless = createMcpHandler({ server: 'http://dataspec.local' }, failingFetch)
+  const projectlessTemplates = await projectless({ jsonrpc: '2.0', id: 202, method: 'resources/templates/list' })
+  assert.ok(projectlessTemplates.result.resourceTemplates.every((template) => template.uriTemplate.includes('{projectId}')))
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 203,
+    method: 'resources/read',
+    params: { uri: 'dataspec://project/7/agent-guidance-pack' }
+  })
+  const payload = JSON.parse(read.result.contents[0].text)
+  assert.equal(payload.kind, 'dataspec-mcp-agent-guidance-pack')
+  assert.equal(payload.projectId, 7)
+  assert.ok(payload.templates.some((template) => template.id === 'reverse_import_standards'))
+  assert.ok(payload.templates.some((template) => template.id === 'answer_field_standard_question'))
+  assert.deepEqual(read.result.structuredContent.templates[0].safeDefaults.executeWorkflow, false)
 })
 
 test('version compatibility resource is listed and read as structured content', async () => {
@@ -368,10 +396,19 @@ test('prompts list and get return DataSpec workflow guidance', async () => {
 
   const listed = await handler({ jsonrpc: '2.0', id: 4, method: 'prompts/list' })
   assert.deepEqual(listed.result.prompts.map((prompt) => prompt.name), [
+    'create_table_with_dataspec',
+    'review_sql_with_dataspec',
+    'reverse_import_standards',
+    'answer_field_standard_question',
     'dataspec_create_table',
     'dataspec_review_sql',
     'dataspec_design_fields'
   ])
+  const firstClassPrompt = listed.result.prompts.find((prompt) => prompt.name === 'reverse_import_standards')
+  assert.equal(firstClassPrompt.dataspecGuidance.templateId, 'reverse_import_standards')
+  assert.ok(firstClassPrompt.dataspecGuidance.toolSequence.includes('search_fields'))
+  assert.equal(firstClassPrompt.safety.readOnly, true)
+  assert.equal(firstClassPrompt.safety.writesProject, false)
 
   const prompt = await handler({
     jsonrpc: '2.0',
@@ -391,6 +428,21 @@ test('prompts list and get return DataSpec workflow guidance', async () => {
   assert.match(prompt.result.messages[0].content.text, /safety/)
   assert.match(prompt.result.messages[0].content.text, /requiresDryRun/)
   assert.match(prompt.result.messages[0].content.text, /export_evidence_package/)
+
+  const reversePrompt = await handler({
+    jsonrpc: '2.0',
+    id: 205,
+    method: 'prompts/get',
+    params: {
+      name: 'reverse_import_standards',
+      arguments: { sourceDescription: '从订单库反向导入字段' }
+    }
+  })
+  assert.match(reversePrompt.result.messages[0].content.text, /requiredInputs/)
+  assert.match(reversePrompt.result.messages[0].content.text, /toolSequence/)
+  assert.match(reversePrompt.result.messages[0].content.text, /stopConditions/)
+  assert.match(reversePrompt.result.messages[0].content.text, /evidenceRequirements/)
+  assert.match(reversePrompt.result.messages[0].content.text, /从订单库反向导入字段/)
 })
 
 test('lint_sql tool returns structured lint result and json text content', async () => {

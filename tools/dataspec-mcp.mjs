@@ -54,6 +54,112 @@ const TOOL_SAFETY = {
   get_ai_task_run: READ_ONLY_TOOL_SAFETY
 }
 
+const AGENT_GUIDANCE_TEMPLATES = [
+  {
+    id: 'create_table_with_dataspec',
+    title: 'Create table with DataSpec',
+    description: 'Use DataSpec standards to design a PostgreSQL table.',
+    requiredInputs: ['businessDescription'],
+    safeDefaults: {
+      executeWorkflow: false,
+      preferExistingFields: true,
+      requireEvidencePackage: true
+    },
+    resourceSequence: ['capability-catalog', 'schema-registry', 'ai-task-profiles', 'field-catalog', 'database-rules'],
+    toolSequence: ['search_fields', 'generate_table_ddl', 'lint_sql', 'export_evidence_package'],
+    stopConditions: ['missing project id', 'capability safety metadata unavailable', 'DDL contains high-risk unreviewed changes'],
+    evidenceRequirements: ['standard fields used', 'DDL preview result', 'lint result', 'next actions'],
+    nextActions: ['Read capability safety before using generate_table_ddl or lint_sql.']
+  },
+  {
+    id: 'review_sql_with_dataspec',
+    title: 'Review SQL with DataSpec',
+    description: 'Review SQL against DataSpec rules and field standards.',
+    requiredInputs: ['sql'],
+    safeDefaults: {
+      executeWorkflow: false,
+      fixedSqlMode: 'dry-run',
+      requireEvidencePackage: true
+    },
+    resourceSequence: ['capability-catalog', 'schema-registry', 'ai-task-profiles', 'field-catalog', 'database-rules'],
+    toolSequence: ['lint_sql', 'search_fields', 'export_evidence_package'],
+    stopConditions: ['SQL text missing', 'lint_sql unavailable', 'write-capable follow-up lacks user confirmation'],
+    evidenceRequirements: ['lint result', 'fixedSql diff when present', 'field evidence', 'next actions'],
+    nextActions: ['Treat ERROR issues as user-visible findings before suggesting fixedSql.']
+  },
+  {
+    id: 'reverse_import_standards',
+    title: 'Reverse import standards',
+    description: 'Plan safe reverse import of database metadata into DataSpec standards.',
+    requiredInputs: ['sourceDescription'],
+    safeDefaults: {
+      executeWorkflow: false,
+      dryRunOnly: true,
+      requireEvidencePackage: true
+    },
+    resourceSequence: ['capability-catalog', 'schema-registry', 'workflow-recipes', 'ai-task-profiles', 'field-catalog'],
+    toolSequence: ['get_session_bootstrap', 'search_fields', 'export_evidence_package'],
+    stopConditions: ['source connection details include raw secrets', 'dry-run preview is missing', 'user has not confirmed write action'],
+    evidenceRequirements: ['metadata summary', 'candidate mapping rationale', 'dry-run diagnostics', 'next actions'],
+    nextActions: ['Use existing reverse-import APIs or UI; do not infer writes from this prompt alone.']
+  },
+  {
+    id: 'answer_field_standard_question',
+    title: 'Answer field standard question',
+    description: 'Answer read-only questions about standard field naming, status, and evidence.',
+    requiredInputs: ['question'],
+    safeDefaults: {
+      executeWorkflow: false,
+      readOnly: true,
+      requireEvidencePackage: false
+    },
+    resourceSequence: ['capability-catalog', 'schema-registry', 'field-catalog'],
+    toolSequence: ['search_fields'],
+    stopConditions: ['confidence is low', 'no matching standard field', 'question asks for business row data'],
+    evidenceRequirements: ['matched fields', 'match reasons', 'confidence or unresolved questions'],
+    nextActions: ['When confidence is low, ask for clarification or suggest candidate inbox follow-up.']
+  }
+]
+
+const RESOURCE_TEMPLATE_KEYS = [
+  'session-bootstrap',
+  'capability-catalog',
+  'schema-registry',
+  'field-catalog',
+  'workflow-recipes',
+  'ai-task-profiles',
+  'agent-guidance-pack'
+]
+
+const READ_ONLY_PROMPT_SAFETY = {
+  readOnly: true,
+  writesProject: false,
+  requiresDryRun: false,
+  requiresIdempotencyKey: false,
+  sensitiveInputs: [],
+  nextActions: []
+}
+
+const FIRST_CLASS_PROMPT_SAFETY = {
+  create_table_with_dataspec: {
+    ...READ_ONLY_PROMPT_SAFETY,
+    nextActions: ['Read capability safety before using generate_table_ddl or lint_sql.']
+  },
+  review_sql_with_dataspec: {
+    ...READ_ONLY_PROMPT_SAFETY,
+    sensitiveInputs: ['sql'],
+    nextActions: ['Treat ERROR issues as user-visible findings before suggesting fixedSql.']
+  },
+  reverse_import_standards: {
+    ...READ_ONLY_PROMPT_SAFETY,
+    nextActions: ['Use existing reverse-import APIs or UI; do not infer writes from this prompt alone.']
+  },
+  answer_field_standard_question: {
+    ...READ_ONLY_PROMPT_SAFETY,
+    nextActions: ['When confidence is low, ask for clarification or suggest candidate inbox follow-up.']
+  }
+}
+
 const RESOURCE_DEFS = {
   'version-compatibility': {
     name: 'DataSpec Version Compatibility',
@@ -102,6 +208,14 @@ const RESOURCE_DEFS = {
       return JSON.stringify(workflowRecipesResourcePayload(projectId), null, 2)
     }
   },
+  'agent-guidance-pack': {
+    name: 'DataSpec MCP Agent Guidance Pack',
+    description: 'MCP agent 任务引导包，说明常用任务的输入、安全默认值、资源顺序、工具顺序、停止条件和证据要求。',
+    mimeType: 'application/json',
+    localContent(projectId) {
+      return agentGuidancePackPayload(projectId)
+    }
+  },
   'ai-task-profiles': {
     name: 'DataSpec AI Task Profiles',
     description: '当前项目的 AI 任务模式，说明上下文范围、fixedSql 策略、输出格式和推荐命令。',
@@ -124,7 +238,79 @@ const RESOURCE_DEFS = {
   }
 }
 
+function agentGuidancePackPayload(projectId) {
+  return {
+    kind: 'dataspec-mcp-agent-guidance-pack',
+    schemaVersion: 1,
+    projectId,
+    compatibilityPolicy: 'Additive templates and optional fields are compatible; removing or renaming template ids, required inputs, safe defaults, tool sequence, stop conditions, or evidence requirements requires fixture and spec updates.',
+    templates: AGENT_GUIDANCE_TEMPLATES.map((template) => materializeGuidanceTemplate(template, projectId)),
+    nextActions: ['Choose a guidance template, read the listed resources in order, inspect tool safety metadata, then call tools only when inputs and stop conditions are satisfied.']
+  }
+}
+
+function materializeGuidanceTemplate(template, projectId) {
+  return {
+    ...template,
+    resourceUris: template.resourceSequence.map((resourceKey) => resourceUri(projectId ?? '{projectId}', resourceKey))
+  }
+}
+
+function guidancePrompt(templateId, args, extraText) {
+  const template = AGENT_GUIDANCE_TEMPLATES.find((item) => item.id === templateId)
+  return {
+    description: template.description,
+    arguments: args,
+    safety: FIRST_CLASS_PROMPT_SAFETY[templateId],
+    dataspecGuidance: {
+      templateId,
+      requiredInputs: template.requiredInputs,
+      safeDefaults: template.safeDefaults,
+      resourceSequence: template.resourceSequence,
+      toolSequence: template.toolSequence,
+      stopConditions: template.stopConditions,
+      evidenceRequirements: template.evidenceRequirements,
+      nextActions: template.nextActions
+    },
+    buildText(promptArgs, projectId) {
+      const guidance = materializeGuidanceTemplate(template, projectId)
+      return [
+        `请按 DataSpec MCP agent guidance template \`${template.id}\` 执行。`,
+        '',
+        `title: ${template.title}`,
+        `description: ${template.description}`,
+        `requiredInputs: ${JSON.stringify(template.requiredInputs)}`,
+        `safeDefaults: ${JSON.stringify(template.safeDefaults)}`,
+        `resourceSequence: ${JSON.stringify(guidance.resourceUris)}`,
+        `toolSequence: ${JSON.stringify(template.toolSequence)}`,
+        `stopConditions: ${JSON.stringify(template.stopConditions)}`,
+        `evidenceRequirements: ${JSON.stringify(template.evidenceRequirements)}`,
+        `nextActions: ${JSON.stringify(template.nextActions)}`,
+        '',
+        '执行约束：先读取 capability catalog 和 schema registry；调用写入型或可能持久化结果的工具前必须检查 safety metadata；本 prompt 不执行工作流、不连接源数据库、不授权写入。',
+        extraText(promptArgs)
+      ].join('\n')
+    }
+  }
+}
+
 const PROMPTS = {
+  create_table_with_dataspec: guidancePrompt('create_table_with_dataspec', [
+    { name: 'businessDescription', description: '业务表或数据对象描述。', required: false },
+    { name: 'projectId', description: '可选项目 ID，未提供时使用 MCP Server 启动项目。', required: false }
+  ], (args) => args.businessDescription ? `业务描述：${args.businessDescription}` : '业务描述：请根据用户后续输入补全。'),
+  review_sql_with_dataspec: guidancePrompt('review_sql_with_dataspec', [
+    { name: 'sql', description: '待评审 SQL。', required: false },
+    { name: 'projectId', description: '可选项目 ID，未提供时使用 MCP Server 启动项目。', required: false }
+  ], (args) => args.sql ? `待评审 SQL：\n\`\`\`sql\n${args.sql}\n\`\`\`` : '待评审 SQL：请根据用户后续输入补全。'),
+  reverse_import_standards: guidancePrompt('reverse_import_standards', [
+    { name: 'sourceDescription', description: '源库、schema 或本次反向导入目标的脱敏描述。', required: false },
+    { name: 'projectId', description: '可选项目 ID，未提供时使用 MCP Server 启动项目。', required: false }
+  ], (args) => args.sourceDescription ? `源数据描述：${args.sourceDescription}` : '源数据描述：请仅提供脱敏 schema/表范围，不要提供 raw secret。'),
+  answer_field_standard_question: guidancePrompt('answer_field_standard_question', [
+    { name: 'question', description: '关于字段标准、命名、状态、敏感性或证据的问题。', required: false },
+    { name: 'projectId', description: '可选项目 ID，未提供时使用 MCP Server 启动项目。', required: false }
+  ], (args) => args.question ? `用户问题：${args.question}` : '用户问题：请根据用户后续输入补全。'),
   dataspec_create_table: {
     description: '按 DataSpec 标准创建 PostgreSQL 表。',
     arguments: [
@@ -292,6 +478,9 @@ async function dispatch(method, params, context) {
   if (method === 'resources/list') {
     return listResources(context.defaultProjectId)
   }
+  if (method === 'resources/templates/list') {
+    return listResourceTemplates()
+  }
   if (method === 'resources/read') {
     return await readResource(params, context)
   }
@@ -348,6 +537,20 @@ function listResources(projectId) {
   }
 }
 
+function listResourceTemplates() {
+  return {
+    resourceTemplates: RESOURCE_TEMPLATE_KEYS.map((key) => {
+      const def = RESOURCE_DEFS[key]
+      return {
+        uriTemplate: `dataspec://project/{projectId}/${key}`,
+        name: def.name,
+        description: def.description,
+        mimeType: def.mimeType
+      }
+    })
+  }
+}
+
 async function readResource(params, context) {
   const uri = params?.uri
   if (!uri) {
@@ -359,8 +562,11 @@ async function readResource(params, context) {
     throw new JsonRpcError(-32602, `未知 resource: ${uri}`)
   }
   let structuredContent
-  const text = typeof def.localContent === 'function'
-    ? def.localContent(projectId)
+  const localContent = typeof def.localContent === 'function' ? def.localContent(projectId) : undefined
+  const text = localContent !== undefined
+    ? typeof localContent === 'string'
+      ? localContent
+      : JSON.stringify(structuredContent = localContent, null, 2)
     : def.versionCompatibilityResource
       ? JSON.stringify(structuredContent = await fetchVersionCompatibilityResource(context), null, 2)
       : def.profileResource
@@ -394,7 +600,9 @@ function listPrompts() {
     prompts: Object.entries(PROMPTS).map(([name, prompt]) => ({
       name,
       description: prompt.description,
-      arguments: prompt.arguments
+      arguments: prompt.arguments,
+      ...(prompt.safety ? { safety: prompt.safety } : {}),
+      ...(prompt.dataspecGuidance ? { dataspecGuidance: prompt.dataspecGuidance } : {})
     }))
   }
 }
