@@ -27,7 +27,7 @@ class AiCapabilityCatalogServiceImplTest {
 
         assertEquals(AiCapabilityCatalogServiceImpl.KIND, catalog.kind());
         assertEquals(1, catalog.schemaVersion());
-        assertEquals("2026.06.28", catalog.catalogVersion());
+        assertEquals("2026.07.05", catalog.catalogVersion());
         assertNotNull(catalog.generatedAt());
         assertFalse(catalog.capabilities().isEmpty());
         assertEquals(catalog.requiredCapabilityIds(), catalog.capabilities().stream().map(AiCapabilityEntry::id).toList());
@@ -79,6 +79,18 @@ class AiCapabilityCatalogServiceImplTest {
         assertTrue(entry.outputContracts().contains("lint-result"));
         assertFalse(entry.preflightChecks().isEmpty());
         assertFalse(entry.nextActions().isEmpty());
+    }
+
+    @Test
+    void reverseImportCapabilityExposesMetadataScanPlanSurfaces() {
+        AiCapabilityEntry entry = service.getCapability("reverse_import", 1L);
+
+        assertTrue(entry.apiEndpoints().contains("POST /api/reverse-import/database/scan"));
+        assertTrue(entry.apiEndpoints().contains("POST /api/reverse-import/database/browser"));
+        assertTrue(entry.optionalInputs().containsAll(List.of("schemaName", "tableNames", "pageSize", "cursor", "cancel")));
+        assertTrue(entry.outputContracts().contains("database-metadata-scan-result"));
+        assertTrue(entry.outputContracts().contains("database-metadata-browser"));
+        assertTrue(entry.contractIds().contains("database-metadata-scan-plan"));
     }
 
     @Test

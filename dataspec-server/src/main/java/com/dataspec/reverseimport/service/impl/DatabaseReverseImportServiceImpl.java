@@ -19,6 +19,10 @@ import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowserColumn;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowserSummary;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowserTable;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanProgress;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanSummary;
 import com.dataspec.reverseimport.model.DatabaseSchemaColumn;
 import com.dataspec.reverseimport.model.DatabaseSchemaIndex;
 import com.dataspec.reverseimport.model.DatabaseSchemaSource;
@@ -45,11 +49,13 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 
 /**
  * 基于 JDBC metadata 的数据库直连反向导入。
@@ -71,6 +77,8 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     private static final String FAILURE_PERMISSION_DENIED = "PERMISSION_DENIED";
     private static final String FAILURE_UNSUPPORTED_DIALECT = "UNSUPPORTED_DIALECT";
     private static final String FAILURE_UNKNOWN = "UNKNOWN";
+    private static final int DEFAULT_SCAN_PAGE_SIZE = 50;
+    private static final int MAX_SCAN_PAGE_SIZE = 100;
 
     private final ReverseImportService reverseImportService;
     private final FieldCoverageService fieldCoverageService;
@@ -129,8 +137,40 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         try (Connection connection = connectionProvider.open(req)) {
             return sanitizeTableInfos(metadataAdapter.listTables(connection, req), req);
         } catch (SQLException e) {
-            throw new BizException("读取数据库表失败: " + e.getMessage());
+            throw new BizException("读取数据库表失败: " + sanitizeConnectionError(e.getMessage(), req));
         }
+    }
+
+    @Override
+    public DatabaseMetadataScanResult scan(DatabaseMetadataScanReq req) {
+        validateConnectionReq(req);
+        int pageSize = scanPageSize(req.getPageSize());
+        int offset = scanOffset(req.getCursor());
+        String scanId = scanId(req);
+        if (Boolean.TRUE.equals(req.getCancel())) {
+            return cancelledScanResult(req, scanId, pageSize, offset);
+        }
+
+        List<DatabaseTableInfo> tables = new ArrayList<>(listTables(req));
+        tables.sort(Comparator
+                .comparing((DatabaseTableInfo table) -> textForSort(table.schemaName()))
+                .thenComparing(table -> textForSort(table.tableName())));
+        int total = tables.size();
+        int fromIndex = Math.min(offset, total);
+        int toIndex = Math.min(fromIndex + pageSize, total);
+        List<DatabaseTableInfo> page = new ArrayList<>(tables.subList(fromIndex, toIndex));
+
+        DatabaseMetadataScanResult result = baseScanResult(req, scanId, pageSize);
+        result.setEstimatedTableCount(total);
+        result.setTables(page);
+        result.setCursor(toIndex < total ? String.valueOf(toIndex) : null);
+        result.setProgress(scanProgress(toIndex, total, pageSize, toIndex < total));
+        result.setPartialSummary(scanSummary(page.size(), total, req));
+        result.setResumeCommand(buildScanResumeCommand(req, result));
+        result.getNextActions().add(toIndex < total
+                ? "可使用 cursor 继续加载下一批表，或选择当前批次生成部分 metadata browser。"
+                : "已到最后一批，可选择表生成 metadata browser 或反向导入预览。");
+        return result;
     }
 
     @Override
@@ -556,6 +596,103 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
 
     private String sanitizeMetadataText(String value, DatabaseConnectionReq req) {
         return SensitiveDataSanitizer.redactText(value, 1000, req == null ? null : req.getPassword());
+    }
+
+    private DatabaseMetadataScanResult baseScanResult(DatabaseMetadataScanReq req, String scanId, int pageSize) {
+        DatabaseMetadataScanResult result = new DatabaseMetadataScanResult();
+        result.setProjectId(req.getProjectId());
+        result.setDatabaseType(sanitizeMetadataText(databaseType(req).toUpperCase(Locale.ROOT), req));
+        result.setDatabaseName(sanitizeMetadataText(req.getDatabaseName(), req));
+        result.setSchemaName(sanitizeMetadataText(req.getSchemaName(), req));
+        result.setScanId(scanId);
+        result.setProgress(scanProgress(0, 0, pageSize, false));
+        result.setPartialSummary(scanSummary(0, 0, req));
+        return result;
+    }
+
+    private DatabaseMetadataScanResult cancelledScanResult(DatabaseMetadataScanReq req,
+                                                           String scanId,
+                                                           int pageSize,
+                                                           int processedCount) {
+        DatabaseMetadataScanResult result = baseScanResult(req, scanId, pageSize);
+        result.setCancelled(true);
+        result.setCursor(null);
+        result.setProgress(scanProgress(processedCount, processedCount, pageSize, false));
+        result.setResumeCommand(buildScanResumeCommand(req, result));
+        result.getNextActions().add("扫描已取消；不会继续读取后续批次，也不会写入源库或标准字段库。");
+        return result;
+    }
+
+    private DatabaseMetadataScanProgress scanProgress(int processedCount,
+                                                       int estimatedTotal,
+                                                       int pageSize,
+                                                       boolean hasMore) {
+        DatabaseMetadataScanProgress progress = new DatabaseMetadataScanProgress();
+        progress.setProcessedTableCount(processedCount);
+        progress.setRemainingTableEstimate(Math.max(0, estimatedTotal - processedCount));
+        progress.setPageSize(pageSize);
+        progress.setHasMore(hasMore);
+        return progress;
+    }
+
+    private DatabaseMetadataScanSummary scanSummary(int pageTableCount, int estimatedTotal, DatabaseMetadataScanReq req) {
+        DatabaseMetadataScanSummary summary = new DatabaseMetadataScanSummary();
+        summary.setPageTableCount(pageTableCount);
+        summary.setSelectedTableCount(req.getTableNames() == null ? 0 : req.getTableNames().size());
+        summary.setEstimatedTableCount(estimatedTotal);
+        return summary;
+    }
+
+    private String buildScanResumeCommand(DatabaseMetadataScanReq req, DatabaseMetadataScanResult result) {
+        String cursor = result.getCursor() == null ? "DONE" : result.getCursor();
+        String command = "POST /api/reverse-import/database/scan"
+                + " projectId=" + req.getProjectId()
+                + " databaseType=" + databaseType(req)
+                + " databaseName=" + req.getDatabaseName()
+                + " schemaName=" + nullToDash(req.getSchemaName())
+                + " scanId=" + result.getScanId()
+                + " cursor=" + cursor
+                + " pageSize=" + result.getProgress().getPageSize();
+        return SensitiveDataSanitizer.redactText(command, 1000, req.getPassword());
+    }
+
+    private String scanId(DatabaseMetadataScanReq req) {
+        return isBlank(req.getScanId())
+                ? "scan-" + UUID.randomUUID()
+                : sanitizeMetadataText(req.getScanId(), req);
+    }
+
+    private int scanPageSize(Integer value) {
+        if (value == null) {
+            return DEFAULT_SCAN_PAGE_SIZE;
+        }
+        if (value < 1) {
+            throw new BizException("分页大小不能小于 1");
+        }
+        return Math.min(value, MAX_SCAN_PAGE_SIZE);
+    }
+
+    private int scanOffset(String cursor) {
+        if (isBlank(cursor)) {
+            return 0;
+        }
+        try {
+            int offset = Integer.parseInt(cursor.trim());
+            if (offset < 0) {
+                throw new BizException("扫描 cursor 不能为负数");
+            }
+            return offset;
+        } catch (NumberFormatException e) {
+            throw new BizException("扫描 cursor 格式不正确");
+        }
+    }
+
+    private String textForSort(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT);
+    }
+
+    private String nullToDash(String value) {
+        return isBlank(value) ? "-" : value;
     }
 
     private String metadataKey(String tableName, String columnName) {

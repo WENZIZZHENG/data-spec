@@ -564,6 +564,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reverse-import/database/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["scanDatabaseMetadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reverse-import/database/browser": {
         parameters: {
             query?: never;
@@ -3314,6 +3330,61 @@ export interface components {
             columns?: components["schemas"]["DatabaseMetadataBrowserColumn"][];
             warnings?: string[];
         };
+        DatabaseMetadataScanReq: {
+            /** Format: int64 */
+            projectId: number;
+            databaseType: string;
+            host: string;
+            /** Format: int32 */
+            port?: number;
+            databaseName: string;
+            schemaName?: string;
+            username: string;
+            password?: string;
+            tableNames?: string[];
+            scanId?: string;
+            cursor?: string;
+            /** Format: int32 */
+            pageSize?: number;
+            cancel?: boolean;
+        };
+        DatabaseMetadataScanProgress: {
+            /** Format: int32 */
+            processedTableCount?: number;
+            /** Format: int32 */
+            remainingTableEstimate?: number;
+            /** Format: int32 */
+            pageSize?: number;
+            hasMore?: boolean;
+        };
+        DatabaseMetadataScanSummary: {
+            /** Format: int32 */
+            pageTableCount?: number;
+            /** Format: int32 */
+            selectedTableCount?: number;
+            /** Format: int32 */
+            estimatedTableCount?: number;
+        };
+        DatabaseMetadataScanResult: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: int64 */
+            projectId?: number;
+            databaseType?: string;
+            databaseName?: string;
+            schemaName?: string;
+            scanId?: string;
+            /** Format: int32 */
+            estimatedTableCount?: number;
+            cursor?: string;
+            tables?: components["schemas"]["DatabaseTableInfo"][];
+            progress?: components["schemas"]["DatabaseMetadataScanProgress"];
+            partialSummary?: components["schemas"]["DatabaseMetadataScanSummary"];
+            resumeCommand?: string;
+            cancelled?: boolean;
+            nextActions?: string[];
+        };
         RReverseImportCompareResult: {
             /** Format: int32 */
             code?: number;
@@ -3483,6 +3554,13 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["DatabaseMetadataBrowser"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RDatabaseMetadataScanResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseMetadataScanResult"];
             error?: components["schemas"]["ErrorDetail"];
         };
         RequirementDraftReq: {
@@ -7455,6 +7533,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RDatabaseMetadataBrowser"];
+                };
+            };
+        };
+    };
+    scanDatabaseMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseMetadataScanReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDatabaseMetadataScanResult"];
                 };
             };
         };

@@ -7,6 +7,8 @@ import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
 import com.dataspec.reverseimport.model.DatabaseImportResult;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
@@ -55,6 +57,14 @@ public class ReverseImportController {
     @PostMapping("/database/tables")
     public R<List<DatabaseTableInfo>> listDatabaseTables(@Valid @RequestBody DatabaseConnectionReq req) {
         return R.ok(databaseReverseImportService.listTables(req));
+    }
+
+    /**
+     * 只读分页扫描数据库表级 metadata，供大库按 cursor 分批浏览和恢复；不保存连接密码或写入字段库。
+     */
+    @PostMapping("/database/scan")
+    public R<DatabaseMetadataScanResult> scanDatabaseMetadata(@Valid @RequestBody DatabaseMetadataScanReq req) {
+        return R.ok(databaseReverseImportService.scan(req));
     }
 
     @PostMapping("/database/dump")

@@ -4,6 +4,8 @@ import com.dataspec.coverage.model.FieldCoverageReport;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
@@ -20,6 +22,11 @@ public interface DatabaseReverseImportService {
     DatabaseConnectionResult testConnection(DatabaseConnectionReq req);
 
     List<DatabaseTableInfo> listTables(DatabaseConnectionReq req);
+
+    /**
+     * 只读分页扫描数据库表级 metadata，返回 cursor/progress 供大库分批浏览；不保存凭据、不写源库或标准库。
+     */
+    DatabaseMetadataScanResult scan(DatabaseMetadataScanReq req);
 
     DatabaseSchemaDump exportDump(DatabaseConnectionReq req);
 

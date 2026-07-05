@@ -44,6 +44,15 @@ export function mergeSelectedTableNames(current: string[] | undefined, tables: D
   return Array.from(selected)
 }
 
+/** 统计当前可见表中已选择的数量，避免跨批次累计选择误当成当前页选择。 */
+export function countSelectedVisibleTableNames(current: string[] | undefined, tables: DatabaseTableLike[]): number {
+  const visible = new Set(selectAllTableNames(tables))
+  return (current ?? [])
+    .map((tableName) => tableName.trim())
+    .filter((tableName) => visible.has(tableName))
+    .length
+}
+
 export function buildCandidateKey(candidate: FieldCandidateLike): string {
   return `${candidate.tableName ?? ''}.${candidate.columnName ?? ''}`
 }

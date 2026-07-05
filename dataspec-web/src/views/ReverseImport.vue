@@ -149,6 +149,10 @@
                     <el-icon><Refresh /></el-icon>
                     加载表
                   </el-button>
+                  <el-button :disabled="!canScanMetadata" :loading="scanLoading" @click="handleStartMetadataScan">
+                    <el-icon><Refresh /></el-icon>
+                    分页扫描
+                  </el-button>
                   <el-button :disabled="!canBrowseMetadata" :loading="metadataLoading" @click="handleBrowseMetadata">
                     <el-icon><View /></el-icon>
                     浏览元数据
@@ -220,7 +224,12 @@
               <div class="db-panel">
                 <div class="section-header compact-header">
                   <h3>选择表</h3>
-                  <el-tag type="info" effect="plain">已选 {{ selectedTableCount }} / {{ databaseTables.length }}</el-tag>
+                  <div class="table-counts">
+                    <el-tag type="info" effect="plain">当前页已选 {{ currentPageSelectedTableCount }} / {{ databaseTables.length }}</el-tag>
+                    <el-tag v-if="selectedTableCount !== currentPageSelectedTableCount" type="success" effect="plain">
+                      累计 {{ selectedTableCount }}
+                    </el-tag>
+                  </div>
                 </div>
                 <div class="table-tools">
                   <el-input
@@ -229,8 +238,24 @@
                     clearable
                     placeholder="搜索 schema、表名或注释"
                   />
+                  <el-input-number v-model="scanPageSize" :min="1" :max="100" size="small" controls-position="right" />
                   <el-button :disabled="filteredDatabaseTables.length === 0" @click="selectVisibleTables">全选当前</el-button>
                   <el-button :disabled="selectedTableCount === 0" @click="clearSelectedTables">清空</el-button>
+                </div>
+                <div v-if="scanResult" class="scan-panel">
+                  <div class="scan-row">
+                    <span>{{ scanProgressText }}</span>
+                    <el-tag v-if="scanResult.cancelled" type="warning" effect="plain">已取消</el-tag>
+                    <el-tag v-else-if="scanResult.progress?.hasMore" type="info" effect="plain">可继续</el-tag>
+                    <el-tag v-else type="success" effect="plain">已完成</el-tag>
+                  </div>
+                  <div class="scan-row scan-actions">
+                    <el-button size="small" :disabled="!canContinueScan" :loading="scanLoading" @click="handleContinueMetadataScan">
+                      下一批
+                    </el-button>
+                    <el-button size="small" :disabled="!canCancelScan" @click="handleCancelMetadataScan">取消扫描</el-button>
+                    <span class="muted-text">{{ scanResumeText }}</span>
+                  </div>
                 </div>
 
                 <div v-if="databaseTables.length === 0 && selectedTableCount > 0" class="saved-table-list">
@@ -655,6 +680,7 @@ import {
   listDatabaseTables,
   previewDatabaseReverseImport,
   previewReverseImport,
+  scanDatabaseMetadata,
   testDatabaseConnection
 } from '@/api/reverseImport'
 import { useProjectStore } from '@/stores/project'
@@ -662,6 +688,7 @@ import {
   attachCandidateConfirmReasons,
   buildIgnoredCandidates,
   buildCandidateKey,
+  countSelectedVisibleTableNames,
   defaultCandidateConfirmReason,
   filterDatabaseTables,
   groupFieldCandidatesByTable,
@@ -677,6 +704,11 @@ import {
   metadataBrowserStatusTagType,
   type DatabaseMetadataBrowserRow
 } from '@/utils/databaseMetadataBrowser'
+import {
+  buildScanResumeSummary,
+  mergeScanTableNames,
+  scanProgressLabel
+} from '@/utils/databaseMetadataScan'
 import {
   fieldLibraryQueryForImportResult,
   loadReverseImportMemory,
@@ -717,6 +749,8 @@ import type {
   DatabaseConnectionSecurityDiagnostic,
   DatabaseImportResult,
   DatabaseMetadataBrowser,
+  DatabaseMetadataScanReq,
+  DatabaseMetadataScanResult,
   DatabaseTableInfo,
   FieldCandidate,
   ReverseImportDecision,
@@ -747,6 +781,7 @@ const previewLoading = ref(false)
 const compareLoading = ref(false)
 const testLoading = ref(false)
 const tableLoading = ref(false)
+const scanLoading = ref(false)
 const metadataLoading = ref(false)
 const importLoading = ref(false)
 const presetLoading = ref(false)
@@ -755,8 +790,10 @@ const presetDialogVisible = ref(false)
 const restoringMemory = ref(false)
 const databaseTables = ref<DatabaseTableInfo[]>([])
 const metadataBrowser = ref<DatabaseMetadataBrowser | null>(null)
+const scanResult = ref<DatabaseMetadataScanResult | null>(null)
 const tableSearch = ref('')
 const metadataSearch = ref('')
+const scanPageSize = ref(50)
 const connectionStatus = ref<ConnectionStatus>('idle')
 const connectionMessage = ref('')
 const connectionSecurity = ref<DatabaseConnectionSecurityDiagnostic | null>(null)
@@ -807,6 +844,18 @@ const canGeneratePreview = computed(() =>
 const canGenerateCompare = computed(() =>
   activeMode.value === 'database' && canPreviewDatabase.value
 )
+const canScanMetadata = computed(() =>
+  activeMode.value === 'database' && canUseDatabaseConnection.value
+)
+const canContinueScan = computed(() =>
+  canScanMetadata.value
+  && Boolean(scanResult.value?.progress?.hasMore)
+  && Boolean(scanResult.value?.cursor)
+  && !scanResult.value?.cancelled
+)
+const canCancelScan = computed(() =>
+  canContinueScan.value
+)
 const canBrowseMetadata = computed(() =>
   activeMode.value === 'database' && canPreviewDatabase.value
 )
@@ -829,6 +878,9 @@ const currentPresetSummary = computed(() =>
   presetConnectionSummary(presetPayload())
 )
 const selectedTableCount = computed(() => dbForm.tableNames?.length ?? 0)
+const currentPageSelectedTableCount = computed(() =>
+  countSelectedVisibleTableNames(dbForm.tableNames, databaseTables.value)
+)
 const candidateTotal = computed(() => preview.value?.fieldCandidates?.length ?? 0)
 const selectedCandidateCount = computed(() => selectedCandidateKeys.value.size)
 const selectedFieldCandidates = computed(() =>
@@ -895,6 +947,12 @@ const metadataSummaryItems = computed(() => [
 ])
 const metadataAiSummary = computed(() =>
   buildMetadataBrowserAiSummary(metadataBrowser.value)
+)
+const scanProgressText = computed(() =>
+  scanProgressLabel(scanResult.value)
+)
+const scanResumeText = computed(() =>
+  buildScanResumeSummary(scanResult.value)
 )
 const previewDialectDiagnostics = computed(() => preview.value?.dialectDiagnostics ?? [])
 const compareSummaryItems = computed(() => [
@@ -1264,6 +1322,7 @@ async function handleLoadTables() {
   try {
     const previousSelection = new Set(dbForm.tableNames ?? [])
     databaseTables.value = await listDatabaseTables(databaseRequest())
+    scanResult.value = null
     const availableTables = new Set(
       databaseTables.value
         .map((table) => table.tableName)
@@ -1280,6 +1339,61 @@ async function handleLoadTables() {
     ElMessage.success(`已加载 ${databaseTables.value.length} 张表`)
   } finally {
     tableLoading.value = false
+  }
+}
+
+async function handleStartMetadataScan() {
+  await runMetadataScan({ cursor: null, resetTables: true })
+}
+
+async function handleContinueMetadataScan() {
+  if (!canContinueScan.value) {
+    return
+  }
+  await runMetadataScan({ cursor: scanResult.value?.cursor ?? null, resetTables: false })
+}
+
+async function handleCancelMetadataScan() {
+  if (!canCancelScan.value) {
+    return
+  }
+  await runMetadataScan({ cursor: scanResult.value?.cursor ?? null, resetTables: false, cancel: true })
+}
+
+async function runMetadataScan(options: { cursor: string | null; resetTables: boolean; cancel?: boolean }) {
+  if (!canScanMetadata.value) {
+    return
+  }
+  scanLoading.value = true
+  try {
+    const result = await scanDatabaseMetadata(scanRequest(options.cursor, Boolean(options.cancel)))
+    scanResult.value = result
+    if (options.cancel || result.cancelled) {
+      connectionMessage.value = '扫描已取消'
+      ElMessage.warning('扫描已取消')
+      return
+    }
+    databaseTables.value = result.tables ?? []
+    if (options.resetTables) {
+      tableSearch.value = ''
+    }
+    dbForm.tableNames = mergeScanTableNames(dbForm.tableNames, result)
+    connectionStatus.value = 'success'
+    connectionMessage.value = `已扫描 ${result.progress?.processedTableCount ?? 0} / ${result.estimatedTableCount ?? 0} 张表`
+    resetResults()
+    ElMessage.success(`已加载当前批次 ${result.tables?.length ?? 0} 张表`)
+  } finally {
+    scanLoading.value = false
+  }
+}
+
+function scanRequest(cursor: string | null, cancel: boolean): DatabaseMetadataScanReq {
+  return {
+    ...databaseRequest(),
+    scanId: scanResult.value?.scanId,
+    cursor: cursor ?? undefined,
+    pageSize: scanPageSize.value,
+    cancel
   }
 }
 
@@ -1947,9 +2061,41 @@ function browserStorage() {
 
 .table-tools {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto;
+  grid-template-columns: minmax(180px, 1fr) 120px auto auto;
   gap: 10px;
   align-items: center;
+}
+
+.table-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.scan-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.scan-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #374151;
+  font-size: 13px;
+}
+
+.scan-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
 }
 
 .table-check-list {
@@ -2214,6 +2360,11 @@ function browserStorage() {
   .preset-bar,
   .import-lists {
     grid-template-columns: 1fr;
+  }
+
+  .scan-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .candidate-toolbar,

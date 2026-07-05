@@ -5,6 +5,8 @@ import type {
   DatabaseConnectionResult,
   DatabaseImportResult,
   DatabaseMetadataBrowser,
+  DatabaseMetadataScanReq,
+  DatabaseMetadataScanResult,
   DatabaseTableInfo,
   FieldCandidate,
   ReverseImportDecision,
@@ -29,6 +31,11 @@ export function listDatabaseTables(data: DatabaseConnectionReq) {
 
 export function browseDatabaseMetadata(data: DatabaseConnectionReq) {
   return request.post<unknown, DatabaseMetadataBrowser>('/reverse-import/database/browser', data)
+}
+
+/** 分页读取数据库表级 metadata，用于大库分批浏览和 AI 恢复扫描。 */
+export function scanDatabaseMetadata(data: DatabaseMetadataScanReq) {
+  return request.post<unknown, DatabaseMetadataScanResult>('/reverse-import/database/scan', data)
 }
 
 export function previewDatabaseReverseImport(data: DatabaseConnectionReq) {

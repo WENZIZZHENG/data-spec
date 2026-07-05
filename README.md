@@ -43,7 +43,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 表名/字段名 snake_case、禁用字段名、推荐字段名、必备列、金额类型、字段后缀/前缀类型和注释缺失等规则。
 - 项目级规则例外，支持按规则编码、表名和字段名声明历史兼容原因；被豁免问题保留在结果中但不计入 active error/warning/suggestion。
 - 修正 SQL 输出、复制、检查记录、分页历史和详情查看。
-- SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项、非标准字段差异和字段级映射决策，并支持填写确认理由后导入数标候选；直连模式支持按表生成数据库现状与 DataSpec 标准字段的二次比对、项目级非敏感连接预设复用、连接健康与方言能力画像、只读 metadata 浏览器和 AI 可读结构摘要，并追踪确认导入后的字段来源批次和 mapping decision。
+- SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项、非标准字段差异和字段级映射决策，并支持填写确认理由后导入数标候选；直连模式支持按表生成数据库现状与 DataSpec 标准字段的二次比对、项目级非敏感连接预设复用、连接健康与方言能力画像、只读 metadata 浏览器、大库分页扫描计划和 AI 可读结构摘要，并追踪确认导入后的字段来源批次和 mapping decision。
 - 数据库 schema dump，支持把选定 PostgreSQL/MySQL 表结构 metadata 导出为离线 JSON，并从 dump 复现反向导入预览、标准差异比对和字段覆盖率报告；dump 会包含可用的索引 metadata，但不包含业务数据行。
 - 字段覆盖率报告，支持基于 SQL/DDL、数据库直连 metadata 或 schema dump 统计标准命中、别名命中、未纳管、缺注释和疑似重复字段。
 
@@ -436,7 +436,7 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 
 `/api/lint` 会返回 lint 结果、结构化修复建议、`fixedSql`、`fixedSqlDiff`、`fixPolicy`、`fixChanges`、`fixSummary` 和 `dialectDiagnostics`，并保存 SQL 检查记录。`fixPolicy` 是请求级策略，支持 `GENERATE`、`DRY_RUN`、`DISABLED` 和最高风险等级；dry-run 只表示预览候选 SQL，不会写回业务仓库，应用前仍需人工确认 diff、风险和方言诊断。方言诊断第一版支持 PostgreSQL/MySQL：SQL 文本会根据 `COMMENT ON`、反引号、`AUTO_INCREMENT`、`ENGINE`、`DEFAULT CHARSET`、inline `COMMENT` 等特征做保守识别；混合或未知方言会返回稳定 code 与 nextAction，不会被静默标成已验证。前端 SQL 校验页支持查看修正 SQL、复制、修复策略摘要、变更风险、当前方言/降级提示、最近检查记录分页和详情；记录详情会展示当时标准、当前标准、回放状态、历史 Context 导出命令和下一步建议，并可复制只包含 `projectId`、页码和 `recordId` 的可复现链接。无快照的旧记录显示为 `unversioned`，仍保留原始 SQL 与问题列表。
 
-反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、浏览只读 metadata、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。SQL 文本和数据库直连预览都会展示方言诊断；PostgreSQL 直连会提示 schema 过滤，MySQL 直连会提示 databaseName 作为 catalog、schemaName 不参与过滤等边界。连接测试会返回 `security` 与 `health` 两组诊断：`security` 继续表达只读风险，`health` 输出连接状态、耗时、失败分类、retryable、数据库产品/版本、schema/comment/index capability、所需只读权限、warnings 和 nextActions；失败信息会统一脱敏，不返回 password、token 或完整 JDBC URL。直连模式还可以生成只读 metadata browser 和二次比对：metadata browser 支持按 schema、表、字段、注释、类型、索引或标准匹配搜索，展示标准命中、缺注释、属性变化、未纳管和可导入候选状态，并提供可复制的 AI schema-only 摘要；二次比对按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。页面会按项目在浏览器本地记住数据库类型、host、port、database、schema、username、表选择、搜索词和差异筛选，不保存数据库密码、token 或完整连接串。当前项目可保存多个数据库连接预设，服务端只持久化预设名、databaseType、host、port、databaseName、schemaName 和 tableNames；反向导入页可选择预设回填连接元数据和表选择，用户名和密码仍由用户当次输入。数据库直连预览会为字段输出 `EXISTING_MATCH`、`NEW_CANDIDATE` 等 mapping decision；确认导入时可填写 `confirmReason`，未勾选候选会记录默认忽略理由，导入结果返回 `batchId` 和 imported/skipped/ignored 决策摘要。确认导入创建的新字段会记录导入批次、来源 schema/table/column、原始 metadata 快照和字段级映射决策，字段库可查看来源摘要；从导入结果跳转字段库时会自动携带字段关键词并筛选当前页结果，带 `sourceBatchId` 的链接也能直达字段库来源筛选。直连模式不会修改源数据库，也不会做定时同步或业务数据采样。
+反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、分页扫描大库、浏览只读 metadata、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。SQL 文本和数据库直连预览都会展示方言诊断；PostgreSQL 直连会提示 schema 过滤，MySQL 直连会提示 databaseName 作为 catalog、schemaName 不参与过滤等边界。连接测试会返回 `security` 与 `health` 两组诊断：`security` 继续表达只读风险，`health` 输出连接状态、耗时、失败分类、retryable、数据库产品/版本、schema/comment/index capability、所需只读权限、warnings 和 nextActions；失败信息会统一脱敏，不返回 password、token 或完整 JDBC URL。直连模式还可以生成 scan plan、只读 metadata browser 和二次比对：scan plan 返回 `scanId`、表总量估算、当前页表、cursor、progress、partialSummary、resumeCommand 和 cancel 状态，前端可按批次继续、取消并保留已选择表；metadata browser 支持按 schema、表、字段、注释、类型、索引或标准匹配搜索，展示标准命中、缺注释、属性变化、未纳管和可导入候选状态，并提供可复制的 AI schema-only 摘要；二次比对按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。页面会按项目在浏览器本地记住数据库类型、host、port、database、schema、username、表选择、搜索词和差异筛选，不保存数据库密码、token 或完整连接串。当前项目可保存多个数据库连接预设，服务端只持久化预设名、databaseType、host、port、databaseName、schemaName 和 tableNames；反向导入页可选择预设回填连接元数据和表选择，用户名和密码仍由用户当次输入。数据库直连预览会为字段输出 `EXISTING_MATCH`、`NEW_CANDIDATE` 等 mapping decision；确认导入时可填写 `confirmReason`，未勾选候选会记录默认忽略理由，导入结果返回 `batchId` 和 imported/skipped/ignored 决策摘要。确认导入创建的新字段会记录导入批次、来源 schema/table/column、原始 metadata 快照和字段级映射决策，字段库可查看来源摘要；从导入结果跳转字段库时会自动携带字段关键词并筛选当前页结果，带 `sourceBatchId` 的链接也能直达字段库来源筛选。直连模式不会修改源数据库，也不会做定时同步或业务数据采样。
 
 后端支持将直连 metadata 导出为离线 schema dump，并用同一份 dump 复现标准分析：
 
@@ -449,6 +449,10 @@ curl -X POST "http://localhost:8090/api/reverse-import/database/browser" \
   -H "Content-Type: application/json" \
   -d '{"projectId":1,"databaseType":"postgresql","host":"localhost","port":5432,"databaseName":"demo","schemaName":"public","username":"readonly","password":"<password>","tableNames":["user_order"]}'
 
+curl -X POST "http://localhost:8090/api/reverse-import/database/scan" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"databaseType":"postgresql","host":"localhost","port":5432,"databaseName":"demo","schemaName":"public","username":"readonly","password":"<password>","pageSize":50}'
+
 curl -X POST "http://localhost:8090/api/reverse-import/dump/preview" \
   -H "Content-Type: application/json" \
   -d '{"projectId":1,"dump":{...}}'
@@ -458,7 +462,7 @@ curl -X POST "http://localhost:8090/api/reverse-import/dump/compare" \
   -d '{"projectId":1,"dump":{...}}'
 ```
 
-schema dump 只包含 databaseType、databaseName、schemaName、表、列、索引、类型、nullable、default、comment、tableType、generatedAt 和非敏感 source metadata；不会包含数据库密码、token、完整 JDBC URL 或业务数据行。metadata browser 会在同一只读边界内返回 summary、表字段浏览行、候选默认选择、preview/compare/coverage 复用结果和 `aiReadableSummary`。
+schema dump 只包含 databaseType、databaseName、schemaName、表、列、索引、类型、nullable、default、comment、tableType、generatedAt 和非敏感 source metadata；不会包含数据库密码、token、完整 JDBC URL 或业务数据行。metadata scan plan 只返回表级分页计划、当前页表、进度和脱敏恢复命令，不读取非当前页字段 metadata，也不会保存连接凭据。metadata browser 会在同一只读边界内返回 summary、表字段浏览行、候选默认选择、preview/compare/coverage 复用结果和 `aiReadableSummary`。
 
 方言能力第一版边界：
 

@@ -4,6 +4,8 @@ import com.dataspec.reverseimport.controller.ReverseImportController;
 import com.dataspec.reverseimport.entity.ReverseImportDecision;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
@@ -32,20 +34,25 @@ class ReverseImportControllerTest {
         ReverseImportPreview preview = new ReverseImportPreview();
         ReverseImportCompareResult compare = new ReverseImportCompareResult();
         DatabaseMetadataBrowser browser = new DatabaseMetadataBrowser();
+        DatabaseMetadataScanReq scanReq = new DatabaseMetadataScanReq();
+        DatabaseMetadataScanResult scanResult = new DatabaseMetadataScanResult();
         when(databaseService.exportDump(connectionReq)).thenReturn(dump);
         when(databaseService.previewDump(dumpReq)).thenReturn(preview);
         when(databaseService.compareDump(dumpReq)).thenReturn(compare);
         when(databaseService.browse(connectionReq)).thenReturn(browser);
+        when(databaseService.scan(scanReq)).thenReturn(scanResult);
 
         assertThat(controller.exportDatabaseDump(connectionReq).getData()).isSameAs(dump);
         assertThat(controller.previewDump(dumpReq).getData()).isSameAs(preview);
         assertThat(controller.compareDump(dumpReq).getData()).isSameAs(compare);
         assertThat(controller.browseDatabaseMetadata(connectionReq).getData()).isSameAs(browser);
+        assertThat(controller.scanDatabaseMetadata(scanReq).getData()).isSameAs(scanResult);
 
         verify(databaseService).exportDump(connectionReq);
         verify(databaseService).previewDump(dumpReq);
         verify(databaseService).compareDump(dumpReq);
         verify(databaseService).browse(connectionReq);
+        verify(databaseService).scan(scanReq);
     }
 
     @Test

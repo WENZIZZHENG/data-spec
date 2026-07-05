@@ -240,6 +240,17 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 该能力只读取 schema metadata，不执行任意 SQL、不采样源库业务数据行、不保存数据库密码。`aiReadableSummary` 用于 AI 继续生成候选导入计划或覆盖率说明；其中不得包含 password、token、Authorization、完整 JDBC URL 或业务数据行。候选写入仍必须走既有显式确认导入接口。
 
+## 数据库 Metadata Scan Plan
+
+稳定字段：
+
+- `DatabaseMetadataScanReq`: 继承数据库连接请求，新增 `scanId`、`cursor`、`pageSize`、`cancel`。
+- `DatabaseMetadataScanResult`: `kind`、`schemaVersion`、`projectId`、`databaseType`、`databaseName`、`schemaName`、`scanId`、`estimatedTableCount`、`cursor`、`tables[]`、`progress`、`partialSummary`、`resumeCommand`、`cancelled`、`nextActions[]`。
+- `DatabaseMetadataScanProgress`: `processedTableCount`、`remainingTableEstimate`、`pageSize`、`hasMore`。
+- `DatabaseMetadataScanSummary`: `pageTableCount`、`selectedTableCount`、`estimatedTableCount`。
+
+该能力用于大库分批浏览，只返回表级分页计划和当前页表 metadata。`cursor` 第一版是短期偏移量，适合同一连接上下文内继续下一页，不是长期任务游标；`resumeCommand` 必须脱敏，不得包含 password、token、Authorization、完整 JDBC URL、DSN 或源库业务数据行。`cancelled=true` 只表示当前响应停止继续扫描，不会写入标准库、不修改源数据库、不保存连接凭据。当前页需要字段级详情时，应继续调用既有 metadata browser 或 preview，并仅传入当前批次选中的 `tableNames`。
+
 ## 自然语言需求草案
 
 稳定字段：

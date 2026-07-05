@@ -1037,6 +1037,74 @@ export interface DatabaseTableInfo {
   comment?: string
 }
 
+/** 数据库 metadata 分页扫描请求；连接密码仅用于本次请求，不进入 cursor 或 scanId。 */
+export interface DatabaseMetadataScanReq extends DatabaseConnectionReq {
+  /** 一轮扫描标识；为空时由服务端生成，不代表持久后台任务。 */
+  scanId?: string
+  /** 短期分页游标，第一版使用已读取表数量偏移。 */
+  cursor?: string
+  /** 每页表数量，服务端限制在 1 到 100。 */
+  pageSize?: number
+  /** true 表示停止继续扫描，不写源库或标准库。 */
+  cancel?: boolean
+}
+
+/** 数据库 metadata 分页扫描进度。 */
+export interface DatabaseMetadataScanProgress {
+  /** 已处理表数量。 */
+  processedTableCount?: number
+  /** 剩余表数量估算。 */
+  remainingTableEstimate?: number
+  /** 本次请求采用的分页大小。 */
+  pageSize?: number
+  /** 是否还有下一批。 */
+  hasMore?: boolean
+}
+
+/** 当前扫描页的轻量汇总。 */
+export interface DatabaseMetadataScanSummary {
+  /** 当前页返回的表数量。 */
+  pageTableCount?: number
+  /** 用户已选择的表数量。 */
+  selectedTableCount?: number
+  /** 当前连接可见表数量估算。 */
+  estimatedTableCount?: number
+}
+
+/** 数据库 metadata 分页扫描响应；只包含表级 metadata、进度和脱敏恢复信息。 */
+export interface DatabaseMetadataScanResult {
+  /** 响应类型标识。 */
+  kind?: string
+  /** 响应 schema 版本。 */
+  schemaVersion?: number
+  /** 当前 DataSpec 项目 ID。 */
+  projectId?: number
+  /** 数据库类型，如 POSTGRESQL 或 MYSQL。 */
+  databaseType?: string
+  /** 数据库名，服务端已做敏感信息清洗。 */
+  databaseName?: string
+  /** schema 名；MySQL 场景可能为空。 */
+  schemaName?: string
+  /** 一轮扫描标识；不承诺持久化生命周期。 */
+  scanId?: string
+  /** 当前连接可见表数量估算。 */
+  estimatedTableCount?: number
+  /** 下一批 cursor；为空表示无后续批次。 */
+  cursor?: string | null
+  /** 当前页表级 metadata，不包含列 metadata 或业务数据行。 */
+  tables?: DatabaseTableInfo[]
+  /** 当前扫描页和下一批状态。 */
+  progress?: DatabaseMetadataScanProgress
+  /** 当前扫描页轻量汇总。 */
+  partialSummary?: DatabaseMetadataScanSummary
+  /** 面向 AI 的脱敏恢复提示。 */
+  resumeCommand?: string
+  /** true 表示用户已请求取消，不应继续下一批。 */
+  cancelled?: boolean
+  /** 扫描后的建议动作，不代表自动写入。 */
+  nextActions?: string[]
+}
+
 export interface DatabaseSchemaIndex {
   schemaName?: string
   tableName?: string

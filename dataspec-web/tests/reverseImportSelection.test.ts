@@ -4,6 +4,7 @@ import {
   attachCandidateConfirmReasons,
   buildCandidateKey,
   buildIgnoredCandidates,
+  countSelectedVisibleTableNames,
   defaultCandidateConfirmReason,
   filterDatabaseTables,
   groupFieldCandidatesByTable,
@@ -73,6 +74,15 @@ test('merges selected table names without dropping hidden selections', () => {
     mergeSelectedTableNames(['event_log', 'users'], visibleTables),
     ['event_log', 'users', 'orders']
   )
+})
+
+test('counts selected names only on the current visible table page', () => {
+  const visibleTables = [
+    { schemaName: 'public', tableName: 'users' },
+    { schemaName: 'public', tableName: 'orders' }
+  ]
+
+  assert.equal(countSelectedVisibleTableNames(['event_log', 'users', 'orders'], visibleTables), 2)
 })
 
 test('builds candidate keys and groups candidates by table', () => {
