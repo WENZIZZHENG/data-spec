@@ -2,6 +2,7 @@ package com.dataspec.reverseimport.service.impl;
 
 import com.dataspec.common.exception.BizException;
 import com.dataspec.common.perf.PerformanceProbe;
+import com.dataspec.common.safety.DryRunEvidenceSigner;
 import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.dialect.service.SqlDialectCompatibilityService;
 import com.dataspec.field.entity.Field;
@@ -27,6 +28,7 @@ import com.dataspec.reverseimport.model.ReverseImportSummary;
 import com.dataspec.reverseimport.service.ReverseImportService;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.security.context.ProjectAccessGuard;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +43,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -144,6 +147,9 @@ public class ReverseImportServiceImpl implements ReverseImportService {
         summary.setMissingCommentCount(preview.getMissingComments().size());
         summary.setNonStandardFieldCount(preview.getNonStandardFields().size());
         preview.setSummary(summary);
+        String dryRunToken = reverseImportDryRunToken(projectId, preview);
+        preview.setDryRunToken(dryRunToken);
+        preview.getFieldCandidates().forEach(candidate -> candidate.setDryRunToken(dryRunToken));
         return preview;
     }
 
@@ -232,6 +238,7 @@ public class ReverseImportServiceImpl implements ReverseImportService {
     }
 
     private DatabaseImportResult importCandidatesInternal(DatabaseImportReq req) {
+        requireImportDryRunEvidence(req);
         Map<String, Field> standardFieldIndex = standardFieldIndex(req.getProjectId());
         DatabaseImportResult result = new DatabaseImportResult();
         List<ImportedFieldSource> importedSources = new ArrayList<>();
@@ -517,6 +524,67 @@ public class ReverseImportServiceImpl implements ReverseImportService {
         decision.setConfirmReason(safeDecisionText(confirmReason));
         decision.setMetadataJson(writeJson(candidateMetadata(candidate)));
         return decision;
+    }
+
+    private void requireImportDryRunEvidence(DatabaseImportReq req) {
+        String dryRunToken = req.getDryRunToken();
+        if (isBlank(dryRunToken)) {
+            throw new BizException(400, "缺少 dry-run evidence: operation=reverse-import:database-import");
+        }
+        JsonNode payload = DryRunEvidenceSigner.verifyPayload("rid", dryRunToken, objectMapper)
+                .orElseThrow(() -> new BizException(400, "dry-run evidence 无效: operation=reverse-import:database-import"));
+        if (!"reverse-import:database-import".equals(payload.path("operation").asText())
+                || !Objects.equals(req.getProjectId(), payload.path("projectId").isMissingNode() ? null : payload.path("projectId").asLong())) {
+            throw new BizException(400, "dry-run evidence 与导入项目不匹配: operation=reverse-import:database-import");
+        }
+        Set<String> allowedCandidateHashes = new HashSet<>();
+        payload.path("candidateHashes").forEach(item -> allowedCandidateHashes.add(item.asText()));
+        for (FieldCandidate candidate : safeCandidates(req.getCandidates())) {
+            if (candidate != null && !Objects.equals(dryRunToken, candidate.getDryRunToken())) {
+                throw new BizException(400, "dry-run evidence 与导入候选不匹配: operation=reverse-import:database-import");
+            }
+            if (candidate != null && !allowedCandidateHashes.contains(candidateEvidenceHash(candidate))) {
+                throw new BizException(400, "dry-run evidence 与导入候选不匹配: operation=reverse-import:database-import");
+            }
+        }
+        for (FieldCandidate candidate : safeCandidates(req.getIgnoredCandidates())) {
+            if (candidate != null && !Objects.equals(dryRunToken, candidate.getDryRunToken())) {
+                throw new BizException(400, "dry-run evidence 与忽略候选不匹配: operation=reverse-import:database-import");
+            }
+            if (candidate != null && !allowedCandidateHashes.contains(candidateEvidenceHash(candidate))) {
+                throw new BizException(400, "dry-run evidence 与忽略候选不匹配: operation=reverse-import:database-import");
+            }
+        }
+    }
+
+    private String reverseImportDryRunToken(Long projectId, ReverseImportPreview preview) {
+        List<String> candidateHashes = safeCandidates(preview.getFieldCandidates()).stream()
+                .map(this::candidateEvidenceHash)
+                .sorted()
+                .toList();
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("operation", "reverse-import:database-import");
+        payload.put("projectId", projectId);
+        payload.put("candidateHashes", candidateHashes);
+        return DryRunEvidenceSigner.signPayload("rid", payload, objectMapper);
+    }
+
+    private String candidateEvidenceHash(FieldCandidate candidate) {
+        try {
+            return DryRunEvidenceSigner.sha256Hex(objectMapper.writeValueAsBytes(candidateEvidenceKey(candidate)));
+        } catch (Exception e) {
+            throw new BizException("计算反向导入候选 dry-run evidence 失败: " + e.getMessage());
+        }
+    }
+
+    private List<Object> candidateEvidenceKey(FieldCandidate candidate) {
+        return List.of(
+                normalize(candidate.getTableName()),
+                normalize(candidate.getColumnName()),
+                nullToEmpty(candidate.getDataType()),
+                String.valueOf(candidate.getNullable()),
+                nullToEmpty(candidate.getDefaultValue()),
+                nullToEmpty(candidate.getComment()));
     }
 
     private Map<String, Object> candidateMetadata(FieldCandidate candidate) {

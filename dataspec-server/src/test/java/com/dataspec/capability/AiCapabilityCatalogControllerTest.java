@@ -4,6 +4,7 @@ import com.dataspec.capability.controller.AiCapabilityCatalogController;
 import com.dataspec.capability.model.AiCapabilityCatalog;
 import com.dataspec.capability.model.AiCapabilityDiagnostic;
 import com.dataspec.capability.model.AiCapabilityEntry;
+import com.dataspec.capability.model.AiWriteSafetyMetadata;
 import com.dataspec.capability.service.AiCapabilityCatalogService;
 import com.dataspec.capability.service.impl.AiCapabilityCatalogServiceImpl;
 import com.dataspec.common.result.R;
@@ -97,6 +98,7 @@ class AiCapabilityCatalogControllerTest {
                     List.of(),
                     List.of("run doctor"),
                     List.of("fix errors"),
+                    new AiWriteSafetyMetadata(false, true, false, false, false, List.of(), List.of("fix errors")),
                     "README.md#sql-规范闭环"
             );
         }

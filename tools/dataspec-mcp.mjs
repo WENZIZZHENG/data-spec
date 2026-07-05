@@ -14,6 +14,46 @@ const SERVER_NAME = 'dataspec-mcp'
 const SERVER_VERSION = '0.1.0'
 const EVIDENCE_SOURCE_TYPES = ['AI_JOB', 'SQL_CHECK', 'COVERAGE_REPORT', 'AI_BATCH_RUN', 'AI_TASK_RUN']
 
+const READ_ONLY_TOOL_SAFETY = {
+  readOnly: true,
+  writesProject: false,
+  requiresDryRun: false,
+  supportsUndo: false,
+  requiresIdempotencyKey: false,
+  sensitiveInputs: [],
+  nextActions: ['读取 capability catalog 后再选择后续工具。']
+}
+
+const TOOL_SAFETY = {
+  get_session_bootstrap: READ_ONLY_TOOL_SAFETY,
+  create_task_card: READ_ONLY_TOOL_SAFETY,
+  render_task_card: READ_ONLY_TOOL_SAFETY,
+  lint_sql: {
+    readOnly: false,
+    writesProject: true,
+    requiresDryRun: false,
+    supportsUndo: true,
+    requiresIdempotencyKey: false,
+    sensitiveInputs: ['sql'],
+    nextActions: ['调用前先读取 capability catalog；完成后可导出 evidence package。']
+  },
+  get_field_catalog: READ_ONLY_TOOL_SAFETY,
+  search_field_catalog: READ_ONLY_TOOL_SAFETY,
+  search_fields: READ_ONLY_TOOL_SAFETY,
+  suggest_fields: READ_ONLY_TOOL_SAFETY,
+  generate_table_ddl: {
+    readOnly: false,
+    writesProject: true,
+    requiresDryRun: false,
+    supportsUndo: true,
+    requiresIdempotencyKey: false,
+    sensitiveInputs: [],
+    nextActions: ['生成 DDL 后检查 lintResult 和方言诊断，再交付给用户确认。']
+  },
+  export_evidence_package: READ_ONLY_TOOL_SAFETY,
+  get_ai_task_run: READ_ONLY_TOOL_SAFETY
+}
+
 const RESOURCE_DEFS = {
   'capability-catalog': {
     name: 'DataSpec AI Capability Catalog',
@@ -101,7 +141,7 @@ const PROMPTS = {
         `- dataspec://project/${projectId}/field-catalog`,
         `- dataspec://project/${projectId}/database-rules`,
         '',
-        '先根据 capability catalog 确认可用入口、preflightChecks 和 writeRisk；再根据 schema registry 确认稳定字段和兼容策略，根据 AI task profile 选择 context scope、fixedSql 策略和输出格式；再根据字段目录优先复用标准字段，生成 PostgreSQL DDL。要求表名和列名使用 snake_case，并为表和字段补充 COMMENT ON 语句。',
+        '先根据 capability catalog 确认可用入口、safety、preflightChecks 和 writeRisk；写入型能力必须先检查 safety.requiresDryRun、safety.requiresIdempotencyKey 和 nextActions；再根据 schema registry 确认稳定字段和兼容策略，根据 AI task profile 选择 context scope、fixedSql 策略和输出格式；再根据字段目录优先复用标准字段，生成 PostgreSQL DDL。要求表名和列名使用 snake_case，并为表和字段补充 COMMENT ON 语句。',
         '交付前请调用 MCP tool `export_evidence_package` 导出 evidence package，作为本次建模依据、输出和下一步建议的只读交接物。',
         args.businessDescription ? `业务描述：${args.businessDescription}` : '业务描述：请根据用户后续输入补全。'
       ].join('\n')
@@ -123,7 +163,7 @@ const PROMPTS = {
     ],
     buildText(args, projectId) {
       return [
-        '请按 DataSpec 标准评审 SQL。先读取 capability catalog、schema registry 和 AI task profile，再读取字段目录和数据库规则，并在需要机器校验时调用 MCP tool `lint_sql`。',
+        '请按 DataSpec 标准评审 SQL。先读取 capability catalog、schema registry 和 AI task profile，并检查相关 capability 或 MCP tool 的 safety metadata；写入型动作必须按 safety.nextActions 先 dry-run 或准备 Idempotency-Key；再读取字段目录和数据库规则，并在需要机器校验时调用 MCP tool `lint_sql`。',
         '完成修复或评审交付前，请调用 MCP tool `export_evidence_package` 导出 evidence package，便于用户和下游 AI 复盘。',
         `能力清单：dataspec://project/${projectId}/capability-catalog`,
         `契约 registry：dataspec://project/${projectId}/schema-registry`,
@@ -150,7 +190,7 @@ const PROMPTS = {
     ],
     buildText(args, projectId) {
       return [
-        '请把业务需求拆成字段设计建议。先读取 capability catalog、schema registry、AI task profile 和 DataSpec 字段目录，优先复用已有标准字段；缺口字段请说明建议字段名、类型、注释和是否应纳入标准字段库。',
+        '请把业务需求拆成字段设计建议。先读取 capability catalog、schema registry、AI task profile 和 DataSpec 字段目录，并检查候选写入动作的 safety metadata；优先复用已有标准字段；缺口字段请说明建议字段名、类型、注释和是否应纳入标准字段库。',
         '完成字段设计建议前，请调用 MCP tool `export_evidence_package` 导出 evidence package，记录使用的标准、候选依据和后续动作。',
         `能力清单：dataspec://project/${projectId}/capability-catalog`,
         `契约 registry：dataspec://project/${projectId}/schema-registry`,
@@ -359,8 +399,7 @@ function getPrompt(params, defaultProjectId) {
 }
 
 function listTools() {
-  return {
-    tools: [
+  const tools = [
       {
         name: 'get_session_bootstrap',
         description: '读取 DataSpec AI 会话启动包，返回当前项目、标准版本、可用能力、推荐命令、风险提示和 nextActions。',
@@ -665,6 +704,15 @@ function listTools() {
         }
       }
     ]
+  return {
+    tools: tools.map(withToolSafety)
+  }
+}
+
+function withToolSafety(tool) {
+  return {
+    ...tool,
+    safety: TOOL_SAFETY[tool.name] ?? READ_ONLY_TOOL_SAFETY
   }
 }
 
@@ -1098,9 +1146,9 @@ async function readResponseJson(response) {
 }
 
 function toDataSpecRpcError(payload, httpStatus) {
-  const message = payload?.message || `DataSpec 请求失败，HTTP ${httpStatus}`
+  const message = sanitizeSecretText(payload?.message || `DataSpec 请求失败，HTTP ${httpStatus}`)
   return new JsonRpcError(-32000, message, {
-    dataspecError: normalizeDataSpecDiagnostic(payload?.error, httpStatus, message)
+    dataspecError: sanitizeSecretValue(normalizeDataSpecDiagnostic(payload?.error, httpStatus, message))
   })
 }
 
@@ -1119,7 +1167,7 @@ function taskCardRpcError(error) {
 
 function normalizeDataSpecDiagnostic(error, httpStatus, message) {
   if (error && typeof error === 'object') {
-    return {
+    const diagnostic = {
       code: String(error.code ?? 'DATASPEC_ERROR'),
       category: String(error.category ?? 'DATASPEC'),
       retryable: Boolean(error.retryable),
@@ -1127,8 +1175,28 @@ function normalizeDataSpecDiagnostic(error, httpStatus, message) {
       docsRef: String(error.docsRef ?? 'README.md#验证'),
       httpStatus
     }
+    appendDiagnosticExtras(diagnostic, error)
+    return diagnostic
   }
   return fallbackDataSpecDiagnostic(httpStatus, message)
+}
+
+function appendDiagnosticExtras(diagnostic, error) {
+  if (Array.isArray(error.missing)) {
+    diagnostic.missing = error.missing.map((item) => String(item))
+  }
+  if (typeof error.operation === 'string' && error.operation.trim()) {
+    diagnostic.operation = error.operation
+  }
+  if (typeof error.capabilityId === 'string' && error.capabilityId.trim()) {
+    diagnostic.capabilityId = error.capabilityId
+  }
+  if (error.safety && typeof error.safety === 'object' && !Array.isArray(error.safety)) {
+    diagnostic.safety = error.safety
+  }
+  if (Array.isArray(error.nextActions)) {
+    diagnostic.nextActions = error.nextActions.map((item) => String(item))
+  }
 }
 
 function fallbackDataSpecDiagnostic(httpStatus, message) {
@@ -1231,7 +1299,7 @@ function containsTaskCardSecretPattern(value) {
     /authorization\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\r\n,;]+)/i.test(value) ||
     /authorization\s*[:=]\s*bearer\s+[^\s,;]+/i.test(value) ||
     /\bbearer\s+[A-Za-z0-9._~+/-]+=*/i.test(value) ||
-    /\b(?:passwords?|passwds?|pwds?|tokens?|api[_-]?tokens?|dataspec[_-]?tokens?|api[_-]?keys?|secrets?|client[_-]?secrets?|access[_-]?tokens?|refresh[_-]?tokens?|plain[_-]?tokens?|token[_-]?hash(?:es)?|jdbc[_-]?urls?|connection[_-]?strings?)\b\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s"',;}&]+)/i.test(value)
+    /\b(?:passwords?|passwds?|pwds?|tokens?|api[_-]?tokens?|dataspec[_-]?tokens?|api[_-]?keys?|secrets?|client[_-]?secrets?|access[_-]?tokens?|refresh[_-]?tokens?|plain[_-]?tokens?|token[_-]?hash(?:es)?|jdbc[_-]?urls?|connection[_-]?strings?|dsns?)\b\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s"',;}&]+)/i.test(value)
 }
 
 function isSensitiveTaskCardKey(key) {
@@ -1269,7 +1337,9 @@ function isSensitiveTaskCardKey(key) {
     'jdbcurl',
     'jdbcurls',
     'connectionstring',
-    'connectionstrings'
+    'connectionstrings',
+    'dsn',
+    'dsns'
   ].includes(normalized)
 }
 
@@ -1399,13 +1469,42 @@ function toErrorResponse(id, error) {
     id,
     error: {
       code,
-      message: error.message
+      message: sanitizeSecretText(error.message)
     }
   }
   if (error instanceof JsonRpcError && error.data !== undefined) {
-    body.error.data = error.data
+    body.error.data = sanitizeSecretValue(error.data)
   }
   return body
+}
+
+function sanitizeSecretValue(value) {
+  if (typeof value === 'string') {
+    return sanitizeSecretText(value)
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeSecretValue(item))
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+      key,
+      isSensitiveTaskCardKey(key) ? '***' : sanitizeSecretValue(item)
+    ]))
+  }
+  return value
+}
+
+function sanitizeSecretText(value) {
+  if (value === undefined || value === null) {
+    return value
+  }
+  return String(value)
+    .replace(/jdbc:[^\s"',;}&]+/gi, 'jdbc:[REDACTED]')
+    .replace(/\b((?:postgres(?:ql)?|mysql|mariadb|sqlserver|oracle|mongodb|redis):\/\/)[^\s"',;}&]+/gi, '$1[REDACTED]')
+    .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s,;]+/gi, '$1[REDACTED]')
+    .replace(/(authorization\s*[:=]\s*)(?!\s*['"]?bearer\s+)(['"]?)[^,;}&\r\n]+\2/gi, '$1$2[REDACTED]$2')
+    .replace(/(bearer\s+)[A-Za-z0-9._~+/-]+=*/gi, '$1[REDACTED]')
+    .replace(/((?:password|passwd|pwd|token|api[_-]?token|dataspec[_-]?token|api[_-]?key|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|plain[_-]?token|token[_-]?hash|jdbc[_-]?url|connection[_-]?string|dsn)\s*[:=]\s*)[^\s"',;}&]+/gi, '$1[REDACTED]')
 }
 
 async function runStdioServer(argv) {

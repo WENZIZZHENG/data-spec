@@ -7,6 +7,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -88,5 +90,18 @@ class ErrorCatalogTest {
         assertEquals("WRITE_OPERATION_IN_PROGRESS", detail.code());
         assertEquals("CONFLICT", detail.category());
         assertTrue(detail.retryable());
+    }
+
+    @Test
+    void classifiesMissingDryRunEvidenceAsSafetyDiagnostic() {
+        ErrorDetail detail = ErrorCatalog.from(400, "缺少 dry-run evidence: operation=project-backup:restore-apply");
+
+        assertEquals("DRY_RUN_REQUIRED", detail.code());
+        assertEquals("SAFETY", detail.category());
+        assertTrue(detail.retryable());
+        assertEquals("project-backup:restore-apply", detail.operation());
+        assertEquals(List.of("dryRunToken"), detail.missing());
+        assertTrue(Boolean.TRUE.equals(detail.safety().get("requiresDryRun")));
+        assertTrue(detail.nextActions().get(0).contains("preview"));
     }
 }

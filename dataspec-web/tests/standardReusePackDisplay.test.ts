@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import {
+import * as reusePackDisplay from '../src/utils/standardReusePackDisplay.ts'
+import type { StandardReusePackPlan } from '../src/types/index.ts'
+
+const {
   buildStandardReusePackApplyPayload,
   buildStandardReusePackCreatePayload,
   hasBlockingReusePackItems,
   reusePackActionTagType,
   summarizeReusePackCounts
-} from '../src/utils/standardReusePackDisplay.ts'
-import type { StandardReusePackPlan } from '../src/types/index.ts'
+} = reusePackDisplay
 
 function readSource(relativePath: string) {
   return readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8')
@@ -70,6 +72,40 @@ test('formats reuse pack actions and detects blocking items', () => {
   assert.equal(hasBlockingReusePackItems({ ...plan, items: [{ assetType: 'field', key: '', action: 'BLOCKED' }] }), true)
 })
 
+test('builds safety-aware dry-run summary before reuse pack apply', () => {
+  const buildAiWriteSafetySummary = (reusePackDisplay as any).buildAiWriteSafetySummary
+  assert.equal(typeof buildAiWriteSafetySummary, 'function')
+
+  const summary = buildAiWriteSafetySummary({
+    safety: {
+      readOnly: false,
+      writesProject: true,
+      requiresDryRun: true,
+      supportsUndo: true,
+      requiresIdempotencyKey: true,
+      sensitiveInputs: ['databasePassword'],
+      nextActions: ['先运行预览应用', '携带 Idempotency-Key 确认应用']
+    },
+    counts: {
+      created: 2,
+      skipped: 1,
+      drifted: 1,
+      blocked: 0,
+      warnings: 1
+    }
+  })
+
+  assert.equal(summary.title, '写入安全 dry-run 摘要')
+  assert.equal(summary.requiresDryRun, true)
+  assert.equal(summary.requiresIdempotencyKey, true)
+  assert.equal(summary.requiresReview, true)
+  assert.match(summary.riskText, /需要 dry-run/)
+  assert.match(summary.idempotencyText, /Idempotency-Key/)
+  assert.deepEqual(summary.counts.map((item) => item.key), ['created', 'skipped', 'drifted', 'blocked', 'warnings'])
+  assert.deepEqual(summary.nextActions, ['先运行预览应用', '携带 Idempotency-Key 确认应用'])
+  assert.deepEqual(summary.sensitiveInputs, ['databasePassword'])
+})
+
 test('keeps standard reuse pack page, api, and types wired', () => {
   const view = readSource('src/views/StandardReusePack.vue')
   const api = readSource('src/api/standardReusePack.ts')
@@ -100,6 +136,8 @@ test('keeps standard reuse pack page, api, and types wired', () => {
     'listStandardReusePackApplications',
     'buildStandardReusePackCreatePayload',
     'buildStandardReusePackApplyPayload',
+    'v-if="safetySummary.requiresDryRun"',
+    'requiresDryRun: false',
     'standardPackSources',
     '标准复用包',
     '创建复用包',

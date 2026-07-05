@@ -1,5 +1,6 @@
 package com.dataspec.reverseimport.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -21,6 +22,9 @@ public class DatabaseImportReq {
 
     @Valid
     private List<FieldCandidate> ignoredCandidates = new ArrayList<>();
+
+    @Schema(description = "反向导入预览返回的 dry-run evidence；确认写入标准字段前必须带回。")
+    private String dryRunToken;
 
     /** 以下来源上下文字段仅用于追踪直连反向导入，不包含密码或完整连接串。 */
     private String databaseType;

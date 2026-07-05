@@ -1704,6 +1704,36 @@ test('capability show prints capability detail', async () => {
   assert.match(output.cliCommands[0], /dataspec lint/)
 })
 
+test('capability show text includes write safety summary', async () => {
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 200,
+      data: capabilityCatalogFixture().capabilities.find((item) => item.id === 'reverse-import')
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'capability',
+    'show',
+    'reverse-import',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'text'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.match(io.stdout, /safety:/)
+  assert.match(io.stdout, /requiresDryRun: true/)
+  assert.match(io.stdout, /requiresIdempotencyKey: true/)
+  assert.match(io.stdout, /sensitiveInputs: databasePassword/)
+})
+
 test('capability show normalizes unknown id as parameter diagnostic', async () => {
   const fetchFn = async () => ({
     ok: false,
@@ -1732,6 +1762,34 @@ test('capability show normalizes unknown id as parameter diagnostic', async () =
   assert.equal(diagnostic.category, 'PARAMETER')
   assert.equal(diagnostic.retryable, false)
   assert.match(diagnostic.suggestedAction, /capability list/)
+})
+
+test('capability check fails when a write capability lacks safety metadata', async () => {
+  const catalog = capabilityCatalogFixture()
+  delete catalog.capabilities.find((item) => item.id === 'lint-sql').safety
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 200,
+      data: catalog
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'capability',
+    'check',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+  const output = JSON.parse(io.stdout)
+
+  assert.equal(code, 2)
+  assert.match(JSON.stringify(output.diagnostics), /MISSING_SAFETY/)
+  assert.match(JSON.stringify(output.diagnostics), /lint-sql/)
 })
 
 test('capability check reports missing core capability ids', async () => {
@@ -1776,6 +1834,42 @@ test('capability list prints DataSpecError when server is unavailable', async ()
   assert.equal(code, 2)
   assert.equal(diagnostic.code, 'DATASPEC_SERVER_UNAVAILABLE')
   assert.match(diagnostic.suggestedAction, /doctor/)
+})
+
+test('cli preserves structured safety diagnostic fields and redacts secrets', async () => {
+  const io = createIo('CREATE TABLE users (id bigint);')
+  const fetchFn = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({
+      code: 400,
+      message: '缺少 Idempotency-Key password=raw-secret Authorization: Bearer ds_cli_secret jdbc:postgresql://host/db dsn=postgres://user:dsn-secret@host/db postgres://user:naked-secret@host/db',
+      error: {
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        category: 'SAFETY',
+        retryable: true,
+        suggestedAction: '携带 --idempotency-key 重试 password=raw-secret dsn=postgres://user:dsn-secret@host/db mysql://user:naked-secret@host/db',
+        docsRef: 'README.md#ai-写入安全协议',
+        missing: ['Idempotency-Key'],
+        operation: 'project-restore:apply',
+        safety: { readOnly: false, writesProject: true, requiresIdempotencyKey: true },
+        nextActions: ['重新运行命令并传入 --idempotency-key <key>']
+      }
+    })
+  })
+
+  const code = await runCli(['lint', '-', '--project', '7', '--format', 'json'], io, fetchFn)
+  const diagnosticLine = io.stderr.split(/\r?\n/).find((line) => line.startsWith('DataSpecError: '))
+  const diagnostic = JSON.parse(diagnosticLine.replace('DataSpecError: ', ''))
+
+  assert.equal(code, 2)
+  assert.equal(diagnostic.code, 'IDEMPOTENCY_KEY_REQUIRED')
+  assert.equal(diagnostic.category, 'SAFETY')
+  assert.deepEqual(diagnostic.missing, ['Idempotency-Key'])
+  assert.equal(diagnostic.operation, 'project-restore:apply')
+  assert.equal(diagnostic.safety.requiresIdempotencyKey, true)
+  assert.match(diagnostic.nextActions[0], /idempotency-key/)
+  assert.doesNotMatch(io.stderr, /raw-secret|ds_cli_secret|jdbc:postgresql:\/\/host\/db|dsn-secret|naked-secret|dsn=postgres:\/\/user:|postgres:\/\/user:|mysql:\/\/user:/)
 })
 
 test('bootstrap prints server session package and hides token value', async () => {
@@ -3627,6 +3721,7 @@ function capabilityCatalogFixture() {
       stability: 'stable-ai',
       requiresProject: !['session-bootstrap', 'capability-catalog', 'doctor', 'schema-registry', 'workflow-recipes'].includes(id),
       writeRisk: id === 'lint-sql' ? 'WRITES_DATASPEC_RECORD' : 'READ_ONLY',
+      safety: capabilitySafetyFixture(id),
       requiredInputs: id === 'lint-sql' ? ['projectId', 'sql'] : [],
       optionalInputs: [],
       outputContracts: id === 'lint-sql' ? ['lint-result'] : ['ai-capability-catalog'],
@@ -3652,6 +3747,22 @@ function capabilityCatalogFixture() {
     requiredCapabilityIds: ids,
     recommendedFirstActions: ['run doctor'],
     diagnostics: [{ code: 'CATALOG_READY', status: 'pass', message: 'ready', nextAction: 'continue' }]
+  }
+}
+
+function capabilitySafetyFixture(id) {
+  const writes = ['lint-sql', 'reverse-import', 'generate-ddl', 'domain-starter-kits'].includes(id)
+  const highRisk = ['reverse-import', 'domain-starter-kits'].includes(id)
+  return {
+    readOnly: !writes,
+    writesProject: writes,
+    requiresDryRun: highRisk,
+    supportsUndo: highRisk,
+    requiresIdempotencyKey: highRisk,
+    sensitiveInputs: id === 'reverse-import' ? ['databasePassword'] : [],
+    nextActions: highRisk
+      ? ['先运行 preview，再携带 --idempotency-key 执行 apply']
+      : ['按 capability nextActions 执行']
   }
 }
 

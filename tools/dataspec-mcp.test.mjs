@@ -308,6 +308,8 @@ test('prompts list and get return DataSpec workflow guidance', async () => {
   assert.match(prompt.result.messages[0].content.text, /ai-task-profiles/)
   assert.match(prompt.result.messages[0].content.text, /schema-registry/)
   assert.match(prompt.result.messages[0].content.text, /capability-catalog/)
+  assert.match(prompt.result.messages[0].content.text, /safety/)
+  assert.match(prompt.result.messages[0].content.text, /requiresDryRun/)
   assert.match(prompt.result.messages[0].content.text, /export_evidence_package/)
 })
 
@@ -447,6 +449,10 @@ test('task card tools create and render local cards without backend calls', asyn
   const tools = await handler({ jsonrpc: '2.0', id: 65, method: 'tools/list' })
   assert.ok(tools.result.tools.some((tool) => tool.name === 'create_task_card'))
   assert.ok(tools.result.tools.some((tool) => tool.name === 'render_task_card'))
+  const lintTool = tools.result.tools.find((tool) => tool.name === 'lint_sql')
+  assert.equal(lintTool.safety.readOnly, false)
+  assert.equal(lintTool.safety.writesProject, true)
+  assert.equal(lintTool.safety.requiresIdempotencyKey, false)
 
   const created = await handler({
     jsonrpc: '2.0',
@@ -888,6 +894,45 @@ test('tool call returns DataSpec diagnostic in json-rpc error data', async () =>
   assert.equal(response.error.data.dataspecError.category, 'AUTH')
   assert.equal(response.error.data.dataspecError.retryable, false)
   assert.equal(response.error.data.dataspecError.httpStatus, 403)
+})
+
+test('tool call preserves safety diagnostic fields and redacts secrets', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({
+      code: 400,
+      message: '缺少 Idempotency-Key password=raw-secret Authorization: Bearer ds_mcp_secret Authorization: Basic raw_basic_secret jdbc:mysql://host/db dsn=postgres://user:dsn-secret@host/db postgres://user:naked-secret@host/db',
+      error: {
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        category: 'SAFETY',
+        retryable: true,
+        suggestedAction: '传入 idempotencyKey 后重试 token=raw-secret Authorization: Basic raw_basic_secret dsn=postgres://user:dsn-secret@host/db mysql://user:naked-secret@host/db',
+        docsRef: 'README.md#ai-写入安全协议',
+        missing: ['Idempotency-Key'],
+        operation: 'project-restore:apply',
+        safety: { readOnly: false, writesProject: true, requiresIdempotencyKey: true },
+        nextActions: ['传入 idempotencyKey 后重试']
+      }
+    })
+  }))
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 131,
+    method: 'tools/call',
+    params: {
+      name: 'lint_sql',
+      arguments: { sql: 'CREATE TABLE users (id bigint);', projectId: 7 }
+    }
+  })
+
+  assert.equal(response.error.code, -32000)
+  assert.equal(response.error.data.dataspecError.code, 'IDEMPOTENCY_KEY_REQUIRED')
+  assert.deepEqual(response.error.data.dataspecError.missing, ['Idempotency-Key'])
+  assert.equal(response.error.data.dataspecError.safety.requiresIdempotencyKey, true)
+  assert.match(response.error.data.dataspecError.nextActions[0], /idempotencyKey/)
+  assert.doesNotMatch(JSON.stringify(response.error), /raw-secret|raw_basic_secret|ds_mcp_secret|jdbc:mysql:\/\/host\/db|dsn-secret|naked-secret|dsn=postgres:\/\/user:|postgres:\/\/user:|mysql:\/\/user:/)
 })
 
 test('tool call classifies legacy authorization failure without backend diagnostic', async () => {

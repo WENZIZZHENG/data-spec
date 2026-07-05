@@ -1,6 +1,7 @@
 package com.dataspec.common.exception;
 
 import com.dataspec.common.result.R;
+import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +21,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BizException.class)
     public ResponseEntity<R<Void>> handleBizException(BizException e) {
-        log.warn("业务异常: {}", e.getMessage());
+        log.warn("业务异常: {}", SensitiveDataSanitizer.redactText(e.getMessage()));
         return ResponseEntity
                 .status(statusOf(e.getCode()))
                 .body(R.fail(e.getCode(), e.getMessage()));
@@ -36,7 +37,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<R<Void>> handleException(Exception e) {
-        log.error("未知异常", e);
+        log.error("未知异常: type={}, message={}", e.getClass().getName(), SensitiveDataSanitizer.redactText(e.getMessage()));
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(R.fail(500, "服务器内部错误"));
     }
 

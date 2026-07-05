@@ -16,20 +16,22 @@ import java.util.regex.Pattern;
  * 统一处理 DataSpec 可复制/可导出的技术 secret。
  *
  * <p>该工具只面向日志、错误、诊断、证据包和备份扫描等出口摘要，不修改业务原始输入。
- * 第一版重点覆盖 password、token、Authorization/Bearer、JDBC URL 和连接串这类明确 secret。</p>
+ * 第一版重点覆盖 password、token、Authorization/Bearer、JDBC URL、DSN 和连接串这类明确 secret。</p>
  */
 public final class SensitiveDataSanitizer {
 
     public static final String REDACTION = "[REDACTED]";
 
     private static final Pattern JDBC_PATTERN = Pattern.compile("(?i)jdbc:[^\\s\"'<>]+");
+    private static final Pattern DSN_URI_PATTERN = Pattern.compile(
+            "(?i)\\b((?:postgres(?:ql)?|mysql|mariadb|sqlserver|oracle|mongodb|redis)://)[^\\s\"'<>]+");
     private static final Pattern AUTHORIZATION_BEARER_PATTERN = Pattern.compile(
             "(?i)(authorization\\s*[:=]\\s*bearer\\s+)[^\\s,;]+");
     private static final Pattern AUTHORIZATION_VALUE_PATTERN = Pattern.compile(
             "(?i)(authorization\\s*[:=]\\s*)(?!\\s*[\"']?bearer\\s+)([\"']?)[^,;}&\\r\\n]+\\2");
     private static final Pattern BEARER_PATTERN = Pattern.compile("(?i)(bearer\\s+)[A-Za-z0-9._~+\\-/]+=*");
     private static final Pattern SECRET_KEY_VALUE_PATTERN = Pattern.compile(
-            "(?i)((?:\"|')?\\b(?:password|passwd|pwd|token|api[_-]?token|dataspec[_-]?token|api[_-]?key|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|plain[_-]?token|token[_-]?hash|jdbc[_-]?url|connection[_-]?string)\\b(?:\"|')?\\s*[:=]\\s*)([\"']?)[^\\s\"',;}&]+\\2");
+            "(?i)((?:\"|')?\\b(?:password|passwd|pwd|token|api[_-]?token|dataspec[_-]?token|api[_-]?key|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|plain[_-]?token|token[_-]?hash|jdbc[_-]?url|connection[_-]?string|dsn)\\b(?:\"|')?\\s*[:=]\\s*)([\"']?)[^\\s\"',;}&]+\\2");
     private static final Set<String> SENSITIVE_KEYS = Set.of(
             "password",
             "passwd",
@@ -46,7 +48,8 @@ public final class SensitiveDataSanitizer {
             "plaintoken",
             "tokenhash",
             "jdbcurl",
-            "connectionstring"
+            "connectionstring",
+            "dsn"
     );
 
     private SensitiveDataSanitizer() {
@@ -62,6 +65,7 @@ public final class SensitiveDataSanitizer {
         }
         String value = redactExplicitSecrets(text, explicitSecrets);
         value = JDBC_PATTERN.matcher(value).replaceAll("jdbc:" + REDACTION);
+        value = DSN_URI_PATTERN.matcher(value).replaceAll("$1" + REDACTION);
         value = AUTHORIZATION_BEARER_PATTERN.matcher(value).replaceAll("$1" + REDACTION);
         value = AUTHORIZATION_VALUE_PATTERN.matcher(value).replaceAll("$1$2" + REDACTION + "$2");
         value = BEARER_PATTERN.matcher(value).replaceAll("$1" + REDACTION);
@@ -86,7 +90,9 @@ public final class SensitiveDataSanitizer {
                 || normalized.contains("authorization")
                 || normalized.contains("tokenhash")
                 || normalized.contains("connectionstring")
-                || normalized.contains("jdbcurl");
+                || normalized.contains("jdbcurl")
+                || normalized.equals("dsn")
+                || normalized.endsWith("dsn");
     }
 
     public static Object sanitizeValue(Object value) {

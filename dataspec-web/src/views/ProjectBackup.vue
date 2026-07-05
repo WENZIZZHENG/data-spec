@@ -210,6 +210,7 @@ import {
   listProjectRestoreRecords,
   previewProjectBackupRestore
 } from '@/api/projectBackup'
+import { createClientIdempotencyKey } from '@/api/idempotency'
 import { useProjectStore } from '@/stores/project'
 import type {
   ProjectBackupPackage,
@@ -340,11 +341,13 @@ async function handleApply() {
   )
   applyLoading.value = true
   try {
+    const idempotencyKey = createClientIdempotencyKey('project-backup:restore-apply')
     restoreResult.value = await applyProjectBackupRestore({
       targetProjectId: selectedTargetProjectId(),
       overwrite: overwrite.value,
-      backupPackage
-    })
+      backupPackage,
+      dryRunToken: restorePlan.value.dryRunToken
+    }, idempotencyKey)
     restorePlan.value = restoreResult.value.plan ?? restorePlan.value
     ElMessage.success('备份包已恢复')
     await projectStore.loadProjects()

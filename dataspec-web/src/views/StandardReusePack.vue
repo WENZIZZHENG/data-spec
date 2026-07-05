@@ -132,6 +132,21 @@
           </div>
         </div>
 
+        <div v-if="safetySummary" class="safety-summary">
+          <div class="safety-summary__header">
+            <strong>{{ safetySummary.title }}</strong>
+            <el-tag v-if="safetySummary.requiresDryRun" type="warning" effect="plain" size="small">requiresDryRun</el-tag>
+          </div>
+          <p>{{ safetySummary.riskText }}</p>
+          <p>{{ safetySummary.idempotencyText }}</p>
+          <div class="safety-summary__counts">
+            <span v-for="item in safetySummary.counts" :key="item.key">{{ item.label }} {{ item.value }}</span>
+          </div>
+          <ul v-if="safetySummary.nextActions.length" class="safety-summary__actions">
+            <li v-for="action in safetySummary.nextActions" :key="action">{{ action }}</li>
+          </ul>
+        </div>
+
         <el-alert
           v-for="warning in plan?.warnings || []"
           :key="warning"
@@ -225,6 +240,7 @@ import {
 import ProjectRequired from '@/components/ProjectRequired.vue'
 import { useProjectStore } from '@/stores/project'
 import {
+  buildAiWriteSafetySummary,
   buildStandardReusePackApplyPayload,
   buildStandardReusePackCreatePayload,
   formatReusePackCountText,
@@ -267,6 +283,20 @@ const standardPackSources = ref<StandardPackSource[]>([])
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
 const canApply = computed(() => Boolean(plan.value?.canApply && selectedPack.value && targetProjectId.value && !hasBlockingReusePackItems(plan.value)))
 const countItems = computed(() => summarizeReusePackCounts(plan.value))
+const safetySummary = computed(() => plan.value
+  ? buildAiWriteSafetySummary({
+    safety: {
+      readOnly: false,
+      writesProject: true,
+      requiresDryRun: false,
+      supportsUndo: true,
+      requiresIdempotencyKey: false,
+      sensitiveInputs: [],
+      nextActions: ['先运行预览应用并确认阻塞项为 0', '确认应用后导出 evidence package 或查看应用摘要']
+    },
+    counts: plan.value.counts
+  })
+  : null)
 
 onMounted(async () => {
   if (projectStore.projects.length === 0) {
@@ -509,5 +539,38 @@ function actionLabel(action?: string) {
 .warning-alert,
 .plan-table {
   margin-top: 12px;
+}
+
+.safety-summary {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #f3d19e;
+  border-radius: 8px;
+  background: #fdf6ec;
+  color: #7c4a03;
+}
+
+.safety-summary__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.safety-summary p {
+  margin: 8px 0 0;
+}
+
+.safety-summary__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.safety-summary__actions {
+  margin: 8px 0 0;
+  padding-left: 18px;
 }
 </style>

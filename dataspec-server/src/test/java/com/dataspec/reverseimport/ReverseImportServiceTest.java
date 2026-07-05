@@ -1,5 +1,7 @@
 package com.dataspec.reverseimport;
 
+import com.dataspec.common.exception.BizException;
+import com.dataspec.common.safety.DryRunEvidenceSigner;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlParserService;
@@ -14,12 +16,17 @@ import com.dataspec.reverseimport.model.ReverseImportFieldStatus;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -33,6 +40,8 @@ import static org.mockito.Mockito.when;
  * SQL 反向导入预览测试。
  */
 class ReverseImportServiceTest {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Test
     void preview_returnsCandidatesMissingCommentsAndAliasMatches() {
@@ -79,6 +88,26 @@ class ReverseImportServiceTest {
         assertThat(preview.getDialectDiagnostics())
                 .extracting("code")
                 .contains("POSTGRESQL_DIALECT_INFERRED", "POSTGRESQL_COMMENT_ON_SUPPORTED");
+    }
+
+    @Test
+    void previewTables_attachesDryRunEvidenceForImportCandidates() {
+        FieldService fieldService = mock(FieldService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                mock(ReverseImportSourceService.class));
+
+        ReverseImportPreview preview = service.previewTables(1L, List.of(TableDef.builder()
+                .name("USER_ORDER")
+                .columns(List.of(column("user_name", "VARCHAR(50)", true, null, "用户名")))
+                .build()));
+
+        assertThat(preview.getDryRunToken()).isNotBlank();
+        assertThat(preview.getFieldCandidates())
+                .hasSize(1)
+                .allSatisfy(candidate -> assertThat(candidate.getDryRunToken()).isEqualTo(preview.getDryRunToken()));
     }
 
     @Test
@@ -203,7 +232,7 @@ class ReverseImportServiceTest {
                 new FieldCandidate("USER_ORDER", "user_name", "VARCHAR(50)", true, null, "用户名")
         ));
 
-        var result = service.importCandidates(req);
+        var result = service.importCandidates(req, "import-new-fields-1");
 
         assertThat(result.getImportedCount()).isEqualTo(1);
         assertThat(result.getSkippedCount()).isEqualTo(1);
@@ -229,6 +258,79 @@ class ReverseImportServiceTest {
                 });
         assertThat(fieldCaptor.getValue().getId()).isEqualTo(99L);
         assertThat(candidateCaptor.getValue().getColumnName()).isEqualTo("user_name");
+    }
+
+    @Test
+    void importCandidates_requiresDryRunEvidenceForDatabaseWrites() {
+        FieldService fieldService = mock(FieldService.class);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                sourceService);
+        DatabaseImportReq req = new DatabaseImportReq();
+        req.setProjectId(1L);
+        req.setCandidates(List.of(
+                new FieldCandidate("USER_ORDER", "user_name", "VARCHAR(50)", true, null, "用户名")
+        ));
+
+        assertThatThrownBy(() -> service.importCandidates(req, "import-missing-dry-run"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("dry-run evidence")
+                .hasMessageContaining("reverse-import:database-import");
+        verify(fieldService, never()).create(any(Field.class));
+        verify(sourceService, never()).createDatabaseBatch(any(), anyInt(), anyInt());
+    }
+
+    @Test
+    void importCandidates_rejectsForgedDryRunEvidenceEvenWhenFieldsMatch() {
+        FieldService fieldService = mock(FieldService.class);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                sourceService);
+        FieldCandidate candidate = new FieldCandidate("USER_ORDER", "user_name", "VARCHAR(50)", true, null, "用户名");
+        DatabaseImportReq req = new DatabaseImportReq();
+        req.setProjectId(1L);
+        req.setDryRunToken("rid.forged.signature");
+        candidate.setDryRunToken(req.getDryRunToken());
+        req.setCandidates(List.of(candidate));
+
+        assertThatThrownBy(() -> service.importCandidates(req, "import-forged-dry-run"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("dry-run evidence")
+                .hasMessageContaining("reverse-import:database-import");
+        verify(fieldService, never()).create(any(Field.class));
+        verify(sourceService, never()).createDatabaseBatch(any(), anyInt(), anyInt());
+    }
+
+    @Test
+    void importCandidates_rejectsCandidateEvidenceDelimiterCollision() {
+        FieldService fieldService = mock(FieldService.class);
+        ReverseImportSourceService sourceService = mock(ReverseImportSourceService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        ReverseImportServiceImpl service = new ReverseImportServiceImpl(
+                new SqlParserService(),
+                fieldService,
+                sourceService);
+        FieldCandidate previewCandidate = new FieldCandidate("USER::ORDER", "user_name", "VARCHAR(50)", true, null, "用户名");
+        FieldCandidate tamperedCandidate = new FieldCandidate("USER", "ORDER::user_name", "VARCHAR(50)", true, null, "用户名");
+        DatabaseImportReq req = new DatabaseImportReq();
+        req.setProjectId(1L);
+        req.setCandidates(List.of(tamperedCandidate));
+        String dryRunToken = dryRunToken(req.getProjectId(), List.of(previewCandidate));
+        req.setDryRunToken(dryRunToken);
+        tamperedCandidate.setDryRunToken(dryRunToken);
+
+        assertThatThrownBy(() -> service.importCandidates(req, "import-collision-dry-run"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("dry-run evidence")
+                .hasMessageContaining("reverse-import:database-import");
+        verify(fieldService, never()).create(any(Field.class));
+        verify(sourceService, never()).createDatabaseBatch(any(), anyInt(), anyInt());
     }
 
     @Test
@@ -280,7 +382,7 @@ class ReverseImportServiceTest {
                 new FieldCandidate("USER_ORDER", "id", "BIGINT", false, null, "主键")
         ));
 
-        var result = service.importCandidates(req);
+        var result = service.importCandidates(req, "import-all-skipped-1");
 
         assertThat(result.getImportedCount()).isZero();
         assertThat(result.getSkippedCount()).isEqualTo(1);
@@ -310,11 +412,11 @@ class ReverseImportServiceTest {
                 sourceService);
         DatabaseImportReq req = new DatabaseImportReq();
         req.setProjectId(1L);
-        req.setCandidates(List.of(
-                new FieldCandidate("USER_ORDER", "user_name", "VARCHAR(50)", true, null, "用户名")
-        ));
+        FieldCandidate candidate = new FieldCandidate("USER_ORDER", "user_name", "VARCHAR(50)", true, null, "用户名");
+        req.setCandidates(List.of(candidate));
+        attachDryRunEvidence(req, List.of(candidate));
 
-        var result = service.importCandidates(req);
+        var result = service.importCandidates(req, "import-legacy-source-1");
 
         assertThat(result.getImportedCount()).isEqualTo(1);
         verify(sourceService).createDatabaseBatch(req, 1, 0);
@@ -344,9 +446,11 @@ class ReverseImportServiceTest {
         selected.setConfirmReason("确认导入客户姓名标准");
         FieldCandidate ignored = new FieldCandidate("USER_ORDER", "tmp_flag", "BOOLEAN", true, null, "临时标记");
         DatabaseImportReq req = databaseImportReq(List.of(selected));
+        ignored.setDryRunToken(req.getDryRunToken());
         req.setIgnoredCandidates(List.of(ignored));
+        attachDryRunEvidence(req, List.of(selected, ignored));
 
-        var result = service.importCandidates(req);
+        var result = service.importCandidates(req, "import-ignored-reason-1");
 
         assertThat(result.getImportedCount()).isEqualTo(1);
         @SuppressWarnings("unchecked")
@@ -392,7 +496,7 @@ class ReverseImportServiceTest {
         selected.setConfirmReason("Authorization: Bearer secret-token-123; token=plain-token-456");
         DatabaseImportReq req = databaseImportReq(List.of(selected));
 
-        service.importCandidates(req);
+        service.importCandidates(req, "import-redaction-1");
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ReverseImportDecision>> decisionsCaptor = ArgumentCaptor.forClass(List.class);
@@ -431,9 +535,11 @@ class ReverseImportServiceTest {
         FieldCandidate selected = new FieldCandidate("USER_ORDER", "user_name", "VARCHAR(50)", true, null, "用户名");
         FieldCandidate duplicateIgnored = new FieldCandidate("user_order", "USER_NAME", "VARCHAR(50)", true, null, "用户名");
         DatabaseImportReq req = databaseImportReq(List.of(selected));
+        duplicateIgnored.setDryRunToken(req.getDryRunToken());
         req.setIgnoredCandidates(List.of(duplicateIgnored));
+        attachDryRunEvidence(req, List.of(selected, duplicateIgnored));
 
-        service.importCandidates(req);
+        service.importCandidates(req, "import-duplicate-ignored-1");
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ReverseImportDecision>> decisionsCaptor = ArgumentCaptor.forClass(List.class);
@@ -450,7 +556,47 @@ class ReverseImportServiceTest {
         req.setSchemaName("public");
         req.setTableNames(List.of("USER_ORDER"));
         req.setCandidates(candidates);
+        attachDryRunEvidence(req, candidates);
         return req;
+    }
+
+    private static void attachDryRunEvidence(DatabaseImportReq req, List<FieldCandidate> candidates) {
+        String dryRunToken = dryRunToken(req.getProjectId(), candidates);
+        req.setDryRunToken(dryRunToken);
+        candidates.forEach(candidate -> candidate.setDryRunToken(dryRunToken));
+    }
+
+    private static String dryRunToken(Long projectId, List<FieldCandidate> candidates) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("operation", "reverse-import:database-import");
+        payload.put("projectId", projectId);
+        payload.put("candidateHashes", candidates.stream()
+                .map(ReverseImportServiceTest::candidateEvidenceHash)
+                .sorted()
+                .toList());
+        return DryRunEvidenceSigner.signPayload("rid", payload, OBJECT_MAPPER);
+    }
+
+    private static String candidateEvidenceHash(FieldCandidate candidate) {
+        try {
+            return DryRunEvidenceSigner.sha256Hex(OBJECT_MAPPER.writeValueAsBytes(List.of(
+                    normalize(candidate.getTableName()),
+                    normalize(candidate.getColumnName()),
+                    nullToEmpty(candidate.getDataType()),
+                    String.valueOf(candidate.getNullable()),
+                    nullToEmpty(candidate.getDefaultValue()),
+                    nullToEmpty(candidate.getComment()))));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private ColumnDef column(String name, String dataType, boolean nullable, String defaultValue, String comment) {

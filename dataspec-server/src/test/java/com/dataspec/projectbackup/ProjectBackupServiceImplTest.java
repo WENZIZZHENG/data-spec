@@ -10,6 +10,7 @@ import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.project.entity.Project;
 import com.dataspec.project.repository.ProjectRepository;
 import com.dataspec.project.service.ProjectService;
+import com.dataspec.projectbackup.entity.ProjectRestoreRecord;
 import com.dataspec.projectbackup.model.ProjectBackupPackage;
 import com.dataspec.projectbackup.model.ProjectRestorePlan;
 import com.dataspec.projectbackup.model.ProjectRestoreReq;
@@ -26,6 +27,7 @@ import com.dataspec.standard.repository.StandardSnapshotRepository;
 import com.dataspec.template.repository.TemplateRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -33,7 +35,9 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -140,11 +144,76 @@ class ProjectBackupServiceImplTest {
         });
         ProjectBackupPackage exported = fixture.service().exportPackage(1L);
 
-        fixture.service().applyRestore(new ProjectRestoreReq(null, false, exported));
+        ProjectRestoreReq req = reqWithPreviewToken(fixture.service(), null, false, exported);
+        var result = fixture.service().applyRestore(req, "restore-new-project-1");
 
         verify(fixture.domainRepository).insert(any(Domain.class));
         verify(fixture.fieldRepository).insert(any(Field.class));
-        verify(fixture.restoreRecordRepository).insert(any());
+        assertNull(result.plan().dryRunToken());
+        ArgumentCaptor<ProjectRestoreRecord> recordCaptor = ArgumentCaptor.forClass(ProjectRestoreRecord.class);
+        verify(fixture.restoreRecordRepository).insert(recordCaptor.capture());
+        assertFalse(recordCaptor.getValue().getSummaryJson().contains(req.dryRunToken()));
+        assertFalse(recordCaptor.getValue().getSummaryJson().contains("\"dryRunToken\":\""));
+    }
+
+    @Test
+    void applyRestore_toNewProjectKeepsPreviewTokenStableWhenNamesCollide() {
+        Fixture fixture = new Fixture();
+        fixture.withSourceProject();
+        Domain sourceDomain = domain("order", 1L);
+        when(fixture.domainRepository.findByProjectId(1L)).thenReturn(List.of(sourceDomain));
+        when(fixture.fieldRepository.findAllByProjectId(1L)).thenReturn(List.of());
+        fixture.withEmptyRemainingAssets();
+        String datedName = "源项目 - restored " + LocalDateTime.now().toLocalDate();
+        when(fixture.projectRepository.existsByName("源项目")).thenReturn(true);
+        when(fixture.projectRepository.existsByName(datedName)).thenReturn(true);
+        when(fixture.projectRepository.existsByName(datedName + " (2)")).thenReturn(false);
+        when(fixture.projectService.create(any(Project.class), eq(false))).thenAnswer(invocation -> {
+            Project project = invocation.getArgument(0);
+            project.setId(2L);
+            return project;
+        });
+        when(fixture.domainRepository.insert(any(Domain.class))).thenAnswer(invocation -> {
+            Domain domain = invocation.getArgument(0);
+            domain.setId(20L);
+            return 1;
+        });
+        ProjectBackupPackage exported = fixture.service().exportPackage(1L);
+        ProjectRestoreReq req = reqWithPreviewToken(fixture.service(), null, false, exported);
+
+        fixture.service().applyRestore(req, "restore-new-project-collision");
+
+        ArgumentCaptor<Project> projectCaptor = ArgumentCaptor.forClass(Project.class);
+        verify(fixture.projectService).create(projectCaptor.capture(), eq(false));
+        assertEquals(datedName + " (2)", projectCaptor.getValue().getName());
+    }
+
+    @Test
+    void applyRestore_requiresDryRunTokenFromPreview() {
+        Fixture fixture = new Fixture();
+        fixture.withSourceProject();
+        Field sourceField = field("order_no", 1L);
+        when(fixture.domainRepository.findByProjectId(1L)).thenReturn(List.of());
+        when(fixture.fieldRepository.findAllByProjectId(1L)).thenReturn(List.of(sourceField));
+        fixture.withEmptyRemainingAssets();
+        ProjectBackupPackage exported = fixture.service().exportPackage(1L);
+        Project target = project(2L, "目标项目");
+        when(fixture.projectService.getById(2L)).thenReturn(target);
+        when(fixture.domainRepository.findByProjectId(2L)).thenReturn(List.of());
+        when(fixture.fieldRepository.findAllByProjectId(2L)).thenReturn(List.of());
+        when(fixture.enumDictRepository.findDictsByProjectId(2L)).thenReturn(List.of());
+        when(fixture.ruleConfigRepository.findByProjectId(2L)).thenReturn(List.of());
+        when(fixture.templateRepository.findByProjectId(2L)).thenReturn(List.of());
+        when(fixture.standardSnapshotRepository.findByProjectId(2L)).thenReturn(List.of());
+
+        BizException error = assertThrows(BizException.class,
+                () -> fixture.service().applyRestore(new ProjectRestoreReq(2L, false, exported), "restore-missing-dry-run"));
+
+        assertEquals(400, error.getCode());
+        assertTrue(error.getMessage().contains("dry-run evidence"));
+        assertTrue(error.getMessage().contains("project-backup:restore-apply"));
+        verify(fixture.fieldRepository, never()).insert(any());
+        verify(fixture.restoreRecordRepository, never()).insert(any());
     }
 
     @Test
@@ -174,7 +243,7 @@ class ProjectBackupServiceImplTest {
         });
         ProjectBackupPackage exported = fixture.service().exportPackage(1L);
         ProjectBackupServiceImpl service = fixture.service();
-        ProjectRestoreReq req = new ProjectRestoreReq(null, false, exported);
+        ProjectRestoreReq req = reqWithPreviewToken(service, null, false, exported);
 
         var first = service.applyRestore(req, "retry-restore-1");
         var second = service.applyRestore(req, "retry-restore-1");
@@ -206,11 +275,21 @@ class ProjectBackupServiceImplTest {
         when(fixture.templateRepository.findByProjectId(2L)).thenReturn(List.of());
         when(fixture.standardSnapshotRepository.findByProjectId(2L)).thenReturn(List.of());
 
-        fixture.service().applyRestore(new ProjectRestoreReq(2L, true, exported));
+        ProjectRestoreReq req = reqWithPreviewToken(fixture.service(), 2L, true, exported);
+        fixture.service().applyRestore(req, "restore-overwrite-1");
 
         verify(fixture.fieldRepository).update(existing);
         assertEquals("来源字段注释", existing.getComment());
         verify(fixture.restoreRecordRepository).insert(any());
+    }
+
+    private static ProjectRestoreReq reqWithPreviewToken(ProjectBackupServiceImpl service,
+                                                         Long targetProjectId,
+                                                         boolean overwrite,
+                                                         ProjectBackupPackage backupPackage) {
+        ProjectRestorePlan plan = service.previewRestore(new ProjectRestoreReq(targetProjectId, overwrite, backupPackage));
+        assertNotNull(plan.dryRunToken());
+        return new ProjectRestoreReq(targetProjectId, overwrite, backupPackage, plan.dryRunToken());
     }
 
     private static com.dataspec.changelog.entity.StandardChangeLog changeLogWithSecret() {

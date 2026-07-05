@@ -4,6 +4,7 @@ import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.coverage.model.FieldCoverageStatus;
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.safety.DryRunEvidenceSigner;
 import com.dataspec.coverage.service.impl.FieldCoverageServiceImpl;
 import com.dataspec.reverseimport.entity.ReverseImportBatch;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
@@ -32,7 +33,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -667,12 +671,12 @@ class DatabaseReverseImportServiceTest {
 
         DatabaseImportReq req = new DatabaseImportReq();
         req.setProjectId(1L);
-        req.setCandidates(List.of(
-                new FieldCandidate("USER_ORDER", "ID", "BIGINT", false, null, "主键"),
-                new FieldCandidate("USER_ORDER", "USER_NAME", "VARCHAR(50)", true, null, "用户名")
-        ));
+        FieldCandidate id = new FieldCandidate("USER_ORDER", "ID", "BIGINT", false, null, "主键");
+        FieldCandidate userName = new FieldCandidate("USER_ORDER", "USER_NAME", "VARCHAR(50)", true, null, "用户名");
+        req.setCandidates(List.of(id, userName));
+        attachDryRunEvidence(req, List.of(id, userName));
 
-        var result = reverseImportService.importCandidates(req);
+        var result = reverseImportService.importCandidates(req, "database-import-candidates-1");
 
         assertThat(result.getImportedCount()).isEqualTo(1);
         assertThat(result.getSkippedCount()).isEqualTo(1);
@@ -816,6 +820,41 @@ class DatabaseReverseImportServiceTest {
         field.setName(name);
         field.setAliases(aliases);
         return field;
+    }
+
+    private void attachDryRunEvidence(DatabaseImportReq req, List<FieldCandidate> candidates) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("operation", "reverse-import:database-import");
+        payload.put("projectId", req.getProjectId());
+        payload.put("candidateHashes", candidates.stream()
+                .map(this::candidateEvidenceHash)
+                .sorted()
+                .toList());
+        String dryRunToken = DryRunEvidenceSigner.signPayload("rid", payload, objectMapper);
+        req.setDryRunToken(dryRunToken);
+        candidates.forEach(candidate -> candidate.setDryRunToken(dryRunToken));
+    }
+
+    private String candidateEvidenceHash(FieldCandidate candidate) {
+        try {
+            return DryRunEvidenceSigner.sha256Hex(objectMapper.writeValueAsBytes(List.of(
+                    normalize(candidate.getTableName()),
+                    normalize(candidate.getColumnName()),
+                    nullToEmpty(candidate.getDataType()),
+                    String.valueOf(candidate.getNullable()),
+                    nullToEmpty(candidate.getDefaultValue()),
+                    nullToEmpty(candidate.getComment()))));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private record FailureCase(String databaseType,

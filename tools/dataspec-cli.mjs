@@ -2108,6 +2108,8 @@ function checkCapabilityCatalog(catalog) {
     if (!capability.writeRisk) {
       diagnostics.push(capabilityDiagnostic('fail', 'MISSING_WRITE_RISK', `${capabilityId} 缺少 writeRisk`))
     }
+    const safetyDiagnostics = validateCapabilitySafety(capabilityId, capability)
+    diagnostics.push(...safetyDiagnostics)
     if (!Array.isArray(capability.preflightChecks)) {
       diagnostics.push(capabilityDiagnostic('fail', 'INVALID_PREFLIGHT_CHECKS', `${capabilityId} preflightChecks 必须是数组`))
     }
@@ -2130,6 +2132,26 @@ function checkCapabilityCatalog(catalog) {
 
 function capabilityDiagnostic(status, code, message) {
   return { status, code, message }
+}
+
+function validateCapabilitySafety(capabilityId, capability) {
+  const safety = capability?.safety
+  if (!safety || typeof safety !== 'object' || Array.isArray(safety)) {
+    return [capabilityDiagnostic('fail', 'MISSING_SAFETY', `${capabilityId} 缺少 safety metadata`)]
+  }
+  const diagnostics = []
+  for (const field of ['readOnly', 'writesProject', 'requiresDryRun', 'supportsUndo', 'requiresIdempotencyKey']) {
+    if (typeof safety[field] !== 'boolean') {
+      diagnostics.push(capabilityDiagnostic('fail', 'INVALID_SAFETY_FIELD', `${capabilityId} safety.${field} 必须是 boolean`))
+    }
+  }
+  if (!Array.isArray(safety.sensitiveInputs)) {
+    diagnostics.push(capabilityDiagnostic('fail', 'INVALID_SAFETY_FIELD', `${capabilityId} safety.sensitiveInputs 必须是数组`))
+  }
+  if (!Array.isArray(safety.nextActions)) {
+    diagnostics.push(capabilityDiagnostic('fail', 'INVALID_SAFETY_FIELD', `${capabilityId} safety.nextActions 必须是数组`))
+  }
+  return diagnostics
 }
 
 function normalizeCapabilityFetchError(error, options = {}) {
@@ -2548,6 +2570,7 @@ function formatCapabilityDetailText(capability) {
     `writeRisk: ${capability.writeRisk ?? '-'}`,
     ''
   ]
+  appendCapabilitySafetyText(lines, capability.safety)
   if (capability.summary) {
     lines.push(capability.summary, '')
   }
@@ -2562,6 +2585,21 @@ function formatCapabilityDetailText(capability) {
   }
   lines.push('')
   return lines.join('\n')
+}
+
+function appendCapabilitySafetyText(lines, safety) {
+  if (!safety || typeof safety !== 'object') {
+    return
+  }
+  lines.push('safety:')
+  lines.push(`  readOnly: ${Boolean(safety.readOnly)}`)
+  lines.push(`  writesProject: ${Boolean(safety.writesProject)}`)
+  lines.push(`  requiresDryRun: ${Boolean(safety.requiresDryRun)}`)
+  lines.push(`  supportsUndo: ${Boolean(safety.supportsUndo)}`)
+  lines.push(`  requiresIdempotencyKey: ${Boolean(safety.requiresIdempotencyKey)}`)
+  lines.push(`  sensitiveInputs: ${Array.isArray(safety.sensitiveInputs) && safety.sensitiveInputs.length > 0 ? safety.sensitiveInputs.join(', ') : '-'}`)
+  appendTextList(lines, '  safety next actions', safety.nextActions)
+  lines.push('')
 }
 
 function formatCapabilityCheckText(result) {
@@ -3517,10 +3555,11 @@ function sanitizeSecretText(value) {
   return String(value)
     .replace(/\b(https?:\/\/)[^\s/]*@/gi, '$1')
     .replace(/jdbc:[^\s"'<>]+/gi, 'jdbc:***')
+    .replace(/\b((?:postgres(?:ql)?|mysql|mariadb|sqlserver|oracle|mongodb|redis):\/\/)[^\s"'<>]+/gi, '$1***')
     .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s,;]+/gi, '$1***')
     .replace(/(authorization\s*[:=]\s*)(?!\s*['"]?bearer\s+)(['"]?)[^,;}&\r\n]+\2/gi, '$1$2***$2')
     .replace(/\b(bearer\s+)[A-Za-z0-9._~+/-]+=*/gi, '$1***')
-    .replace(/((?:"|')?\b(?:password|passwd|pwd|token|api[_-]?token|dataspec[_-]?token|api[_-]?key|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|plain[_-]?token|token[_-]?hash|jdbc[_-]?url|connection[_-]?string)\b(?:"|')?\s*[:=]\s*)(['"]?)[^\s"',;}&]+\2/gi, '$1$2***$2')
+    .replace(/((?:"|')?\b(?:password|passwd|pwd|token|api[_-]?token|dataspec[_-]?token|api[_-]?key|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|plain[_-]?token|token[_-]?hash|jdbc[_-]?url|connection[_-]?string|dsn)\b(?:"|')?\s*[:=]\s*)(['"]?)[^\s"',;}&]+\2/gi, '$1$2***$2')
 }
 
 function isSensitiveSecretKey(key) {
@@ -3541,7 +3580,8 @@ function isSensitiveSecretKey(key) {
     'plaintoken',
     'tokenhash',
     'jdbcurl',
-    'connectionstring'
+    'connectionstring',
+    'dsn'
   ].includes(normalized) ||
     normalized.endsWith('token') ||
     normalized.endsWith('secret') ||
@@ -3550,7 +3590,9 @@ function isSensitiveSecretKey(key) {
     normalized.includes('authorization') ||
     normalized.includes('tokenhash') ||
     normalized.includes('connectionstring') ||
-    normalized.includes('jdbcurl')
+    normalized.includes('jdbcurl') ||
+    normalized === 'dsn' ||
+    normalized.endsWith('dsn')
 }
 
 function formatLintText(result) {
@@ -4069,7 +4111,7 @@ function toDataSpecCliError(payload, httpStatus) {
 
 function normalizeDataSpecDiagnostic(error, httpStatus, message) {
   if (error && typeof error === 'object') {
-    return {
+    const diagnostic = {
       code: String(error.code ?? 'DATASPEC_ERROR'),
       category: String(error.category ?? 'DATASPEC'),
       retryable: Boolean(error.retryable),
@@ -4077,8 +4119,28 @@ function normalizeDataSpecDiagnostic(error, httpStatus, message) {
       docsRef: String(error.docsRef ?? 'README.md#验证'),
       httpStatus
     }
+    appendDiagnosticExtras(diagnostic, error)
+    return diagnostic
   }
   return fallbackDataSpecDiagnostic(httpStatus, message)
+}
+
+function appendDiagnosticExtras(diagnostic, error) {
+  if (Array.isArray(error.missing)) {
+    diagnostic.missing = error.missing.map((item) => String(item))
+  }
+  if (typeof error.operation === 'string' && error.operation.trim()) {
+    diagnostic.operation = error.operation
+  }
+  if (typeof error.capabilityId === 'string' && error.capabilityId.trim()) {
+    diagnostic.capabilityId = error.capabilityId
+  }
+  if (error.safety && typeof error.safety === 'object' && !Array.isArray(error.safety)) {
+    diagnostic.safety = error.safety
+  }
+  if (Array.isArray(error.nextActions)) {
+    diagnostic.nextActions = error.nextActions.map((item) => String(item))
+  }
 }
 
 function fallbackDataSpecDiagnostic(httpStatus, message) {

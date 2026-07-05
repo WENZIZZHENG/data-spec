@@ -1,6 +1,9 @@
 package com.dataspec.idempotency;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.result.R;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -15,6 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class WriteGuardServiceTest {
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void execute_reusesSuccessfulResultForSameProjectOperationAndKey() {
@@ -47,13 +52,36 @@ class WriteGuardServiceTest {
     }
 
     @Test
+    void execute_rejectsMissingIdempotencyKeyForHighRiskApplyOperation() {
+        WriteGuardService service = new WriteGuardService();
+
+        BizException error = assertThrows(BizException.class,
+                () -> service.execute(1L, "project-backup:restore-apply", null, () -> "unsafe"));
+        JsonNode response = objectMapper.valueToTree(R.fail(error.getCode(), error.getMessage()));
+        String serialized = response.toString();
+
+        assertThat(error.getCode()).isEqualTo(400);
+        assertThat(error.getMessage()).contains("Idempotency-Key");
+        assertThat(response.path("error").path("code").asText()).isEqualTo("IDEMPOTENCY_KEY_REQUIRED");
+        assertThat(response.path("error").path("category").asText()).isEqualTo("SAFETY");
+        assertThat(response.path("error").path("retryable").asBoolean()).isTrue();
+        assertThat(response.path("error").path("missing").toString()).contains("Idempotency-Key");
+        assertThat(response.path("error").path("operation").asText()).isEqualTo("project-backup:restore-apply");
+        assertThat(response.path("error").path("safety").path("requiresIdempotencyKey").asBoolean()).isTrue();
+        assertThat(response.path("error").path("nextActions").toString()).contains("idempotency");
+        assertThat(serialized).doesNotContain("password=raw")
+                .doesNotContain("Authorization")
+                .doesNotContain("jdbc:postgresql://");
+    }
+
+    @Test
     void execute_rejectsConcurrentOperationWithRetryableConflict() throws Exception {
         WriteGuardService service = new WriteGuardService();
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         var executor = Executors.newSingleThreadExecutor();
         try {
-            var running = executor.submit(() -> service.execute(1L, "reverse-import:apply", null, () -> {
+            var running = executor.submit(() -> service.execute(1L, "low-risk:write", null, () -> {
                 started.countDown();
                 try {
                     release.await(2, TimeUnit.SECONDS);
@@ -65,7 +93,7 @@ class WriteGuardServiceTest {
             assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
 
             BizException error = assertThrows(BizException.class,
-                    () -> service.execute(1L, "reverse-import:apply", null, () -> "second"));
+                    () -> service.execute(1L, "low-risk:write", null, () -> "second"));
 
             assertThat(error.getCode()).isEqualTo(409);
             assertThat(error.getMessage()).contains("写入操作正在进行");
@@ -82,11 +110,11 @@ class WriteGuardServiceTest {
         WriteGuardService service = new WriteGuardService();
 
         List<TransactionSynchronization> synchronizations = runInsideTransaction(() ->
-                service.execute(1L, "reverse-import:apply", null, () -> "created"));
+                service.execute(1L, "low-risk:write", null, () -> "created"));
         var executor = Executors.newSingleThreadExecutor();
         try {
             BizException error = executor.submit(() -> assertThrows(BizException.class,
-                    () -> service.execute(1L, "reverse-import:apply", null, () -> "second"))).get(2, TimeUnit.SECONDS);
+                    () -> service.execute(1L, "low-risk:write", null, () -> "second"))).get(2, TimeUnit.SECONDS);
 
             assertThat(error.getCode()).isEqualTo(409);
             assertThat(error.getMessage()).contains("写入操作正在进行");

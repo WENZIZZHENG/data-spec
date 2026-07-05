@@ -3128,6 +3128,7 @@ export interface components {
             confidence?: number;
             ignoreReason?: string;
             confirmReason?: string;
+            dryRunToken?: string;
         };
         MissingCommentIssue: {
             tableName?: string;
@@ -3174,6 +3175,7 @@ export interface components {
         };
         ReverseImportPreview: {
             summary?: components["schemas"]["ReverseImportSummary"];
+            dryRunToken?: string;
             tables?: components["schemas"]["TableDef"][];
             fieldCandidates?: components["schemas"]["FieldCandidate"][];
             mappingDecisions?: components["schemas"]["ReverseImportDecision"][];
@@ -3519,6 +3521,7 @@ export interface components {
             projectId: number;
             candidates?: components["schemas"]["FieldCandidate"][];
             ignoredCandidates?: components["schemas"]["FieldCandidate"][];
+            dryRunToken?: string;
             databaseType?: string;
             databaseName?: string;
             schemaName?: string;
@@ -3852,6 +3855,7 @@ export interface components {
             targetProjectId?: number;
             overwrite?: boolean;
             backupPackage: components["schemas"]["ProjectBackupPackage"];
+            dryRunToken?: string;
         };
         ReverseImportBatch: {
             /** Format: int64 */
@@ -3928,6 +3932,7 @@ export interface components {
         };
         ProjectRestorePlan: {
             dryRun?: boolean;
+            dryRunToken?: string;
             overwrite?: boolean;
             canApply?: boolean;
             compatibilityStatus?: string;

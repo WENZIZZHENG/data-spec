@@ -4,6 +4,7 @@ import com.dataspec.capability.model.AiCapabilityCatalog;
 import com.dataspec.capability.model.AiCapabilityEntry;
 import com.dataspec.capability.service.impl.AiCapabilityCatalogServiceImpl;
 import com.dataspec.common.exception.BizException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,9 @@ class AiCapabilityCatalogServiceImplTest {
                 "merge-standard-fields",
                 "generate-ddl",
                 "reverse-import",
+                "project-backup-restore",
+                "standard-reuse-packs",
+                "ai-batch-sql-lint",
                 "coverage-report",
                 "schema-registry",
                 "export-evidence-package",
@@ -80,6 +84,58 @@ class AiCapabilityCatalogServiceImplTest {
         assertTrue(entry.outputContracts().contains("lint-result"));
         assertFalse(entry.preflightChecks().isEmpty());
         assertFalse(entry.nextActions().isEmpty());
+    }
+
+    @Test
+    void catalogSerializesSafetyMetadataForEveryCapability() {
+        JsonNode catalog = objectMapper.valueToTree(service.getCatalog(1L));
+
+        for (JsonNode capability : catalog.path("capabilities")) {
+            String id = capability.path("id").asText();
+            JsonNode safety = capability.path("safety");
+
+            assertTrue(safety.isObject(), id + " 应输出 safety metadata");
+            assertTrue(safety.has("readOnly"), id + " 缺少 readOnly");
+            assertTrue(safety.has("writesProject"), id + " 缺少 writesProject");
+            assertTrue(safety.has("requiresDryRun"), id + " 缺少 requiresDryRun");
+            assertTrue(safety.has("supportsUndo"), id + " 缺少 supportsUndo");
+            assertTrue(safety.has("requiresIdempotencyKey"), id + " 缺少 requiresIdempotencyKey");
+            assertTrue(safety.path("sensitiveInputs").isArray(), id + " sensitiveInputs 必须是数组");
+            assertTrue(safety.path("nextActions").isArray(), id + " nextActions 必须是数组");
+        }
+    }
+
+    @Test
+    void highRiskCapabilitySafetyRequiresPreviewAndIdempotency() {
+        JsonNode reverseImport = objectMapper.valueToTree(service.getCapability("reverse_import", 1L));
+        JsonNode safety = reverseImport.path("safety");
+
+        assertFalse(safety.path("readOnly").asBoolean(true));
+        assertTrue(safety.path("writesProject").asBoolean(false));
+        assertTrue(safety.path("requiresDryRun").asBoolean(false));
+        assertTrue(safety.path("requiresIdempotencyKey").asBoolean(false));
+        assertTrue(safety.path("sensitiveInputs").toString().contains("databasePassword"));
+        assertTrue(safety.path("nextActions").toString().contains("preview"));
+    }
+
+    @Test
+    void catalogSafetyMatchesEnforcedWriteOperations() {
+        JsonNode restoreSafety = objectMapper.valueToTree(service.getCapability("project_backup_restore", 1L)).path("safety");
+        JsonNode reusePackSafety = objectMapper.valueToTree(service.getCapability("standard_reuse_packs", 1L)).path("safety");
+        JsonNode aiBatchSafety = objectMapper.valueToTree(service.getCapability("ai_batch_sql_lint", 1L)).path("safety");
+        JsonNode mergeSafety = objectMapper.valueToTree(service.getCapability("merge_standard_fields", 1L)).path("safety");
+        JsonNode starterKitSafety = objectMapper.valueToTree(service.getCapability("domain_starter_kits", 1L)).path("safety");
+
+        assertTrue(restoreSafety.path("requiresDryRun").asBoolean(false));
+        assertTrue(restoreSafety.path("requiresIdempotencyKey").asBoolean(false));
+        assertTrue(restoreSafety.path("nextActions").toString().contains("Idempotency-Key"));
+        assertFalse(reusePackSafety.path("requiresDryRun").asBoolean(true));
+        assertFalse(mergeSafety.path("requiresDryRun").asBoolean(true));
+        assertFalse(starterKitSafety.path("requiresDryRun").asBoolean(true));
+        assertTrue(aiBatchSafety.path("requiresIdempotencyKey").asBoolean(false));
+        assertFalse(aiBatchSafety.path("readOnly").asBoolean(true));
+        assertFalse(service.getCapability("standard_reuse_packs", 1L).optionalInputs().contains("dryRunToken"));
+        assertTrue(service.getCapability("ai_batch_sql_lint", 1L).cliCommands().isEmpty());
     }
 
     @Test

@@ -1283,6 +1283,8 @@ export interface FieldCandidate {
   confidence?: number
   ignoreReason?: string
   confirmReason?: string
+  /** 字段候选所属预览批次的 dry-run evidence，确认导入或忽略时必须与请求 dryRunToken 一致。 */
+  dryRunToken?: string
 }
 
 export type ReverseImportDecision = Schemas['ReverseImportDecision']
@@ -1303,6 +1305,8 @@ export interface NonStandardField {
 
 export interface ReverseImportPreview {
   summary?: ReverseImportSummary
+  /** 本次预览生成的 dry-run evidence，确认导入字段候选时必须随请求带回。 */
+  dryRunToken?: string
   tables?: TableDef[]
   fieldCandidates?: FieldCandidate[]
   mappingDecisions?: ReverseImportDecision[]

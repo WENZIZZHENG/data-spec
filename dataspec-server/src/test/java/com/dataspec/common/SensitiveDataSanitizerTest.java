@@ -18,7 +18,7 @@ class SensitiveDataSanitizerTest {
 
     @Test
     void redactsCommonSecretTextPatterns() {
-        String raw = "Authorization: Bearer abc.def password=s3cr3t token=ds_raw jdbc:postgresql://localhost:5432/app";
+        String raw = "Authorization: Bearer abc.def password=s3cr3t token=ds_raw jdbc:postgresql://localhost:5432/app dsn=postgres://user:pass@host/db mysql://user:pass@host/db";
         String sanitized = SensitiveDataSanitizer.redactText(raw);
 
         assertTrue(sanitized.contains("[REDACTED]"));
@@ -28,6 +28,8 @@ class SensitiveDataSanitizerTest {
         assertFalse(sanitized.contains("s3cr3t"));
         assertFalse(sanitized.contains("ds_raw"));
         assertFalse(sanitized.contains("jdbc:postgresql://localhost"));
+        assertFalse(sanitized.contains("user:pass@host"));
+        assertFalse(sanitized.contains("dsn=postgres://"));
     }
 
     @Test
@@ -75,6 +77,7 @@ class SensitiveDataSanitizerTest {
         assertTrue(SensitiveDataSanitizer.isSensitiveKey("dbPassword"));
         assertTrue(SensitiveDataSanitizer.isSensitiveKey("githubApiKey"));
         assertTrue(SensitiveDataSanitizer.isSensitiveKey("sourceTokenHash"));
+        assertTrue(SensitiveDataSanitizer.isSensitiveKey("sourceDsn"));
         assertFalse(SensitiveDataSanitizer.isSensitiveKey("databaseName"));
         assertEquals("password=[REDACTED]", SensitiveDataSanitizer.sanitizeValue("password=secret"));
     }

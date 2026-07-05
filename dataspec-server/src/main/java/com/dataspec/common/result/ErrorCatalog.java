@@ -1,6 +1,10 @@
 package com.dataspec.common.result;
 
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 将现有业务 code/message 收敛为稳定错误码。
@@ -9,6 +13,8 @@ import java.util.Locale;
  * 可以继续在这里补充更精确的映射。</p>
  */
 public final class ErrorCatalog {
+
+    private static final Pattern OPERATION_PATTERN = Pattern.compile("operation=([A-Za-z0-9:_-]+)");
 
     private ErrorCatalog() {
     }
@@ -33,6 +39,44 @@ public final class ErrorCatalog {
                     false,
                     "切换到 token 授权的项目，或使用具备该项目权限的 API Token 后重试。",
                     "README.md#安全基线"
+            );
+        }
+        if (text.contains("Idempotency-Key") && (text.contains("缺少") || lower.contains("required"))) {
+            String operation = extractOperation(text);
+            return new ErrorDetail(
+                    "IDEMPOTENCY_KEY_REQUIRED",
+                    "SAFETY",
+                    true,
+                    "为该高风险写入生成并传入 Idempotency-Key；AI 自动重试必须复用同一 projectId、operation 和 key。",
+                    "README.md#ai-写入安全协议",
+                    List.of("Idempotency-Key"),
+                    operation,
+                    null,
+                    Map.of(
+                            "readOnly", false,
+                            "writesProject", true,
+                            "requiresIdempotencyKey", true
+                    ),
+                    List.of("重新运行命令并传入 --idempotency-key <key> 或 Idempotency-Key header。")
+            );
+        }
+        if (lower.contains("dry-run evidence") || lower.contains("dry run evidence")) {
+            String operation = extractOperation(text);
+            return new ErrorDetail(
+                    "DRY_RUN_REQUIRED",
+                    "SAFETY",
+                    true,
+                    "先执行对应 preview/compare/plan dry-run，确认结果后将返回的 dryRunToken 原样带回 apply/import。",
+                    "README.md#ai-写入安全协议",
+                    List.of("dryRunToken"),
+                    operation,
+                    null,
+                    Map.of(
+                            "readOnly", false,
+                            "writesProject", true,
+                            "requiresDryRun", true
+                    ),
+                    List.of("重新运行 preview/compare/plan，并在确认写入请求中传入 dryRunToken。")
             );
         }
         if (statusCode == 409 || text.contains("写入操作正在进行") || lower.contains("idempotency")) {
@@ -96,6 +140,11 @@ public final class ErrorCatalog {
                 "检查请求参数并按错误消息修正；AI agent 可先运行 doctor 或查看对应页面必填项。",
                 "README.md#验证"
         );
+    }
+
+    private static String extractOperation(String text) {
+        Matcher matcher = OPERATION_PATTERN.matcher(text == null ? "" : text);
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     private static boolean containsProjectId(String text, String lower) {

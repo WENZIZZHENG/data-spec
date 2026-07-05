@@ -985,6 +985,9 @@ test('keeps standard health trend and improvement plan wired', () => {
 test('keeps database reverse import and comparison flow wired', () => {
   const view = readSource('src/views/ReverseImport.vue')
   const api = readSource('src/api/reverseImport.ts')
+  const idempotency = readSource('src/api/idempotency.ts')
+  const types = readSource('src/types/index.ts')
+  const schema = readSource('src/api/schema.ts')
 
   assertContains(view, [
     'previewReverseImport',
@@ -1031,6 +1034,8 @@ test('keeps database reverse import and comparison flow wired', () => {
     '只读安全诊断',
     'candidateReasonValue(row)',
     'ignoredFieldCandidates',
+    'preview.value?.dryRunToken',
+    "createClientIdempotencyKey('reverse-import:database-import')",
     'importDecisionRows',
     '映射决策',
     'goToFieldLibrary'
@@ -1044,9 +1049,25 @@ test('keeps database reverse import and comparison flow wired', () => {
     "request.post<unknown, DatabaseMetadataBrowser>('/reverse-import/database/browser'",
     "request.post<unknown, ReverseImportPreview>('/reverse-import/database/preview'",
     "request.post<unknown, ReverseImportCompareResult>('/reverse-import/database/compare'",
-    "request.post<unknown, DatabaseImportResult>('/reverse-import/database/import'",
+    'request.post<unknown, DatabaseImportResult>(',
+    "'/reverse-import/database/import'",
+    'dryRunToken',
+    'withIdempotencyKey(idempotencyKey)',
     "request.get<unknown, ReverseImportDecision[]>('/reverse-import/decisions'"
   ], 'reverse import api')
+
+  assertContains(idempotency, [
+    "headers: { 'Idempotency-Key': idempotencyKey }",
+    'createClientIdempotencyKey'
+  ], 'idempotency api')
+
+  assertContains(types, [
+    'dryRunToken?: string'
+  ], 'reverse import types')
+
+  assertContains(schema, [
+    'dryRunToken?: string;'
+  ], 'reverse import schema')
 })
 
 test('keeps field library filtering, grouping, bulk maintenance, and undo flow wired', () => {
@@ -1193,6 +1214,7 @@ test('keeps rule baseline suite workflow wired on rule config page', () => {
 test('keeps project backup export and restore workflow wired', () => {
   const view = readSource('src/views/ProjectBackup.vue')
   const api = readSource('src/api/projectBackup.ts')
+  const idempotency = readSource('src/api/idempotency.ts')
   const types = readSource('src/types/index.ts')
   const schema = readSource('src/api/schema.ts')
 
@@ -1209,15 +1231,24 @@ test('keeps project backup export and restore workflow wired', () => {
     'exportProjectBackup(projectId)',
     'previewProjectBackupRestore({',
     'applyProjectBackupRestore({',
+    'dryRunToken: restorePlan.value.dryRunToken',
+    "createClientIdempotencyKey('project-backup:restore-apply')",
     'listProjectRestoreRecords(projectId)'
   ], 'ProjectBackup.vue')
 
   assertContains(api, [
     "request.get<unknown, ProjectBackupPackage>('/project-backups/export'",
     "request.post<unknown, ProjectRestorePlan>('/project-backups/restore/preview'",
-    "request.post<unknown, ProjectRestoreResult>('/project-backups/restore/apply'",
+    'request.post<unknown, ProjectRestoreResult>(',
+    "'/project-backups/restore/apply'",
+    'withIdempotencyKey(idempotencyKey)',
     "request.get<unknown, ProjectRestoreRecord[]>('/project-backups/restore/records'"
   ], 'project backup api')
+
+  assertContains(idempotency, [
+    "headers: { 'Idempotency-Key': idempotencyKey }",
+    'createClientIdempotencyKey'
+  ], 'idempotency api')
 
   assertContains(types, [
     "export type ProjectBackupPackage = Schemas['ProjectBackupPackage']",
@@ -1235,6 +1266,7 @@ test('keeps project backup export and restore workflow wired', () => {
     'ProjectBackupPackage',
     'ProjectRestorePlan',
     'ProjectRestoreResult',
+    'dryRunToken?: string;',
     'RListProjectRestoreRecord'
   ], 'project backup schema')
 })

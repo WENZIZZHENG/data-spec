@@ -1,4 +1,5 @@
 import request from '@/api/request'
+import { withIdempotencyKey } from '@/api/idempotency'
 import type {
   DatabaseConnectionReq,
   DatabaseImportSourceContext,
@@ -50,14 +51,21 @@ export function importDatabaseCandidates(
   projectId: number,
   candidates: FieldCandidate[],
   source?: DatabaseImportSourceContext,
-  ignoredCandidates: FieldCandidate[] = []
+  ignoredCandidates: FieldCandidate[] = [],
+  dryRunToken?: string,
+  idempotencyKey?: string
 ) {
-  return request.post<unknown, DatabaseImportResult>('/reverse-import/database/import', {
-    projectId,
-    candidates,
-    ignoredCandidates,
-    ...source
-  })
+  return request.post<unknown, DatabaseImportResult>(
+    '/reverse-import/database/import',
+    {
+      projectId,
+      candidates,
+      ignoredCandidates,
+      dryRunToken,
+      ...source
+    },
+    withIdempotencyKey(idempotencyKey)
+  )
 }
 
 export function listReverseImportDecisions(projectId: number, batchId?: number, limit = 50) {

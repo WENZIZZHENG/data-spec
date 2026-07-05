@@ -8,6 +8,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.Set;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -25,6 +26,11 @@ public class WriteGuardService {
     private static final int MAX_KEY_LENGTH = 128;
     private static final int MAX_COMPLETED_ENTRIES = 1_000;
     private static final Duration COMPLETED_ENTRY_TTL = Duration.ofHours(6);
+    private static final Set<String> REQUIRED_IDEMPOTENCY_OPERATIONS = Set.of(
+            "ai-batch:sql-lint",
+            "project-backup:restore-apply",
+            "reverse-import:database-import"
+    );
 
     private final Map<String, CompletedEntry> completedEntries = new ConcurrentHashMap<>();
     private final Map<String, ReentrantLock> operationLocks = new ConcurrentHashMap<>();
@@ -36,8 +42,12 @@ public class WriteGuardService {
         if (operation == null || operation.isBlank()) {
             throw new BizException(400, "写入操作名称不能为空");
         }
-        String operationScope = projectId + ":" + operation.trim();
+        String normalizedOperation = operation.trim();
         String normalizedKey = normalizeKey(idempotencyKey);
+        if (normalizedKey == null && REQUIRED_IDEMPOTENCY_OPERATIONS.contains(normalizedOperation)) {
+            throw new BizException(400, "缺少 Idempotency-Key: operation=" + normalizedOperation);
+        }
+        String operationScope = projectId + ":" + normalizedOperation;
         String completedKey = normalizedKey == null ? null : operationScope + ":" + normalizedKey;
         if (completedKey != null) {
             CompletedEntry completed = completedEntries.get(completedKey);

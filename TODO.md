@@ -699,12 +699,12 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不做企业组织层级、审批发布、跨团队权限或复杂包仓库；第一版只服务个人/小团队复用。
 
 ### P6-69：AI 写入安全策略与 dry-run 协议
-- 状态：待办。
+- 状态：已完成第一版，已新增 AI capability `safety` metadata、CLI/MCP safety 展示与校验、缺幂等 key 的结构化诊断、签名 dry-run 证据和前端 dry-run 摘要。
 - 为什么做：DataSpec 越来越多入口会被 AI 通过 CLI/MCP 调用，个人工具也需要避免“AI 一次误写很多标准字段、规则或导入记录”；安全策略应偏产品内建约束，而不是企业审批流。
-- 已有基础：已有 API Token、`doctor`、workflow recipes、AI 能力清单待办、AI 任务卡待办、幂等锁待办和敏感信息脱敏待办。
+- 已有基础：已有 API Token、`doctor`、workflow recipes、AI 能力清单、AI 任务卡、幂等写保护和敏感信息脱敏。
 - 缺口：CLI/MCP/API 对写操作缺少统一 machine-readable safety metadata；AI 不容易判断哪些操作只读、哪些需要 dry-run、哪些必须带 idempotency key 或可撤销证据。
-- 落地产物：为高风险写操作定义 safety metadata，包含 `readOnly`、`writesProject`、`requiresDryRun`、`supportsUndo`、`requiresIdempotencyKey`、`sensitiveInputs` 和 `nextActions`；CLI/MCP 输出并校验该协议，前端批量写入前展示 dry-run 摘要。
-- 验收标准：AI 能先枚举安全等级再执行写操作；批量导入、批量维护、标准合并等写入默认可 dry-run；缺少必要幂等参数时返回结构化错误；日志不输出密码/token。
+- 落地产物：为高风险写操作定义 safety metadata，包含 `readOnly`、`writesProject`、`requiresDryRun`、`supportsUndo`、`requiresIdempotencyKey`、`sensitiveInputs` 和 `nextActions`；反向导入和项目恢复确认写入要求预览返回的签名 `dryRunToken`，CLI/MCP 输出并校验该协议，前端批量写入前展示 dry-run 摘要。
+- 验收标准：AI 能先枚举安全等级再执行写操作；反向导入和项目恢复等高风险确认写入必须先 dry-run，AI 批量 SQL lint 等重复写操作必须带幂等 key；标准复用等仅建议预览的能力不伪装成服务端强校验；缺少必要安全参数时返回结构化错误；日志不输出 password/token/Authorization/JDBC URL/DSN。已通过后端、CLI/MCP、前端和 OpenSpec 目标验证，完整证据见本次 OpenSpec 变更记录。
 - 边界：不做组织审批、多人审核或复杂 RBAC；不阻塞单条低风险个人 CRUD。
 
 ### P6-70：SQL 规则调试器与可解释匹配面板

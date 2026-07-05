@@ -94,9 +94,12 @@ Capability entry 稳定字段：
 - `examples[]`
 - `preflightChecks[]`
 - `nextActions[]`
+- `safety`
 - `docsRef`
 
-`capability check` 的成功只说明 catalog 结构和核心能力条目存在；它不会执行这些能力，也不会验证当前项目标准质量。
+`safety` 是 AI 写入安全 metadata，稳定字段包括 `readOnly`、`writesProject`、`requiresDryRun`、`supportsUndo`、`requiresIdempotencyKey`、`sensitiveInputs[]` 和 `nextActions[]`。`writeRisk` 继续作为旧客户端可读的摘要风险字段保留；新客户端应优先读取 `safety` 判断是否需要 dry-run、幂等 key、证据导出或人工确认。
+
+`capability check` 的成功只说明 catalog 结构、核心能力条目和必需 `safety` 字段存在；它不会执行这些能力，也不会验证当前项目标准质量。
 
 ### field
 
@@ -293,13 +296,14 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - CLI `lint`、`lint-files`、`suggest-field`、`search-fields`、`generate-ddl` 透传后端稳定字段。
 - CLI `profile list/show` 输出 AI Task Profiles 稳定字段；未知 profile 或 taskType 返回参数错误退出码。
 - CLI `contract list/show/check` 输出 Schema Registry 稳定字段；`check` 失败时退出码为 `2`，并返回 `diagnostics[]`。
-- CLI `capability list/show/check` 输出 AI Capability Catalog 稳定字段；`check` 失败时退出码为 `2`，并返回 `diagnostics[]`。
+- CLI `capability list/show/check` 输出 AI Capability Catalog 稳定字段和 `safety` metadata；`show --format text` 展示安全摘要，`check` 失败时退出码为 `2`，并返回 `diagnostics[]`。
 - CLI `workflow list/show` 输出 `kind`、`schemaVersion`、`recipes[]`、`recipe`；recipe 保留 `id`、`title`、`goal`、`requiredInputs`、`prechecks`、`steps`、`expectedArtifacts`、`failureHandling`、`nextActions`。
 - CLI `evidence export` 输出 `AiEvidencePackage` JSON 或 zip；失败时返回参数错误退出码并输出脱敏错误。
 - MCP resources/tools 返回 `structuredContent` 和 `content[].text`；`content[].text` 应保持可解析 JSON 或明确文本 fallback。
 - MCP `ai-task-profiles` resource 输出 `AiTaskProfileCatalog` 兼容结构。
-- MCP `capability-catalog` resource 输出 AI Capability Catalog，并为该 resource 返回 `structuredContent` 和可解析 JSON text。
+- MCP `capability-catalog` resource 输出 AI Capability Catalog，并为该 resource 返回 `structuredContent` 和可解析 JSON text；MCP `tools/list` 的本地工具描述同步包含 `safety` metadata 或等价安全引用。
 - MCP `schema-registry` resource 输出 Schema Registry catalog。
 - MCP `workflow-recipes` resource 输出 `kind`、`schemaVersion`、`projectId`、`recipes[]`。
 - MCP `search_fields` tool 返回字段检索稳定字段，`content[].text` 保持可解析 JSON。
 - MCP `export_evidence_package` tool 返回 `AiEvidencePackage`，并保持后端脱敏结果。
+- 安全诊断在 API `error`、CLI `DataSpecError` 和 MCP `error.data.dataspecError` 中保留 `code`、`category`、`missing`、`operation`、`safety` 和 `nextActions`；`IDEMPOTENCY_KEY_REQUIRED` 表示高风险写入缺少必需的 `Idempotency-Key`，`DRY_RUN_REQUIRED` 表示确认写入缺少预览返回的 `dryRunToken`。CLI/MCP 透传这些诊断时会递归脱敏 token、password、Authorization、JDBC URL、DSN 和 connection string。

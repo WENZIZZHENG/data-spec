@@ -683,6 +683,7 @@ import {
   scanDatabaseMetadata,
   testDatabaseConnection
 } from '@/api/reverseImport'
+import { createClientIdempotencyKey } from '@/api/idempotency'
 import { useProjectStore } from '@/stores/project'
 import {
   attachCandidateConfirmReasons,
@@ -1438,6 +1439,7 @@ async function handleImportCandidates() {
   }
   importLoading.value = true
   try {
+    const idempotencyKey = createClientIdempotencyKey('reverse-import:database-import')
     importResult.value = await importDatabaseCandidates(
       projectStore.currentProjectId,
       selectedFieldCandidates.value,
@@ -1447,7 +1449,9 @@ async function handleImportCandidates() {
         schemaName: dbForm.schemaName,
         tableNames: [...(dbForm.tableNames ?? [])]
       },
-      ignoredFieldCandidates.value
+      ignoredFieldCandidates.value,
+      preview.value?.dryRunToken,
+      idempotencyKey
     )
     ElMessage.success(`导入 ${importResult.value.importedCount ?? 0} 个字段，跳过 ${importResult.value.skippedCount ?? 0} 个字段`)
   } finally {

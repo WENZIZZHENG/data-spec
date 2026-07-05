@@ -3,6 +3,7 @@ package com.dataspec.projectbackup.service.impl;
 import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.repository.StandardChangeLogRepository;
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.safety.DryRunEvidenceSigner;
 import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.domain.entity.Domain;
 import com.dataspec.domain.repository.DomainRepository;
@@ -56,7 +57,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -125,8 +125,10 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
             warnings.add("未指定 targetProjectId，应用恢复时将创建新项目");
         }
         boolean canApply = counts.blocked() == 0 && counts.conflicts() == 0;
+        String dryRunToken = restoreDryRunToken(pkg, overwrite, target == null ? null : target.getId(), targetName, counts, items, warnings);
         return new ProjectRestorePlan(
                 true,
+                dryRunToken,
                 overwrite,
                 canApply,
                 "SUPPORTED",
@@ -158,6 +160,7 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
 
     private ProjectRestoreResult applyRestoreInternal(ProjectRestoreReq req) {
         ProjectRestorePlan preview = previewRestore(req);
+        requireRestoreDryRunEvidence(req, preview);
         if (!Boolean.TRUE.equals(preview.canApply())) {
             throw new BizException("恢复计划存在冲突或阻断项，请先处理 dry-run 结果");
         }
@@ -174,6 +177,7 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
 
         ProjectRestorePlan appliedPlan = new ProjectRestorePlan(
                 false,
+                null,
                 preview.overwrite(),
                 true,
                 preview.compatibilityStatus(),
@@ -184,6 +188,15 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
                 preview.warnings());
         ProjectRestoreRecord record = saveRestoreRecord(req.backupPackage(), appliedPlan, target.getId());
         return new ProjectRestoreResult(appliedPlan, record);
+    }
+
+    private void requireRestoreDryRunEvidence(ProjectRestoreReq req, ProjectRestorePlan preview) {
+        if (isBlank(req.dryRunToken())) {
+            throw new BizException(400, "缺少 dry-run evidence: operation=project-backup:restore-apply");
+        }
+        if (!DryRunEvidenceSigner.matches(preview.dryRunToken(), req.dryRunToken())) {
+            throw new BizException(400, "dry-run evidence 与当前恢复计划不匹配: operation=project-backup:restore-apply");
+        }
     }
 
     @Autowired
@@ -577,7 +590,14 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
         if (!projectRepository.existsByName(dated)) {
             return dated;
         }
-        return dated + " " + System.currentTimeMillis();
+        // dryRunToken 会绑定预览计划摘要；重名兜底必须确定性生成，避免合法预览在 apply 阶段被时间戳误判失效。
+        for (int index = 2; index <= 100; index++) {
+            String candidate = dated + " (" + index + ")";
+            if (!projectRepository.existsByName(candidate)) {
+                return candidate;
+            }
+        }
+        throw new BizException("无法为恢复项目生成可用名称，请先重命名已有恢复项目");
     }
 
     private ProjectBackupPackage withHash(ProjectBackupPackage pkg, String hash) {
@@ -590,6 +610,33 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
                 pkg.sanitization(),
                 pkg.warnings(),
                 hash);
+    }
+
+    private String restoreDryRunToken(ProjectBackupPackage pkg,
+                                      boolean overwrite,
+                                      Long targetProjectId,
+                                      String targetProjectName,
+                                      ProjectRestoreCounts counts,
+                                      List<ProjectRestoreItem> items,
+                                      List<String> warnings) {
+        try {
+            Map<String, Object> evidence = new LinkedHashMap<>();
+            evidence.put("operation", "project-backup:restore-apply");
+            evidence.put("packageHash", pkg.packageHash());
+            evidence.put("overwrite", overwrite);
+            evidence.put("targetProjectId", targetProjectId);
+            evidence.put("targetProjectName", targetProjectName);
+            evidence.put("counts", counts);
+            evidence.put("items", items);
+            evidence.put("warnings", warnings);
+            byte[] json = mapper().writeValueAsBytes(evidence);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("operation", "project-backup:restore-apply");
+            payload.put("evidenceHash", DryRunEvidenceSigner.sha256Hex(json));
+            return DryRunEvidenceSigner.signPayload("pbr", payload, mapper());
+        } catch (Exception e) {
+            throw new BizException("计算恢复 dry-run evidence 失败: " + e.getMessage());
+        }
     }
 
     private String packageHash(ProjectBackupPackage pkg) {
@@ -615,6 +662,10 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
 
     private String textOrDefault(String value, String defaultValue) {
         return value == null || value.isBlank() ? defaultValue : value;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private <T> java.util.stream.Collector<T, ?, Map<String, T>> toNaturalMap(Function<T, String> keyFn) {

@@ -4,6 +4,7 @@ import com.dataspec.capability.model.AiCapabilityCatalog;
 import com.dataspec.capability.model.AiCapabilityDiagnostic;
 import com.dataspec.capability.model.AiCapabilityEntry;
 import com.dataspec.capability.model.AiCapabilityExample;
+import com.dataspec.capability.model.AiWriteSafetyMetadata;
 import com.dataspec.capability.service.AiCapabilityCatalogService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.security.context.ProjectAccessGuard;
@@ -278,6 +279,58 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
                 "README.md#sql-规范闭环"
         ));
         add(map, cap(
+                "project-backup-restore", "project", "项目备份恢复",
+                "预览并确认应用脱敏项目备份包，恢复领域、字段、规则、模板和反向导入来源记录。",
+                true, "WRITES_DATASPEC_STANDARD",
+                list("backupPackage"), list("targetProjectId", "overwrite", "dryRunToken"),
+                list("project-restore-plan", "project-restore-result"),
+                list("POST /api/project-backups/restore/preview", "POST /api/project-backups/restore/apply"),
+                list(),
+                list(), list(),
+                list("/project-backup"),
+                list("project-backup-restore"),
+                list(), list(),
+                examples("API", null, "POST /api/project-backups/restore/preview"),
+                list("备份包必须来自 DataSpec export", "apply 前必须检查 dry-run 计划、warnings 和冲突", "apply 必须携带 Idempotency-Key"),
+                list("先预览恢复计划，确认 dryRunToken、目标项目和覆盖策略后再 apply。"),
+                "README.md#项目备份"
+        ));
+        add(map, cap(
+                "standard-reuse-packs", "project", "标准复用包",
+                "创建、预览并应用跨项目标准复用包，把稳定字段、枚举、规则和模板复制到目标项目。",
+                true, "WRITES_DATASPEC_STANDARD",
+                list("packId", "targetProjectId"), list("overwrite"),
+                list("standard-reuse-pack-plan", "standard-reuse-pack-apply-result"),
+                list("GET /api/standard-reuse-packs", "POST /api/standard-reuse-packs", "POST /api/standard-reuse-packs/apply/preview", "POST /api/standard-reuse-packs/apply"),
+                list(),
+                list(), list(),
+                list("/standard-reuse-packs"),
+                list("standard-reuse-pack-plan", "field", "enum-dict", "rule-config", "template"),
+                list(), list("minimal-context"),
+                examples("API", null, "POST /api/standard-reuse-packs/apply/preview"),
+                list("先预览 created/skipped/drifted/blocked", "有 blocked 项时不得自动 apply", "跨项目应用前确认目标项目"),
+                list("先运行 apply preview，确认漂移和阻塞项后再人工确认应用。"),
+                "README.md#标准复用包"
+        ));
+        add(map, cap(
+                "ai-batch-sql-lint", "automation", "AI 批量 SQL lint",
+                "批量校验 SQL 文件或输入，写入 AI batch 任务记录并可生成交付证据包。",
+                true, "WRITES_DATASPEC_RECORD",
+                list("projectId", "items"), list("profileId", "taskType", "deliveryPackage"),
+                list("ai-batch-result", "lint-result", "ai-batch-delivery-package"),
+                list("POST /api/ai-batches/sql-lint"),
+                list(),
+                list(), list(),
+                list("/ai-batches"),
+                list("ai-batch-result", "lint-result"),
+                list("review-pr-sql"),
+                list("sql-fix", "pr-review"),
+                examples("API", null, "POST /api/ai-batches/sql-lint"),
+                list("批量写入检查记录前确认 projectId、profile 和文件范围", "必须携带 Idempotency-Key"),
+                list("AI 自动重试批量 lint 时复用同一 Idempotency-Key；交付前导出 evidence package。"),
+                "README.md#ai-批量任务"
+        ));
+        add(map, cap(
                 "coverage-report", "database", "字段覆盖率报告",
                 "基于 SQL、数据库 metadata 或 schema dump 统计标准覆盖、未纳管和缺注释字段。",
                 true, "READ_ONLY",
@@ -427,8 +480,68 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
                 examples,
                 preflightChecks,
                 nextActions,
+                safety(id, writeRisk, preflightChecks, nextActions),
                 docsRef
         );
+    }
+
+    private static AiWriteSafetyMetadata safety(
+            String id,
+            String writeRisk,
+            List<String> preflightChecks,
+            List<String> nextActions
+    ) {
+        boolean readOnly = "READ_ONLY".equals(writeRisk);
+        boolean writesProject = !readOnly;
+        boolean requiresDryRun = List.of("reverse-import", "project-backup-restore").contains(id);
+        boolean requiresIdempotencyKey = List.of("reverse-import", "project-backup-restore", "ai-batch-sql-lint").contains(id);
+        boolean supportsUndo = List.of("merge-standard-fields", "reverse-import", "domain-starter-kits",
+                "project-backup-restore", "standard-reuse-packs", "export-evidence-package", "ai-task-profiles").contains(id);
+        List<String> sensitiveInputs = sensitiveInputs(id);
+        return new AiWriteSafetyMetadata(
+                readOnly,
+                writesProject,
+                requiresDryRun,
+                supportsUndo,
+                requiresIdempotencyKey,
+                sensitiveInputs,
+                safetyNextActions(id, preflightChecks, nextActions, requiresDryRun, requiresIdempotencyKey)
+        );
+    }
+
+    private static List<String> sensitiveInputs(String id) {
+        if ("reverse-import".equals(id)) {
+            return list("databasePassword", "jdbcUrl", "connectionString", "sourceDatabaseCredentials");
+        }
+        if ("ai-batch-sql-lint".equals(id)) {
+            return list("sql", "payloadSummary");
+        }
+        if ("export-evidence-package".equals(id)) {
+            return list("payloadSummary");
+        }
+        return list();
+    }
+
+    private static List<String> safetyNextActions(
+            String id,
+            List<String> preflightChecks,
+            List<String> nextActions,
+            boolean requiresDryRun,
+            boolean requiresIdempotencyKey
+    ) {
+        List<String> base = new java.util.ArrayList<>();
+        if (requiresDryRun) {
+            base.add("先运行 preview/compare/plan dry-run，确认摘要、冲突和 warnings 后再 apply。");
+        }
+        if (requiresIdempotencyKey) {
+            base.add("确认写入时携带 Idempotency-Key；AI 重试必须复用同一 key。");
+        }
+        if ("reverse-import".equals(id)) {
+            base.add("使用只读数据库账号；不要把数据库密码、完整 JDBC URL 或连接串写入日志、证据包或任务卡。");
+        }
+        base.addAll(preflightChecks);
+        base.addAll(nextActions);
+        return base.stream().filter(value -> value != null && !value.isBlank()).distinct().toList();
     }
 
     private static List<String> list(String... values) {

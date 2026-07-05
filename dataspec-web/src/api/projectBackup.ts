@@ -1,4 +1,5 @@
 import request from '@/api/request'
+import { withIdempotencyKey } from '@/api/idempotency'
 import type {
   ProjectBackupPackage,
   ProjectRestorePlan,
@@ -17,8 +18,12 @@ export function previewProjectBackupRestore(data: ProjectRestoreReq) {
   return request.post<unknown, ProjectRestorePlan>('/project-backups/restore/preview', data)
 }
 
-export function applyProjectBackupRestore(data: ProjectRestoreReq) {
-  return request.post<unknown, ProjectRestoreResult>('/project-backups/restore/apply', data)
+export function applyProjectBackupRestore(data: ProjectRestoreReq, idempotencyKey?: string) {
+  return request.post<unknown, ProjectRestoreResult>(
+    '/project-backups/restore/apply',
+    data,
+    withIdempotencyKey(idempotencyKey)
+  )
 }
 
 export function listProjectRestoreRecords(projectId: number) {
