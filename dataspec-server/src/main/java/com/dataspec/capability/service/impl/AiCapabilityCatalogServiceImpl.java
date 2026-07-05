@@ -190,6 +190,24 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
                 "README.md#sql-规范闭环"
         ));
         add(map, cap(
+                "sql-rule-debugger", "sql", "SQL 规则调试器",
+                "只读解释 SQL lint 规则启用状态、参数快照、matchTrace、sourceRange、fixStrategy 和 suppressionStatus。",
+                true, "READ_ONLY",
+                list("projectId", "sql"), list("profileId", "taskType", "fixPolicy"),
+                list("sql-rule-debug-result", "lint-result"),
+                list("POST /api/lint/debug"),
+                list("dataspec lint-debug <file.sql> --project <id> --format json"),
+                list(), list(),
+                list("/sql-lint"),
+                list("sql-rule-debugger", "lint-result"),
+                list("review-pr-sql"),
+                list("sql-fix", "pr-review"),
+                examples("CLI", "dataspec lint-debug db/schema.sql --project 1 --format json", null),
+                list("先准备当前 SQL 和 projectId", "只读调试不会保存 SQL 检查记录，也不会创建规则豁免"),
+                list("查看 rules[].matchTrace 定位命中或未命中原因；误报时结合 suppressionStatus 和 rule params 决定是否调整规则或豁免。"),
+                "README.md#sql-规范闭环"
+        ));
+        add(map, cap(
                 "search-fields", "field", "字段标准检索",
                 "按关键词、分类、标签、状态等检索标准字段，返回命中原因和下一步建议。",
                 true, "READ_ONLY",

@@ -73,6 +73,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'lint') {
       return await runLint(rest, io, fetchFn)
     }
+    if (command === 'lint-debug') {
+      return await runLintDebug(rest, io, fetchFn)
+    }
     if (command === 'lint-files') {
       return await runLintFiles(rest, io, fetchFn)
     }
@@ -181,6 +184,60 @@ async function runLint(args, io, fetchFn) {
     io.writeOut(formatLintText(result))
   }
   return Number(result.errorCount ?? 0) > 0 ? 1 : 0
+}
+
+async function runLintDebug(args, io, fetchFn) {
+  const { positional, options } = parseArgs(args, [
+    'project',
+    'format',
+    'server',
+    'dataspec-token',
+    'profile',
+    'task-type',
+    'taskType',
+    'fix-mode',
+    'fixMode',
+    'max-risk',
+    'maxRisk',
+    'include-explanations',
+    'includeExplanations',
+    'enable-rule',
+    'enableRule',
+    'disable-rule',
+    'disableRule'
+  ], [], ['enable-rule', 'enableRule', 'disable-rule', 'disableRule'])
+  const config = loadDataSpecConfig(cliCwd(io))
+  const sqlPath = positional[0]
+  if (!sqlPath) {
+    throw new Error('lint-debug 需要提供 SQL 文件路径或 -')
+  }
+  if (positional.length > 1) {
+    throw new Error(`lint-debug 只接受一个 SQL 输入路径，收到: ${positional.slice(1).join(', ')}`)
+  }
+  const projectId = parseProjectId(options.project ?? config.projectId)
+  const format = options.format ?? 'json'
+  if (format !== 'json') {
+    throw new Error('lint-debug 当前仅支持 --format json')
+  }
+  const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
+  const profileSelection = resolveProfileSelection(options, config)
+  const fixPolicy = resolveCliFixPolicy(options)
+  const sql = sqlPath === '-' ? await io.readStdin() : await readFile(sqlPath, 'utf8')
+  const body = { sql, projectId, ...profileSelection }
+  if (fixPolicy) {
+    body.fixPolicy = fixPolicy
+  }
+
+  const response = await fetchFn(`${server}/api/lint/debug`, {
+    method: 'POST',
+    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body)
+  })
+  const payload = await readJsonResponse(response)
+  const result = unwrapResponse(payload)
+  io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  return 0
 }
 
 function runWorkflow(args, io) {
@@ -2070,6 +2127,7 @@ const REQUIRED_CAPABILITY_IDS = [
   'doctor',
   'export-ai-context',
   'lint-sql',
+  'sql-rule-debugger',
   'search-fields',
   'suggest-fields',
   'generate-ddl',
@@ -2229,6 +2287,59 @@ function resolveProfileSelection(options = {}, config = {}) {
     profileId: normalizeOptionalCliText(config.aiProfile),
     taskType: normalizeOptionalCliText(config.taskType)
   }
+}
+
+function resolveCliFixPolicy(options = {}) {
+  const mode = normalizeEnumOption(options.fixMode ?? options['fix-mode'], 'fix-mode', ['GENERATE', 'DRY_RUN', 'DISABLED'])
+  const maxRiskLevel = normalizeEnumOption(options.maxRisk ?? options['max-risk'], 'max-risk', ['LOW', 'MEDIUM', 'HIGH'])
+  const includeExplanations = parseOptionalBoolean(
+    options.includeExplanations ?? options['include-explanations'],
+    'include-explanations'
+  )
+  const enabledRuleCodes = normalizeRuleCodeOptions(options.enableRule ?? options['enable-rule'])
+  const disabledRuleCodes = normalizeRuleCodeOptions(options.disableRule ?? options['disable-rule'])
+
+  const policy = {}
+  if (mode) {
+    policy.mode = mode
+  }
+  if (maxRiskLevel) {
+    policy.maxRiskLevel = maxRiskLevel
+  }
+  if (enabledRuleCodes?.length) {
+    policy.enabledRuleCodes = enabledRuleCodes
+  }
+  if (disabledRuleCodes?.length) {
+    policy.disabledRuleCodes = disabledRuleCodes
+  }
+  if (includeExplanations !== undefined) {
+    policy.includeExplanations = includeExplanations
+  }
+  return Object.keys(policy).length > 0 ? policy : null
+}
+
+function normalizeEnumOption(value, label, allowedValues) {
+  const normalized = normalizeOptionalCliText(value)
+  if (!normalized) {
+    return undefined
+  }
+  const enumValue = normalized.replaceAll('-', '_').toUpperCase()
+  if (!allowedValues.includes(enumValue)) {
+    throw new Error(`无效 ${label}: ${value}。支持: ${allowedValues.join(', ')}`)
+  }
+  return enumValue
+}
+
+function normalizeRuleCodeOptions(value) {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  const values = Array.isArray(value) ? value : [value]
+  const result = values
+    .flatMap((item) => String(item).split(','))
+    .map((item) => item.trim())
+    .filter(Boolean)
+  return [...new Set(result)]
 }
 
 function normalizeOptionalCliText(value) {
@@ -4187,6 +4298,7 @@ function helpText() {
 
 Usage:
   node tools/dataspec-cli.mjs lint <path|-> [--project <id>] [--profile <id>|--task-type <type>] --format text|json [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
+  node tools/dataspec-cli.mjs lint-debug <path|-> [--project <id>] [--profile <id>|--task-type <type>] [--fix-mode GENERATE|DRY_RUN|DISABLED] [--max-risk LOW|MEDIUM|HIGH] [--include-explanations true|false] [--enable-rule <code>] [--disable-rule <code>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] [--profile <id>|--task-type <type>] --format json [--delivery-package <json>] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs changed [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>]
   node tools/dataspec-cli.mjs lint-changed [--project <id>] [--profile <id>|--task-type <type>] --format json [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
@@ -4223,6 +4335,7 @@ Options:
   --profile/--task-type 可由 .dataspec/config.json 的 aiProfile/taskType 提供，显式参数优先
   --dataspec-token 可由 .dataspec/config.json 的 apiToken 或 DATASPEC_TOKEN 环境变量提供
   --idempotency-key 可由 DATASPEC_IDEMPOTENCY_KEY 兜底，写入型命令会作为 Idempotency-Key header 传给后端
+  lint-debug 读取 /api/lint/debug 的只读规则 trace；成功请求始终返回 0，适合 AI 排查命中原因和参数快照
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
   lint-files 可通过 --delivery-package 或 --batch-package 写出 AI 批量任务交付包，stdout JSON 保持原结构
   changed 读取 git 变更并按 defaultPaths 输出文件清单、SQL 子集、最小 Context 建议和恢复诊断，不调用服务端

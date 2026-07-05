@@ -41,6 +41,7 @@ class SchemaRegistryServiceImplTest {
                 "template",
                 "standard-snapshot",
                 "lint-result",
+                "sql-rule-debug-result",
                 "ai-evidence-package",
                 "ai-context-manifest",
                 "ai-context-field-catalog",
@@ -63,6 +64,11 @@ class SchemaRegistryServiceImplTest {
         assertNotNull(contract.getJsonSchema().get("properties"));
         assertFalse(contract.getExamples().isEmpty());
         assertNotNull(contract.getCompatibility());
+
+        SchemaContract debug = service.getContract("sql-rule-debug-result");
+        assertTrue(debug.getStableFields().contains("rules[].matchTrace[]"));
+        assertTrue(debug.getJsonSchema().get("properties").toString().contains("UNPARSED"));
+        assertTrue(debug.getExamples().toString().contains("sql-rule-debug@1"));
 
         SchemaContract evidence = service.getContract("ai-evidence-package");
         assertTrue(evidence.getStableFields().contains("validationSummary"));

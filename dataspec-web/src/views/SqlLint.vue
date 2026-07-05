@@ -2,10 +2,16 @@
   <div class="sql-lint-page">
     <div class="page-header">
       <h2>SQL 校验</h2>
-      <el-button type="primary" :loading="linting" @click="handleLint">
-        <el-icon><CaretRight /></el-icon>
-        执行校验
-      </el-button>
+      <div class="header-actions">
+        <el-button type="primary" :loading="linting" @click="handleLint">
+          <el-icon><CaretRight /></el-icon>
+          执行校验
+        </el-button>
+        <el-button :loading="debugging" @click="handleDebug">
+          <el-icon><Search /></el-icon>
+          规则调试
+        </el-button>
+      </div>
     </div>
     <div class="fix-policy-toolbar">
       <div class="policy-control profile-control">
@@ -76,6 +82,134 @@
       <div class="result-panel">
         <div class="panel-title">校验结果</div>
         <div class="result-content">
+          <div v-if="debugResult || debugError || debugging" class="debug-panel">
+            <div class="debug-header">
+              <div>
+                <strong>规则调试</strong>
+                <span v-if="debugResult?.debugVersion" class="debug-version">{{ debugResult.debugVersion }}</span>
+              </div>
+              <div class="debug-tags">
+                <el-tag size="small" type="success">命中 {{ debugMatchedCount }}</el-tag>
+                <el-tag size="small" type="info">未命中 {{ debugNoMatchCount }}</el-tag>
+                <el-tag size="small" type="warning">禁用 {{ debugDisabledCount }}</el-tag>
+              </div>
+            </div>
+            <el-alert
+              v-if="debugError"
+              type="error"
+              :closable="false"
+              :title="debugError"
+              show-icon
+            />
+            <div v-else-if="debugResult" class="debug-grid">
+              <div class="debug-rule-list">
+                <button
+                  v-for="rule in debugRules"
+                  :key="rule.ruleCode"
+                  type="button"
+                  :class="['debug-rule-button', { active: rule.ruleCode === selectedDebugRuleCode }]"
+                  @click="selectedDebugRuleCode = rule.ruleCode || ''"
+                >
+                  <span class="debug-rule-main">
+                    <span class="debug-rule-name">{{ rule.ruleName || rule.ruleCode }}</span>
+                    <span class="debug-rule-code">{{ rule.ruleCode }}</span>
+                  </span>
+                  <span class="debug-rule-tags">
+                    <el-tag size="small" :type="debugStatusType(debugRuleStatus(rule))">
+                      {{ debugStatusLabel(debugRuleStatus(rule)) }}
+                    </el-tag>
+                    <el-tag v-if="rule.severity" size="small" :type="severityType(rule.severity)">
+                      {{ severityLabel(rule.severity) }}
+                    </el-tag>
+                  </span>
+                </button>
+              </div>
+              <div v-if="selectedDebugRule" class="debug-detail">
+                <div class="debug-detail-title">
+                  <div>
+                    <strong>{{ selectedDebugRule.ruleName || selectedDebugRule.ruleCode }}</strong>
+                    <small>{{ selectedDebugRule.ruleCode }}</small>
+                  </div>
+                  <el-tag size="small" :type="selectedDebugRule.enabled ? 'success' : 'warning'">
+                    {{ selectedDebugRule.enabled ? '启用' : '禁用' }}
+                  </el-tag>
+                </div>
+                <div class="debug-metrics">
+                  <span>active {{ selectedDebugRule.suppressionStatus?.activeIssueCount ?? 0 }}</span>
+                  <span>suppressed {{ selectedDebugRule.suppressionStatus?.suppressedIssueCount ?? 0 }}</span>
+                  <span>fix {{ selectedDebugRule.fixStrategy?.fixSummary?.availableCount ?? 0 }}</span>
+                </div>
+                <div class="debug-section">
+                  <div class="debug-section-title">matchTrace</div>
+                  <el-table :data="selectedDebugRule.matchTrace ?? []" size="small" class="debug-trace-table">
+                    <el-table-column label="状态" width="86">
+                      <template #default="{ row }">
+                        <el-tag size="small" :type="debugStatusType(row.status)">
+                          {{ debugStatusLabel(row.status) }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="位置" width="120">
+                      <template #default="{ row }">
+                        <el-button
+                          v-if="row.sourceRange?.line"
+                          size="small"
+                          text
+                          type="primary"
+                          @click="handleGoToDebugRange(row.sourceRange)"
+                        >
+                          {{ sourceRangeLabel(row.sourceRange) }}
+                        </el-button>
+                        <span v-else>{{ sourceRangeLabel(row.sourceRange) }}</span>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="对象" min-width="130" show-overflow-tooltip>
+                      <template #default="{ row }">
+                        {{ debugTargetLabel(row) }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="message" label="说明" min-width="180" show-overflow-tooltip />
+                    <el-table-column prop="issueMessage" label="issue" min-width="220" show-overflow-tooltip />
+                  </el-table>
+                </div>
+                <div class="debug-section">
+                  <div class="debug-section-title">paramsSnapshot</div>
+                  <pre class="debug-json">{{ formatDebugJson(selectedDebugRule.paramsSnapshot) }}</pre>
+                </div>
+                <div class="debug-section debug-columns">
+                  <div>
+                    <div class="debug-section-title">fixStrategy</div>
+                    <div class="debug-pill-row">
+                      <el-tag size="small" type="success">应用 {{ selectedDebugRule.fixStrategy?.fixSummary?.appliedCount ?? 0 }}</el-tag>
+                      <el-tag size="small" type="warning">预览 {{ selectedDebugRule.fixStrategy?.fixSummary?.plannedCount ?? 0 }}</el-tag>
+                      <el-tag size="small" type="info">跳过 {{ selectedDebugRule.fixStrategy?.fixSummary?.skippedCount ?? 0 }}</el-tag>
+                    </div>
+                    <ul class="debug-notes">
+                      <li v-for="(action, index) in selectedDebugRule.fixStrategy?.nextActions ?? []" :key="`fix-${index}`">
+                        {{ action }}
+                      </li>
+                    </ul>
+                  </div>
+                  <div>
+                    <div class="debug-section-title">suppressionStatus</div>
+                    <p class="debug-summary">{{ selectedDebugRule.suppressionStatus?.summary || '-' }}</p>
+                    <p v-if="selectedDebugRule.suppressionStatus?.suppressionReasons?.length" class="debug-summary">
+                      {{ selectedDebugRule.suppressionStatus.suppressionReasons.join(' / ') }}
+                    </p>
+                  </div>
+                </div>
+                <div v-if="selectedDebugRule.debugNotes?.length" class="debug-section">
+                  <div class="debug-section-title">debugNotes</div>
+                  <ul class="debug-notes">
+                    <li v-for="(note, index) in selectedDebugRule.debugNotes" :key="`note-${index}`">
+                      {{ note }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <template v-if="lintResult">
             <div class="summary-row">
               <el-tag :type="issueTotal === 0 ? 'success' : 'danger'">
@@ -451,7 +585,7 @@ import { ElMessage } from 'element-plus'
 import * as monaco from 'monaco-editor'
 import { listAiProfiles } from '@/api/aiProfile'
 import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
-import { getLintRecord, lintSql, listLintRecords } from '@/api/lint'
+import { debugLintSql, getLintRecord, lintSql, listLintRecords } from '@/api/lint'
 import StateBlock from '@/components/StateBlock.vue'
 import { useRequestState } from '@/composables/useRequestState'
 import { useProjectStore } from '@/stores/project'
@@ -477,12 +611,20 @@ import type {
   PageResult,
   RecordDetail,
   SqlCheckRecord,
+  SqlLintDebugResult,
+  SqlRuleDebugTrace,
+  SqlRuleMatchTrace,
+  SqlRuleSourceRange,
   StandardSnapshotInfo
 } from '@/types'
 
 const editorContainer = ref<HTMLElement>()
 const lintResult = ref<LintResult | null>(null)
+const debugResult = ref<SqlLintDebugResult | null>(null)
+const selectedDebugRuleCode = ref('')
 const linting = ref(false)
+const debugging = ref(false)
+const debugError = ref('')
 const records = ref<SqlCheckRecord[]>([])
 const recordTotal = ref(0)
 const recordCurrent = ref(1)
@@ -556,6 +698,19 @@ const recordDiffLines = computed(() => {
   return parseDiff(buildSqlDiff(record?.originalSql, record?.fixedSql))
 })
 const recordLoading = computed(() => recordState.loading.value)
+const debugRules = computed<SqlRuleDebugTrace[]>(() => debugResult.value?.rules ?? [])
+const selectedDebugRule = computed(() =>
+  debugRules.value.find((rule) => rule.ruleCode === selectedDebugRuleCode.value) ?? debugRules.value[0] ?? null
+)
+const debugMatchedCount = computed(() =>
+  debugRules.value.filter((rule) => debugRuleStatus(rule) === 'MATCHED').length
+)
+const debugNoMatchCount = computed(() =>
+  debugRules.value.filter((rule) => debugRuleStatus(rule) === 'NO_MATCH').length
+)
+const debugDisabledCount = computed(() =>
+  debugRules.value.filter((rule) => debugRuleStatus(rule) === 'DISABLED').length
+)
 
 onMounted(() => {
   applyRecordPageFromRoute()
@@ -634,24 +789,51 @@ async function handleLint() {
   }
 
   linting.value = true
+  debugError.value = ''
+  debugResult.value = null
   try {
-    const request: LintRequest = {
-      sql,
-      projectId: projectStore.currentProjectId ?? undefined
-    }
-    if (selectedProfileId.value) {
-      request.profileId = selectedProfileId.value
-    }
-    if (!profileFixPolicyActive.value) {
-      request.fixPolicy = currentFixPolicy.value
-    }
-    lintResult.value = await lintSql(request)
+    lintResult.value = await lintSql(buildLintRequest(sql))
     recordCurrent.value = 1
     await syncRecordUrlState({ recordId: null })
     await loadRecords()
   } finally {
     linting.value = false
   }
+}
+
+async function handleDebug() {
+  const sql = editor?.getValue() || ''
+  if (!sql.trim()) {
+    ElMessage.warning('请输入 SQL')
+    return
+  }
+
+  debugging.value = true
+  debugError.value = ''
+  try {
+    const result = await debugLintSql(buildLintRequest(sql))
+    debugResult.value = result
+    lintResult.value = result.lintResult ?? null
+    selectedDebugRuleCode.value = result.rules?.[0]?.ruleCode ?? ''
+  } catch (error) {
+    debugError.value = error instanceof Error ? error.message : '规则调试失败'
+  } finally {
+    debugging.value = false
+  }
+}
+
+function buildLintRequest(sql: string): LintRequest {
+  const request: LintRequest = {
+    sql,
+    projectId: projectStore.currentProjectId ?? undefined
+  }
+  if (selectedProfileId.value) {
+    request.profileId = selectedProfileId.value
+  }
+  if (!profileFixPolicyActive.value) {
+    request.fixPolicy = currentFixPolicy.value
+  }
+  return request
 }
 
 async function loadRecords() {
@@ -899,6 +1081,80 @@ function handleGoToIssue(issue: LintIssue) {
   editor.focus()
 }
 
+function handleGoToDebugRange(range?: SqlRuleSourceRange) {
+  if (!editor || !range?.line) {
+    return
+  }
+  const position = {
+    lineNumber: range.line,
+    column: range.column ?? 1
+  }
+  editor.setPosition(position)
+  editor.revealPositionInCenter(position)
+  editor.focus()
+}
+
+function debugRuleStatus(rule: SqlRuleDebugTrace): NonNullable<SqlRuleMatchTrace['status']> {
+  if (rule.enabled === false) {
+    return 'DISABLED'
+  }
+  const traces = rule.matchTrace ?? []
+  if (traces.some((trace) => trace.status === 'ERROR')) {
+    return 'ERROR'
+  }
+  if (traces.some((trace) => trace.status === 'MATCHED')) {
+    return 'MATCHED'
+  }
+  if (traces.some((trace) => trace.status === 'UNPARSED')) {
+    return 'UNPARSED'
+  }
+  return traces[0]?.status ?? 'NO_MATCH'
+}
+
+function debugStatusLabel(status?: SqlRuleMatchTrace['status']) {
+  const map: Record<string, string> = {
+    MATCHED: '命中',
+    NO_MATCH: '未命中',
+    DISABLED: '禁用',
+    UNPARSED: '未解析',
+    ERROR: '异常'
+  }
+  return status ? map[status] ?? status : '-'
+}
+
+function debugStatusType(status?: SqlRuleMatchTrace['status']) {
+  const map: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
+    MATCHED: 'success',
+    NO_MATCH: 'info',
+    DISABLED: 'warning',
+    UNPARSED: 'info',
+    ERROR: 'danger'
+  }
+  return status ? map[status] ?? 'info' : 'info'
+}
+
+function sourceRangeLabel(range?: SqlRuleSourceRange) {
+  if (!range?.line) {
+    return '-'
+  }
+  const start = `${range.line}:${range.column ?? 1}`
+  if (!range.lineEnd || !range.columnEnd) {
+    return start
+  }
+  return `${start}-${range.lineEnd}:${range.columnEnd}`
+}
+
+function debugTargetLabel(trace: SqlRuleMatchTrace) {
+  return [trace.tableName, trace.columnName].filter(Boolean).join('.') || '-'
+}
+
+function formatDebugJson(value: unknown) {
+  if (value === undefined || value === null) {
+    return '{}'
+  }
+  return JSON.stringify(value, null, 2)
+}
+
 function severityType(severity: LintIssue['severity']) {
   const map: Record<string, 'danger' | 'warning' | 'info'> = {
     ERROR: 'danger',
@@ -1140,6 +1396,12 @@ function buildDiffLines(originalLines: string[], fixedLines: string[]) {
   margin: 0;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .fix-policy-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1217,6 +1479,190 @@ function buildDiffLines(originalLines: string[], fixedLines: string[]) {
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.debug-panel {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.debug-header,
+.debug-detail-title,
+.debug-tags,
+.debug-rule-tags,
+.debug-pill-row {
+  display: flex;
+  align-items: center;
+}
+
+.debug-header {
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #303133;
+}
+
+.debug-version {
+  margin-left: 8px;
+  color: #909399;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.debug-tags,
+.debug-rule-tags,
+.debug-pill-row {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.debug-grid {
+  display: grid;
+  grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.debug-rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.debug-rule-button {
+  display: flex;
+  width: 100%;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  background: #f8fafc;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.debug-rule-button:hover,
+.debug-rule-button.active {
+  background: #eef5ff;
+  border-color: #409eff;
+}
+
+.debug-rule-button:focus-visible {
+  outline: 2px solid #409eff;
+  outline-offset: 2px;
+}
+
+.debug-rule-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.debug-rule-name {
+  overflow: hidden;
+  color: #303133;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debug-rule-code {
+  overflow: hidden;
+  color: #909399;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debug-detail {
+  min-width: 0;
+}
+
+.debug-detail-title {
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.debug-detail-title small {
+  display: block;
+  color: #909399;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 12px;
+}
+
+.debug-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #606266;
+  font-size: 12px;
+}
+
+.debug-section {
+  margin-top: 10px;
+}
+
+.debug-section-title {
+  margin-bottom: 6px;
+  color: #303133;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.debug-trace-table {
+  width: 100%;
+}
+
+.debug-json {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px;
+  color: #1f2d3d;
+  background: #f7f8fa;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.debug-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.debug-notes {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.debug-summary {
+  margin: 0 0 6px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .fixed-sql-panel,
@@ -1498,6 +1944,11 @@ function buildDiffLines(originalLines: string[], fixedLines: string[]) {
 
 @media (max-width: 1100px) {
   .lint-content {
+    grid-template-columns: 1fr;
+  }
+
+  .debug-grid,
+  .debug-columns {
     grid-template-columns: 1fr;
   }
 

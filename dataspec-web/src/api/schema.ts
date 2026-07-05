@@ -804,6 +804,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lint/debug": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["lintDebug"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/import-export/fields/import": {
         parameters: {
             query?: never;
@@ -4101,11 +4117,135 @@ export interface components {
             fixNextActions?: string[];
             dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
         };
+        /** @description SQL 规则调试中指向源 SQL 文本的范围。 */
+        SqlRuleSourceRange: {
+            /** @description 1-based 起始行号；无法定位时为空。 */
+            /** Format: int32 */
+            line?: number;
+            /** @description 1-based 起始列号；无法定位时为空。 */
+            /** Format: int32 */
+            column?: number;
+            /** @description 1-based 结束行号；无法定位时为空。 */
+            /** Format: int32 */
+            lineEnd?: number;
+            /** @description 1-based 结束列号(不含)；无法定位时为空。 */
+            /** Format: int32 */
+            columnEnd?: number;
+            /** @description 0-based 起始偏移；无法定位时为空。 */
+            /** Format: int32 */
+            sourceStart?: number;
+            /** @description 0-based 结束偏移(不含)；无法定位时为空。 */
+            /** Format: int32 */
+            sourceEnd?: number;
+            /** @description 定位类型，例如 table、column、comment_column；无法定位时为空。 */
+            locationKind?: string;
+            /** @description source range 对应的表名；无法定位到具体表时为空。 */
+            tableName?: string;
+            /** @description source range 对应的字段名；表级问题或无法定位时为空。 */
+            columnName?: string;
+        };
+        /** @description 单条 SQL 规则调试事件，描述规则为什么命中、未命中或被跳过。 */
+        SqlRuleMatchTrace: {
+            /** @description 稳定状态，供 AI 和前端按状态分组展示。 */
+            /** @enum {string} */
+            status?: "MATCHED" | "NO_MATCH" | "DISABLED" | "UNPARSED" | "ERROR";
+            /** @description 人类可读解释，说明命中、未命中、禁用或异常原因。 */
+            message?: string;
+            /** @description 命中 issue 的严重级别；未命中或禁用时可为空。 */
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING" | "SUGGESTION";
+            /** @description 命中 issue 的原始问题描述；未命中或禁用时为空。 */
+            issueMessage?: string;
+            /** @description 本次 trace 对应的表名；没有具体表时为空。 */
+            tableName?: string;
+            /** @description 本次 trace 对应的字段名；表级问题或无具体字段时为空。 */
+            columnName?: string;
+            /** @description 本次 trace 对应的源 SQL 范围；无法定位时为空。 */
+            sourceRange?: components["schemas"]["SqlRuleSourceRange"];
+            /** @description 当前 fixedSql 策略下的修复状态；未参与修复策略时为空。 */
+            /** @enum {string} */
+            fixStatus?: "APPLIED" | "PLANNED" | "SKIPPED";
+            /** @description fixedSql 跳过原因编码；未跳过时为空。 */
+            fixReasonCode?: string;
+            /** @description 命中规则豁免 ID；未被豁免时为空。 */
+            /** Format: int64 */
+            suppressionId?: number;
+        };
+        /** @description 单条规则在当前 SQL 中的豁免统计与命中说明。 */
+        SqlRuleSuppressionStatus: {
+            /** @description 未被豁免、仍计入 lint 统计的 issue 数量。 */
+            /** Format: int32 */
+            activeIssueCount?: number;
+            /** @description 被项目规则豁免抑制的 issue 数量。 */
+            /** Format: int32 */
+            suppressedIssueCount?: number;
+            /** @description 命中的规则豁免 ID 列表；没有豁免时为空列表。 */
+            suppressionIds?: number[];
+            /** @description 命中的规则豁免原因列表；没有豁免时为空列表。 */
+            suppressionReasons?: string[];
+            /** @description 适合前端和 AI 直接展示的豁免状态摘要。 */
+            summary?: string;
+        };
+        /** @description 单条规则在当前 fixedSql 策略下的修复计划快照。 */
+        SqlRuleFixStrategy: {
+            /** @description 本次调试沿用的 fixedSql 策略；为空表示使用系统默认策略。 */
+            fixPolicy?: components["schemas"]["FixPolicy"];
+            /** @description 是否为 dry-run 修复预览。 */
+            fixDryRun?: boolean;
+            /** @description 该规则产生的修复变更汇总。 */
+            fixSummary?: components["schemas"]["FixPlanSummary"];
+            /** @description 该规则产生的修复变更列表；没有确定性修复时为空列表。 */
+            changes?: components["schemas"]["FixChange"][];
+            /** @description 针对该规则修复结果的后续建议动作。 */
+            nextActions?: string[];
+        };
+        /** @description 单条 SQL lint 规则的调试快照。 */
+        SqlRuleDebugTrace: {
+            /** @description 规则编码，对应 LintRule.getCode() 和 RuleConfig.ruleCode。 */
+            ruleCode?: string;
+            /** @description 规则名称，供用户在调试面板中识别规则。 */
+            ruleName?: string;
+            /** @description 该规则在当前项目配置下是否会执行。 */
+            enabled?: boolean;
+            /** @description 当前配置或命中 issue 推导出的严重级别；没有配置且未命中时为空。 */
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING" | "SUGGESTION";
+            /** @description 规则参数快照；敏感键和值会被脱敏。 */
+            paramsSnapshot?: Record<string, unknown>;
+            /** @description 规则命中、未命中、禁用或异常的结构化解释。 */
+            matchTrace?: components["schemas"]["SqlRuleMatchTrace"][];
+            /** @description 该规则首个可定位命中的源 SQL 范围；没有命中或无法定位时为空。 */
+            sourceRange?: components["schemas"]["SqlRuleSourceRange"];
+            /** @description 该规则在当前 fixedSql 策略下的修复计划快照。 */
+            fixStrategy?: components["schemas"]["SqlRuleFixStrategy"];
+            /** @description 该规则命中的豁免状态与计数。 */
+            suppressionStatus?: components["schemas"]["SqlRuleSuppressionStatus"];
+            /** @description 补充说明，解释通用 trace 或兼容降级原因。 */
+            debugNotes?: string[];
+        };
+        /** @description SQL 规则调试接口响应。 */
+        SqlLintDebugResult: {
+            /** @description 调试响应版本，用于 AI 和 CLI 判断字段兼容性。 */
+            debugVersion?: string;
+            /** @description 常规 lint 结果快照；字段与 /api/lint 保持兼容。 */
+            lintResult?: components["schemas"]["LintResult"];
+            /** @description 每条已知 lint 规则的执行或跳过 trace。 */
+            rules?: components["schemas"]["SqlRuleDebugTrace"][];
+            /** @description 本次调试的全局说明，例如只读、不保存记录或 SQL 未解析。 */
+            debugNotes?: string[];
+        };
         RLintResult: {
             /** Format: int32 */
             code?: number;
             message?: string;
             data?: components["schemas"]["LintResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RSqlLintDebugResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["SqlLintDebugResult"];
             error?: components["schemas"]["ErrorDetail"];
         };
         RInteger: {
@@ -7920,6 +8060,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RLintResult"];
+                };
+            };
+        };
+    };
+    lintDebug: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LintRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RSqlLintDebugResult"];
                 };
             };
         };

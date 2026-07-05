@@ -12,6 +12,14 @@ function assertContains(source: string, snippets: string[], context: string) {
   }
 }
 
+function assertBefore(source: string, first: string, second: string, context: string) {
+  const firstIndex = source.indexOf(first)
+  const secondIndex = source.indexOf(second)
+  assert.ok(firstIndex >= 0, `${context} should include ${first}`)
+  assert.ok(secondIndex >= 0, `${context} should include ${second}`)
+  assert.ok(firstIndex < secondIndex, `${context} should place ${first} before ${second}`)
+}
+
 test('keeps critical frontend routes and navigation entries wired', () => {
   const router = readSource('src/router/index.ts')
   const app = readSource('src/App.vue')
@@ -851,7 +859,7 @@ test('keeps SQL lint fixed SQL and record history flow wired', () => {
 
   assertContains(view, [
     "import { listAiProfiles } from '@/api/aiProfile'",
-    "import { getLintRecord, lintSql, listLintRecords } from '@/api/lint'",
+    "import { debugLintSql, getLintRecord, lintSql, listLintRecords } from '@/api/lint'",
     'projectId: projectStore.currentProjectId ?? undefined',
     'request.profileId = selectedProfileId.value',
     'request.fixPolicy = currentFixPolicy.value',
@@ -876,14 +884,30 @@ test('keeps SQL lint fixed SQL and record history flow wired', () => {
     'activeRecord.replay',
     'lintDialectDiagnostics',
     'dialectSummary(lintDialectDiagnostics)',
+    '规则调试',
+    'debugResult',
+    'selectedDebugRule',
+    'async function handleDebug()',
+    'await debugLintSql(buildLintRequest(sql))',
+    'matchTrace',
+    'paramsSnapshot',
+    'suppressionStatus',
+    'fixStrategy',
     'async function loadRecords()',
     'await listLintRecords(projectId, recordCurrent.value, recordSize.value)',
     'async function handleViewRecord(id?: number)',
     'activeRecord.value = await getLintRecord(id)'
   ], 'SqlLint.vue')
+  assertBefore(
+    view,
+    'v-if="debugResult || debugError || debugging"',
+    '<template v-if="lintResult">',
+    'SqlLint.vue debug error visibility'
+  )
 
   assertContains(api, [
     "request.post<unknown, LintResult>('/lint', data)",
+    "request.post<unknown, SqlLintDebugResult>('/lint/debug', data)",
     "request.get<unknown, PageResult<SqlCheckRecord>>('/lint/records'",
     'export function getLintRecord(id: number)',
     'RecordDetail'
@@ -896,7 +920,12 @@ test('keeps SQL lint fixed SQL and record history flow wired', () => {
     'FixPlanSummary',
     'fixPolicy?: components["schemas"]["FixPolicy"]',
     'fixChanges?: components["schemas"]["FixChange"][]',
-    'fixRiskLevel?: "LOW" | "MEDIUM" | "HIGH"'
+    'fixRiskLevel?: "LOW" | "MEDIUM" | "HIGH"',
+    'SqlLintDebugResult',
+    'SqlRuleDebugTrace',
+    'SqlRuleMatchTrace',
+    'RSqlLintDebugResult',
+    'post: operations["lintDebug"]'
   ], 'lint schema fixedSql policy')
 })
 

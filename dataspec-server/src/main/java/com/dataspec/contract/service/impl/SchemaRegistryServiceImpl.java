@@ -293,6 +293,55 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                 List.of(orderedMap("errorCount", 1, "warningCount", 0, "suggestionCount", 0))
         ));
         add(map, contract(
+                "sql-rule-debug-result",
+                "SQL 规则调试结果",
+                "SQL 规则启用、匹配 trace、source range、fixedSql 策略和豁免状态的只读解释结构。",
+                List.of("debugVersion", "lintResult", "rules[]", "debugNotes[]",
+                        "rules[].ruleCode", "rules[].enabled", "rules[].paramsSnapshot",
+                        "rules[].matchTrace[]", "rules[].sourceRange", "rules[].fixStrategy",
+                        "rules[].suppressionStatus"),
+                List.of(),
+                objectSchema("DataSpec SQL Rule Debug Result", List.of("debugVersion", "lintResult", "rules"), orderedMap(
+                        "debugVersion", stringProp(),
+                        "lintResult", objectProp(),
+                        "rules", arrayOf(objectSchema("SQL Rule Debug Trace", List.of("ruleCode", "ruleName", "enabled", "matchTrace"), orderedMap(
+                                "ruleCode", stringProp(),
+                                "ruleName", stringProp(),
+                                "enabled", booleanProp(),
+                                "severity", enumProp("ERROR", "WARNING", "SUGGESTION"),
+                                "paramsSnapshot", objectProp(),
+                                "matchTrace", arrayOf(objectSchema("SQL Rule Match Trace", List.of("status", "message"), orderedMap(
+                                        "status", enumProp("MATCHED", "NO_MATCH", "DISABLED", "UNPARSED", "ERROR"),
+                                        "message", stringProp(),
+                                        "severity", enumProp("ERROR", "WARNING", "SUGGESTION"),
+                                        "issueMessage", stringProp(),
+                                        "tableName", stringProp(),
+                                        "columnName", stringProp(),
+                                        "sourceRange", objectProp(),
+                                        "fixStatus", enumProp("APPLIED", "PLANNED", "SKIPPED"),
+                                        "fixReasonCode", stringProp(),
+                                        "suppressionId", integerProp()
+                                ))),
+                                "sourceRange", objectProp(),
+                                "fixStrategy", objectProp(),
+                                "suppressionStatus", objectProp(),
+                                "debugNotes", arrayOf(stringProp())
+                        ))),
+                        "debugNotes", arrayOf(stringProp())
+                )),
+                List.of(orderedMap(
+                        "debugVersion", "sql-rule-debug@1",
+                        "lintResult", orderedMap("errorCount", 1, "warningCount", 0, "suggestionCount", 0),
+                        "rules", List.of(orderedMap(
+                                "ruleCode", "table_naming_snake_case",
+                                "ruleName", "表名 snake_case",
+                                "enabled", true,
+                                "matchTrace", List.of(orderedMap("status", "MATCHED", "message", "规则命中 lint issue。")),
+                                "suppressionStatus", orderedMap("activeIssueCount", 1, "suppressedIssueCount", 0)
+                        ))
+                ))
+        ));
+        add(map, contract(
                 "ai-evidence-package",
                 "AI 执行证据包",
                 "AI 任务交付、复盘和下游续跑使用的只读 evidence package 结构。",

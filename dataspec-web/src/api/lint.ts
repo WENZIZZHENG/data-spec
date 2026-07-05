@@ -1,8 +1,12 @@
 import request from '@/api/request'
-import type { LintRequest, LintResult, PageResult, RecordDetail, SqlCheckRecord } from '@/types'
+import type { LintRequest, LintResult, PageResult, RecordDetail, SqlCheckRecord, SqlLintDebugResult } from '@/types'
 
 export function lintSql(data: LintRequest) {
   return request.post<unknown, LintResult>('/lint', data)
+}
+
+export function debugLintSql(data: LintRequest) {
+  return request.post<unknown, SqlLintDebugResult>('/lint/debug', data)
 }
 
 export function listAvailableLintRules() {

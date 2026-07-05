@@ -9,6 +9,7 @@ import com.dataspec.lint.model.FixPolicy;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.lint.model.SqlCheckReplay;
+import com.dataspec.lint.model.SqlLintDebugResult;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -36,6 +37,17 @@ public class LintController {
     @PostMapping
     public R<LintResult> lint(@Valid @RequestBody LintRequest req) {
         LintResult result = sqlLintService.lint(req.sql(), req.projectId(), req.fixPolicy(), req.profileId(), req.taskType());
+        return R.ok(result);
+    }
+
+    /**
+     * 调试 SQL lint 规则执行过程。
+     * <p>
+     * 该接口只读执行规则，不保存 SQL 检查记录，也不创建 AI replay。
+     */
+    @PostMapping("/debug")
+    public R<SqlLintDebugResult> debug(@Valid @RequestBody LintRequest req) {
+        SqlLintDebugResult result = sqlLintService.debug(req.sql(), req.projectId(), req.fixPolicy(), req.profileId(), req.taskType());
         return R.ok(result);
     }
 
@@ -70,6 +82,15 @@ public class LintController {
         return R.ok(new RecordDetail(record, issues, replay));
     }
 
+    /**
+     * SQL lint 请求。
+     *
+     * @param sql 待校验 SQL，不能为空。
+     * @param projectId 项目 ID；为空时使用内置规则，不读取项目配置。
+     * @param profileId AI task profile 标识；可为空，显式 fixPolicy 优先。
+     * @param taskType AI 任务类型；当 profileId 为空时可用于解析默认 fixPolicy。
+     * @param fixPolicy 请求级 fixedSql 策略；为空时使用 profile 或系统默认策略。
+     */
     public record LintRequest(
             @NotBlank(message = "SQL 不能为空") String sql,
             Long projectId,

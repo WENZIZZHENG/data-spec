@@ -133,6 +133,10 @@ Capability entry 稳定字段：
 
 SQL 校验结果契约，覆盖问题列表、统计、fixedSql、diff、修复计划和方言诊断。
 
+### sql-rule-debug-result
+
+SQL 规则调试结果契约，覆盖 lint 结果、规则启用状态、匹配 trace、source range、修复策略、豁免状态和调试说明。该契约用于解释规则为什么命中、未命中或未执行，不代表写入 SQL 检查记录。
+
 ### ai-evidence-package
 
 AI 执行证据包契约，覆盖 source、标准快照、输入摘要、输出摘要、验证摘要、产物、下一步动作和推荐命令。它是只读交付结构，不是审计、审批、权限或防篡改机制。
@@ -181,15 +185,25 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 稳定字段：
 
+- API `POST /api/lint`: 返回 `LintResult` 并保存 SQL 检查记录。
+- API `POST /api/lint/debug`: 返回 `SqlLintDebugResult`，只读解释规则执行过程，不保存 SQL 检查记录、不生成 AI replay、不写回业务仓库。
 - `LintResult`: `tables`、`issues`、`errorCount`、`warningCount`、`suggestionCount`、`suppressedCount`、`fixedSql`、`fixedSqlDiff`、`fixPolicy`、`fixDryRun`、`fixChanges`、`fixExplanations`、`fixSummary`、`fixNextActions`。
 - `LintRequest`: `sql`、`projectId`、`profileId`、`taskType`、`fixPolicy`。
 - `FixPolicy`: `mode`、`maxRiskLevel`、`enabledRuleCodes`、`disabledRuleCodes`、`includeExplanations`。
 - `FixChange`: `status`、`reasonCode`、`ruleCode`、`ruleName`、`riskLevel`、`changeType`、`tableName`、`columnName`、`before`、`after`、`explain`、`confidence`、`sourceStart`、`sourceEnd`。
 - `FixPlanSummary`: `availableCount`、`appliedCount`、`plannedCount`、`skippedCount`。
 - `LintIssue`: `severity`、`ruleCode`、`ruleName`、`message`、`tableName`、`columnName`、`suggestion`、`replacement`、`before`、`after`、`confidence`、`fixRiskLevel`、`fixChangeType`、`fixStatus`、`fixExplain`、`fixReasonCode`、`line`、`column`、`lineEnd`、`columnEnd`、`sourceStart`、`sourceEnd`、`locationKind`、`suppressed`、`suppressionId`、`suppressionReason`。
-- 稳定枚举：`severity` 使用 `ERROR`、`WARNING`、`SUGGESTION`；`locationKind` 至少包含 `table`、`column`、`comment_column`；`FixPolicy.mode` 使用 `GENERATE`、`DRY_RUN`、`DISABLED`；`fixRiskLevel` 使用 `LOW`、`MEDIUM`、`HIGH`；`fixStatus` 使用 `APPLIED`、`PLANNED`、`SKIPPED`。
+- `SqlLintDebugResult`: `debugVersion`、`lintResult`、`rules[]`、`debugNotes[]`。
+- `SqlRuleDebugTrace`: `ruleCode`、`ruleName`、`enabled`、`severity`、`paramsSnapshot`、`matchTrace[]`、`sourceRange`、`fixStrategy`、`suppressionStatus`、`debugNotes[]`。
+- `SqlRuleMatchTrace`: `status`、`message`、`severity`、`issueMessage`、`tableName`、`columnName`、`sourceRange`、`fixStatus`、`fixReasonCode`、`suppressionId`。
+- `SqlRuleSourceRange`: `line`、`column`、`lineEnd`、`columnEnd`、`sourceStart`、`sourceEnd`、`locationKind`、`tableName`、`columnName`。
+- `SqlRuleFixStrategy`: `fixPolicy`、`fixDryRun`、`fixSummary`、`changes[]`、`nextActions[]`。
+- `SqlRuleSuppressionStatus`: `activeIssueCount`、`suppressedIssueCount`、`suppressionIds[]`、`suppressionReasons[]`、`summary`。
+- 稳定枚举：`severity` 使用 `ERROR`、`WARNING`、`SUGGESTION`；`locationKind` 至少包含 `table`、`column`、`comment_column`；`FixPolicy.mode` 使用 `GENERATE`、`DRY_RUN`、`DISABLED`；`fixRiskLevel` 使用 `LOW`、`MEDIUM`、`HIGH`；`fixStatus` 使用 `APPLIED`、`PLANNED`、`SKIPPED`；`SqlRuleMatchStatus` 使用 `MATCHED`、`NO_MATCH`、`DISABLED`、`UNPARSED`、`ERROR`。
 
 `fixedSql` 仍只是候选输出，不代表已经写回业务仓库；`fixPolicy.mode=DRY_RUN` 时 AI 必须把结果视为预览，并结合 `fixedSqlDiff`、`fixChanges` 和 `dialectDiagnostics` 人工确认后再继续。`fixPolicy.includeExplanations=false` 时 `fixExplanations` 可为空，AI 仍应以 `fixChanges.status/reasonCode` 判断跳过项。请求同时包含 `profileId/taskType` 和显式 `fixPolicy` 时，显式 `fixPolicy` 是有效策略来源。
+
+`/api/lint/debug` 与 CLI `lint-debug` 使用同一份 `LintRequest`。调试结果中的 `paramsSnapshot` 仅用于说明规则运行参数，服务端会对 password、token、secret、Authorization、JDBC URL、DSN 等敏感值返回 `[REDACTED]`；调用方不得把该字段当作可还原配置源。
 
 ## AI Evidence Package
 

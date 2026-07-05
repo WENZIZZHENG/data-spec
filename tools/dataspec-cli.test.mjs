@@ -135,6 +135,133 @@ test('lint returns 0 when server reports no errors', async () => {
   assert.equal(JSON.parse(io.stdout).warningCount, 1)
 })
 
+test('lint-debug reads sql file, posts to debug endpoint, prints json, and returns 0 for lint errors', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-lint-debug-'))
+  try {
+    const sqlPath = path.join(dir, 'bad.sql')
+    await writeFile(sqlPath, 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            debugVersion: 'sql-rule-debug@1',
+            lintResult: { errorCount: 1, warningCount: 0, suggestionCount: 0, issues: [] },
+            rules: []
+          }
+        })
+      }
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'lint-debug',
+      sqlPath,
+      '--project',
+      '7',
+      '--format',
+      'json',
+      '--server',
+      'http://dataspec.local',
+      '--fix-mode',
+      'dry-run',
+      '--max-risk',
+      'low',
+      '--include-explanations',
+      'false',
+      '--enable-rule',
+      'table_naming_snake_case',
+      '--disable-rule',
+      'required_columns'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(calls[0].url, 'http://dataspec.local/api/lint/debug')
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      sql: 'CREATE TABLE UserOrder (id bigint);',
+      projectId: 7,
+      fixPolicy: {
+        mode: 'DRY_RUN',
+        maxRiskLevel: 'LOW',
+        enabledRuleCodes: ['table_naming_snake_case'],
+        disabledRuleCodes: ['required_columns'],
+        includeExplanations: false
+      }
+    })
+    assert.equal(calls[0].options.headers['Idempotency-Key'], undefined)
+    assert.equal(JSON.parse(io.stdout).debugVersion, 'sql-rule-debug@1')
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('lint-debug reads stdin and forwards profile selection', async () => {
+  const calls = []
+  const fetchFn = async (url, options) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          debugVersion: 'sql-rule-debug@1',
+          lintResult: { errorCount: 2, warningCount: 0, suggestionCount: 0, issues: [] },
+          rules: []
+        }
+      })
+    }
+  }
+  const io = createIo('CREATE TABLE UserOrder (id bigint);')
+
+  const code = await runCli([
+    'lint-debug',
+    '-',
+    '--project',
+    '7',
+    '--profile',
+    'sql-fix',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    sql: 'CREATE TABLE UserOrder (id bigint);',
+    projectId: 7,
+    profileId: 'sql-fix'
+  })
+})
+
+test('lint-debug returns 2 when server request fails and redacts diagnostics', async () => {
+  const fetchFn = async () => ({
+    ok: false,
+    status: 500,
+    json: async () => ({
+      message: 'debug failed token=plain-secret jdbc:postgresql://db.internal/app',
+      error: {
+        code: 'INTERNAL_ERROR',
+        category: 'SERVER',
+        retryable: true,
+        suggestedAction: '检查 token=plain-secret 和 jdbc:postgresql://db.internal/app'
+      }
+    })
+  })
+  const io = createIo('CREATE TABLE users (id bigint);')
+
+  const code = await runCli(['lint-debug', '-', '--project', '7', '--format', 'json'], io, fetchFn)
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /DataSpecError/)
+  assert.doesNotMatch(io.stderr, /plain-secret/)
+  assert.doesNotMatch(io.stderr, /db\.internal/)
+})
+
 test('lint uses configured aiProfile and lets explicit task type override config', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-profile-'))
   try {
@@ -3695,6 +3822,7 @@ function capabilityCatalogFixture() {
     'doctor',
     'export-ai-context',
     'lint-sql',
+    'sql-rule-debugger',
     'search-fields',
     'suggest-fields',
     'generate-ddl',
@@ -3714,7 +3842,7 @@ function capabilityCatalogFixture() {
     projectId: 7,
     capabilities: ids.map((id) => ({
       id,
-      category: id === 'lint-sql' ? 'sql' : 'discovery',
+      category: ['lint-sql', 'sql-rule-debugger'].includes(id) ? 'sql' : 'discovery',
       title: id,
       summary: `${id} summary`,
       status: 'AVAILABLE',
@@ -3722,14 +3850,17 @@ function capabilityCatalogFixture() {
       requiresProject: !['session-bootstrap', 'capability-catalog', 'doctor', 'schema-registry', 'workflow-recipes'].includes(id),
       writeRisk: id === 'lint-sql' ? 'WRITES_DATASPEC_RECORD' : 'READ_ONLY',
       safety: capabilitySafetyFixture(id),
-      requiredInputs: id === 'lint-sql' ? ['projectId', 'sql'] : [],
+      requiredInputs: ['lint-sql', 'sql-rule-debugger'].includes(id) ? ['projectId', 'sql'] : [],
       optionalInputs: [],
-      outputContracts: id === 'lint-sql' ? ['lint-result'] : ['ai-capability-catalog'],
+      outputContracts: id === 'lint-sql'
+        ? ['lint-result']
+        : id === 'sql-rule-debugger' ? ['sql-rule-debug-result', 'lint-result'] : ['ai-capability-catalog'],
       apiEndpoints: id === 'session-bootstrap'
         ? ['GET /api/bootstrap/session']
-        : id === 'lint-sql' ? ['POST /api/lint'] : ['GET /api/capabilities'],
+        : id === 'lint-sql' ? ['POST /api/lint'] : id === 'sql-rule-debugger' ? ['POST /api/lint/debug'] : ['GET /api/capabilities'],
       cliCommands: id === 'lint-sql'
         ? ['dataspec lint <file.sql> --project <id> --format json']
+        : id === 'sql-rule-debugger' ? ['dataspec lint-debug <file.sql> --project <id> --format json']
         : id === 'session-bootstrap' ? ['dataspec bootstrap --project <id> --format json'] : ['dataspec capability list --format json'],
       mcpResources: id === 'capability-catalog'
         ? ['dataspec://project/<id>/capability-catalog']

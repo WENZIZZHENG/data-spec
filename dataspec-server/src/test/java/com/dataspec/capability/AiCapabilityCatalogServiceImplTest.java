@@ -37,6 +37,7 @@ class AiCapabilityCatalogServiceImplTest {
                 "doctor",
                 "export-ai-context",
                 "lint-sql",
+                "sql-rule-debugger",
                 "search-fields",
                 "suggest-fields",
                 "merge-standard-fields",
@@ -84,6 +85,23 @@ class AiCapabilityCatalogServiceImplTest {
         assertTrue(entry.outputContracts().contains("lint-result"));
         assertFalse(entry.preflightChecks().isEmpty());
         assertFalse(entry.nextActions().isEmpty());
+    }
+
+    @Test
+    void sqlRuleDebuggerCapabilityIsReadOnlyAndExposesDebugSurfaces() {
+        AiCapabilityEntry entry = service.getCapability("sql_rule_debugger", 1L);
+        JsonNode safety = objectMapper.valueToTree(entry).path("safety");
+
+        assertEquals("sql-rule-debugger", entry.id());
+        assertEquals("READ_ONLY", entry.writeRisk());
+        assertTrue(entry.requiresProject());
+        assertTrue(entry.apiEndpoints().contains("POST /api/lint/debug"));
+        assertTrue(entry.cliCommands().stream().anyMatch(command -> command.contains("lint-debug")));
+        assertTrue(entry.outputContracts().contains("sql-rule-debug-result"));
+        assertTrue(entry.preflightChecks().stream().anyMatch(check -> check.contains("不会保存 SQL 检查记录")));
+        assertTrue(safety.path("readOnly").asBoolean(false));
+        assertFalse(safety.path("writesProject").asBoolean(true));
+        assertFalse(safety.path("requiresIdempotencyKey").asBoolean(true));
     }
 
     @Test

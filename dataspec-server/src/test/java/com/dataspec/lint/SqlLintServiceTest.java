@@ -19,6 +19,9 @@ import com.dataspec.lint.model.FixPolicy;
 import com.dataspec.lint.model.FixRiskLevel;
 import com.dataspec.lint.model.LintResult;
 import com.dataspec.lint.model.LintIssue;
+import com.dataspec.lint.model.SqlLintDebugResult;
+import com.dataspec.lint.model.SqlRuleDebugTrace;
+import com.dataspec.lint.model.SqlRuleMatchStatus;
 import com.dataspec.lint.model.SqlCheckReplay;
 import com.dataspec.lint.rules.RecommendedFieldNameRule;
 import com.dataspec.lint.rules.RequiredColumnsRule;
@@ -35,6 +38,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -458,6 +462,157 @@ class SqlLintServiceTest {
         assertTrue(recordService.saved.get(0).getIssuesJson().contains("\"fixReasonCode\":\"SUPPRESSED\""));
     }
 
+    @Test
+    void debugReturnsRuleTraceWithoutSavingRecordOrAiReplay() {
+        RecordingCheckRecordService recordService = new RecordingCheckRecordService();
+        RecordingAiJobRecordService aiJobRecordService = new RecordingAiJobRecordService();
+        SqlLintService service = new SqlLintService(
+                new SqlParserService(),
+                new EmptyRuleConfigService(),
+                List.of(new TableNameSnakeCaseRule(), new RequiredColumnsRule()),
+                new ObjectMapper(),
+                new FixedSqlGenerator(),
+                recordService,
+                aiJobRecordService,
+                new NoopRuleExemptionService(),
+                new PromptTemplateRegistry(),
+                null
+        );
+
+        SqlLintDebugResult debug = service.debug("""
+                CREATE TABLE UserOrder (
+                    id bigserial PRIMARY KEY
+                );
+                """, 1L, null, null, null);
+
+        assertEquals("sql-rule-debug@1", debug.getDebugVersion());
+        assertEquals(0, recordService.saved.size(), "debug 不应保存 SQL 检查记录");
+        assertEquals(0, aiJobRecordService.created.size(), "debug 不应创建 AI replay");
+        assertNotNull(debug.getLintResult().getFixedSql());
+
+        SqlRuleDebugTrace tableTrace = findDebugRule(debug, "table_naming_snake_case");
+        assertTrue(tableTrace.isEnabled());
+        assertEquals(SqlRuleMatchStatus.MATCHED, tableTrace.getMatchTrace().get(0).getStatus());
+        assertEquals("table", tableTrace.getSourceRange().getLocationKind());
+        assertTrue(tableTrace.getFixStrategy().getFixSummary().getAppliedCount() >= 1);
+    }
+
+    @Test
+    void debugExplainsEnabledRuleWithoutMatchAndSanitizesParams() {
+        RuleConfig cfg = ruleConfig("recommended_field_name", true, "suggestion", """
+                {
+                  "recommendations": {"legacy_name": "standard_name"},
+                  "apiToken": "plain-secret",
+                  "jdbcUrl": "jdbc:postgresql://db.example/internal",
+                  "headers": {
+                    "debugNote": "Authorization: Bearer abc.def token: raw-token postgresql://user:pass@host/db"
+                  }
+                }
+                """);
+        SqlLintService service = new SqlLintService(
+                new SqlParserService(),
+                new StaticRuleConfigService(List.of(cfg)),
+                List.of(new RecommendedFieldNameRule()),
+                new ObjectMapper(),
+                new FixedSqlGenerator(),
+                new RecordingCheckRecordService(),
+                new NoopAiJobRecordService(),
+                new NoopRuleExemptionService(),
+                new PromptTemplateRegistry(),
+                null
+        );
+
+        SqlLintDebugResult debug = service.debug("""
+                CREATE TABLE users (
+                    id bigserial PRIMARY KEY,
+                    created_at timestamp NOT NULL,
+                    updated_at timestamp NOT NULL,
+                    is_deleted boolean NOT NULL
+                );
+                """, 1L, null, null, null);
+
+        SqlRuleDebugTrace trace = findDebugRule(debug, "recommended_field_name");
+        assertEquals(SqlRuleMatchStatus.NO_MATCH, trace.getMatchTrace().get(0).getStatus());
+        assertEquals("plain-secret".equals(trace.getParamsSnapshot().get("apiToken")), false);
+        assertEquals("[REDACTED]", trace.getParamsSnapshot().get("apiToken"));
+        assertEquals("[REDACTED]", trace.getParamsSnapshot().get("jdbcUrl"));
+        assertTrue(((Map<?, ?>) trace.getParamsSnapshot().get("recommendations")).containsKey("legacy_name"));
+        String snapshotText = trace.getParamsSnapshot().toString();
+        assertEquals(false, snapshotText.contains("abc.def"));
+        assertEquals(false, snapshotText.contains("raw-token"));
+        assertEquals(false, snapshotText.contains("user:pass@host"));
+    }
+
+    @Test
+    void debugIncludesDisabledRuleWhenProjectConfigDisablesIt() {
+        RuleConfig cfg = ruleConfig("table_naming_snake_case", false, "error", null);
+        RecordingCheckRecordService recordService = new RecordingCheckRecordService();
+        SqlLintService service = new SqlLintService(
+                new SqlParserService(),
+                new StaticRuleConfigService(List.of(cfg)),
+                List.of(new TableNameSnakeCaseRule()),
+                new ObjectMapper(),
+                new FixedSqlGenerator(),
+                recordService,
+                new NoopAiJobRecordService(),
+                new NoopRuleExemptionService(),
+                new PromptTemplateRegistry(),
+                null
+        );
+        String sql = """
+                CREATE TABLE UserOrder (
+                    id bigserial PRIMARY KEY
+                );
+                """;
+
+        LintResult lint = service.lint(sql, 1L);
+        SqlLintDebugResult debug = service.debug(sql, 1L, null, null, null);
+
+        SqlRuleDebugTrace trace = findDebugRule(debug, "table_naming_snake_case");
+        assertEquals(false, trace.isEnabled());
+        assertEquals(SqlRuleMatchStatus.DISABLED, trace.getMatchTrace().get(0).getStatus());
+        assertEquals(0, lint.getIssues().size());
+        assertEquals(0, debug.getLintResult().getIssues().size());
+        assertEquals(lint.getIssues().size(), debug.getLintResult().getIssues().size());
+        assertEquals(1, recordService.saved.size(), "普通 lint 仍应保存检查记录");
+    }
+
+    @Test
+    void debugCarriesSuppressionAndSkippedFixStrategy() {
+        RuleExemption exemption = new RuleExemption();
+        exemption.setId(11L);
+        exemption.setProjectId(1L);
+        exemption.setRuleCode("table_naming_snake_case");
+        exemption.setTableName("UserOrder");
+        exemption.setReason("历史三方表名兼容");
+        exemption.setEnabled(true);
+        SqlLintService service = new SqlLintService(
+                new SqlParserService(),
+                new EmptyRuleConfigService(),
+                List.of(new TableNameSnakeCaseRule()),
+                new ObjectMapper(),
+                new FixedSqlGenerator(),
+                new RecordingCheckRecordService(),
+                new NoopAiJobRecordService(),
+                new StaticRuleExemptionService(List.of(exemption)),
+                new PromptTemplateRegistry(),
+                null
+        );
+
+        SqlLintDebugResult debug = service.debug("""
+                CREATE TABLE UserOrder (
+                    id bigserial PRIMARY KEY
+                );
+                """, 1L, null, null, null);
+
+        SqlRuleDebugTrace trace = findDebugRule(debug, "table_naming_snake_case");
+        assertEquals(1, trace.getSuppressionStatus().getSuppressedIssueCount());
+        assertEquals(11L, trace.getSuppressionStatus().getSuppressionIds().get(0));
+        assertEquals("SUPPRESSED", trace.getFixStrategy().getChanges().get(0).getReasonCode());
+        assertEquals(SqlRuleMatchStatus.MATCHED, trace.getMatchTrace().get(0).getStatus());
+        assertEquals(11L, trace.getMatchTrace().get(0).getSuppressionId());
+    }
+
     private static class EmptyRuleConfigService implements RuleConfigService {
         @Override
         public List<RuleConfig> listByProject(Long projectId) {
@@ -491,6 +646,44 @@ class SqlLintServiceTest {
         @Override
         public void toggle(Long id, boolean enabled) {
         }
+    }
+
+    private static class StaticRuleConfigService extends EmptyRuleConfigService {
+        private final List<RuleConfig> configs;
+
+        private StaticRuleConfigService(List<RuleConfig> configs) {
+            this.configs = configs;
+        }
+
+        @Override
+        public List<RuleConfig> listByProject(Long projectId) {
+            return configs;
+        }
+
+        @Override
+        public List<RuleConfig> listEnabledByProject(Long projectId) {
+            return configs.stream()
+                    .filter(config -> !Boolean.FALSE.equals(config.getEnabled()))
+                    .toList();
+        }
+    }
+
+    private RuleConfig ruleConfig(String ruleCode, boolean enabled, String severity, String paramsJson) {
+        RuleConfig cfg = new RuleConfig();
+        cfg.setProjectId(1L);
+        cfg.setRuleCode(ruleCode);
+        cfg.setRuleName(ruleCode);
+        cfg.setEnabled(enabled);
+        cfg.setSeverity(severity);
+        cfg.setParamsJson(paramsJson);
+        return cfg;
+    }
+
+    private SqlRuleDebugTrace findDebugRule(SqlLintDebugResult debug, String ruleCode) {
+        return debug.getRules().stream()
+                .filter(rule -> ruleCode.equals(rule.getRuleCode()))
+                .findFirst()
+                .orElseThrow();
     }
 
     /** 记录 save 调用的 stub,便于断言落库行为 */
