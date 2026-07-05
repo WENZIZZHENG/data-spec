@@ -194,7 +194,10 @@ commit 规则：
 - commit 只 stage 本次任务产生的变更；使用显式 pathspec 或 hunk stage。
 - commit 前固定核对 `git status --short`、`git diff --check`、`git diff --cached --check`、`git diff --cached --stat` 和必要的 `git diff --cached`。
 - commit 前至少扫描 staged diff 和 staged 文件名中的常见敏感项：`password`、`passwd`、`token`、`secret`、`authorization`、`api_key`、`apikey`、`jdbc:`、`dsn`。
-- commit message 使用中文，概括用户可理解的变更结果。
+- commit message 使用轻量 Conventional Commits：标题格式为 `<type>: <中文说明>`，可按需使用 `<type>(<scope>): <中文说明>`；标题用中文概括用户可理解的变更结果。
+- 常用 `type` 取值：`feat` 新增或扩展用户可见能力，`fix` 修复缺陷，`docs` 文档，`test` 测试，`refactor` 不改变行为的重构，`chore` 日常维护，`build` 构建或依赖，`ci` 持续集成，`perf` 性能优化，`style` 代码格式或样式，`revert` 回滚。
+- 纯规范、流程、任务清单等项目管理类文档优先使用 `docs`；只影响开发工具、脚本或仓库维护且不属于用户文档时使用 `chore`。
+- breaking change、安全边界、凭据、存储语义、API / CLI / MCP / AI 外部协议变化，除使用合适 `type` 外，commit 正文必须说明影响范围、兼容策略和关键验证证据。
 
 push 规则：
 
