@@ -4,6 +4,10 @@ import { createInterface } from 'node:readline'
 import { pathToFileURL } from 'node:url'
 import { loadDataSpecConfig } from './dataspec-config.mjs'
 import { workflowRecipesResourcePayload } from './dataspec-workflows.mjs'
+import {
+  createTaskCard,
+  renderTaskCardMarkdown
+} from './dataspec-task-card.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const SERVER_NAME = 'dataspec-mcp'
@@ -371,6 +375,46 @@ function listTools() {
         }
       },
       {
+        name: 'create_task_card',
+        description: '从 DataSpec workflow recipe 创建本地 AI 任务卡；只返回计划和恢复信息，不执行 workflow。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            workflowId: {
+              type: 'string',
+              description: 'workflow recipe id，例如 create-table、review-pr-sql、reverse-import-standards、export-min-context。'
+            },
+            goal: {
+              type: 'string',
+              description: '本次任务目标。'
+            },
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            inputs: {
+              type: 'object',
+              description: '非敏感任务输入或环境变量占位符；明文 token/password/JDBC URL/Authorization 会被拒绝。'
+            }
+          },
+          required: ['workflowId', 'goal']
+        }
+      },
+      {
+        name: 'render_task_card',
+        description: '把 DataSpec AI 任务卡渲染成 Markdown；不执行 workflow，不调用远端写接口。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            taskCard: {
+              type: 'object',
+              description: 'DataSpec AI task card JSON。'
+            }
+          },
+          required: ['taskCard']
+        }
+      },
+      {
         name: 'lint_sql',
         description: '调用 DataSpec lint 校验 SQL，返回结构化问题列表。',
         inputSchema: {
@@ -630,6 +674,12 @@ async function callTool(params, context) {
   if (name === 'get_session_bootstrap') {
     return await callGetSessionBootstrap(args, context)
   }
+  if (name === 'create_task_card') {
+    return callCreateTaskCard(args, context)
+  }
+  if (name === 'render_task_card') {
+    return callRenderTaskCard(args)
+  }
   if (name === 'lint_sql') {
     return await callLintSql(args, context)
   }
@@ -661,6 +711,43 @@ async function callGetSessionBootstrap(args, context) {
   const projectId = optionalBootstrapProjectId(args.projectId, context.defaultProjectId)
   const result = await fetchSessionBootstrapResource(context, projectId)
   return toolJsonResult(result)
+}
+
+function callCreateTaskCard(args, context) {
+  try {
+    assertTaskCardMcpInputsSafe({
+      goal: args.goal,
+      inputs: args.inputs
+    })
+    const projectId = optionalBootstrapProjectId(args.projectId, context.defaultProjectId)
+    const card = createTaskCard({
+      workflowId: args.workflowId,
+      projectId,
+      goal: args.goal,
+      inputs: args.inputs && typeof args.inputs === 'object' ? args.inputs : {}
+    })
+    return toolJsonResult(card)
+  } catch (error) {
+    throw taskCardRpcError(error)
+  }
+}
+
+function callRenderTaskCard(args) {
+  try {
+    const markdown = renderTaskCardMarkdown(args.taskCard)
+    return {
+      content: [
+        {
+          type: 'text',
+          text: markdown
+        }
+      ],
+      structuredContent: { markdown },
+      isError: false
+    }
+  } catch (error) {
+    throw taskCardRpcError(error)
+  }
 }
 
 async function callLintSql(args, context) {
@@ -1017,6 +1104,19 @@ function toDataSpecRpcError(payload, httpStatus) {
   })
 }
 
+function taskCardRpcError(error) {
+  return new JsonRpcError(-32000, error?.message ?? 'DataSpec task card 请求无效', {
+    dataspecError: {
+      code: 'TASK_CARD_INVALID',
+      category: 'TASK_CARD',
+      retryable: true,
+      suggestedAction: '检查 workflowId、goal、inputs 或 taskCard JSON 后重试；不要传入 token/password/JDBC URL 明文。',
+      docsRef: 'README.md#ai-任务卡',
+      httpStatus: null
+    }
+  })
+}
+
 function normalizeDataSpecDiagnostic(error, httpStatus, message) {
   if (error && typeof error === 'object') {
     return {
@@ -1081,6 +1181,96 @@ function parseJsonOrFallback(text) {
   } catch {
     return { text }
   }
+}
+
+function assertTaskCardMcpInputsSafe(payload) {
+  const unsafePaths = findUnsafeTaskCardInputPaths(payload)
+  if (unsafePaths.length > 0) {
+    throw new Error(`create_task_card 拒绝接收明文敏感输入: ${unsafePaths.join(', ')}。请改用环境变量占位符或省略该输入，让任务卡进入 BLOCKED。`)
+  }
+}
+
+function findUnsafeTaskCardInputPaths(value, pathLabel = 'arguments', key = '') {
+  if (isSensitiveTaskCardKey(key) && value !== undefined && value !== null && value !== '') {
+    if (typeof value === 'string' && isSafeSecretPlaceholder(String(value).trim())) {
+      return []
+    }
+    return [pathLabel]
+  }
+  if (typeof value === 'string') {
+    return isUnsafeTaskCardSecretValue(key, value) ? [pathLabel] : []
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => findUnsafeTaskCardInputPaths(item, `${pathLabel}[${index}]`, key))
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value).flatMap(([itemKey, itemValue]) => (
+      findUnsafeTaskCardInputPaths(itemValue, `${pathLabel}.${itemKey}`, itemKey)
+    ))
+  }
+  return []
+}
+
+function isUnsafeTaskCardSecretValue(key, value) {
+  const text = String(value).trim()
+  if (text === '' || isSafeSecretPlaceholder(text)) {
+    return false
+  }
+  return isSensitiveTaskCardKey(key) || containsTaskCardSecretPattern(text)
+}
+
+function isSafeSecretPlaceholder(value) {
+  return /^\$[A-Za-z_][A-Za-z0-9_]*$/.test(value) ||
+    /^\$\{[A-Za-z_][A-Za-z0-9_]*}$/.test(value) ||
+    /^%[A-Za-z_][A-Za-z0-9_]*%$/.test(value) ||
+    /^(?:\*\*\*|\[REDACTED]|<[^<>]+>)$/i.test(value)
+}
+
+function containsTaskCardSecretPattern(value) {
+  return /jdbc:[^\s"'<>]+/i.test(value) ||
+    /authorization\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\r\n,;]+)/i.test(value) ||
+    /authorization\s*[:=]\s*bearer\s+[^\s,;]+/i.test(value) ||
+    /\bbearer\s+[A-Za-z0-9._~+/-]+=*/i.test(value) ||
+    /\b(?:passwords?|passwds?|pwds?|tokens?|api[_-]?tokens?|dataspec[_-]?tokens?|api[_-]?keys?|secrets?|client[_-]?secrets?|access[_-]?tokens?|refresh[_-]?tokens?|plain[_-]?tokens?|token[_-]?hash(?:es)?|jdbc[_-]?urls?|connection[_-]?strings?)\b\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s"',;}&]+)/i.test(value)
+}
+
+function isSensitiveTaskCardKey(key) {
+  const normalized = String(key ?? '').replace(/[^A-Za-z0-9]/g, '').toLowerCase()
+  return [
+    'password',
+    'passwords',
+    'passwd',
+    'passwds',
+    'pwd',
+    'pwds',
+    'token',
+    'tokens',
+    'githubtoken',
+    'githubtokens',
+    'apitoken',
+    'apitokens',
+    'dataspectoken',
+    'dataspectokens',
+    'apikey',
+    'apikeys',
+    'authorization',
+    'secret',
+    'secrets',
+    'clientsecret',
+    'clientsecrets',
+    'accesstoken',
+    'accesstokens',
+    'refreshtoken',
+    'refreshtokens',
+    'plaintoken',
+    'plaintokens',
+    'tokenhash',
+    'tokenhashes',
+    'jdbcurl',
+    'jdbcurls',
+    'connectionstring',
+    'connectionstrings'
+  ].includes(normalized)
 }
 
 function parseResourceUri(uri) {

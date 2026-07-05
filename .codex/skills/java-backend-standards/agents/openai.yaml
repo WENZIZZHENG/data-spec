@@ -1,0 +1,4 @@
+interface:
+  display_name: "Java 后端开发规范"
+  short_description: "Spring Boot 分层、契约与安全规范"
+  default_prompt: "使用 $java-backend-standards，先按 Reference 路由表判断场景并加载对应 reference，再按规范实现或评审 Java/Spring Boot 后端变更。"

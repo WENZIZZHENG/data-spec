@@ -3234,6 +3234,224 @@ test('workflow show rejects unknown recipe with supported ids', async () => {
   assert.equal(io.stdout, '')
 })
 
+test('task-card create prints stable json without calling server', async () => {
+  const io = createIo()
+  const fetchFn = async () => {
+    throw new Error('fetch should not be called')
+  }
+
+  const code = await runCli([
+    'task-card',
+    'create',
+    '--workflow',
+    'create-table',
+    '--goal',
+    '创建订单表',
+    '--project',
+    '7',
+    '--input',
+    'businessDescription=订单表',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(output.kind, 'dataspec-ai-task-card')
+  assert.equal(output.workflowId, 'create-table')
+  assert.equal(output.projectId, 7)
+  assert.equal(output.status, 'PLANNED')
+  assert.ok(output.currentStep)
+  assert.equal(io.stderr, '')
+})
+
+test('task-card create writes markdown inside cwd and redacts secrets', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-task-card-'))
+  try {
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'task-card',
+      'create',
+      '--workflow',
+      'review-pr-sql',
+      '--goal',
+      '检查 PR SQL',
+      '--project',
+      '7',
+      '--input',
+      'repo=acme/app',
+      '--input',
+      'pr=12',
+      '--input',
+      'GITHUB_TOKEN=ghp_secret_token',
+      '--format',
+      'markdown',
+      '--output',
+      'task-card.md'
+    ], io, fetchFn)
+
+    const content = await readFile(path.join(dir, 'task-card.md'), 'utf8')
+    assert.equal(code, 0)
+    assert.equal(io.stdout, '')
+    assert.match(content, /DataSpec AI Task Card/)
+    assert.match(content, /检查 PR SQL/)
+    assert.doesNotMatch(content, /ghp_secret_token|Authorization|Bearer/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('task-card show and update local json without executing workflow', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-task-card-'))
+  try {
+    const filePath = path.join(dir, 'task-card.json')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const createCode = await runCli([
+      'task-card',
+      'create',
+      '--workflow',
+      'export-min-context',
+      '--goal',
+      '导出订单上下文',
+      '--project',
+      '7',
+      '--input',
+      'scope=field',
+      '--output',
+      'task-card.json'
+    ], io, fetchFn)
+    assert.equal(createCode, 0)
+
+    const updateIo = createIo('', dir)
+    const updateCode = await runCli([
+      'task-card',
+      'update',
+      '--file',
+      'task-card.json',
+      '--step',
+      'precheck-1',
+      '--status',
+      'DONE',
+      '--artifact',
+      'dataspec-ai-context.zip'
+    ], updateIo, fetchFn)
+    const updated = JSON.parse(await readFile(filePath, 'utf8'))
+
+    const showIo = createIo('', dir)
+    const showCode = await runCli(['task-card', 'show', '--file', 'task-card.json', '--format', 'markdown'], showIo, fetchFn)
+
+    assert.equal(updateCode, 0)
+    assert.equal(showCode, 0)
+    assert.equal(updated.steps[0].status, 'DONE')
+    assert.equal(updated.artifacts[0].path, 'dataspec-ai-context.zip')
+    assert.match(showIo.stdout, /Validation Commands/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('task-card rejects unknown workflow and unsafe output path', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-task-card-'))
+  try {
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+    const unknownIo = createIo('', dir)
+    const unknownCode = await runCli([
+      'task-card',
+      'create',
+      '--workflow',
+      'missing',
+      '--goal',
+      'x',
+      '--format',
+      'json'
+    ], unknownIo, fetchFn)
+    const unsafeIo = createIo('', dir)
+    const unsafeCode = await runCli([
+      'task-card',
+      'create',
+      '--workflow',
+      'create-table',
+      '--goal',
+      'x',
+      '--project',
+      '7',
+      '--input',
+      'businessDescription=订单',
+      '--output',
+      '..\\outside.json'
+    ], unsafeIo, fetchFn)
+    const createIoForUpdate = createIo('', dir)
+    const createCodeForUpdate = await runCli([
+      'task-card',
+      'create',
+      '--workflow',
+      'export-min-context',
+      '--goal',
+      '导出上下文',
+      '--project',
+      '7',
+      '--input',
+      'scope=field',
+      '--output',
+      'task-card.json'
+    ], createIoForUpdate, fetchFn)
+    const invalidStatusIo = createIo('', dir)
+    const invalidStatusCode = await runCli([
+      'task-card',
+      'update',
+      '--file',
+      'task-card.json',
+      '--step',
+      'precheck-1',
+      '--status',
+      'INVALID'
+    ], invalidStatusIo, fetchFn)
+    const missingStepIo = createIo('', dir)
+    const missingStepCode = await runCli([
+      'task-card',
+      'update',
+      '--file',
+      'task-card.json',
+      '--step',
+      'missing-step',
+      '--status',
+      'DONE'
+    ], missingStepIo, fetchFn)
+    await writeFile(path.join(dir, 'broken-task-card.json'), '{not-json', 'utf8')
+    const brokenIo = createIo('', dir)
+    const brokenCode = await runCli([
+      'task-card',
+      'show',
+      '--file',
+      'broken-task-card.json'
+    ], brokenIo, fetchFn)
+
+    assert.equal(unknownCode, 2)
+    assert.match(unknownIo.stderr, /未知 workflow recipe: missing/)
+    assert.equal(unsafeCode, 2)
+    assert.match(unsafeIo.stderr, /输出路径必须位于当前工作目录/)
+    assert.equal(createCodeForUpdate, 0)
+    assert.equal(invalidStatusCode, 2)
+    assert.match(invalidStatusIo.stderr, /无效 task card step status: INVALID/)
+    assert.equal(missingStepCode, 2)
+    assert.match(missingStepIo.stderr, /未知 task card step: missing-step/)
+    assert.equal(brokenCode, 2)
+    assert.match(brokenIo.stderr, /Expected property name|Unexpected token|JSON/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('init requires project id when config is absent', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-init-'))
   try {

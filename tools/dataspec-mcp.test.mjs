@@ -441,6 +441,106 @@ test('get_session_bootstrap tool works without configured project', async () => 
   assert.equal(response.result.structuredContent.nextActions[0].code, 'SELECT_PROJECT')
 })
 
+test('task card tools create and render local cards without backend calls', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
+
+  const tools = await handler({ jsonrpc: '2.0', id: 65, method: 'tools/list' })
+  assert.ok(tools.result.tools.some((tool) => tool.name === 'create_task_card'))
+  assert.ok(tools.result.tools.some((tool) => tool.name === 'render_task_card'))
+
+  const created = await handler({
+    jsonrpc: '2.0',
+    id: 66,
+    method: 'tools/call',
+    params: {
+      name: 'create_task_card',
+      arguments: {
+        workflowId: 'create-table',
+        goal: '创建订单表',
+        projectId: 7,
+        inputs: { businessDescription: '订单表' }
+      }
+    }
+  })
+
+  const rendered = await handler({
+    jsonrpc: '2.0',
+    id: 67,
+    method: 'tools/call',
+    params: {
+      name: 'render_task_card',
+      arguments: { taskCard: created.result.structuredContent }
+    }
+  })
+
+  assert.equal(created.result.structuredContent.kind, 'dataspec-ai-task-card')
+  assert.equal(created.result.structuredContent.workflowId, 'create-table')
+  assert.match(created.result.content[0].text, /dataspec-ai-task-card/)
+  assert.match(rendered.result.content[0].text, /DataSpec AI Task Card/)
+  assert.match(rendered.result.content[0].text, /创建订单表/)
+})
+
+test('task card tools reject unknown workflow and unsafe sensitive inputs', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
+
+  const unknown = await handler({
+    jsonrpc: '2.0',
+    id: 68,
+    method: 'tools/call',
+    params: {
+      name: 'create_task_card',
+      arguments: { workflowId: 'missing', goal: 'x' }
+    }
+  })
+  const unsafe = await handler({
+    jsonrpc: '2.0',
+    id: 69,
+    method: 'tools/call',
+    params: {
+      name: 'create_task_card',
+      arguments: {
+        workflowId: 'review-pr-sql',
+        goal: '检查 PR',
+        projectId: 7,
+        inputs: {
+          repo: 'acme/app',
+          pr: '12',
+          GITHUB_TOKEN: 'ghp_secret_token',
+          tokens: [{ value: 'raw_secret_token' }],
+          apiKeys: [{ value: 'api_key_one' }],
+          note: 'Authorization: Basic raw_auth_secret'
+        }
+      }
+    }
+  })
+  const placeholder = await handler({
+    jsonrpc: '2.0',
+    id: 70,
+    method: 'tools/call',
+    params: {
+      name: 'create_task_card',
+      arguments: {
+        workflowId: 'review-pr-sql',
+        goal: '检查 PR',
+        projectId: 7,
+        inputs: { repo: 'acme/app', pr: '12', GITHUB_TOKEN: '$GITHUB_TOKEN' }
+      }
+    }
+  })
+
+  assert.equal(unknown.error.code, -32000)
+  assert.equal(unknown.error.data.dataspecError.code, 'TASK_CARD_INVALID')
+  assert.match(unknown.error.message, /未知 workflow recipe: missing/)
+  assert.equal(unsafe.error.code, -32000)
+  assert.equal(unsafe.error.data.dataspecError.code, 'TASK_CARD_INVALID')
+  assert.match(unsafe.error.message, /拒绝接收明文敏感输入/)
+  assert.doesNotMatch(JSON.stringify(unsafe.error), /ghp_secret_token|raw_secret_token|api_key_one|raw_auth_secret/)
+  assert.equal(placeholder.result.structuredContent.kind, 'dataspec-ai-task-card')
+  assert.equal(placeholder.result.structuredContent.inputs.GITHUB_TOKEN, '***')
+  assert.doesNotMatch(JSON.stringify(placeholder.result.structuredContent), /ghp_secret_token/)
+  assert.match(JSON.stringify(placeholder.result.structuredContent), /\*\*\*/)
+})
+
 test('get_field_catalog tool parses json catalog when possible', async () => {
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
     assert.equal(url, 'http://dataspec.local/api/ai-context/field-catalog?projectId=7')

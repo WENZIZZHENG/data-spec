@@ -1,0 +1,116 @@
+{
+  "should_trigger": [
+    {
+      "query": "给 data-spec 新增一个 Spring Boot Controller、Service 和 Repository 模块，包含 create 接口。",
+      "reason": "涉及 Controller、Service、Repository、API 路由和持久化分层。"
+    },
+    {
+      "query": "评审这段 Java 代码：Service 直接注入了 MyBatis mapper，还把 Entity 作为响应返回。",
+      "reason": "涉及 mapper 访问、DTO/entity 边界和代码评审红线。"
+    },
+    {
+      "query": "修复更新接口，避免 request DTO 的 null 字段覆盖数据库已有值。",
+      "reason": "涉及更新白名单合并、事务和数据一致性。"
+    },
+    {
+      "query": "设计复杂订单支付系统的 Spring Boot 包结构，需要长期演进和领域建模。",
+      "reason": "涉及复杂业务、目录结构、应用层/领域层/基础设施层取舍。"
+    },
+    {
+      "query": "检查新增 API 是否需要 OpenSpec，响应字段、错误码和 DTO 注释是否完整。",
+      "reason": "涉及 API 契约、schema description 和验证门禁。"
+    },
+    {
+      "query": "这个 Repository 查询用了动态排序字段和 XML ${}，帮我按规范修正。",
+      "reason": "涉及 SQL 注入、动态 SQL allowlist 和 repository 测试。"
+    },
+    {
+      "query": "Spring Security 配置里有 /api/**.permitAll()，请评审权限风险。",
+      "reason": "涉及安全授权、公开路径和权限测试。"
+    },
+    {
+      "query": "新增批量导入功能，要考虑事务、幂等和重复提交。",
+      "reason": "涉及事务边界、幂等、并发和集成测试。"
+    }
+  ],
+  "should_not_trigger": [
+    {
+      "query": "写一个纯 Java 二分查找算法并解释复杂度。",
+      "reason": "纯算法任务，不涉及 Spring 后端分层或 API 契约。"
+    },
+    {
+      "query": "修复 Maven wrapper 下载失败的问题。",
+      "reason": "构建工具问题，不涉及 Java 后端代码规范。"
+    },
+    {
+      "query": "调整前端 Vue 页面按钮样式。",
+      "reason": "前端样式任务。"
+    },
+    {
+      "query": "给 README 补一段项目介绍文案。",
+      "reason": "纯文档任务。"
+    },
+    {
+      "query": "解释 Java record 的语法，不涉及项目代码。",
+      "reason": "普通语言问答，不涉及后端分层实现或评审。"
+    },
+    {
+      "query": "修复单元测试里的断言文案拼写。",
+      "reason": "轻量测试文案，不涉及后端架构或安全规则。"
+    },
+    {
+      "query": "查看 git status 并告诉我哪些文件变了。",
+      "reason": "仓库状态查询。"
+    },
+    {
+      "query": "帮我生成一张架构插图。",
+      "reason": "图像生成任务。"
+    },
+    {
+      "query": "只解释 Spring Security 的 permitAll 是什么，不看项目代码。",
+      "reason": "概念问答，不涉及实现、修改或评审项目后端代码。"
+    },
+    {
+      "query": "只升级 pom.xml 里的 Spring Boot 版本号并说明兼容风险。",
+      "reason": "构建依赖维护，不直接触及 Controller、Service、Repository 或 API 契约代码。"
+    },
+    {
+      "query": "比较 JPA 和 MyBatis 的基本区别，不涉及项目代码取舍。",
+      "reason": "通用技术比较，不是项目 Java 后端实现、修改或评审。"
+    },
+    {
+      "query": "解释 Bean Validation 的 @NotBlank 和 @NotNull 区别。",
+      "reason": "通用技术解释，不是项目代码实现或评审。"
+    },
+    {
+      "query": "帮我解释这段 Spring Boot 配置类里的 @ConditionalOnProperty 是什么意思。",
+      "reason": "配置概念解释，不涉及项目后端分层、API、事务、安全或持久化实现。"
+    },
+    {
+      "query": "比较 CompletableFuture 和 @Async 的区别。",
+      "reason": "并发/异步概念问答，不触及项目代码、事务边界或后端分层评审。"
+    }
+  ],
+  "borderline": [
+    {
+      "query": "用 Spring Boot 写一个文件上传工具类，只负责本地文件名清洗和 MIME 判断。",
+      "recommended_action": "一般不触发；若涉及 Controller、权限、路径遍历、持久化记录或外部 API，再读取 quality-security.md。"
+    },
+    {
+      "query": "重构这个 Service 的日志输出格式，不改变业务行为。",
+      "recommended_action": "只涉及日志脱敏时读取 quality-security.md；不需要加载 architecture.md 或 layering.md。"
+    },
+    {
+      "query": "给现有 Controller 加一个查询接口的分页参数校验。",
+      "recommended_action": "触发但轻量读取 layering.md 和 quality-security.md；通常不需要 architecture.md，除非同时改变 API 契约或分页响应结构。"
+    },
+    {
+      "query": "优化一个 MyBatis 列表查询的分页和排序。",
+      "recommended_action": "触发 performance.md 和 quality-security.md；若改变响应字段或查询契约，再读取 layering.md 和 testing-review.md。"
+    },
+    {
+      "query": "把一个单表内部管理 CRUD 的 Service 拆成接口和实现。",
+      "recommended_action": "触发 architecture.md 和 layering.md；先判断是否真的需要拆接口，避免为轻量模块制造空抽象。"
+    }
+  ]
+}

@@ -176,3 +176,25 @@ The DataSpec MCP server SHALL expose a read-only `get_session_bootstrap` tool.
 - **WHEN** an MCP client calls `get_session_bootstrap` with an optional `projectId`
 - **THEN** the server calls `/api/bootstrap/session`
 - **AND** returns the package as JSON text and `structuredContent`.
+
+### Requirement: MCP Task Card Tools
+The DataSpec MCP server SHALL expose local task card tools for AI clients.
+
+#### Scenario: Create task card tool
+- **WHEN** an MCP client calls `create_task_card` with workflow id, goal, optional project id, and non-sensitive inputs
+- **THEN** the server returns task card JSON text and `structuredContent`.
+
+#### Scenario: Render task card tool
+- **WHEN** an MCP client calls `render_task_card` with a task card object
+- **THEN** the server returns Markdown text without mutating project state.
+
+#### Scenario: Task card tool validation
+- **WHEN** an MCP client provides an unknown workflow id, invalid task card, or unsafe sensitive input
+- **THEN** the server returns a JSON-RPC error with AI-readable diagnostic data.
+
+### Requirement: MCP Task Card Safety
+MCP task card tools SHALL be local planning helpers, not workflow executors.
+
+#### Scenario: No workflow execution
+- **WHEN** a client creates or renders a task card
+- **THEN** the MCP server does not call DataSpec write APIs, run lint, connect to source databases, or generate DDL.

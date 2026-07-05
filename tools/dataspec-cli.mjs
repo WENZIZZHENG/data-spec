@@ -15,6 +15,11 @@ import {
   supportedWorkflowRecipeIds,
   workflowCatalogPayload
 } from './dataspec-workflows.mjs'
+import {
+  createTaskCard,
+  renderTaskCardMarkdown,
+  updateTaskCardStep
+} from './dataspec-task-card.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const DEFAULT_GITHUB_API = 'https://api.github.com'
@@ -122,6 +127,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'workflow' || command === 'workflows') {
       return runWorkflow(rest, io)
     }
+    if (command === 'task-card' || command === 'taskcard') {
+      return await runTaskCard(rest, io)
+    }
     throw new Error(`未知命令: ${command}\n\n${helpText()}`)
   } catch (error) {
     io.writeErr(formatCliError(error))
@@ -222,6 +230,105 @@ function runWorkflow(args, io) {
     return 0
   }
   throw new Error(`未知 workflow 子命令: ${subcommand}。支持: list, show`)
+}
+
+async function runTaskCard(args, io) {
+  const [subcommand, ...rest] = args
+  if (subcommand === 'create') {
+    return await runTaskCardCreate(rest, io)
+  }
+  if (subcommand === 'show') {
+    return await runTaskCardShow(rest, io)
+  }
+  if (subcommand === 'update') {
+    return await runTaskCardUpdate(rest, io)
+  }
+  throw new Error(`未知 task-card 子命令: ${subcommand ?? ''}。支持: create, show, update`)
+}
+
+async function runTaskCardCreate(args, io) {
+  const { positional, options } = parseArgs(args, ['workflow', 'goal', 'project', 'input', 'format', 'output'], [], ['input'])
+  if (positional.length > 0) {
+    throw new Error(`task-card create 不接受位置参数: ${positional.join(', ')}`)
+  }
+  if (!options.workflow) {
+    throw new Error('task-card create 需要提供 --workflow <id>')
+  }
+  if (!options.goal) {
+    throw new Error('task-card create 需要提供 --goal <text>')
+  }
+  const format = options.format ?? 'json'
+  if (!['json', 'markdown'].includes(format)) {
+    throw new Error('task-card create 仅支持 --format json|markdown')
+  }
+  const projectId = parseOptionalProjectId(options.project)
+  const output = options.output ? resolveTaskCardOutputPath(options.output, cliCwd(io)) : null
+  const inputs = parseTaskCardInputs(options.input)
+  const card = createTaskCard({
+    workflowId: options.workflow,
+    projectId,
+    goal: options.goal,
+    inputs,
+    outputPath: output ? formatOutputPath(output) : undefined
+  })
+  const content = format === 'markdown'
+    ? renderTaskCardMarkdown(card)
+    : `${JSON.stringify(card, null, 2)}\n`
+  if (output) {
+    await mkdir(path.dirname(output), { recursive: true })
+    await writeFile(output, ensureTrailingNewline(content), 'utf8')
+  } else {
+    io.writeOut(ensureTrailingNewline(content))
+  }
+  return 0
+}
+
+async function runTaskCardShow(args, io) {
+  const { positional, options } = parseArgs(args, ['file', 'format'])
+  if (positional.length > 0) {
+    throw new Error(`task-card show 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const filePath = resolveTaskCardInputPath(options.file, cliCwd(io))
+  const format = options.format ?? 'json'
+  if (!['json', 'markdown'].includes(format)) {
+    throw new Error('task-card show 仅支持 --format json|markdown')
+  }
+  const card = JSON.parse(await readFile(filePath, 'utf8'))
+  io.writeOut(format === 'markdown'
+    ? ensureTrailingNewline(renderTaskCardMarkdown(card))
+    : `${JSON.stringify(card, null, 2)}\n`)
+  return 0
+}
+
+async function runTaskCardUpdate(args, io) {
+  const { positional, options } = parseArgs(args, ['file', 'step', 'status', 'artifact', 'notes', 'resume-command', 'resumeCommand', 'format'])
+  if (positional.length > 0) {
+    throw new Error(`task-card update 不接受位置参数: ${positional.join(', ')}`)
+  }
+  if (!options.step) {
+    throw new Error('task-card update 需要提供 --step <id>')
+  }
+  if (!options.status) {
+    throw new Error('task-card update 需要提供 --status <status>')
+  }
+  const filePath = resolveTaskCardInputPath(options.file, cliCwd(io))
+  const format = options.format ?? 'json'
+  if (!['json', 'markdown'].includes(format)) {
+    throw new Error('task-card update 仅支持 --format json|markdown')
+  }
+  const card = JSON.parse(await readFile(filePath, 'utf8'))
+  const updated = updateTaskCardStep(card, {
+    stepId: options.step,
+    status: String(options.status).trim().toUpperCase(),
+    artifact: options.artifact,
+    notes: options.notes,
+    resumeCommand: options.resumeCommand ?? options['resume-command']
+  })
+  await writeFile(filePath, `${JSON.stringify(updated, null, 2)}\n`, 'utf8')
+  io.writeOut(format === 'markdown'
+    ? ensureTrailingNewline(renderTaskCardMarkdown(updated))
+    : `${JSON.stringify(updated, null, 2)}\n`)
+  return 0
 }
 
 async function runLintFiles(args, io, fetchFn) {
@@ -3243,6 +3350,45 @@ function resolveOutputInsideCwd(outputPath, cwd) {
   return target
 }
 
+function resolveTaskCardOutputPath(outputPath, cwd) {
+  try {
+    return resolveOutputInsideCwd(outputPath, cwd)
+  } catch (error) {
+    if (/输出路径越界/.test(error.message)) {
+      throw new Error(`输出路径必须位于当前工作目录: ${outputPath}`)
+    }
+    throw error
+  }
+}
+
+function resolveTaskCardInputPath(inputPath, cwd) {
+  if (!inputPath) {
+    throw new Error('task-card 需要提供 --file <path>')
+  }
+  return resolveOutputInsideCwd(inputPath, cwd)
+}
+
+function parseTaskCardInputs(inputValues) {
+  const result = {}
+  for (const item of Array.isArray(inputValues) ? inputValues : inputValues ? [inputValues] : []) {
+    const index = String(item).indexOf('=')
+    if (index <= 0) {
+      throw new Error(`task-card --input 需要使用 key=value: ${item}`)
+    }
+    const key = String(item).slice(0, index).trim()
+    const value = String(item).slice(index + 1).trim()
+    if (!key) {
+      throw new Error(`task-card --input key 不能为空: ${item}`)
+    }
+    result[key] = value
+  }
+  return result
+}
+
+function ensureTrailingNewline(content) {
+  return content.endsWith('\n') ? content : `${content}\n`
+}
+
 function buildLintFilesDeliveryPackage(lintOutput, projectId) {
   const items = (lintOutput.files ?? []).map((file) => toDeliveryPackageItem(file))
   const summary = buildDeliverySummary(items)
@@ -4005,6 +4151,9 @@ Usage:
   node tools/dataspec-cli.mjs profile show <id|taskType> [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs workflow list [--format text|json]
   node tools/dataspec-cli.mjs workflow show <id> [--format text|json]
+  node tools/dataspec-cli.mjs task-card create --workflow <id> --goal <text> [--project <id>] [--input key=value ...] [--format json|markdown] [--output <path>]
+  node tools/dataspec-cli.mjs task-card show --file <path> [--format json|markdown]
+  node tools/dataspec-cli.mjs task-card update --file <path> --step <id> --status <status> [--artifact <path>] [--notes <text>] [--format json|markdown]
 
 Options:
   --project 可由 .dataspec/config.json 的 projectId 提供
@@ -4025,6 +4174,7 @@ Options:
   contract 用于读取和检查 AI 可消费输出契约 registry，不代表权限或发布审批
   capability 用于读取和检查 AI 可用能力清单，只描述入口和前置检查，不会自动执行能力
   workflow 只输出任务计划和命令建议，不会自动执行步骤或调用外部 LLM
+  task-card 从 workflow 生成或更新本地 AI 任务卡文件，只描述进度、下一步、产物和验证命令，不会执行 workflow 或写入远端
 `
 }
 

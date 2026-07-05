@@ -125,6 +125,23 @@ test('keeps AI batch delivery package page wired', () => {
   ], 'ai batch types')
 })
 
+test('keeps task card display helpers wired', () => {
+  const utils = readSource('src/utils/taskCardDisplay.ts')
+  const packageJson = readSource('package.json')
+
+  assertContains(utils, [
+    'buildTaskCardSummary',
+    'buildTaskCardMarkdown',
+    'dataspec-ai-task-card',
+    'Validation Commands',
+    'Stop Conditions'
+  ], 'task card display utils')
+
+  assertContains(packageJson, [
+    'tests/taskCardDisplay.test.ts'
+  ], 'frontend test script')
+})
+
 test('keeps AI feedback improvement loop page wired', () => {
   const view = readSource('src/views/AiFeedback.vue')
   const api = readSource('src/api/aiFeedback.ts')
