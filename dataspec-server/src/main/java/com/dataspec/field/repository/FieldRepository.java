@@ -1,6 +1,7 @@
 package com.dataspec.field.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.dataspec.field.entity.Field;
@@ -8,6 +9,7 @@ import com.dataspec.field.mapper.FieldMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -85,6 +87,23 @@ public class FieldRepository {
     /** 更新字段 */
     public int update(Field field) {
         return fieldMapper.updateById(field);
+    }
+
+    /**
+     * 合并来源字段时的条件废弃更新。
+     * <p>
+     * 该方法只在来源字段仍未设置 replacement 时生效，用于阻止两个合并请求同时把同一个来源字段合并到不同目标字段。
+     */
+    public int deprecateSourceForMergeIfReplacementUnset(Field source) {
+        LocalDateTime now = LocalDateTime.now();
+        return fieldMapper.update(null, new LambdaUpdateWrapper<Field>()
+                .eq(Field::getId, source.getId())
+                .eq(Field::getProjectId, source.getProjectId())
+                .isNull(Field::getReplacementFieldId)
+                .set(Field::getStatus, source.getStatus())
+                .set(Field::getReplacementFieldId, source.getReplacementFieldId())
+                .set(Field::getReplacementReason, source.getReplacementReason())
+                .set(Field::getUpdatedAt, now));
     }
 
     /** 逻辑删除字段 */

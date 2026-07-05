@@ -50,12 +50,16 @@ test('keeps field conflict naming risk view wired', () => {
   const types = readSource('src/types/index.ts')
 
   assertContains(view, [
+    "import StandardFieldMergeDialog from '@/components/StandardFieldMergeDialog.vue'",
     '命名风险',
     'RESERVED_WORD',
     'DANGEROUS_SQL_NAME',
     'CASE_COLLISION',
     'AMBIGUOUS_ALIAS',
-    'isNamingRiskType(group.conflictType)'
+    'isNamingRiskType(group.conflictType)',
+    'openMergeWizard(row)',
+    'mergeOptions',
+    'handleMergeApplied'
   ], 'FieldConflicts.vue')
 
   assertContains(utils, [
@@ -69,7 +73,8 @@ test('keeps field conflict naming risk view wired', () => {
     "| 'RESERVED_WORD'",
     "| 'DANGEROUS_SQL_NAME'",
     "| 'CASE_COLLISION'",
-    "| 'AMBIGUOUS_ALIAS'"
+    "| 'AMBIGUOUS_ALIAS'",
+    'export interface StandardFieldMergeOption'
   ], 'field conflict types')
 })
 
@@ -931,6 +936,7 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
   const standardChangeApi = readSource('src/api/standardChange.ts')
 
   assertContains(view, [
+    "import StandardFieldMergeDialog from '@/components/StandardFieldMergeDialog.vue'",
     'const fieldKeyword = ref',
     'route.query.keyword',
     'searchFields(searchRequest)',
@@ -966,6 +972,9 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
     'previewFieldChange(field.id, payload)',
     'standardChangeConfirmMessage(preview)',
     'getFieldImpactReport(field.id, projectStore.currentProjectId)',
+    'openMergeDialog(row)',
+    'fieldMergeOptions',
+    'handleMergeApplied',
     'openBulkDialog',
     'handleUndoChange'
   ], 'FieldLibrary.vue')
@@ -976,7 +985,9 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
     "request.get<unknown, FieldGroupSummary>('/fields/groups'",
     "request.post<unknown, FieldBulkUpdatePreview>('/fields/bulk-update/preview'",
     "request.post<unknown, FieldBulkUpdateResult>('/fields/bulk-update'",
-    "request.post<unknown, FieldChangeUndoResult>(`/fields/${id}/undo`"
+    "request.post<unknown, FieldChangeUndoResult>(`/fields/${id}/undo`",
+    "request.post<unknown, StandardFieldMergePreview>('/fields/merge/preview'",
+    "request.post<unknown, StandardFieldMergeResult>('/fields/merge/apply'"
   ], 'field api')
 
   assertContains(standardChangeApi, [

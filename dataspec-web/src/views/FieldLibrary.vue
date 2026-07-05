@@ -151,11 +151,12 @@
             </template>
           </el-table-column>
           <el-table-column prop="comment" label="注释" min-width="220" show-overflow-tooltip />
-          <el-table-column label="操作" width="300" fixed="right">
+          <el-table-column label="操作" width="350" fixed="right">
             <template #default="{ row }">
               <el-button text type="primary" @click="openImpactDialog(row)">影响</el-button>
               <el-button text type="primary" @click="openSourceDialog(row)">来源</el-button>
               <el-button text type="primary" @click="openChangeLogDialog(row)">变更</el-button>
+              <el-button text type="primary" @click="openMergeDialog(row)">合并</el-button>
               <el-button text type="primary" @click="openEditDialog(row)">编辑</el-button>
               <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
@@ -689,6 +690,14 @@
         />
       </div>
     </el-dialog>
+
+    <StandardFieldMergeDialog
+      v-model="mergeDialogVisible"
+      :project-id="projectStore.currentProjectId"
+      :options="fieldMergeOptions"
+      :initial-target-id="mergeInitialTargetId"
+      @applied="handleMergeApplied"
+    />
   </div>
 </template>
 
@@ -699,6 +708,7 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { Link, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { listChangeLogs } from '@/api/changeLog'
 import { listDomains } from '@/api/domain'
+import StandardFieldMergeDialog from '@/components/StandardFieldMergeDialog.vue'
 import {
   batchUpdateFieldGrouping,
   bulkUpdateFields,
@@ -746,7 +756,8 @@ import type {
   FieldSearchSummary,
   FieldSourceDetail,
   StandardChangePreview,
-  StandardChangeLog
+  StandardChangeLog,
+  StandardFieldMergeOption
 } from '@/types'
 
 const projectStore = useProjectStore()
@@ -772,6 +783,7 @@ const bulkDialogVisible = ref(false)
 const sourceDialogVisible = ref(false)
 const impactDialogVisible = ref(false)
 const changeLogDialogVisible = ref(false)
+const mergeDialogVisible = ref(false)
 const editingField = ref<Field | null>(null)
 const sourceField = ref<Field | null>(null)
 const impactField = ref<Field | null>(null)
@@ -788,6 +800,7 @@ const formRef = ref<FormInstance>()
 const openedRouteFieldId = ref<number | null>(null)
 const selectedFields = ref<Field[]>([])
 const activeGroupKey = ref('all')
+const mergeInitialTargetId = ref<number | null>(null)
 let loadSequence = 0
 
 const pagination = reactive({
@@ -980,6 +993,17 @@ const bulkChangedItems = computed(() => bulkPreview.value?.items?.filter((item) 
 const replacementFieldOptions = computed(() =>
   fields.value.filter((field): field is Field & { id: number } =>
     typeof field.id === 'number' && field.id !== editingField.value?.id)
+)
+const fieldMergeOptions = computed<StandardFieldMergeOption[]>(() =>
+  fields.value
+    .filter((field): field is Field & { id: number } => typeof field.id === 'number')
+    .map((field) => ({
+      fieldId: field.id,
+      name: field.name,
+      displayName: field.displayName,
+      dataType: field.dataType,
+      status: field.status
+    }))
 )
 
 onMounted(() => {
@@ -1365,6 +1389,18 @@ function openEditDialog(field: Field) {
   if (field.id) {
     void syncFieldUrlState({ fieldId: field.id })
   }
+}
+
+function openMergeDialog(field: Field) {
+  if (!field.id) {
+    return
+  }
+  mergeInitialTargetId.value = field.id
+  mergeDialogVisible.value = true
+}
+
+async function handleMergeApplied() {
+  await loadFields()
 }
 
 async function openFieldFromRoute() {

@@ -148,8 +148,27 @@
           </template>
         </el-table-column>
         <el-table-column prop="suggestedAction" label="建议" min-width="300" show-overflow-tooltip />
+        <el-table-column label="操作" width="110" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              text
+              type="primary"
+              :disabled="(row.fields?.length ?? 0) < 2"
+              @click="openMergeWizard(row)"
+            >
+              合并
+            </el-button>
+          </template>
+        </el-table-column>
       </el-table>
     </template>
+
+    <StandardFieldMergeDialog
+      v-model="mergeDialogVisible"
+      :project-id="projectStore.currentProjectId"
+      :options="mergeOptions"
+      @applied="handleMergeApplied"
+    />
   </div>
 </template>
 
@@ -158,6 +177,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Refresh } from '@element-plus/icons-vue'
 import { getFieldConflictReport } from '@/api/field'
+import StandardFieldMergeDialog from '@/components/StandardFieldMergeDialog.vue'
 import { useProjectStore } from '@/stores/project'
 import {
   conflictFieldEditQuery,
@@ -169,9 +189,11 @@ import {
 } from '@/utils/fieldConflictDisplay'
 import type {
   FieldConflictField,
+  FieldConflictGroup,
   FieldConflictReport,
   FieldConflictSeverity,
-  FieldConflictType
+  FieldConflictType,
+  StandardFieldMergeOption
 } from '@/types'
 
 const projectStore = useProjectStore()
@@ -181,6 +203,8 @@ const loading = ref(false)
 const report = ref<FieldConflictReport>({})
 const severityFilter = ref<FieldConflictSeverity | 'ALL'>('ALL')
 const typeFilter = ref<FieldConflictType | 'ALL'>('ALL')
+const mergeDialogVisible = ref(false)
+const mergeOptions = ref<StandardFieldMergeOption[]>([])
 
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
 const summary = computed(() => report.value.summary ?? {})
@@ -223,6 +247,23 @@ function goToField(field: FieldConflictField) {
     path: '/fields',
     query: conflictFieldEditQuery(field)
   })
+}
+
+function openMergeWizard(group: FieldConflictGroup) {
+  mergeOptions.value = (group.fields ?? [])
+    .map((field) => ({
+      fieldId: field.fieldId,
+      name: field.name,
+      displayName: field.displayName,
+      dataType: field.dataType,
+      status: field.status
+    }))
+    .filter((field) => typeof field.fieldId === 'number')
+  mergeDialogVisible.value = mergeOptions.value.length >= 2
+}
+
+async function handleMergeApplied() {
+  await loadReport()
 }
 </script>
 

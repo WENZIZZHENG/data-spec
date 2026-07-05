@@ -223,6 +223,23 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
                 "README.md#字段推荐"
         ));
         add(map, cap(
+                "merge-standard-fields", "field", "标准字段合并向导",
+                "预览并确认两个正式标准字段的合并，安全迁移 aliases/tags，废弃来源字段并写入变更日志。",
+                true, "WRITES_DATASPEC_STANDARD",
+                list("projectId", "targetFieldId", "sourceFieldId"), list("reason"),
+                list("standard-field-merge"),
+                list("POST /api/fields/merge/preview", "POST /api/fields/merge/apply"),
+                list(),
+                list(), list(),
+                list("/field-conflicts", "/fields"),
+                list("standard-field-merge", "field"),
+                list(), list(),
+                examples("API", null, "POST /api/fields/merge/preview"),
+                list("先从字段冲突或字段库选择同项目字段", "必须 review risks 和 rollbackHints", "apply 必须填写合并原因"),
+                list("有 blocking risk 时先处理冲突；apply 后查看目标和来源字段变更日志。"),
+                "README.md#标准字段模型"
+        ));
+        add(map, cap(
                 "generate-ddl", "sql", "生成 DDL",
                 "基于表模板生成 PostgreSQL DDL，并运行 DataSpec lint 自检。",
                 true, "WRITES_DATASPEC_RECORD",

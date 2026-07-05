@@ -82,6 +82,174 @@ export interface FieldChangeUndoResult {
   logId?: number
 }
 
+/** 标准字段合并预览请求，只在同一项目内比较一个保留字段和一个来源字段。 */
+export interface StandardFieldMergePreviewReq {
+  /** DataSpec 项目 ID。 */
+  projectId?: number
+  /** 保留字段 ID。 */
+  targetFieldId?: number
+  /** 来源字段 ID。 */
+  sourceFieldId?: number
+}
+
+/** 标准字段合并确认请求，reason 会写入来源字段替代说明。 */
+export interface StandardFieldMergeApplyReq extends StandardFieldMergePreviewReq {
+  /** 用户确认合并的业务原因，前端会先阻止空值提交。 */
+  reason?: string
+}
+
+/** 标准字段合并向导中的字段选项。 */
+export interface StandardFieldMergeOption {
+  /** 字段 ID。 */
+  fieldId?: number
+  /** 标准字段名。 */
+  name?: string
+  /** 显示名。 */
+  displayName?: string
+  /** 数据类型。 */
+  dataType?: string
+  /** 生命周期状态。 */
+  status?: string
+}
+
+/** 标准字段合并响应中的字段摘要，不包含源库业务行值。 */
+export interface StandardFieldMergeFieldSummary {
+  /** 字段 ID。 */
+  id?: number
+  /** 标准字段名。 */
+  name?: string
+  /** 显示名。 */
+  displayName?: string
+  /** 数据类型。 */
+  dataType?: string
+  /** 是否允许空值。 */
+  nullable?: boolean
+  /** 代码集 ID。 */
+  codeSetId?: number | null
+  /** 是否敏感字段。 */
+  sensitive?: boolean
+  /** 生命周期状态。 */
+  status?: string
+  /** 替代字段 ID。 */
+  replacementFieldId?: number | null
+  /** 替代说明。 */
+  replacementReason?: string | null
+  /** 合并后的别名列表。 */
+  aliases?: string[]
+  /** 合并后的标签列表。 */
+  tags?: string[]
+  /** 脱敏后的示例值。 */
+  exampleValue?: string | null
+  /** 格式约束摘要。 */
+  formatNotes?: string[]
+  /** 来源摘要，只包含表列名称。 */
+  sourceSummaries?: string[]
+}
+
+/** 标准字段合并预览中的字段级变化。 */
+export interface StandardFieldMergeChange {
+  /** 受影响属性名。 */
+  attribute?: string
+  /** 变更前值。 */
+  beforeValue?: unknown
+  /** 变更后值或建议值。 */
+  afterValue?: unknown
+  /** 迁移模式，如 SAFE_MERGE、MANUAL_REVIEW。 */
+  migrationMode?: string
+  /** 变化说明。 */
+  description?: string
+}
+
+/** 标准字段合并风险。 */
+export interface StandardFieldMergeRisk {
+  /** 风险级别。 */
+  severity?: 'ERROR' | 'WARNING' | 'INFO' | string
+  /** 稳定风险码。 */
+  code?: string
+  /** 风险说明。 */
+  message?: string
+  /** true 表示阻断 apply。 */
+  blocking?: boolean
+  /** 人工处理建议。 */
+  manualAction?: string
+}
+
+/** 标准字段合并影响摘要。 */
+export interface StandardFieldMergeImpact {
+  /** 影响类型。 */
+  impactType?: string
+  /** 影响对象 ID。 */
+  sourceId?: number | null
+  /** 影响标题。 */
+  title?: string
+  /** 影响数量。 */
+  count?: number
+  /** 影响说明。 */
+  description?: string
+  /** 结构化补充信息，不包含凭据或源库行值。 */
+  metadata?: Record<string, unknown>
+}
+
+/** 标准字段合并回退提示。 */
+export interface StandardFieldMergeRollbackHint {
+  /** 回退提示类型。 */
+  type?: string
+  /** 建议动作。 */
+  action?: string
+  /** 回退说明。 */
+  description?: string
+  /** API 或页面路径。 */
+  targetPath?: string
+}
+
+/** 标准字段合并预览响应。 */
+export interface StandardFieldMergePreview {
+  /** 响应类型标识。 */
+  kind?: string
+  /** 响应 schema 版本。 */
+  schemaVersion?: number
+  /** DataSpec 项目 ID。 */
+  projectId?: number
+  /** 推荐保留字段 ID。 */
+  recommendedTargetFieldId?: number
+  /** 保留字段当前摘要。 */
+  target?: StandardFieldMergeFieldSummary
+  /** 来源字段当前摘要。 */
+  source?: StandardFieldMergeFieldSummary
+  /** 应用后的保留字段摘要。 */
+  targetAfter?: StandardFieldMergeFieldSummary
+  /** 应用后的来源字段摘要。 */
+  sourceAfter?: StandardFieldMergeFieldSummary
+  /** 字段级变化。 */
+  changes?: StandardFieldMergeChange[]
+  /** 风险列表。 */
+  risks?: StandardFieldMergeRisk[]
+  /** 影响对象。 */
+  impactItems?: StandardFieldMergeImpact[]
+  /** 回退提示。 */
+  rollbackHints?: StandardFieldMergeRollbackHint[]
+  /** 下一步建议。 */
+  nextActions?: string[]
+}
+
+/** 标准字段合并确认结果。 */
+export interface StandardFieldMergeResult {
+  /** 响应类型标识。 */
+  kind?: string
+  /** 响应 schema 版本。 */
+  schemaVersion?: number
+  /** DataSpec 项目 ID。 */
+  projectId?: number
+  /** true 表示服务端已写入字段库。 */
+  applied?: boolean
+  /** 本次应用采用的预览。 */
+  preview?: StandardFieldMergePreview
+  /** 回退提示。 */
+  rollbackHints?: StandardFieldMergeRollbackHint[]
+  /** 下一步建议。 */
+  nextActions?: string[]
+}
+
 export interface BusinessGlossary {
   id?: number
   projectId?: number

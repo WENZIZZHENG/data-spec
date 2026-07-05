@@ -130,7 +130,7 @@ class AiContextExportServiceTest {
         assertTrue(manifest.path("files").toString().contains(".dataspec/usage-examples.json"));
         assertTrue(manifest.path("files").toString().contains(".dataspec/workflows.md"));
         assertEquals(1, manifest.path("contracts").path("schemaVersion").asInt());
-        assertEquals("2026.06.28", manifest.path("contracts").path("registryVersion").asText());
+        assertEquals(SchemaRegistryServiceImpl.REGISTRY_VERSION, manifest.path("contracts").path("registryVersion").asText());
         assertEquals(".dataspec/schema-registry.json", manifest.path("contracts").path("file").asText());
         assertTrue(manifest.path("contracts").path("contractIds").toString().contains("field"));
         assertTrue(manifest.path("commands").path("contractList").asText().contains("contract list"));
@@ -140,7 +140,7 @@ class AiContextExportServiceTest {
 
         var registry = new ObjectMapper().readTree(entries.get(".dataspec/schema-registry.json"));
         assertEquals("dataspec-schema-registry", registry.path("kind").asText());
-        assertEquals("2026.06.28", registry.path("registryVersion").asText());
+        assertEquals(SchemaRegistryServiceImpl.REGISTRY_VERSION, registry.path("registryVersion").asText());
         assertTrue(registry.path("contracts").toString().contains("lint-result"));
         assertTrue(registry.path("compatibilityPolicy").path("breakingChangePolicy").asText().contains("schemaVersion"));
 

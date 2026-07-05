@@ -19,14 +19,14 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 ### 标准维护
 
 - 项目空间管理，创建项目时可导入内置 standards，可选择用户账号、订单交易、支付金额、库存商品和审计日志等领域 Starter Kit，并支持一键创建演示项目。
-- 标准字段库，支持别名、分类、代码集关联、敏感标记、生命周期状态、替代字段/说明、示例值、分组筛选、批量归组、批量维护和字段标准检索命中原因展示。
+- 标准字段库，支持别名、分类、代码集关联、敏感标记、生命周期状态、替代字段/说明、示例值、分组筛选、批量归组、批量维护、标准字段合并向导和字段标准检索命中原因展示。
 - 业务术语表，支持项目级术语、同义词、英文词根、拼音/历史缩写、禁用词、canonical 字段、适用范围和示例字段维护；冲突检测会提示重复术语、禁用词冲突和不可用 canonical 字段。
 - 标准候选 Inbox，支持手动创建候选、按状态/来源/关键词筛选、采纳为新字段、合并到已有字段、忽略或延后处理。
 - 字段质量评分，按注释、别名、示例、分类、敏感标识、代码集和废弃说明识别低质量字段。
 - 标准健康趋势，按项目保存健康快照，聚合字段质量、覆盖率摘要、AI 反馈、候选状态和 fixedSql 机会，展示本周/月变化、Top actions 和可复制的 AI 改进计划。
 - 标准质量门禁，按项目配置字段质量、覆盖率、lint error、未纳管字段和敏感标记阈值，输出 `PASS/FAIL/DISABLED`、失败项和 nextActions。
 - 标准使用示例与反例库，支持维护 `FIELD`、`RULE`、`TEMPLATE` 和 `GENERAL` 范围的 `GOOD/BAD` 示例、反模式、原因、标签、优先级和启停状态，用于告诉 AI 哪些写法应该模仿、哪些历史写法不要复用。
-- 字段冲突检测，识别别名冲突、显示名重复、语义疑似重复、关键属性不一致、SQL 保留字/危险命名、大小写碰撞和 alias 歧义。
+- 字段冲突检测，识别别名冲突、显示名重复、语义疑似重复、关键属性不一致、SQL 保留字/危险命名、大小写碰撞和 alias 歧义，并可从冲突组进入标准字段合并向导。
 - 字段影响分析，展示字段被模板、导入来源、历史 SQL 检查、标准快照和代码集引用的范围。
 - 数据域、枚举字典、表模板、规则配置、规则基线套件和规则例外管理。
 - 领域 Starter Kit 支持把内置领域字段、枚举和表模板幂等应用到项目；重复应用只补缺失项，不覆盖用户已修改标准，并保留安装摘要。
@@ -237,7 +237,7 @@ node tools/dataspec-cli.mjs capability show lint-sql --project 1 --format json
 node tools/dataspec-cli.mjs capability check --project 1 --format json
 ```
 
-第一版内置 `session-bootstrap`、`capability-catalog`、`doctor`、`export-ai-context`、`lint-sql`、`search-fields`、`suggest-fields`、`generate-ddl`、`reverse-import`、`coverage-report`、`schema-registry`、`export-evidence-package`、`workflow-recipes`、`ai-task-profiles` 和 `domain-starter-kits`。写入型能力会标记 `writeRisk` 和 `preflightChecks`，AI 应先运行 `bootstrap`、`doctor` 或读取相关 workflow/profile，再执行实际工具。
+第一版内置 `session-bootstrap`、`capability-catalog`、`doctor`、`export-ai-context`、`lint-sql`、`search-fields`、`suggest-fields`、`merge-standard-fields`、`generate-ddl`、`reverse-import`、`coverage-report`、`schema-registry`、`export-evidence-package`、`workflow-recipes`、`ai-task-profiles` 和 `domain-starter-kits`。写入型能力会标记 `writeRisk` 和 `preflightChecks`，AI 应先运行 `bootstrap`、`doctor` 或读取相关 workflow/profile，再执行实际工具。
 
 ## AI 任务模式
 
@@ -268,7 +268,7 @@ curl -X POST "http://localhost:8090/api/projects/1/standard-snapshots" \
 
 ## 标准字段模型
 
-标准字段支持 `aliases`、`category`、`domainId`、`tags`、`codeSetId`、`sensitive`、`status=draft|enabled|deprecated|disabled`、`replacementFieldId`、`replacementReason`、`exampleValue`、`formatType`、`formatPattern`、`formatUnit`、`formatPrecision`、`formatTimezone`、`formatNullPolicy`、`validExamplesJson`、`invalidExamplesJson` 和 `formatNotes` 等个人版元数据。字段库支持按数据域、分类、标签、生命周期状态和未分组状态浏览字段；编辑字段时可维护替代字段、替代说明和值格式约束，正例/反例在前端按“每行一个示例”编辑，保存为 JSON 字符串数组。批量维护支持状态、分类、标签、敏感标记、代码集和别名，提交前会先展示后端预览。每次批量维护和字段更新都会写入字段变更日志，字段行内“变更”入口可查看最近日志，并对带 before 快照的更新记录执行确认回退。AI 导出的 `field-catalog.json` 会把 `aliases` 转成数组，并输出敏感标记、字段状态、替代字段/说明、代码集关联、示例值、字段 `format` 对象和可选 `contextScope.groupSummary`，方便 AI 按业务语义复用标准字段、避开草稿/废弃/停用字段、识别未分组字段，并读取金额单位、手机号/邮箱格式、时间时区、JSON/状态码样例等值形态约束。
+标准字段支持 `aliases`、`category`、`domainId`、`tags`、`codeSetId`、`sensitive`、`status=draft|enabled|deprecated|disabled`、`replacementFieldId`、`replacementReason`、`exampleValue`、`formatType`、`formatPattern`、`formatUnit`、`formatPrecision`、`formatTimezone`、`formatNullPolicy`、`validExamplesJson`、`invalidExamplesJson` 和 `formatNotes` 等个人版元数据。字段库支持按数据域、分类、标签、生命周期状态和未分组状态浏览字段；编辑字段时可维护替代字段、替代说明和值格式约束，正例/反例在前端按“每行一个示例”编辑，保存为 JSON 字符串数组。批量维护支持状态、分类、标签、敏感标记、代码集和别名，提交前会先展示后端预览。标准字段合并向导支持先预览 target/source、aliases/tags 安全迁移、不可自动覆盖属性风险、来源摘要、rollbackHints，再填写合并原因确认 apply；apply 会把来源字段标记为 `deprecated` 并写入 `replacementFieldId/replacementReason`，不删除历史字段或变更日志。每次批量维护、字段更新和字段合并都会写入字段变更日志，字段行内“变更”入口可查看最近日志，并对带 before 快照的更新记录执行确认回退。AI 导出的 `field-catalog.json` 会把 `aliases` 转成数组，并输出敏感标记、字段状态、替代字段/说明、代码集关联、示例值、字段 `format` 对象和可选 `contextScope.groupSummary`，方便 AI 按业务语义复用标准字段、避开草稿/废弃/停用字段、识别未分组字段，并读取金额单位、手机号/邮箱格式、时间时区、JSON/状态码样例等值形态约束。
 
 前端“基础数据 / 业务术语表”提供项目级 glossary 维护入口。每条术语可配置主术语、同义词、英文词根、拼音或历史缩写、禁用词、推荐 canonical 字段、适用范围、示例字段和状态；后端提供 `/api/glossary` 分页、`/api/glossary/all`、`/api/glossary/conflicts`、创建、更新和软删除接口。第一版只做确定性匹配和轻量冲突检测，不做企业级本体、知识图谱、向量检索或自动覆盖字段已有别名。
 
@@ -373,7 +373,7 @@ curl -X POST "http://localhost:8090/api/evidence-packages" \
 
 ## 标准候选 Inbox
 
-前端“基础数据 / 标准候选”提供项目级候选采纳工作台。第一版支持手动创建候选字段，按状态、来源和关键词筛选，查看证据与置信度，并执行采纳、合并、忽略或延后。采纳会创建新的标准字段；合并只记录目标字段和决策原因，不会静默修改目标字段的别名、注释或类型。
+前端“基础数据 / 标准候选”提供项目级候选采纳工作台。第一版支持手动创建候选字段，按状态、来源和关键词筛选，查看证据与置信度，并执行采纳、合并、忽略或延后。候选采纳会创建新的标准字段；候选合并只记录目标字段和决策原因，不会静默修改目标字段的别名、注释或类型。正式标准字段之间的合并请使用字段库或字段冲突页的“字段合并”向导。
 
 后端 API：
 
@@ -509,12 +509,18 @@ curl "http://localhost:8090/api/fields/quality?projectId=1"
 
 ## 字段冲突检测
 
-前端“基础数据 / 字段冲突”按当前项目生成只读冲突报告。报告按冲突组展示字段名重复、别名冲突、显示名重复、语义疑似重复、SQL 保留字/危险命名、大小写碰撞、alias 歧义，以及数据类型、代码集、敏感标记和状态不一致等证据；支持按级别和类型筛选，并可跳转字段库编辑涉及字段。AI Context 的 `DATABASE_RULES.md` 会导出命名风险摘要，提醒 AI 生成新 DDL/SQL 时避让高风险字段名或歧义 alias。
+前端“基础数据 / 字段冲突”按当前项目生成只读冲突报告。报告按冲突组展示字段名重复、别名冲突、显示名重复、语义疑似重复、SQL 保留字/危险命名、大小写碰撞、alias 歧义，以及数据类型、代码集、敏感标记和状态不一致等证据；支持按级别和类型筛选，并可跳转字段库编辑涉及字段，或打开字段合并向导选择保留字段和来源字段。AI Context 的 `DATABASE_RULES.md` 会导出命名风险摘要，提醒 AI 生成新 DDL/SQL 时避让高风险字段名或歧义 alias。
 
 后端 API：
 
 ```bash
 curl "http://localhost:8090/api/fields/conflicts?projectId=1"
+curl -X POST "http://localhost:8090/api/fields/merge/preview" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"targetFieldId":10,"sourceFieldId":20}'
+curl -X POST "http://localhost:8090/api/fields/merge/apply" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"targetFieldId":10,"sourceFieldId":20,"reason":"统一手机号标准字段"}'
 ```
 
 第一版实时计算，不新增冲突表，不自动合并字段，不删除历史字段，不做跨项目统一治理；保留字/危险词清单覆盖 PostgreSQL、MySQL 和通用 SQL 高频词，不追求完整方言字典。

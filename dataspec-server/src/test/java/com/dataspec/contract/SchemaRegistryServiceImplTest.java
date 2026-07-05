@@ -25,7 +25,7 @@ class SchemaRegistryServiceImplTest {
 
         assertEquals("dataspec-schema-registry", catalog.getKind());
         assertEquals(1, catalog.getSchemaVersion());
-        assertEquals("2026.06.28", catalog.getRegistryVersion());
+        assertEquals("2026.07.05", catalog.getRegistryVersion());
         assertNotNull(catalog.getCompatibilityPolicy());
         assertTrue(catalog.getCompatibilityPolicy().getBreakingChangePolicy().contains("schemaVersion"));
 
@@ -37,6 +37,7 @@ class SchemaRegistryServiceImplTest {
                 "field",
                 "enum-dict",
                 "rule-config",
+                "standard-field-merge",
                 "template",
                 "standard-snapshot",
                 "lint-result",
@@ -71,6 +72,16 @@ class SchemaRegistryServiceImplTest {
         assertTrue(fieldCatalog.getStableFields().contains("usageExamples[]"));
         assertTrue(fieldCatalog.getStableFields().contains("usageExampleSummary"));
         assertTrue(fieldCatalog.getJsonSchema().get("properties").toString().contains("usageExamples"));
+
+        SchemaContract merge = service.getContract("standard-field-merge");
+        assertTrue(merge.getStableFields().contains("risks[].blocking"));
+        assertTrue(merge.getStableFields().contains("rollbackHints[].targetPath"));
+        assertTrue(merge.getStableFields().contains("applied"));
+        assertTrue(merge.getStableFields().contains("preview"));
+        assertTrue(merge.getJsonSchema().get("properties").toString().contains("standard_field_merge_preview"));
+        assertTrue(merge.getJsonSchema().get("properties").toString().contains("applied"));
+        assertTrue(merge.getJsonSchema().get("properties").toString().contains("preview"));
+        assertTrue(merge.getExamples().toString().contains("standard_field_merge_result"));
     }
 
     @Test
@@ -88,7 +99,7 @@ class SchemaRegistryServiceImplTest {
         var summary = service.manifestSummary();
 
         assertEquals(1, summary.get("schemaVersion"));
-        assertEquals("2026.06.28", summary.get("registryVersion"));
+        assertEquals("2026.07.05", summary.get("registryVersion"));
         assertEquals(".dataspec/schema-registry.json", summary.get("file"));
         assertEquals(service.requiredContractIds(), summary.get("contractIds"));
     }

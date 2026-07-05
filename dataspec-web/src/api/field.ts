@@ -16,7 +16,11 @@ import type {
   FieldSearchResult,
   FieldSourceDetail,
   FieldSuggestion,
-  PageResult
+  PageResult,
+  StandardFieldMergeApplyReq,
+  StandardFieldMergePreview,
+  StandardFieldMergePreviewReq,
+  StandardFieldMergeResult
 } from '@/types'
 
 export function pageFields(projectId: number, current = 1, size = 20) {
@@ -99,6 +103,14 @@ export function undoFieldChange(id: number, logId: number) {
   return request.post<unknown, FieldChangeUndoResult>(`/fields/${id}/undo`, null, {
     params: { logId }
   })
+}
+
+export function previewStandardFieldMerge(data: StandardFieldMergePreviewReq) {
+  return request.post<unknown, StandardFieldMergePreview>('/fields/merge/preview', data)
+}
+
+export function applyStandardFieldMerge(data: StandardFieldMergeApplyReq) {
+  return request.post<unknown, StandardFieldMergeResult>('/fields/merge/apply', data)
 }
 
 export function deleteField(id: number) {

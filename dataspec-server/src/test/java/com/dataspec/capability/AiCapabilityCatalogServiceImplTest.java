@@ -38,6 +38,7 @@ class AiCapabilityCatalogServiceImplTest {
                 "lint-sql",
                 "search-fields",
                 "suggest-fields",
+                "merge-standard-fields",
                 "generate-ddl",
                 "reverse-import",
                 "coverage-report",
@@ -91,6 +92,18 @@ class AiCapabilityCatalogServiceImplTest {
         assertTrue(entry.outputContracts().contains("database-metadata-scan-result"));
         assertTrue(entry.outputContracts().contains("database-metadata-browser"));
         assertTrue(entry.contractIds().contains("database-metadata-scan-plan"));
+    }
+
+    @Test
+    void mergeStandardFieldsCapabilityExposesPreviewAndApplySurfaces() {
+        AiCapabilityEntry entry = service.getCapability("merge_standard_fields", 1L);
+
+        assertEquals("merge-standard-fields", entry.id());
+        assertEquals("WRITES_DATASPEC_STANDARD", entry.writeRisk());
+        assertTrue(entry.apiEndpoints().contains("POST /api/fields/merge/preview"));
+        assertTrue(entry.apiEndpoints().contains("POST /api/fields/merge/apply"));
+        assertTrue(entry.outputContracts().contains("standard-field-merge"));
+        assertTrue(entry.preflightChecks().stream().anyMatch(check -> check.contains("合并原因")));
     }
 
     @Test

@@ -25,7 +25,7 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
 
     public static final String REGISTRY_KIND = "dataspec-schema-registry";
     public static final int REGISTRY_SCHEMA_VERSION = 1;
-    public static final String REGISTRY_VERSION = "2026.06.28";
+    public static final String REGISTRY_VERSION = "2026.07.05";
     public static final String CONTRACT_SCHEMA_VERSION = "1.0";
 
     private final SchemaCompatibilityPolicy compatibilityPolicy = SchemaCompatibilityPolicy.builder()
@@ -126,6 +126,60 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                         "nullable", false,
                         "status", "enabled",
                         "aliases", List.of("phone", "mobile")
+                ))
+        ));
+        add(map, contract(
+                "standard-field-merge",
+                "标准字段合并",
+                "正式标准字段合并预览和确认结果结构。",
+                List.of("kind", "schemaVersion", "projectId", "recommendedTargetFieldId",
+                        "target", "source", "targetAfter", "sourceAfter", "changes[]", "risks[]",
+                        "impactItems[]", "rollbackHints[]", "nextActions[]", "applied", "preview",
+                        "risks[].code", "risks[].blocking", "rollbackHints[].targetPath"),
+                List.of(),
+                objectSchema("DataSpec Standard Field Merge", List.of("kind", "schemaVersion", "projectId"), orderedMap(
+                        "kind", enumProp("standard_field_merge_preview", "standard_field_merge_result"),
+                        "schemaVersion", integerProp(),
+                        "projectId", integerProp(),
+                        "recommendedTargetFieldId", integerProp(),
+                        "target", objectProp(),
+                        "source", objectProp(),
+                        "targetAfter", objectProp(),
+                        "sourceAfter", objectProp(),
+                        "changes", arrayOf(objectProp()),
+                        "risks", arrayOf(objectSchema("Merge Risk", List.of("code", "blocking"), orderedMap(
+                                "severity", enumProp("ERROR", "WARNING", "INFO"),
+                                "code", stringProp(),
+                                "message", stringProp(),
+                                "blocking", booleanProp(),
+                                "manualAction", stringProp()
+                        ))),
+                        "impactItems", arrayOf(objectProp()),
+                        "rollbackHints", arrayOf(objectSchema("Merge Rollback Hint", List.of("targetPath"), orderedMap(
+                                "type", stringProp(),
+                                "action", stringProp(),
+                                "description", stringProp(),
+                                "targetPath", stringProp()
+                        ))),
+                        "nextActions", arrayOf(stringProp()),
+                        "applied", booleanProp(),
+                        "preview", objectProp()
+                )),
+                List.of(orderedMap(
+                        "kind", "standard_field_merge_preview",
+                        "schemaVersion", 1,
+                        "projectId", 1,
+                        "target", orderedMap("name", "mobile_no"),
+                        "source", orderedMap("name", "user_mobile"),
+                        "risks", List.of(orderedMap("code", "NULLABILITY_MISMATCH", "blocking", false)),
+                        "rollbackHints", List.of(orderedMap("targetPath", "/api/fields/10/undo?logId=<changeLogId>"))
+                ), orderedMap(
+                        "kind", "standard_field_merge_result",
+                        "schemaVersion", 1,
+                        "projectId", 1,
+                        "applied", true,
+                        "preview", orderedMap("kind", "standard_field_merge_preview"),
+                        "rollbackHints", List.of(orderedMap("targetPath", "/api/fields/10/undo?logId=<changeLogId>"))
                 ))
         ));
         add(map, contract(

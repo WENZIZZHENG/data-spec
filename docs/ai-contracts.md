@@ -1,6 +1,6 @@
 # AI 输出契约
 
-本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、AI Context、AI capability catalog、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索和 DDL 预览的自动化使用场景。
+本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、AI Context、AI capability catalog、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、标准字段合并和 DDL 预览的自动化使用场景。
 
 ## 兼容策略
 
@@ -42,7 +42,7 @@ Contract summary 稳定字段：
 - `compatibility`
 - `docsRef`
 
-Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`enum-dict`、`rule-config`、`template`、`standard-snapshot`、`lint-result`、`ai-evidence-package`、`ai-context-manifest`、`ai-context-field-catalog` 和 `ai-task-profile`。
+Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`standard-field-merge`、`enum-dict`、`rule-config`、`template`、`standard-snapshot`、`lint-result`、`ai-evidence-package`、`ai-context-manifest`、`ai-context-field-catalog` 和 `ai-task-profile`。
 
 `contract check` 的成功只说明 registry 结构对 AI 可用；它不会验证当前项目业务标准是否完整，也不会授权任何写入动作。
 
@@ -101,6 +101,10 @@ Capability entry 稳定字段：
 ### field
 
 标准字段契约，覆盖字段库和 AI Context 中的字段基础元数据，例如 `name`、`dataType`、`nullable`、`comment`、`status`、`replacementFieldId`、`replacementReason`、`aliases[]` 和 `matchReasons[]`。`status` 稳定值至少包含 `draft`、`enabled`、`deprecated` 和 `disabled`。
+
+### standard-field-merge
+
+标准字段合并契约，覆盖正式字段 merge preview 和 apply result。preview 稳定字段包括 `kind`、`schemaVersion`、`projectId`、`recommendedTargetFieldId`、`target`、`source`、`targetAfter`、`sourceAfter`、`changes[]`、`risks[]`、`impactItems[]`、`rollbackHints[]` 和 `nextActions[]`；result 稳定字段额外包括 `applied` 和 `preview`。`risks[].blocking=true` 时 AI 和前端不得调用 apply；`rollbackHints[].targetPath` 只给出回退定位方式，仍需用户选择具体变更日志。
 
 ### explain-trace
 
@@ -228,6 +232,16 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - `FieldSearchItem`: `field`、`score`、`matchReasons[]`、`recommendedUse`、`nextActions[]`、`evidence[]`。
 
 字段检索是只读能力。AI 可依赖 `matchReasons[]` 和 `evidence[]` 判断命中来源，依赖 `recommendedUse` 和 `nextActions[]` 决定收窄检索、采用标准字段或进入候选补全流程。默认检索只返回 `enabled` 字段；显式传入非 enabled `status` 时，返回项必须说明状态、替代字段或替代原因。不得把 `score` 当作跨版本绝对分值，只能用于同一次结果内排序参考。Explain Trace 不包含业务数据行、token、password 或完整 JDBC URL。
+
+## 标准字段合并
+
+稳定字段：
+
+- `StandardFieldMergePreview`: `kind`、`schemaVersion`、`projectId`、`recommendedTargetFieldId`、`target`、`source`、`targetAfter`、`sourceAfter`、`changes[]`、`risks[]`、`impactItems[]`、`rollbackHints[]`、`nextActions[]`。
+- `StandardFieldMergeResult`: `kind`、`schemaVersion`、`projectId`、`applied`、`preview`、`rollbackHints[]`、`nextActions[]`。
+- `StandardFieldMergeRisk`: `severity`、`code`、`message`、`blocking`、`manualAction`。
+
+字段合并是写入型标准维护能力。AI 必须先调用 preview 并展示 `changes[]`、`risks[]`、`impactItems[]` 和 `rollbackHints[]`，只有 `risks[].blocking` 全为 false 且用户提供明确 `reason` 后才能调用 apply。apply 只自动合并 aliases/tags，把来源字段标记为 `deprecated` 并写入 replacement 关系；dataType、nullable、codeSetId、sensitive 和格式约束冲突只作为风险或人工审阅项，不会静默覆盖目标字段。preview/result 不得包含 password、token、Authorization、完整 JDBC URL、DSN 或源库业务行值。
 
 ## 数据库 Metadata Browser
 
