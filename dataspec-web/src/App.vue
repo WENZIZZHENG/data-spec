@@ -121,6 +121,10 @@
             <el-icon><DataAnalysis /></el-icon>
             <span>AI 批量任务</span>
           </el-menu-item>
+          <el-menu-item index="/ai-handoff">
+            <el-icon><DocumentChecked /></el-icon>
+            <span>AI 交接证据</span>
+          </el-menu-item>
           <el-menu-item index="/ai-feedback">
             <el-icon><DataAnalysis /></el-icon>
             <span>AI 反馈</span>

@@ -400,6 +400,68 @@ test('keeps AI evidence package actions wired on high frequency result pages', (
   ], 'AiBatch evidence actions')
 })
 
+test('keeps AI handoff evidence dashboard wired', () => {
+  const router = readSource('src/router/index.ts')
+  const app = readSource('src/App.vue')
+  const commandPalette = readSource('src/utils/commandPalette.ts')
+  const handoffView = readSource('src/views/AiHandoff.vue')
+  const handoffUtils = readSource('src/utils/handoffEvidenceDisplay.ts')
+  const packageJson = readSource('package.json')
+
+  assertContains(router, [
+    "path: '/ai-handoff'",
+    "name: 'AiHandoff'",
+    "component: () => import('@/views/AiHandoff.vue')",
+    "meta: { title: 'AI 交接证据' }"
+  ], 'router AI handoff')
+
+  assertContains(app, [
+    'index="/ai-handoff"',
+    'AI 交接证据'
+  ], 'App AI handoff menu')
+
+  assertContains(commandPalette, [
+    "id: 'page.ai-handoff'",
+    "title: 'AI 交接证据'",
+    "path: '/ai-handoff'"
+  ], 'command palette AI handoff')
+
+  assertContains(handoffView, [
+    "import { listAiTaskRuns, getAiTaskRunDetail } from '@/api/aiTaskRun'",
+    "import { listAiJobs } from '@/api/aiJob'",
+    "import { listLintRecords } from '@/api/lint'",
+    "import { listAiBatches } from '@/api/aiBatch'",
+    "import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'",
+    "import ProjectRequired from '@/components/ProjectRequired.vue'",
+    "import StateBlock from '@/components/StateBlock.vue'",
+    'buildEvidenceRequest',
+    'buildHandoffEvidenceJson',
+    'AI 交接证据',
+    '任务交接记录',
+    '关联证据源',
+    '失败或未验证项',
+    '复制证据 JSON',
+    '下载证据包',
+    'safeHandoffText(row.message)',
+    'safeHandoffText(row.artifactRef)',
+    'safeHandoffText(row.name)',
+    'safeHandoffText(row.ref)',
+    'safeHandoffText(row.summary)'
+  ], 'AiHandoff view')
+
+  assertContains(handoffUtils, [
+    'export interface HandoffEvidenceSource',
+    'export function buildEvidenceRequest',
+    'export function buildHandoffEvidenceJson',
+    'export function sanitizeHandoffText',
+    'handoffStatusTagType',
+    'Authorization',
+    'jdbc:'
+  ], 'handoff evidence utils')
+
+  assertContains(packageJson, ['tests/handoffEvidenceDisplay.test.ts'], 'frontend test script handoff evidence')
+})
+
 test('keeps standard candidate inbox workbench wired', () => {
   const view = readSource('src/views/StandardCandidate.vue')
   const api = readSource('src/api/standardCandidate.ts')

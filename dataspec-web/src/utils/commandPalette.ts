@@ -209,6 +209,7 @@ function navigationCommands(projectId: number | null): CommandPaletteItem[] {
     requiresProject({ id: 'page.field-coverage', title: '覆盖率报告', description: '恢复字段覆盖率报告入口', group: 'navigation', keywords: ['coverage', '覆盖率'], route: { path: '/field-coverage', query: projectQuery } }),
     requiresProject({ id: 'page.ai-export', title: 'AI Context', description: '导出当前项目 AI 上下文', group: 'action', keywords: ['context', 'ai', '导出'], route: { path: '/ai-export', query: projectQuery } }),
     requiresProject({ id: 'page.ai-replay', title: 'AI 回放', description: '查看 AI 作业和重放上下文', group: 'navigation', keywords: ['replay', '回放'], route: { path: '/ai-replay', query: projectQuery } }),
+    requiresProject({ id: 'page.ai-handoff', title: 'AI 交接证据', description: '聚合任务交接记录和证据包', group: 'navigation', keywords: ['handoff', 'evidence', '交接', '证据'], route: { path: '/ai-handoff', query: projectQuery } }),
     { id: 'page.tokens', title: 'API Token', description: '管理本地 API Token', group: 'navigation', keywords: ['token', 'auth'], route: { path: '/tokens' } }
   ]
 }

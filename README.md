@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、全局命令面板、最近操作续跑、统一前端数据状态、项目活动时间线、标准健康趋势、标准质量门禁、领域 Starter Kit、业务术语表、标准使用示例与反例库、自然语言需求草案、Explain Trace、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 会话启动包、AI 任务卡、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 任务失败恢复、AI 执行证据包、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、全局命令面板、最近操作续跑、统一前端数据状态、项目活动时间线、标准健康趋势、标准质量门禁、领域 Starter Kit、业务术语表、标准使用示例与反例库、自然语言需求草案、Explain Trace、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、AI Context、AI 会话启动包、AI 任务卡、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 任务失败恢复、AI 执行证据包、AI 交接证据看板、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -72,6 +72,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI 批量任务，支持后端保存 SQL lint batch run、前端查看最近任务/分项结果/下一步动作、绑定 AI task run 并下载 JSON 交付包。
 - AI 任务失败恢复，记录 task run 状态、失败步骤、partial artifacts、retryable、idempotencyKey 和 resumeCommand；API/CLI/MCP/前端可查询最近失败任务并复制恢复命令。
 - AI 执行证据包，支持从 SQL 检查记录、AI job、AI 批量任务、AI task run 和当前覆盖率报告生成 JSON 或 zip，前端可复制/下载，CLI/MCP 可机器读取。
+- AI 交接证据看板，按项目聚合 AI task run、AI job、SQL 检查和 AI 批量任务，标红失败或未验证项，并可直接生成、复制或下载脱敏 evidence package。
 - AI/CLI 写入保护，标准快照、反向导入确认、AI 批量 SQL lint、项目恢复 apply 和 AI job 回放记录已接入单机轻量 idempotency key、项目级 operation lock 和可重试冲突诊断。
 - 自然语言需求草案 API 和前端入口，基于字段推荐/检索、业务术语表和表模板，把建表描述拆成 matchedFields、missingCandidates、ambiguousTerms、recommendedTemplate、nextActions 和可复制 Prompt；字段、候选和模板会展示 Explain Trace 证据来源；第一版只读，不自动写入候选或字段库。
 - 字段推荐与字段标准检索 API/CLI/MCP；启用的业务术语表会参与“会员手机号”“订单费用”等自然语言 query 的确定性匹配，并在命中原因中标记 `术语表`；推荐和检索结果包含轻量 evidence 数组，便于 AI 读取来源、置信度和文档引用。
@@ -369,6 +370,7 @@ curl -X POST "http://localhost:8090/api/evidence-packages" \
 - SQL 校验记录详情：复制证据 JSON、下载证据包。
 - 覆盖率报告：对当前即时报告生成 payload 型证据包。
 - AI 批量任务详情和列表：复制证据 JSON、下载 evidence zip。
+- AI 交接证据：聚合任务交接记录与关联证据源，标红失败或未验证项，并生成/下载证据包。
 
 证据包会对 token、password、Authorization、完整 JDBC URL 和自由文本 diagnostics 做统一脱敏；覆盖率与数据库 metadata 只包含 schema/字段/规则/count 摘要，不包含业务数据行。第一版不新增证据包表，不长期归档，不上传第三方，不做企业审计、审批、签名或防篡改系统。
 
@@ -967,6 +969,7 @@ data-spec/
 - [x] AI 批量任务交付包，支持后端保存 SQL lint batch run、CLI 写出同构 package、前端查看详情、绑定 task run 并下载 JSON
 - [x] AI 任务失败恢复和断点续跑第一版，支持 task run 状态、失败步骤、partial artifacts、retryable、resumeCommand、CLI/MCP 查询和前端复制恢复命令
 - [x] AI 执行证据包，支持 SQL_CHECK、AI_JOB、AI_BATCH_RUN、AI_TASK_RUN 和 COVERAGE_REPORT 生成 JSON/zip，前端复制/下载，CLI/MCP 机器读取，并默认脱敏
+- [x] AI 交接证据看板，聚合 AI task run、AI job、SQL 检查和 AI 批量任务，标红失败或未验证项，并可生成/下载脱敏证据包
 - [x] AI 输出引用证据与 Explain Trace 第一版，覆盖字段推荐、字段检索和自然语言需求草案的 evidence 来源、置信度和文档引用
 - [x] AI/CLI 并发写入幂等与任务锁第一版，覆盖标准快照、反向导入确认、AI 批量 SQL lint、项目恢复 apply、AI job 回放记录和 CLI Idempotency-Key 透传
 - [x] 标准变更 What-if 预览与回滚辅助第一版，覆盖字段编辑、规则编辑、规则启停的 diff、影响、验证命令、当前快照和回退提示

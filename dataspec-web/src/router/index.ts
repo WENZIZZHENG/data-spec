@@ -133,6 +133,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'AI 批量任务' }
   },
   {
+    path: '/ai-handoff',
+    name: 'AiHandoff',
+    component: () => import('@/views/AiHandoff.vue'),
+    meta: { title: 'AI 交接证据' }
+  },
+  {
     path: '/ai-feedback',
     name: 'AiFeedback',
     component: () => import('@/views/AiFeedback.vue'),
