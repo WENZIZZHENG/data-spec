@@ -49,6 +49,17 @@ public class StandardCandidateRepository {
         return standardCandidateMapper.selectPage(new Page<>(current, size), wrapper);
     }
 
+    /**
+     * 查询项目内候选证据，用于只读聚合字段来源可信度，不暴露 raw evidence 给外部响应。
+     */
+    public List<StandardCandidate> findByProjectId(Long projectId) {
+        return standardCandidateMapper.selectList(
+                new LambdaQueryWrapper<StandardCandidate>()
+                        .eq(StandardCandidate::getProjectId, projectId)
+                        .orderByDesc(StandardCandidate::getCreatedAt)
+                        .orderByDesc(StandardCandidate::getId));
+    }
+
     public boolean existsActiveByNameInProject(Long projectId, String candidateName) {
         return standardCandidateMapper.exists(new LambdaQueryWrapper<StandardCandidate>()
                 .eq(StandardCandidate::getProjectId, projectId)
