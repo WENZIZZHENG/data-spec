@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { promisify } from 'node:util'
-import { buildInlineReviewPlan, buildPullRequestLineMap, runCli } from './dataspec-cli.mjs'
+import { buildFixedSqlPatchPlan, buildInlineReviewPlan, buildPullRequestLineMap, runCli } from './dataspec-cli.mjs'
 
 const execFileAsync = promisify(execFile)
 
@@ -260,6 +261,471 @@ test('lint-debug returns 2 when server request fails and redacts diagnostics', a
   assert.match(io.stderr, /DataSpecError/)
   assert.doesNotMatch(io.stderr, /plain-secret/)
   assert.doesNotMatch(io.stderr, /db\.internal/)
+})
+
+test('buildFixedSqlPatchPlan creates dry-run plan without changing target content', () => {
+  const originalSql = 'CREATE TABLE UserOrder (userId bigint);\n'
+  const fixedSql = 'CREATE TABLE user_order (user_id bigint);\n'
+  const plan = buildFixedSqlPatchPlan({
+    cwd: 'D:\\workspace\\demo',
+    targetPath: 'sql/bad.sql',
+    targetContent: originalSql,
+    lintResult: {
+      sql: originalSql,
+      fixedSql
+    }
+  })
+
+  assert.equal(plan.kind, 'dataspec.fixed-sql.patch-plan')
+  assert.equal(plan.schemaVersion, 1)
+  assert.equal(plan.targetPath, 'sql/bad.sql')
+  assert.equal(plan.dryRunResult.status, 'READY')
+  assert.equal(plan.dryRunResult.willWrite, false)
+  assert.equal(plan.conflictWarnings.length, 0)
+  assert.match(plan.unifiedDiff, /-CREATE TABLE UserOrder/)
+  assert.match(plan.unifiedDiff, /\+CREATE TABLE user_order/)
+  assert.match(plan.planHash, /^[a-f0-9]{64}$/)
+  assert.match(plan.applyCommand, /fixed-sql patch/)
+  assert.match(plan.applyCommand, /--confirm/)
+  assert.equal(plan.rollbackHint.originalSha256, plan.currentFileSha256)
+  assert.equal(plan.evidenceRef, `fixed-sql-patch:${plan.planHash.slice(0, 12)}`)
+})
+
+test('buildFixedSqlPatchPlan rejects missing fixedSql and reports no-change plans', () => {
+  assert.throws(() => buildFixedSqlPatchPlan({
+    cwd: '/workspace/demo',
+    targetPath: 'sql/bad.sql',
+    targetContent: 'select 1;\n',
+    lintResult: { sql: 'select 1;\n' }
+  }), /fixedSql/)
+
+  const plan = buildFixedSqlPatchPlan({
+    cwd: '/workspace/demo',
+    targetPath: 'sql/good.sql',
+    targetContent: 'select 1;\n',
+    lintResult: { sql: 'select 1;\n', fixedSql: 'select 1;\n' }
+  })
+
+  assert.equal(plan.dryRunResult.status, 'NO_CHANGE')
+  assert.equal(plan.applyCommand, null)
+})
+
+test('buildFixedSqlPatchPlan rejects fixedSql without original sql evidence', () => {
+  assert.throws(() => buildFixedSqlPatchPlan({
+    cwd: '/workspace/demo',
+    targetPath: 'sql/bad.sql',
+    targetContent: 'select 1;\n',
+    lintResult: { fixedSql: 'select 2;\n' }
+  }), /originalSql|sql|原始 SQL/)
+})
+
+test('buildFixedSqlPatchPlan supports original sql hash and rejects hash mismatch', () => {
+  const originalSql = 'select 1;\n'
+  const fixedSql = 'select 2;\n'
+  const originalSqlSha256 = createHash('sha256').update(originalSql).digest('hex')
+  const plan = buildFixedSqlPatchPlan({
+    cwd: '/workspace/demo',
+    targetPath: 'sql/bad.sql',
+    targetContent: originalSql,
+    lintResult: { originalSqlSha256, fixedSql }
+  })
+
+  assert.equal(plan.dryRunResult.status, 'READY')
+  assert.equal(plan.lintOriginalSha256, originalSqlSha256)
+  assert.throws(() => buildFixedSqlPatchPlan({
+    cwd: '/workspace/demo',
+    targetPath: 'sql/bad.sql',
+    targetContent: 'select 3;\n',
+    lintResult: { originalSqlSha256, fixedSql }
+  }), /hash|不匹配/)
+})
+
+test('buildFixedSqlPatchPlan reports drift and confirmation mismatch', () => {
+  const plan = buildFixedSqlPatchPlan({
+    cwd: '/workspace/demo',
+    targetPath: 'sql/bad.sql',
+    targetContent: 'CREATE TABLE user_order (id bigint, updated_at timestamp);\n',
+    lintResult: {
+      sql: 'CREATE TABLE UserOrder (id bigint);\n',
+      fixedSql: 'CREATE TABLE user_order (id bigint);\n'
+    },
+    confirm: 'not-the-current-plan'
+  })
+
+  assert.equal(plan.dryRunResult.status, 'CONFLICT')
+  assert.equal(plan.dryRunResult.confirmed, false)
+  assert.ok(plan.conflictWarnings.some((item) => item.code === 'TARGET_CONTENT_DRIFT'))
+  assert.ok(plan.conflictWarnings.some((item) => item.code === 'CONFIRM_HASH_MISMATCH'))
+})
+
+test('buildFixedSqlPatchPlan redacts secret-like values from diff output', () => {
+  const plan = buildFixedSqlPatchPlan({
+    cwd: '/workspace/demo',
+    targetPath: 'sql/bad.sql',
+    targetContent: "SELECT 'jdbc:postgresql://db.internal/app?password=raw' AS dsn;\n",
+    lintResult: {
+      sql: "SELECT 'jdbc:postgresql://db.internal/app?password=raw' AS dsn;\n",
+      fixedSql: "SELECT 'jdbc:postgresql://db.internal/app?password=fixed' AS dsn;\n"
+    }
+  })
+
+  assert.match(plan.unifiedDiff, /jdbc:\*\*\*/)
+  assert.doesNotMatch(plan.unifiedDiff, /db\.internal/)
+  assert.doesNotMatch(plan.unifiedDiff, /password=raw|password=fixed/)
+})
+
+test('fixed-sql patch prints dry-run json and leaves target file untouched', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-fixed-sql-patch-'))
+  try {
+    const sqlDir = path.join(dir, 'sql')
+    await mkdir(sqlDir, { recursive: true })
+    const targetPath = path.join(sqlDir, 'bad.sql')
+    const lintPath = path.join(dir, 'lint-result.json')
+    const originalSql = 'CREATE TABLE UserOrder (userId bigint);\n'
+    const fixedSql = 'CREATE TABLE user_order (user_id bigint);\n'
+    await writeFile(targetPath, originalSql, 'utf8')
+    await writeFile(lintPath, JSON.stringify({ sql: originalSql, fixedSql }), 'utf8')
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'sql/bad.sql',
+      '--format',
+      'json'
+    ], io)
+    const output = JSON.parse(io.stdout)
+
+    assert.equal(code, 0)
+    assert.equal(output.dryRunResult.status, 'READY')
+    assert.equal(output.safety.requiresDryRun, true)
+    assert.equal(await readFile(targetPath, 'utf8'), originalSql)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('fixed-sql patch applies only with matching confirm hash', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-fixed-sql-apply-'))
+  try {
+    const sqlDir = path.join(dir, 'sql')
+    await mkdir(sqlDir, { recursive: true })
+    const targetPath = path.join(sqlDir, 'bad.sql')
+    const lintPath = path.join(dir, 'lint-result.json')
+    const originalSql = 'CREATE TABLE UserOrder (userId bigint);\n'
+    const fixedSql = 'CREATE TABLE user_order (user_id bigint);\n'
+    await writeFile(targetPath, originalSql, 'utf8')
+    await writeFile(lintPath, JSON.stringify({ sql: originalSql, fixedSql }), 'utf8')
+
+    const dryRunIo = createIo('', dir)
+    await runCli(['fixed-sql', 'patch', '--lint-result', 'lint-result.json', '--target', 'sql/bad.sql', '--format', 'json'], dryRunIo)
+    const dryRun = JSON.parse(dryRunIo.stdout)
+    const applyIo = createIo('', dir)
+
+    const code = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'sql/bad.sql',
+      '--apply',
+      '--confirm',
+      dryRun.planHash,
+      '--format',
+      'json'
+    ], applyIo)
+    const output = JSON.parse(applyIo.stdout)
+
+    assert.equal(code, 0)
+    assert.equal(output.dryRunResult.status, 'APPLIED')
+    assert.equal(await readFile(targetPath, 'utf8'), fixedSql)
+    assert.equal(applyIo.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('fixed-sql patch blocks missing confirmation and path escape', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-fixed-sql-block-'))
+  const outsideDir = await mkdtemp(path.join(tmpdir(), 'dataspec-fixed-sql-outside-'))
+  try {
+    const lintPath = path.join(dir, 'lint-result.json')
+    const originalSql = 'CREATE TABLE UserOrder (id bigint);\n'
+    await writeFile(path.join(dir, 'bad.sql'), originalSql, 'utf8')
+    await writeFile(path.join(outsideDir, 'outside.sql'), originalSql, 'utf8')
+    await writeFile(lintPath, JSON.stringify({
+      sql: originalSql,
+      fixedSql: 'CREATE TABLE user_order (id bigint);\n'
+    }), 'utf8')
+
+    const missingConfirmIo = createIo('', dir)
+    const missingConfirmCode = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'bad.sql',
+      '--apply',
+      '--format',
+      'json'
+    ], missingConfirmIo)
+
+    assert.equal(missingConfirmCode, 2)
+    assert.match(missingConfirmIo.stderr, /confirm/)
+
+    const escapeIo = createIo('', dir)
+    const escapeCode = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      path.join(outsideDir, 'outside.sql'),
+      '--format',
+      'json'
+    ], escapeIo)
+
+    assert.equal(escapeCode, 2)
+    assert.match(escapeIo.stderr, /越界|当前工作目录/)
+
+    const lintEscapeIo = createIo('', dir)
+    const lintEscapeCode = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      path.join(outsideDir, 'lint-result.json'),
+      '--target',
+      'bad.sql',
+      '--format',
+      'json'
+    ], lintEscapeIo)
+
+    assert.equal(lintEscapeCode, 2)
+    assert.match(lintEscapeIo.stderr, /越界|当前工作目录/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+    await rm(outsideDir, { recursive: true, force: true })
+  }
+})
+
+test('fixed-sql patch blocks drift, wrong confirm, no-change, and mismatched files item', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-fixed-sql-guards-'))
+  try {
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    const targetPath = path.join(dir, 'sql', 'bad.sql')
+    const lintPath = path.join(dir, 'lint-result.json')
+    const originalSql = 'CREATE TABLE UserOrder (id bigint);\n'
+    const fixedSql = 'CREATE TABLE user_order (id bigint);\n'
+    await writeFile(targetPath, 'CREATE TABLE UserOrder (id bigint, name text);\n', 'utf8')
+    await writeFile(lintPath, JSON.stringify({ sql: originalSql, fixedSql }), 'utf8')
+
+    const driftIo = createIo('', dir)
+    const driftCode = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'sql/bad.sql',
+      '--format',
+      'json'
+    ], driftIo)
+
+    assert.equal(driftCode, 2)
+    assert.equal(JSON.parse(driftIo.stdout).dryRunResult.status, 'CONFLICT')
+    assert.match(driftIo.stderr, /FIXED_SQL_PATCH_CONFLICT/)
+    assert.equal(await readFile(targetPath, 'utf8'), 'CREATE TABLE UserOrder (id bigint, name text);\n')
+
+    await writeFile(targetPath, originalSql, 'utf8')
+    const wrongConfirmIo = createIo('', dir)
+    const wrongConfirmCode = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'sql/bad.sql',
+      '--apply',
+      '--confirm',
+      'not-the-current-plan',
+      '--format',
+      'json'
+    ], wrongConfirmIo)
+
+    assert.equal(wrongConfirmCode, 2)
+    assert.match(wrongConfirmIo.stderr, /FIXED_SQL_PATCH_APPLY_BLOCKED|确认失败/)
+    assert.equal(await readFile(targetPath, 'utf8'), originalSql)
+
+    await writeFile(lintPath, JSON.stringify({ sql: fixedSql, fixedSql }), 'utf8')
+    await writeFile(targetPath, fixedSql, 'utf8')
+    const noChangeIo = createIo('', dir)
+    const noChangeCode = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'sql/bad.sql',
+      '--format',
+      'json'
+    ], noChangeIo)
+
+    assert.equal(noChangeCode, 0)
+    assert.equal(JSON.parse(noChangeIo.stdout).dryRunResult.status, 'NO_CHANGE')
+
+    await writeFile(lintPath, JSON.stringify({
+      files: [{
+        path: 'sql/other.sql',
+        result: { sql: originalSql, fixedSql }
+      }]
+    }), 'utf8')
+    await writeFile(targetPath, originalSql, 'utf8')
+    const mismatchIo = createIo('', dir)
+    const mismatchCode = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'sql/bad.sql',
+      '--format',
+      'json'
+    ], mismatchIo)
+
+    assert.equal(mismatchCode, 2)
+    assert.match(mismatchIo.stderr, /path|target|目标文件/)
+    assert.equal(await readFile(targetPath, 'utf8'), originalSql)
+
+    await writeFile(lintPath, JSON.stringify({
+      sql: originalSql,
+      fixedSql,
+      files: [{
+        path: 'sql/other.sql',
+        result: { sql: originalSql, fixedSql }
+      }]
+    }), 'utf8')
+    const mixedMismatchIo = createIo('', dir)
+    const mixedMismatchCode = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'sql/bad.sql',
+      '--format',
+      'json'
+    ], mixedMismatchIo)
+
+    assert.equal(mixedMismatchCode, 2)
+    assert.match(mixedMismatchIo.stderr, /path|target|目标文件/)
+    assert.equal(await readFile(targetPath, 'utf8'), originalSql)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('fixed-sql patch rejects missing original sql in CLI lint result', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-fixed-sql-original-'))
+  try {
+    const originalSql = 'CREATE TABLE UserOrder (id bigint);\n'
+    await writeFile(path.join(dir, 'bad.sql'), originalSql, 'utf8')
+    await writeFile(path.join(dir, 'lint-result.json'), JSON.stringify({
+      fixedSql: 'CREATE TABLE user_order (id bigint);\n'
+    }), 'utf8')
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'bad.sql',
+      '--format',
+      'json'
+    ], io)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /originalSql|sql|原始 SQL/)
+    assert.equal(await readFile(path.join(dir, 'bad.sql'), 'utf8'), originalSql)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('fixed-sql patch redacts secret-like values from CLI dry-run output', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-fixed-sql-redact-'))
+  try {
+    const originalSql = "SELECT 'jdbc:postgresql://db.internal/app?password=raw' AS dsn;\n"
+    const fixedSql = "SELECT 'jdbc:postgresql://db.internal/app?password=fixed' AS dsn;\n"
+    await writeFile(path.join(dir, 'bad.sql'), originalSql, 'utf8')
+    await writeFile(path.join(dir, 'lint-result.json'), JSON.stringify({ sql: originalSql, fixedSql }), 'utf8')
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'bad.sql',
+      '--format',
+      'json'
+    ], io)
+
+    assert.equal(code, 0)
+    assert.match(io.stdout, /jdbc:\*\*\*/)
+    assert.doesNotMatch(io.stdout, /db\.internal/)
+    assert.doesNotMatch(io.stdout, /password=raw|password=fixed/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('fixed-sql patch rejects symlink paths when the platform supports symlinks', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-fixed-sql-symlink-'))
+  const outsideDir = await mkdtemp(path.join(tmpdir(), 'dataspec-fixed-sql-symlink-outside-'))
+  try {
+    const originalSql = 'CREATE TABLE UserOrder (id bigint);\n'
+    const fixedSql = 'CREATE TABLE user_order (id bigint);\n'
+    const outsideTarget = path.join(outsideDir, 'outside.sql')
+    await writeFile(outsideTarget, originalSql, 'utf8')
+    await writeFile(path.join(dir, 'lint-result.json'), JSON.stringify({ sql: originalSql, fixedSql }), 'utf8')
+    try {
+      await symlink(outsideTarget, path.join(dir, 'linked.sql'), 'file')
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) {
+        t.skip(`当前平台无法创建 symlink: ${error.code}`)
+        return
+      }
+      throw error
+    }
+
+    const io = createIo('', dir)
+    const code = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'linked.sql',
+      '--format',
+      'json'
+    ], io)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /符号链接|symlink|当前工作目录/)
+    assert.equal(await readFile(outsideTarget, 'utf8'), originalSql)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+    await rm(outsideDir, { recursive: true, force: true })
+  }
 })
 
 test('lint uses configured aiProfile and lets explicit task type override config', async () => {

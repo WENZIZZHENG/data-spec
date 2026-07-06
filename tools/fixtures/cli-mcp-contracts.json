@@ -122,6 +122,19 @@
       "recommendedNextActions": ["Use fixedSql only after reviewing the diff."]
     },
     {
+      "id": "fixed-sql-patch",
+      "command": "fixed-sql patch --lint-result <json> --target <file.sql> --format json",
+      "description": "Preview or explicitly apply fixedSql from a lint result to one local SQL file.",
+      "requiredOptions": ["lint-result", "target", "format"],
+      "optionalOptions": ["apply", "confirm"],
+      "outputShape": ["kind", "schemaVersion", "targetPath", "dryRunResult", "dryRunResult.status", "dryRunResult.requiresConfirmation", "unifiedDiff", "conflictWarnings[]", "planHash", "currentFileSha256", "lintOriginalSha256", "fixedSqlSha256", "applyCommand", "rollbackHint", "evidenceRef", "safety", "safety.requiresExplicitConfirmation", "nextActions[]"],
+      "exitCodes": { "0": "dry-run plan printed or confirmed patch applied", "2": "argument error, path escape, missing fixedSql, drift, missing confirm, or confirm mismatch" },
+      "safety": { "readOnly": false, "writesProject": true, "requiresDryRun": true, "requiresExplicitConfirmation": true, "requiresIdempotencyKey": false, "sensitiveInputs": ["sql", "lint-result"], "nextActions": ["Review unifiedDiff before apply.", "Apply only with --confirm <planHash>."] },
+      "successExample": { "command": "node tools/dataspec-cli.mjs fixed-sql patch --lint-result lint-result.json --target sql/user-order.sql --format json", "output": { "kind": "dataspec.fixed-sql.patch-plan", "dryRunResult": { "status": "READY" }, "planHash": "0123456789abcdef", "unifiedDiff": "--- a/sql/user-order.sql\n+++ b/sql/user-order.sql\n@@ -1,1 +1,1 @@" } },
+      "failureExample": { "exitCode": 2, "diagnostic": { "code": "FIXED_SQL_PATCH_APPLY_BLOCKED", "category": "VALIDATION" } },
+      "recommendedNextActions": ["Run dry-run first, review unifiedDiff, then apply with --confirm <planHash> only after human approval."]
+    },
+    {
       "id": "export-context",
       "command": "export-context --project <id> --output <path>",
       "description": "Export AI context zip or cache files for a project.",

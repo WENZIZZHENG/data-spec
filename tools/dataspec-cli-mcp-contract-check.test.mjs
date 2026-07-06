@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
+import { runCli } from './dataspec-cli.mjs'
 import {
   DEFAULT_FIXTURE_PATH,
   loadContractFixtures,
@@ -20,6 +21,60 @@ test('bundled CLI/MCP contract fixtures validate against local MCP descriptors',
   assert.ok(result.summary.mcpResources >= 6)
   assert.ok(result.summary.mcpPrompts >= 3)
   assert.ok(result.summary.mcpResourceTemplates >= 1)
+})
+
+test('bundled fixtures include fixed SQL patch safety contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'fixed-sql-patch')
+
+  assert.ok(command)
+  assert.equal(command.command, 'fixed-sql patch --lint-result <json> --target <file.sql> --format json')
+  assert.ok(command.outputShape.includes('planHash'))
+  assert.ok(command.outputShape.includes('unifiedDiff'))
+  assert.ok(command.outputShape.includes('lintOriginalSha256'))
+  assert.ok(command.outputShape.includes('dryRunResult.status'))
+  assert.ok(command.outputShape.includes('safety.requiresExplicitConfirmation'))
+  assert.equal(command.safety.readOnly, false)
+  assert.equal(command.safety.requiresDryRun, true)
+  assert.equal(command.safety.requiresExplicitConfirmation, true)
+  assert.equal(command.safety.requiresIdempotencyKey, false)
+  assert.ok(command.recommendedNextActions.some((item) => item.includes('confirm')))
+})
+
+test('fixed SQL patch fixture matches actual dry-run json shape', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'fixed-sql-patch')
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'dataspec-fixed-sql-fixture-'))
+  try {
+    const originalSql = 'CREATE TABLE UserOrder (id bigint);\n'
+    const fixedSql = 'CREATE TABLE user_order (id bigint);\n'
+    await writeFile(path.join(tempDir, 'bad.sql'), originalSql, 'utf8')
+    await writeFile(path.join(tempDir, 'lint-result.json'), JSON.stringify({ sql: originalSql, fixedSql }), 'utf8')
+    const io = createIo()
+    io.cwd = () => tempDir
+
+    const code = await runCli([
+      'fixed-sql',
+      'patch',
+      '--lint-result',
+      'lint-result.json',
+      '--target',
+      'bad.sql',
+      '--format',
+      'json'
+    ], io)
+    const output = JSON.parse(io.stdout)
+
+    assert.equal(code, 0)
+    assert.equal(output.kind, 'dataspec.fixed-sql.patch-plan')
+    assert.equal(output.dryRunResult.status, 'READY')
+    assert.equal(output.safety.requiresExplicitConfirmation, true)
+    assert.equal(typeof output.lintOriginalSha256, 'string')
+    assert.equal(typeof output.planHash, 'string')
+    assert.ok(command.outputShape.every((field) => hasFixtureShapeField(output, field)))
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
 })
 
 test('fixture checker reports missing MCP tool and safety metadata drift', async () => {
@@ -222,6 +277,7 @@ function createIo() {
   return {
     stdout: '',
     stderr: '',
+    cwd: () => process.cwd(),
     writeOut(text) {
       this.stdout += text
     },
@@ -229,4 +285,14 @@ function createIo() {
       this.stderr += text
     }
   }
+}
+
+function hasFixtureShapeField(output, field) {
+  return field
+    .replace(/\[\]/g, '')
+    .split('.')
+    .every((part, index, parts) => {
+      const target = parts.slice(0, index + 1).reduce((value, key) => value?.[key], output)
+      return target !== undefined
+    })
 }

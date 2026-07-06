@@ -23,6 +23,7 @@ const REQUIRED_CLI_COMMANDS = [
   'contract-show',
   'contract-check',
   'lint',
+  'fixed-sql-patch',
   'export-context',
   'search-fields',
   'generate-ddl'

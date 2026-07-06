@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from 'node:child_process'
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -79,6 +79,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'lint-files') {
       return await runLintFiles(rest, io, fetchFn)
+    }
+    if (command === 'fixed-sql' || command === 'fixedsql') {
+      return await runFixedSql(rest, io)
     }
     if (command === 'changed') {
       return await runChanged(rest, io)
@@ -426,6 +429,96 @@ async function runLintFiles(args, io, fetchFn) {
   }
   io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
   return output.summary.failedFiles > 0 ? 1 : 0
+}
+
+async function runFixedSql(args, io) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'patch') {
+    throw new Error(`fixed-sql 仅支持 patch 子命令: ${subcommand ?? ''}`.trim())
+  }
+  const { positional, options } = parseArgs(rest, ['lint-result', 'target', 'format', 'confirm'], ['apply'])
+  if (positional.length > 0) {
+    throw new Error(`fixed-sql patch 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const format = options.format ?? 'json'
+  if (format !== 'json') {
+    throw new Error('fixed-sql patch 当前仅支持 --format json')
+  }
+
+  const cwd = await realpath(cliCwd(io))
+  const lintResultPath = await resolveFixedSqlPatchExistingPath(options['lint-result'], cwd, 'lint-result')
+  const targetFilePath = await resolveFixedSqlPatchExistingPath(options.target, cwd, 'target')
+  const lintResult = parseFixedSqlPatchLintResult(await readFile(lintResultPath, 'utf8'), options['lint-result'])
+  const targetContent = await readFile(targetFilePath, 'utf8')
+  const plan = buildFixedSqlPatchPlan({
+    cwd,
+    lintResultPath,
+    targetPath: targetFilePath,
+    targetContent,
+    lintResult,
+    confirm: options.confirm
+  })
+
+  if (!options.apply) {
+    io.writeOut(`${JSON.stringify(plan, null, 2)}\n`)
+    if (plan.dryRunResult.status === 'CONFLICT') {
+      throw new DataSpecCliError('fixed-sql patch 检测到冲突，未写入目标文件。', {
+        code: 'FIXED_SQL_PATCH_CONFLICT',
+        category: 'VALIDATION',
+        retryable: false,
+        suggestedAction: '重新运行 SQL lint 生成新 fixedSql，或手工处理冲突后重试。',
+        conflictWarnings: plan.conflictWarnings
+      })
+    }
+    return 0
+  }
+
+  if (!options.confirm) {
+    throw new DataSpecCliError('fixed-sql patch apply 需要 --confirm <planHash>；请先运行 dry-run 并人工确认计划。', {
+      code: 'FIXED_SQL_PATCH_CONFIRM_REQUIRED',
+      category: 'VALIDATION',
+      retryable: false,
+      suggestedAction: '先运行 fixed-sql patch dry-run，审查 unifiedDiff 后使用输出的 planHash 确认。'
+    })
+  }
+  if (plan.dryRunResult.status !== 'READY' || plan.planHash !== options.confirm) {
+    throw new DataSpecCliError('fixed-sql patch apply 确认失败或计划不可应用，未写入目标文件。', {
+      code: 'FIXED_SQL_PATCH_APPLY_BLOCKED',
+      category: 'VALIDATION',
+      retryable: false,
+      suggestedAction: '重新运行 dry-run，确认 targetPath、unifiedDiff 和最新 planHash 后再 apply。',
+      conflictWarnings: plan.conflictWarnings
+    })
+  }
+
+  const patchSource = selectFixedSqlPatchSource(lintResult, {
+    cwd,
+    targetPath: targetFilePath,
+    targetContent
+  })
+  await writeFixedSqlPatchTarget({
+    cwd,
+    targetInputPath: options.target,
+    expectedPath: targetFilePath,
+    expectedSha256: plan.currentFileSha256,
+    fixedSql: patchSource.fixedSql
+  })
+  io.writeOut(`${JSON.stringify({
+    ...plan,
+    dryRunResult: {
+      ...plan.dryRunResult,
+      status: 'APPLIED',
+      willWrite: true,
+      confirmed: true,
+      applied: true
+    },
+    applyCommand: null,
+    nextActions: [
+      '补丁已写入目标 SQL 文件。',
+      '请运行项目 SQL 校验、代码评审和版本控制 diff 检查后再提交。'
+    ]
+  }, null, 2)}\n`)
+  return 0
 }
 
 async function runChanged(args, io) {
@@ -3669,6 +3762,333 @@ function resolveOutputInsideCwd(outputPath, cwd) {
   return target
 }
 
+function resolveFixedSqlPatchInputPath(inputPath, cwd, label) {
+  if (!inputPath) {
+    throw new Error(`fixed-sql patch 需要提供 --${label} <path>`)
+  }
+  try {
+    return resolveOutputInsideCwd(inputPath, cwd)
+  } catch (error) {
+    if (/输出路径越界/.test(error.message)) {
+      throw new Error(`fixed-sql patch ${label} 路径必须位于当前工作目录: ${inputPath}`)
+    }
+    throw error
+  }
+}
+
+async function resolveFixedSqlPatchExistingPath(inputPath, cwd, label) {
+  const resolvedPath = resolveFixedSqlPatchInputPath(inputPath, cwd, label)
+  const entry = await lstat(resolvedPath)
+  if (entry.isSymbolicLink()) {
+    throw new Error(`fixed-sql patch ${label} 不允许使用符号链接: ${inputPath}`)
+  }
+  const baseDir = await realpath(cwd)
+  const realTarget = await realpath(resolvedPath)
+  if (!isPathInside(baseDir, realTarget)) {
+    throw new Error(`fixed-sql patch ${label} 路径必须位于当前工作目录: ${inputPath}`)
+  }
+  return realTarget
+}
+
+async function writeFixedSqlPatchTarget({ cwd, targetInputPath, expectedPath, expectedSha256, fixedSql }) {
+  const targetPath = await resolveFixedSqlPatchExistingPath(targetInputPath, cwd, 'target')
+  if (targetPath !== expectedPath) {
+    throw new DataSpecCliError('fixed-sql patch apply 目标路径在确认后发生变化，未写入目标文件。', {
+      code: 'FIXED_SQL_PATCH_TARGET_CHANGED',
+      category: 'VALIDATION',
+      retryable: false,
+      suggestedAction: '重新运行 dry-run，确认目标路径和 planHash 后再 apply。'
+    })
+  }
+  const file = await open(targetPath, 'r+')
+  try {
+    const currentContent = await file.readFile({ encoding: 'utf8' })
+    if (sha256Hex(currentContent) !== expectedSha256) {
+      throw new DataSpecCliError('fixed-sql patch apply 写入前检测到目标文件已变化，未写入目标文件。', {
+        code: 'FIXED_SQL_PATCH_TARGET_DRIFTED_BEFORE_WRITE',
+        category: 'VALIDATION',
+        retryable: false,
+        suggestedAction: '重新运行 dry-run，审查最新 diff 和 planHash 后再 apply。'
+      })
+    }
+    await file.truncate(0)
+    await file.write(fixedSql, 0, 'utf8')
+  } finally {
+    await file.close()
+  }
+}
+
+function parseFixedSqlPatchLintResult(content, sourcePath) {
+  try {
+    return JSON.parse(content)
+  } catch (error) {
+    throw new Error(`fixed-sql patch 无法解析 lint-result JSON: ${sourcePath ?? '<memory>'}`)
+  }
+}
+
+/**
+ * 构建 fixedSql 文件补丁计划。
+ *
+ * 该函数的返回值会被 CLI、AI agent 和人工确认流程读取，因此只暴露相对路径、hash、
+ * 脱敏 diff 与下一步动作；真实 fixedSql 仅在显式 apply 且确认 hash 匹配后写入文件。
+ */
+export function buildFixedSqlPatchPlan({ cwd, targetPath, targetContent, lintResult, confirm = null, lintResultPath = '<json>' }) {
+  const target = normalizeFixedSqlPatchTarget(cwd, targetPath)
+  const lintResultCommandPath = lintResultPath === '<json>'
+    ? '<json>'
+    : normalizeFixedSqlPatchRelativePath(cwd, lintResultPath, 'lint-result').relativePath
+  const patchSource = selectFixedSqlPatchSource(lintResult, {
+    cwd,
+    targetPath: target.absolutePath,
+    targetContent
+  })
+  const currentFileSha256 = sha256Hex(targetContent)
+  const lintOriginalSha256 = sha256Hex(patchSource.originalSql)
+  const fixedSqlSha256 = sha256Hex(patchSource.fixedSql)
+  const rawUnifiedDiff = buildUnifiedDiff(target.relativePath, patchSource.originalSql, patchSource.fixedSql)
+  const unifiedDiff = sanitizeSecretText(rawUnifiedDiff)
+  const planHash = createFixedSqlPatchPlanHash({
+    targetPath: target.relativePath,
+    currentFileSha256,
+    lintOriginalSha256,
+    fixedSqlSha256,
+    unifiedDiffSha256: sha256Hex(rawUnifiedDiff)
+  })
+  const conflictWarnings = []
+  const noChange = targetContent === patchSource.fixedSql
+  const currentMatchesLintOriginal = targetContent === patchSource.originalSql
+
+  if (!currentMatchesLintOriginal && !noChange) {
+    conflictWarnings.push({
+      code: 'TARGET_CONTENT_DRIFT',
+      message: '目标文件当前内容与 lint 结果中的原始 SQL 不一致，已阻断自动写入。',
+      nextAction: '请重新运行 SQL lint，或人工检查文件变化后再生成补丁计划。'
+    })
+  }
+  if (confirm && confirm !== planHash) {
+    conflictWarnings.push({
+      code: 'CONFIRM_HASH_MISMATCH',
+      message: '传入的确认 hash 与当前补丁计划不匹配，已阻断自动写入。',
+      nextAction: '请重新 dry-run 并使用最新 planHash 确认。'
+    })
+  }
+
+  const status = noChange
+    ? 'NO_CHANGE'
+    : conflictWarnings.length > 0
+      ? 'CONFLICT'
+      : 'READY'
+  const applyCommand = status === 'READY'
+    ? `node tools/dataspec-cli.mjs fixed-sql patch --lint-result ${formatCliArgument(lintResultCommandPath)} --target ${formatCliArgument(target.relativePath)} --apply --confirm ${planHash} --format json`
+    : null
+
+  return {
+    kind: 'dataspec.fixed-sql.patch-plan',
+    schemaVersion: 1,
+    targetPath: target.relativePath,
+    dryRunResult: {
+      status,
+      willWrite: false,
+      confirmed: Boolean(confirm) && confirm === planHash,
+      currentFileMatchesLintOriginal: currentMatchesLintOriginal,
+      requiresConfirmation: status === 'READY'
+    },
+    unifiedDiff,
+    conflictWarnings,
+    planHash,
+    currentFileSha256,
+    lintOriginalSha256,
+    fixedSqlSha256,
+    applyCommand,
+    rollbackHint: {
+      targetPath: target.relativePath,
+      originalSha256: currentFileSha256,
+      hint: '如需回退，请从版本控制或 dry-run diff 恢复原文件内容。'
+    },
+    evidenceRef: `fixed-sql-patch:${planHash.slice(0, 12)}`,
+    safety: {
+      readOnly: false,
+      writesProject: true,
+      requiresDryRun: true,
+      requiresExplicitConfirmation: true,
+      requiresIdempotencyKey: false,
+      sensitiveOutputPolicy: 'hash-and-redacted-diff-only'
+    },
+    nextActions: buildFixedSqlPatchNextActions(status, applyCommand)
+  }
+}
+
+function normalizeFixedSqlPatchTarget(cwd, targetPath) {
+  return normalizeFixedSqlPatchRelativePath(cwd, targetPath, 'target')
+}
+
+function normalizeFixedSqlPatchRelativePath(cwd, filePath, label) {
+  const absolutePath = resolveFixedSqlPatchInputPath(filePath, cwd, label)
+  const relativePath = path.relative(path.resolve(cwd), absolutePath)
+  if (!relativePath) {
+    throw new Error(`fixed-sql patch ${label} 必须指向当前工作目录内的文件`)
+  }
+  return {
+    absolutePath,
+    relativePath: toPosixPath(relativePath)
+  }
+}
+
+function selectFixedSqlPatchSource(lintResult, { cwd, targetPath, targetContent }) {
+  const root = unwrapFixedSqlPatchPayload(lintResult)
+  const fileItems = Array.isArray(root?.files) ? root.files : []
+  if (fileItems.length > 0) {
+    return selectFixedSqlPatchSourceFromFiles(fileItems, { cwd, targetPath, targetContent })
+  }
+  const direct = fixedSqlPatchSourceFromObject(root, targetContent)
+  if (direct) {
+    return direct
+  }
+  const nested = fixedSqlPatchSourceFromObject(root?.lintResult, targetContent)
+  if (nested) {
+    return nested
+  }
+
+  throw new Error('fixed-sql patch 需要 lint-result 中包含 fixedSql；请先运行支持 fixedSql dry-run 的 lint 命令。')
+}
+
+function selectFixedSqlPatchSourceFromFiles(fileItems, { cwd, targetPath, targetContent }) {
+  const matchedItems = fileItems.filter((item) => fixedSqlPatchPathMatches(item?.path, targetPath, cwd))
+  if (matchedItems.length > 1) {
+    throw new Error('fixed-sql patch 无法唯一定位目标文件的 fixedSql，请提供单文件 lint 结果或匹配的 files[].path')
+  }
+  if (matchedItems.length === 1) {
+    const item = matchedItems[0]
+    const source = fixedSqlPatchSourceFromObject(item.result ?? item, targetContent)
+    if (source) {
+      return source
+    }
+    throw new Error('fixed-sql patch 匹配的 files[] 目标文件缺少 fixedSql')
+  }
+  if (fileItems.some((item) => hasFixedSqlPatchCandidate(item?.result ?? item))) {
+    throw new Error('fixed-sql patch lint-result files[].path 未匹配目标文件，请确认 --target 与 lint 结果来自同一 SQL 文件。')
+  }
+  throw new Error('fixed-sql patch 需要 lint-result 中包含 fixedSql；请先运行支持 fixedSql dry-run 的 lint 命令。')
+}
+
+function unwrapFixedSqlPatchPayload(payload) {
+  let current = payload
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (current?.data && typeof current.data === 'object' && !Array.isArray(current.data)) {
+      current = current.data
+      continue
+    }
+    return current
+  }
+  return current
+}
+
+function fixedSqlPatchSourceFromObject(value, targetContent) {
+  if (!value || typeof value !== 'object' || typeof value.fixedSql !== 'string') {
+    return null
+  }
+  return {
+    originalSql: resolveFixedSqlPatchOriginalSql(value, targetContent),
+    fixedSql: value.fixedSql
+  }
+}
+
+function resolveFixedSqlPatchOriginalSql(value, targetContent) {
+  if (typeof value.originalSql === 'string') {
+    return value.originalSql
+  }
+  if (typeof value.sql === 'string') {
+    return value.sql
+  }
+  const originalSha256 = ['originalSqlSha256', 'sqlSha256', 'sourceSqlSha256', 'currentFileSha256']
+    .map((key) => value[key])
+    .find((item) => typeof item === 'string' && /^[a-f0-9]{64}$/i.test(item))
+  if (originalSha256) {
+    if (sha256Hex(targetContent) === originalSha256.toLowerCase()) {
+      return targetContent
+    }
+    throw new Error('fixed-sql patch lint-result 中的原始 SQL hash 与目标文件当前内容不匹配。')
+  }
+  throw new Error('fixed-sql patch 需要 lint-result 包含 originalSql 或 sql，或提供与目标内容匹配的 originalSqlSha256。')
+}
+
+function hasFixedSqlPatchCandidate(value) {
+  return Boolean(value && typeof value === 'object' && typeof value.fixedSql === 'string')
+}
+
+function fixedSqlPatchPathMatches(candidatePath, targetPath, cwd) {
+  if (!candidatePath) {
+    return false
+  }
+  try {
+    return path.resolve(cwd, candidatePath) === path.resolve(targetPath)
+  } catch {
+    return false
+  }
+}
+
+function createFixedSqlPatchPlanHash(input) {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      schemaVersion: 1,
+      targetPath: input.targetPath,
+      currentFileSha256: input.currentFileSha256,
+      lintOriginalSha256: input.lintOriginalSha256,
+      fixedSqlSha256: input.fixedSqlSha256,
+      unifiedDiffSha256: input.unifiedDiffSha256
+    }))
+    .digest('hex')
+}
+
+function buildUnifiedDiff(filePath, originalContent, fixedContent) {
+  if (originalContent === fixedContent) {
+    return ''
+  }
+  const originalLines = splitDiffLines(originalContent)
+  const fixedLines = splitDiffLines(fixedContent)
+  const lines = [
+    `--- a/${filePath}`,
+    `+++ b/${filePath}`,
+    `@@ -1,${Math.max(originalLines.length, 1)} +1,${Math.max(fixedLines.length, 1)} @@`
+  ]
+  for (const line of originalLines) {
+    lines.push(`-${line}`)
+  }
+  for (const line of fixedLines) {
+    lines.push(`+${line}`)
+  }
+  return `${lines.join('\n')}\n`
+}
+
+function splitDiffLines(content) {
+  const lines = String(content).split('\n')
+  if (lines.length > 1 && lines.at(-1) === '') {
+    lines.pop()
+  }
+  return lines
+}
+
+function buildFixedSqlPatchNextActions(status, applyCommand) {
+  if (status === 'READY') {
+  return [
+    '人工审查 unifiedDiff，确认目标文件和 SQL 变更范围。',
+    `确认后运行: ${applyCommand}`
+  ]
+  }
+  if (status === 'NO_CHANGE') {
+    return ['fixedSql 与目标文件当前内容一致，无需写入。']
+  }
+  return [
+    '不要 apply 当前计划。',
+    '重新运行 SQL lint 或手工处理冲突后再生成补丁计划。'
+  ]
+}
+
+function formatCliArgument(value) {
+  const text = String(value)
+  return /^[A-Za-z0-9_./:<>{}-]+$/.test(text) ? text : JSON.stringify(text)
+}
+
 function resolveTaskCardOutputPath(outputPath, cwd) {
   try {
     return resolveOutputInsideCwd(outputPath, cwd)
@@ -4470,6 +4890,7 @@ Usage:
   node tools/dataspec-cli.mjs lint <path|-> [--project <id>] [--profile <id>|--task-type <type>] --format text|json [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs lint-debug <path|-> [--project <id>] [--profile <id>|--task-type <type>] [--fix-mode GENERATE|DRY_RUN|DISABLED] [--max-risk LOW|MEDIUM|HIGH] [--include-explanations true|false] [--enable-rule <code>] [--disable-rule <code>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] [--profile <id>|--task-type <type>] --format json [--delivery-package <json>] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
+  node tools/dataspec-cli.mjs fixed-sql patch --lint-result <json> --target <file.sql> [--apply --confirm <planHash>] --format json
   node tools/dataspec-cli.mjs changed [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>]
   node tools/dataspec-cli.mjs lint-changed [--project <id>] [--profile <id>|--task-type <type>] --format json [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
@@ -4509,6 +4930,7 @@ Options:
   lint-debug 读取 /api/lint/debug 的只读规则 trace；成功请求始终返回 0，适合 AI 排查命中原因和参数快照
   lint-files 未传 path 时可使用 .dataspec/config.json 的 defaultPaths
   lint-files 可通过 --delivery-package 或 --batch-package 写出 AI 批量任务交付包，stdout JSON 保持原结构
+  fixed-sql patch 默认只输出补丁计划；写入目标 SQL 文件必须显式传 --apply --confirm <planHash>
   changed 读取 git 变更并按 defaultPaths 输出文件清单、SQL 子集、最小 Context 建议和恢复诊断，不调用服务端
   lint-changed 只对 changed 发现的 SQL 文件调用 lint；无 SQL 变更时返回诊断且不调用服务端
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
