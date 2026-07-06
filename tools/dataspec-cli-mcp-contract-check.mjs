@@ -26,7 +26,8 @@ const REQUIRED_CLI_COMMANDS = [
   'fixed-sql-patch',
   'export-context',
   'search-fields',
-  'generate-ddl'
+  'generate-ddl',
+  'schema-plan'
 ]
 
 const REQUIRED_MCP_TOOLS = [

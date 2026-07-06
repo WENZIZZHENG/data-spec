@@ -6,6 +6,7 @@ import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
+import com.dataspec.reverseimport.model.DatabaseSchemaChangePlan;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
@@ -42,6 +43,11 @@ public interface DatabaseReverseImportService {
     ReverseImportCompareResult compare(DatabaseConnectionReq req);
 
     ReverseImportCompareResult compareDump(DatabaseSchemaDumpReq req);
+
+    /**
+     * 只读生成数据库 schema change plan，复用 schema metadata 与标准比对结果；不执行迁移、不写源库、不保存凭据。
+     */
+    DatabaseSchemaChangePlan planSchemaChange(DatabaseConnectionReq req);
 
     FieldCoverageReport coverage(DatabaseConnectionReq req);
 

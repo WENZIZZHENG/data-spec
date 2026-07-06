@@ -8,6 +8,7 @@ import type {
   DatabaseMetadataBrowser,
   DatabaseMetadataScanReq,
   DatabaseMetadataScanResult,
+  DatabaseSchemaChangePlan,
   DatabaseTableInfo,
   FieldCandidate,
   ReverseImportDecision,
@@ -45,6 +46,11 @@ export function previewDatabaseReverseImport(data: DatabaseConnectionReq) {
 
 export function compareDatabaseReverseImport(data: DatabaseConnectionReq) {
   return request.post<unknown, ReverseImportCompareResult>('/reverse-import/database/compare', data)
+}
+
+/** 只读生成数据库 schema change plan，不执行迁移、不保存数据库密码。 */
+export function planDatabaseSchemaChange(data: DatabaseConnectionReq) {
+  return request.post<unknown, DatabaseSchemaChangePlan>('/reverse-import/database/schema-plan', data)
 }
 
 export function importDatabaseCandidates(

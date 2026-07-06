@@ -660,6 +660,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reverse-import/database/schema-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["planDatabaseSchemaChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/requirement-drafts": {
         parameters: {
             query?: never;
@@ -3274,6 +3290,101 @@ export interface components {
             indexes?: components["schemas"]["DatabaseSchemaIndex"][];
             warnings?: string[];
         };
+        /** @description schema change plan 的单个字段级变更项；用于 API、CLI 和前端 dry-run 审计。 */
+        DatabaseSchemaChangeItem: {
+            /** @description 来源数据库表名；来自 schema metadata，不包含连接串或业务数据行。 */
+            tableName?: string;
+            /** @description 来源数据库字段名；来自 schema metadata，不包含业务数据值。 */
+            columnName?: string;
+            /** @description 命中的 DataSpec 标准字段名；未命中标准或删除候选时为空。 */
+            standardFieldName?: string;
+            /** @description 本变更的预览动作；第一版仅用于 dry-run 计划，不代表自动执行。 */
+            /** @enum {string} */
+            action?: "ALTER_COMMENT" | "ALTER_COLUMN" | "DROP_CANDIDATE";
+            /** @description 发生变化的属性，如 dataType、nullable、defaultValue、comment 或 column。 */
+            property?: string;
+            /** @description 当前数据库 metadata 值；已脱敏，不包含业务数据行。 */
+            currentValue?: string;
+            /** @description 目标 DataSpec 标准值；已脱敏，结构属性不会直接拼入可执行 SQL。 */
+            targetValue?: string;
+            /** @description 字段级风险：LOW、MEDIUM 或 HIGH；客户端用于突出人工确认优先级。 */
+            /** @enum {string} */
+            riskLevel?: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "BLOCKED";
+            /** @description dry-run SQL 草案；结构变更和高风险删除候选只输出 REVIEW/BLOCKED 注释，不输出可执行 DROP。 */
+            migrationSql?: string;
+            /** @description 回滚或撤销提示；用于 AI/用户生成正式迁移文件前检查。 */
+            rollbackHint?: string;
+            /** @description 需要人工确认的检查点；正式迁移前必须逐项确认。 */
+            manualChecks?: string[];
+            /** @description 阻止自动执行的原因；存在值时客户端不得把该项当作可自动应用。 */
+            blockedReasons?: string[];
+            /** @description 对本项的可读解释，说明为什么生成该计划项。 */
+            reason?: string;
+        };
+        /** @description schema change plan 的聚合统计；用于前端和 AI 快速判断风险范围。 */
+        DatabaseSchemaChangeSummary: {
+            /** @description 本次计划覆盖的表数量。 */
+            /** Format: int32 */
+            tableCount?: number;
+            /** @description 本次计划读取的字段数量。 */
+            /** Format: int32 */
+            columnCount?: number;
+            /** @description 变更项数量。 */
+            /** Format: int32 */
+            changeCount?: number;
+            /** @description LOW 风险变更项数量。 */
+            /** Format: int32 */
+            lowRiskCount?: number;
+            /** @description MEDIUM 风险变更项数量。 */
+            /** Format: int32 */
+            mediumRiskCount?: number;
+            /** @description HIGH 风险变更项数量。 */
+            /** Format: int32 */
+            highRiskCount?: number;
+            /** @description 带阻塞原因、不得自动执行的变更项数量。 */
+            /** Format: int32 */
+            blockedCount?: number;
+        };
+        /** @description 数据库 schema 变更计划预览；只用于 dry-run 审计，不执行数据库迁移、不保存连接凭据。 */
+        DatabaseSchemaChangePlan: {
+            /** @description 响应类型标识，供 AI/CLI 判断 JSON 语义。 */
+            kind?: string;
+            /** @description 响应 schema 版本；新增可选字段时保持兼容递增策略。 */
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** @description DataSpec 项目 ID。 */
+            /** Format: int64 */
+            projectId?: number;
+            /** @description 数据库类型，如 POSTGRESQL 或 MYSQL。 */
+            databaseType?: string;
+            /** @description 数据库名；已脱敏，不包含 JDBC URL。 */
+            databaseName?: string;
+            /** @description schema 名；PostgreSQL 用于限定对象，MySQL 场景可能为空或仅作为兼容输入。 */
+            schemaName?: string;
+            /** @description 当前源库 schema-only metadata hash，不包含密码、连接串或业务数据行。 */
+            currentSchemaHash?: string;
+            /** @description 目标 DataSpec 标准摘要 hash，不包含连接凭据。 */
+            targetSpecHash?: string;
+            /** @description 整体风险：SAFE、LOW、MEDIUM、HIGH 或 BLOCKED。 */
+            /** @enum {string} */
+            riskLevel?: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "BLOCKED";
+            /** @description 计划聚合统计，覆盖表、字段、风险和阻塞计数。 */
+            summary?: components["schemas"]["DatabaseSchemaChangeSummary"];
+            /** @description 字段级变更项列表；每项描述一个 dry-run schema 差异处理建议。 */
+            changeSet?: components["schemas"]["DatabaseSchemaChangeItem"][];
+            /** @description 合并后的 dry-run SQL 草案；不得直接视为已审批迁移脚本。 */
+            migrationSql?: string;
+            /** @description 整体回滚提示；正式迁移前需要据此准备反向脚本或恢复方案。 */
+            rollbackHint?: string;
+            /** @description 全局人工检查点；正式迁移前必须逐项确认。 */
+            manualChecks?: string[];
+            /** @description 全局阻塞原因；非空时客户端不得自动执行迁移。 */
+            blockedReasons?: string[];
+            /** @description 面向用户和 AI 的后续动作建议。 */
+            nextActions?: string[];
+            /** @description metadata cache 证据；只描述 schema-only 缓存状态，不包含凭据。 */
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
+        };
         DatabaseMetadataBrowser: {
             kind?: string;
             /** Format: int32 */
@@ -3454,6 +3565,13 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["ReverseImportCompareResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RDatabaseSchemaChangePlan: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseSchemaChangePlan"];
             error?: components["schemas"]["ErrorDetail"];
         };
         ReverseImportCompareResult: {
@@ -7851,6 +7969,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RReverseImportCompareResult"];
+                };
+            };
+        };
+    };
+    planDatabaseSchemaChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseConnectionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDatabaseSchemaChangePlan"];
                 };
             };
         };

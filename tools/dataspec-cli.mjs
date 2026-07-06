@@ -104,6 +104,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'generate-ddl') {
       return await runGenerateDdl(rest, io, fetchFn)
     }
+    if (command === 'schema-plan') {
+      return await runSchemaPlan(rest, io, fetchFn)
+    }
     if (command === 'init') {
       return await runInit(rest, io, fetchFn)
     }
@@ -828,6 +831,65 @@ async function runGenerateDdl(args, io, fetchFn) {
   return 0
 }
 
+async function runSchemaPlan(args, io, fetchFn) {
+  const { positional, options } = parseArgs(args, [
+    'project',
+    'database-type',
+    'host',
+    'port',
+    'database',
+    'database-name',
+    'schema',
+    'username',
+    'password',
+    'password-env',
+    'table',
+    'metadata-cache-mode',
+    'format',
+    'server',
+    'dataspec-token'
+  ], [], ['table'])
+  const config = loadDataSpecConfig(cliCwd(io))
+  if (positional.length > 0) {
+    throw new Error(`schema-plan 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const projectId = parseProjectId(options.project ?? config.projectId)
+  const format = options.format ?? 'json'
+  if (format !== 'json') {
+    throw new Error('schema-plan 当前仅支持 --format json')
+  }
+  const databaseName = options.database ?? options['database-name']
+  const tableNames = Array.isArray(options.table) ? options.table : options.table ? [options.table] : []
+  if (tableNames.length === 0) {
+    throw new Error('schema-plan 需要至少提供一个 --table <name>')
+  }
+  const req = {
+    projectId,
+    databaseType: requiredOption(options['database-type'], 'database-type'),
+    host: requiredOption(options.host, 'host'),
+    port: options.port === undefined ? undefined : parsePositiveInteger(options.port, 'database port'),
+    databaseName: requiredOption(databaseName, 'database'),
+    schemaName: options.schema,
+    username: requiredOption(options.username, 'username'),
+    password: resolveDatabasePassword(options),
+    tableNames
+  }
+  if (options['metadata-cache-mode'] !== undefined) {
+    req.metadataCacheMode = options['metadata-cache-mode']
+  }
+  const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
+  const response = await fetchFn(`${server}/api/reverse-import/database/schema-plan`, {
+    method: 'POST',
+    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(removeUndefinedValues(req))
+  })
+  const payload = await readJsonResponse(response)
+  const result = unwrapResponse(payload)
+  io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  return 0
+}
+
 async function runDoctor(args, io, fetchFn) {
   const { positional, options } = parseArgs(
     args,
@@ -1447,6 +1509,32 @@ function parseArgs(args, allowedOptions, flagOptions = [], repeatableOptions = [
     i += 1
   }
   return { positional, options }
+}
+
+function requiredOption(value, name) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    throw new Error(`schema-plan 需要提供 --${name}`)
+  }
+  return value
+}
+
+function resolveDatabasePassword(options) {
+  if (options.password !== undefined && options['password-env'] !== undefined) {
+    throw new Error('schema-plan 的 --password 和 --password-env 不能同时使用')
+  }
+  if (options['password-env'] !== undefined) {
+    const envName = options['password-env']
+    const value = process.env[envName]
+    if (value === undefined) {
+      throw new Error(`环境变量 ${envName} 未设置`)
+    }
+    return value
+  }
+  return options.password
+}
+
+function removeUndefinedValues(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined))
 }
 
 function buildAiContextPackageUrl(server, projectId, options) {
@@ -4898,6 +4986,7 @@ Usage:
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs schema-plan [--project <id>] --database-type <postgresql|mysql> --host <host> [--port <n>] --database <name> [--schema <schema>] --username <user> [--password-env <env>|--password <value>] --table <name> [--table <name> ...] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
   node tools/dataspec-cli.mjs bootstrap [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs doctor [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
@@ -4935,6 +5024,7 @@ Options:
   lint-changed 只对 changed 发现的 SQL 文件调用 lint；无 SQL 变更时返回诊断且不调用服务端
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
+  schema-plan 只生成数据库 schema change plan 预览，不执行迁移；推荐使用 --password-env 读取数据库密码
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   bootstrap 是 AI 新会话第一跳；服务可达时读取后端启动包，服务不可达时仍输出本地 BLOCKED JSON 和 nextActions
   doctor 默认做轻量 OpenAPI 状态和 AI Context 缓存检查；传 --check-openapi 时执行完整 schema 漂移检查

@@ -172,6 +172,19 @@
       "successExample": { "command": "node tools/dataspec-cli.mjs generate-ddl --project 1 --template 1 --table user_account --format json", "output": { "ddl": "CREATE TABLE user_account (...)", "lintResult": { "issues": [] } } },
       "failureExample": { "exitCode": 2, "diagnostic": { "code": "DATASPEC_REQUEST_FAILED" } },
       "recommendedNextActions": ["Do not execute generated DDL without user confirmation."]
+    },
+    {
+      "id": "schema-plan",
+      "command": "schema-plan --project <id> --database-type <postgresql|mysql> --host <host> --database <name> --username <user> --password-env <env> --table <name> --format json",
+      "description": "Generate a read-only database schema change plan with dry-run SQL, risk, manual checks, blocked reasons, and next actions.",
+      "requiredOptions": ["project", "database-type", "host", "database", "username", "table"],
+      "optionalOptions": ["port", "schema", "password-env", "password", "metadata-cache-mode", "format", "server", "dataspec-token"],
+      "outputShape": ["kind", "schemaVersion", "projectId", "databaseType", "currentSchemaHash", "targetSpecHash", "riskLevel", "summary", "changeSet[]", "migrationSql", "rollbackHint", "manualChecks[]", "blockedReasons[]", "nextActions[]"],
+      "exitCodes": { "0": "schema plan printed", "2": "argument or request error" },
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": true, "requiresIdempotencyKey": false, "sensitiveInputs": ["databasePassword", "dataspec-token"], "nextActions": ["Review blockedReasons and manualChecks before creating a migration file.", "Do not execute migrationSql directly from this preview."] },
+      "successExample": { "command": "DATASPEC_DB_PASSWORD=*** node tools/dataspec-cli.mjs schema-plan --project 1 --database-type postgresql --host localhost --database demo --schema public --username readonly --password-env DATASPEC_DB_PASSWORD --table user_order --format json", "output": { "kind": "dataspec-database-schema-change-plan", "riskLevel": "BLOCKED", "changeSet": [] } },
+      "failureExample": { "exitCode": 2, "diagnostic": { "code": "DATASPEC_REQUEST_FAILED" } },
+      "recommendedNextActions": ["Use --password-env instead of --password for real connections.", "Treat DROP_CANDIDATE and blockedReasons as a stop sign for human review."]
     }
   ],
   "mcpTools": [

@@ -16,6 +16,10 @@ import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
+import com.dataspec.reverseimport.model.DatabaseSchemaChangeAction;
+import com.dataspec.reverseimport.model.DatabaseSchemaChangeItem;
+import com.dataspec.reverseimport.model.DatabaseSchemaChangePlan;
+import com.dataspec.reverseimport.model.DatabaseSchemaChangeSummary;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
 import com.dataspec.reverseimport.model.FieldCandidate;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
@@ -28,6 +32,7 @@ import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.reverseimport.service.impl.DatabaseReverseImportServiceImpl;
 import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
@@ -770,6 +775,200 @@ class DatabaseReverseImportServiceTest {
     }
 
     @Test
+    void planSchemaChange_buildsReadOnlyMigrationDraftFromCompareResult() throws Exception {
+        prepareMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        Field id = standardField("id", null);
+        id.setDataType("BIGINT");
+        id.setNullable(false);
+        id.setComment("主键");
+        Field mobileNo = standardField("mobile_no", "phone,mobile");
+        mobileNo.setDataType("VARCHAR");
+        mobileNo.setLength(30);
+        mobileNo.setNullable(true);
+        mobileNo.setComment("手机号");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(id, mobileNo));
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
+        DatabaseConnectionReq req = connectionReq();
+        req.setTableNames(List.of("USER_ORDER"));
+        req.setPassword("plan-secret");
+
+        DatabaseSchemaChangePlan plan = service.planSchemaChange(req);
+
+        assertThat(plan.getCurrentSchemaHash()).hasSize(64);
+        assertThat(plan.getTargetSpecHash()).hasSize(64);
+        assertThat(plan.getRiskLevel()).isEqualTo("BLOCKED");
+        assertThat(plan.getSummary().getChangeCount()).isEqualTo(4);
+        assertThat(plan.getSummary().getBlockedCount()).isEqualTo(1);
+        assertThat(plan.getChangeSet())
+                .extracting("tableName", "columnName", "action", "property", "riskLevel")
+                .contains(
+                        org.assertj.core.groups.Tuple.tuple("USER_ORDER", "ID", DatabaseSchemaChangeAction.ALTER_COMMENT, "comment", "LOW"),
+                        org.assertj.core.groups.Tuple.tuple("USER_ORDER", "PHONE", DatabaseSchemaChangeAction.ALTER_COLUMN, "dataType", "MEDIUM"),
+                        org.assertj.core.groups.Tuple.tuple("USER_ORDER", "PHONE", DatabaseSchemaChangeAction.ALTER_COMMENT, "comment", "LOW"),
+                        org.assertj.core.groups.Tuple.tuple("USER_ORDER", "USER_NAME", DatabaseSchemaChangeAction.DROP_CANDIDATE, "column", "HIGH")
+                );
+        assertThat(plan.getMigrationSql()).contains("COMMENT ON COLUMN", "-- REVIEW");
+        assertThat(plan.getMigrationSql()).contains("-- BLOCKED DROP_CANDIDATE");
+        assertThat(plan.getMigrationSql()).contains("\"PUBLIC\".\"USER_ORDER\".\"PHONE\"");
+        assertThat(plan.getMigrationSql()).doesNotContain("ALTER TABLE", "DROP COLUMN", "plan-secret", "jdbc:");
+        assertThat(plan.getMigrationSql()).doesNotContainPattern("(?m)^(?!\\s*--).*\\bDROP\\b");
+        assertThat(plan.getChangeSet())
+                .filteredOn(item -> DatabaseSchemaChangeAction.ALTER_COLUMN.equals(item.getAction()))
+                .allMatch(item -> item.getMigrationSql().startsWith("-- REVIEW"));
+        assertThat(plan.getBlockedReasons()).anyMatch(reason -> reason.contains("USER_ORDER.USER_NAME"));
+        assertThat(plan.getManualChecks()).anyMatch(check -> check.contains("PHONE"));
+        assertThat(plan.getNextActions()).contains("高风险或阻塞项需要人工确认后再交给迁移工具。");
+        verify(fieldService, never()).create(any(Field.class));
+    }
+
+    @Test
+    void planSchemaChange_usesPostgresqlSchemaPrefixInDraftSql() throws Exception {
+        prepareBizSchemaMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        Field mobileNo = standardField("mobile_no", "phone,mobile");
+        mobileNo.setDataType("VARCHAR");
+        mobileNo.setLength(30);
+        mobileNo.setNullable(true);
+        mobileNo.setComment("手机号");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(mobileNo));
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
+        DatabaseConnectionReq req = connectionReq();
+        req.setSchemaName("BIZ");
+        req.setTableNames(List.of("USER_ORDER"));
+
+        DatabaseSchemaChangePlan plan = service.planSchemaChange(req);
+
+        assertThat(plan.getMigrationSql()).contains("\"BIZ\".\"USER_ORDER\".\"PHONE\"");
+        assertThat(plan.getMigrationSql()).doesNotContain("COMMENT ON COLUMN \"USER_ORDER\".\"PHONE\"");
+    }
+
+    @Test
+    void planSchemaChange_usesDefaultPostgresqlSchemaPrefixWhenRequestOmitsSchema() throws Exception {
+        prepareDefaultPublicSchemaMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        Field mobileNo = standardField("mobile_no", "phone,mobile");
+        mobileNo.setDataType("VARCHAR");
+        mobileNo.setLength(30);
+        mobileNo.setNullable(true);
+        mobileNo.setComment("手机号");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(mobileNo));
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
+        DatabaseConnectionReq req = connectionReq();
+        req.setSchemaName(null);
+        req.setTableNames(List.of("USER_ORDER"));
+
+        DatabaseSchemaChangePlan plan = service.planSchemaChange(req);
+
+        assertThat(plan.getMigrationSql()).contains("\"public\".\"USER_ORDER\".\"PHONE\"");
+        assertThat(plan.getMigrationSql()).doesNotContain("COMMENT ON COLUMN \"USER_ORDER\".\"PHONE\"");
+    }
+
+    @Test
+    void planSchemaChange_keepsUnsafeStructureChangesAsReviewComments() throws Exception {
+        prepareRiskyMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        Field phone = standardField("phone", null);
+        phone.setDataType("varchar(30); DROP TABLE account; --");
+        phone.setNullable(true);
+        phone.setDefaultValue("now(); DROP TABLE account; --");
+        phone.setComment("手机号");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(phone));
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
+        DatabaseConnectionReq req = connectionReq();
+        req.setTableNames(List.of("RISKY_ORDER"));
+
+        DatabaseSchemaChangePlan plan = service.planSchemaChange(req);
+
+        assertThat(plan.getChangeSet())
+                .filteredOn(item -> DatabaseSchemaChangeAction.ALTER_COLUMN.equals(item.getAction()))
+                .extracting(DatabaseSchemaChangeItem::getMigrationSql)
+                .allMatch(sql -> sql.toString().startsWith("-- REVIEW"));
+        assertThat(plan.getMigrationSql())
+                .contains("-- REVIEW")
+                .doesNotContain("DROP TABLE account", "SET DEFAULT", "DROP DEFAULT", "DROP NOT NULL")
+                .doesNotContainPattern("(?m)^(?!\\s*--).*\\bDROP\\b");
+    }
+
+    @Test
+    void planSchemaChange_keepsMultilineIdentifiersInsideReviewComments() throws Exception {
+        prepareMultilineIdentifierMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        Field phone = standardField("phone", "phone\nDROP TABLE account; --");
+        phone.setDataType("VARCHAR");
+        phone.setLength(30);
+        phone.setNullable(true);
+        phone.setComment("手机号");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(phone));
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
+        DatabaseConnectionReq req = connectionReq();
+        req.setTableNames(List.of("risk_order\nDROP TABLE account; --"));
+
+        DatabaseSchemaChangePlan plan = service.planSchemaChange(req);
+
+        assertThat(plan.getMigrationSql()).contains("-- REVIEW", "-- BLOCKED DROP_CANDIDATE");
+        assertThat(plan.getMigrationSql()).doesNotContain("\nDROP TABLE account", "\rDROP TABLE account");
+        assertThat(plan.getMigrationSql()).doesNotContainPattern("(?m)^\\s*DROP\\b");
+    }
+
+    @Test
+    void planSchemaChange_keepsMultilineSchemaNameInsideReviewComments() throws Exception {
+        prepareMultilineSchemaMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        Field phone = standardField("phone", null);
+        phone.setDataType("VARCHAR");
+        phone.setLength(30);
+        phone.setNullable(true);
+        phone.setComment("手机号");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(phone));
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
+        DatabaseConnectionReq req = connectionReq();
+        req.setSchemaName("evil_schema\nDROP TABLE account; --");
+        req.setTableNames(List.of("USER_ORDER"));
+
+        DatabaseSchemaChangePlan plan = service.planSchemaChange(req);
+
+        assertThat(plan.getMigrationSql()).contains("\"evil_schema DROP TABLE account; --\".\"USER_ORDER\".\"PHONE\"");
+        assertThat(plan.getMigrationSql()).doesNotContain("\nDROP TABLE account", "\rDROP TABLE account");
+        assertThat(plan.getMigrationSql()).doesNotContainPattern("(?m)^\\s*DROP\\b");
+    }
+
+
+    @Test
+    void schemaChangePlanModelsExposeOpenApiDescriptions() throws Exception {
+        assertSchemaDescription(DatabaseSchemaChangeAction.class);
+        assertSchemaDescription(DatabaseSchemaChangePlan.class);
+        assertSchemaDescription(DatabaseSchemaChangeSummary.class);
+        assertSchemaDescription(DatabaseSchemaChangeItem.class);
+        assertSchemaDescription(DatabaseSchemaChangePlan.class, "currentSchemaHash");
+        assertSchemaDescription(DatabaseSchemaChangePlan.class, "migrationSql");
+        assertSchemaDescription(DatabaseSchemaChangePlan.class, "blockedReasons");
+        assertSchemaDescription(DatabaseSchemaChangeItem.class, "action");
+        assertSchemaDescription(DatabaseSchemaChangeItem.class, "migrationSql");
+        assertSchemaDescription(DatabaseSchemaChangeSummary.class, "blockedCount");
+        assertSchemaDescription(DatabaseSchemaChangeAction.class.getField("ALTER_COLUMN"));
+        assertSchemaDescription(DatabaseSchemaChangeAction.class.getField("DROP_CANDIDATE"));
+    }
+
+    @Test
     void coverage_readsMetadataAndBuildsFieldCoverageReport() throws Exception {
         prepareMetadataDatabase();
         FieldService fieldService = mock(FieldService.class);
@@ -888,6 +1087,73 @@ class DatabaseReverseImportServiceTest {
                     )
                     """);
             statement.execute("CREATE INDEX idx_user_order_phone ON user_order(phone)");
+        }
+    }
+
+    private void prepareBizSchemaMetadataDatabase() throws Exception {
+        try (Connection connection = openMetadataConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("CREATE SCHEMA IF NOT EXISTS biz");
+            statement.execute("DROP TABLE IF EXISTS biz.user_order");
+            statement.execute("""
+                    CREATE TABLE biz.user_order (
+                        phone VARCHAR(20)
+                    )
+                    """);
+        }
+    }
+
+    private void prepareDefaultPublicSchemaMetadataDatabase() throws Exception {
+        try (Connection connection = openMetadataConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("CREATE SCHEMA IF NOT EXISTS \"public\"");
+            statement.execute("DROP TABLE IF EXISTS \"public\".user_order");
+            statement.execute("""
+                    CREATE TABLE "public".user_order (
+                        phone VARCHAR(20)
+                    )
+                    """);
+        }
+    }
+
+    private void prepareRiskyMetadataDatabase() throws Exception {
+        try (Connection connection = openMetadataConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS risky_order");
+            statement.execute("""
+                    CREATE TABLE risky_order (
+                        phone VARCHAR(20) NOT NULL DEFAULT 'old'
+                    )
+                    """);
+        }
+    }
+
+    private void prepareMultilineIdentifierMetadataDatabase() throws Exception {
+        try (Connection connection = openMetadataConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS \"risk_order\nDROP TABLE account; --\"");
+            statement.execute("""
+                    CREATE TABLE "risk_order
+                    DROP TABLE account; --" (
+                        "phone
+                    DROP TABLE account; --" VARCHAR(20),
+                        unmanaged VARCHAR(20)
+                    )
+                    """);
+        }
+    }
+
+    private void prepareMultilineSchemaMetadataDatabase() throws Exception {
+        try (Connection connection = openMetadataConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("CREATE SCHEMA IF NOT EXISTS \"evil_schema\nDROP TABLE account; --\"");
+            statement.execute("DROP TABLE IF EXISTS \"evil_schema\nDROP TABLE account; --\".user_order");
+            statement.execute("""
+                    CREATE TABLE "evil_schema
+                    DROP TABLE account; --".user_order (
+                        phone VARCHAR(20)
+                    )
+                    """);
         }
     }
 
@@ -1028,6 +1294,22 @@ class DatabaseReverseImportServiceTest {
 
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private void assertSchemaDescription(Class<?> type) {
+        Schema schema = type.getAnnotation(Schema.class);
+        assertThat(schema).as(type.getSimpleName() + " @Schema").isNotNull();
+        assertThat(schema.description()).as(type.getSimpleName() + " description").isNotBlank();
+    }
+
+    private void assertSchemaDescription(Class<?> type, String fieldName) throws NoSuchFieldException {
+        assertSchemaDescription(type.getDeclaredField(fieldName));
+    }
+
+    private void assertSchemaDescription(java.lang.reflect.Field field) {
+        Schema schema = field.getAnnotation(Schema.class);
+        assertThat(schema).as(field.getName() + " @Schema").isNotNull();
+        assertThat(schema.description()).as(field.getName() + " description").isNotBlank();
     }
 
     private static class InMemoryDatabaseMetadataCacheRepository implements DatabaseMetadataCacheRepository {

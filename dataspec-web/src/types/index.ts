@@ -1372,6 +1372,108 @@ export interface ReverseImportCompareResult {
   tableDiffs?: ReverseImportTableDiff[]
 }
 
+/** schema plan 字段级动作；动作只表示 dry-run 预览，不代表前端会执行迁移。 */
+export type DatabaseSchemaChangeAction =
+  | 'ALTER_COMMENT'
+  | 'ALTER_COLUMN'
+  | 'DROP_CANDIDATE'
+  | (string & {})
+
+/** schema plan 风险等级；BLOCKED 表示存在不得自动执行的阻塞项。 */
+export type DatabaseSchemaRiskLevel =
+  | 'SAFE'
+  | 'LOW'
+  | 'MEDIUM'
+  | 'HIGH'
+  | 'BLOCKED'
+  | (string & {})
+
+/** schema change plan 的单个字段级变更项，值均来自 schema metadata 或 DataSpec 标准摘要。 */
+export interface DatabaseSchemaChangeItem {
+  /** 来源数据库表名，不包含连接串或业务数据行。 */
+  tableName?: string
+  /** 来源数据库字段名。 */
+  columnName?: string
+  /** 命中的 DataSpec 标准字段名；未命中标准时为空。 */
+  standardFieldName?: string
+  /** 预览动作，如注释修正、结构调整或删除候选。 */
+  action?: DatabaseSchemaChangeAction
+  /** 发生变化的属性，如 dataType、nullable、defaultValue、comment 或 column。 */
+  property?: string
+  /** 当前数据库 metadata 值；应为脱敏后的结构值。 */
+  currentValue?: string
+  /** 目标 DataSpec 标准值；应为脱敏后的结构值。 */
+  targetValue?: string
+  /** 字段级风险等级。 */
+  riskLevel?: DatabaseSchemaRiskLevel
+  /** 本项 dry-run SQL 草案；DROP_CANDIDATE 只能是注释化提示，不应是可执行 DROP。 */
+  migrationSql?: string
+  /** 本项回滚或撤销提示。 */
+  rollbackHint?: string
+  /** 执行前必须人工确认的检查点。 */
+  manualChecks?: string[]
+  /** 阻止自动执行的原因；非空时客户端不得提示自动应用。 */
+  blockedReasons?: string[]
+  /** 面向用户和 AI 的本项说明。 */
+  reason?: string
+}
+
+/** schema change plan 聚合统计，用于前端风险面板和 AI 摘要。 */
+export interface DatabaseSchemaChangeSummary {
+  /** 本次计划覆盖的表数量。 */
+  tableCount?: number
+  /** 本次计划读取的字段数量。 */
+  columnCount?: number
+  /** 字段级变更项数量。 */
+  changeCount?: number
+  /** 低风险变更项数量。 */
+  lowRiskCount?: number
+  /** 中风险变更项数量。 */
+  mediumRiskCount?: number
+  /** 高风险变更项数量。 */
+  highRiskCount?: number
+  /** 带阻塞原因、不得自动执行的变更项数量。 */
+  blockedCount?: number
+}
+
+/** 数据库 schema 变更计划响应；只用于预览和审计，不执行迁移、不保存连接凭据。 */
+export interface DatabaseSchemaChangePlan {
+  /** 响应类型标识，供 CLI/AI 判断 JSON 语义。 */
+  kind?: string
+  /** 响应 schema 版本；新增可选字段时保持兼容递增。 */
+  schemaVersion?: number
+  /** DataSpec 项目 ID。 */
+  projectId?: number
+  /** 数据库类型，如 POSTGRESQL 或 MYSQL。 */
+  databaseType?: string
+  /** 数据库名；不得包含完整 JDBC URL 或 DSN。 */
+  databaseName?: string
+  /** schema 名；MySQL 场景可能为空。 */
+  schemaName?: string
+  /** 当前源库 schema-only metadata hash，不包含密码、连接串或业务数据行。 */
+  currentSchemaHash?: string
+  /** 目标 DataSpec 标准摘要 hash，不包含连接凭据。 */
+  targetSpecHash?: string
+  /** 整体风险等级。 */
+  riskLevel?: DatabaseSchemaRiskLevel
+  /** 计划聚合统计。 */
+  summary?: DatabaseSchemaChangeSummary
+  /** 字段级变更项列表。 */
+  changeSet?: DatabaseSchemaChangeItem[]
+  /** 合并后的 dry-run SQL 草案，不得直接视为已审批迁移脚本。 */
+  migrationSql?: string
+  /** 整体回滚提示。 */
+  rollbackHint?: string
+  /** 全局人工检查点。 */
+  manualChecks?: string[]
+  /** 全局阻塞原因；非空时客户端不得提示自动执行迁移。 */
+  blockedReasons?: string[]
+  /** 面向用户和 AI 的后续动作建议。 */
+  nextActions?: string[]
+  /** metadata cache 证据；只描述 schema-only 缓存状态，不包含凭据。 */
+  metadataCache?: DatabaseMetadataCacheInfo
+}
+
 export type DatabaseMetadataCacheMode = 'AUTO' | 'REFRESH' | 'BYPASS' | (string & {})
 
 export interface DatabaseConnectionReq {

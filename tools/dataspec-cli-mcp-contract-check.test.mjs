@@ -41,6 +41,20 @@ test('bundled fixtures include fixed SQL patch safety contract', async () => {
   assert.ok(command.recommendedNextActions.some((item) => item.includes('confirm')))
 })
 
+test('bundled fixtures include schema plan readonly contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'schema-plan')
+
+  assert.ok(command)
+  assert.equal(command.safety.readOnly, true)
+  assert.equal(command.safety.writesProject, false)
+  assert.equal(command.safety.requiresDryRun, true)
+  assert.ok(command.outputShape.includes('currentSchemaHash'))
+  assert.ok(command.outputShape.includes('targetSpecHash'))
+  assert.ok(command.outputShape.includes('blockedReasons[]'))
+  assert.ok(command.recommendedNextActions.some((item) => item.includes('password-env')))
+})
+
 test('fixed SQL patch fixture matches actual dry-run json shape', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'fixed-sql-patch')

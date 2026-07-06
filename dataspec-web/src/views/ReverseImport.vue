@@ -157,6 +157,10 @@
                     <el-icon><View /></el-icon>
                     浏览元数据
                   </el-button>
+                  <el-button :disabled="!canGenerateSchemaPlan" :loading="schemaPlanLoading" @click="handleGenerateSchemaPlan">
+                    <el-icon><View /></el-icon>
+                    生成迁移计划
+                  </el-button>
                   <el-button :disabled="!canBrowseMetadata" :loading="metadataLoading" @click="handleRefreshMetadata">
                     <el-icon><Refresh /></el-icon>
                     刷新元数据
@@ -387,6 +391,104 @@
                 </el-table-column>
                 <el-table-column prop="matchReason" label="命中说明" min-width="220" show-overflow-tooltip />
               </el-table>
+            </div>
+
+            <div v-if="schemaPlan" class="schema-plan-preview">
+              <div class="section-header compact-header">
+                <h3>Schema 迁移计划</h3>
+                <div class="inline-actions">
+                  <el-tag :type="schemaRiskTagType(schemaPlan.riskLevel)" effect="plain">
+                    {{ schemaRiskLabel(schemaPlan.riskLevel) }}
+                  </el-tag>
+                  <el-tag type="info" effect="plain">dry-run SQL</el-tag>
+                  <el-button size="small" plain @click="handleCopySchemaPlanSummary">
+                    <el-icon><Link /></el-icon>
+                    复制 AI 摘要
+                  </el-button>
+                </div>
+              </div>
+              <div class="schema-plan-meta">
+                <span>{{ schemaPlan.databaseType || '-' }} / {{ schemaPlan.databaseName || '-' }} / {{ schemaPlan.schemaName || '-' }}</span>
+                <span>current={{ schemaPlan.currentSchemaHash?.slice(0, 12) || '-' }}</span>
+                <span>target={{ schemaPlan.targetSpecHash?.slice(0, 12) || '-' }}</span>
+              </div>
+              <div class="summary-grid schema-plan-summary">
+                <div v-for="item in schemaPlanSummaryItems" :key="item.key" class="summary-item">
+                  <div class="summary-label">{{ item.label }}</div>
+                  <div class="summary-value">{{ item.value }}</div>
+                </div>
+              </div>
+              <div class="schema-plan-notes">
+                <div v-if="schemaPlan.blockedReasons?.length" class="schema-plan-list danger">
+                  <div class="list-title">阻塞原因</div>
+                  <ul>
+                    <li v-for="reason in schemaPlan.blockedReasons" :key="reason">{{ reason }}</li>
+                  </ul>
+                </div>
+                <div v-if="schemaPlan.manualChecks?.length" class="schema-plan-list warning">
+                  <div class="list-title">人工检查</div>
+                  <ul>
+                    <li v-for="check in schemaPlan.manualChecks" :key="check">{{ check }}</li>
+                  </ul>
+                </div>
+                <div v-if="schemaPlan.nextActions?.length" class="schema-plan-list">
+                  <div class="list-title">下一步建议</div>
+                  <ul>
+                    <li v-for="action in schemaPlan.nextActions" :key="action">{{ action }}</li>
+                  </ul>
+                </div>
+              </div>
+              <pre class="metadata-ai-summary">{{ schemaPlanAiSummary }}</pre>
+              <el-empty v-if="schemaPlanGroups.length === 0" description="暂无 schema 变更项" />
+              <el-collapse v-else class="schema-plan-groups">
+                <el-collapse-item
+                  v-for="group in schemaPlanGroups"
+                  :key="group.tableName"
+                  :name="group.tableName"
+                >
+                  <template #title>
+                    <span class="group-title">{{ group.tableName }}</span>
+                    <el-tag size="small" effect="plain">{{ group.changeSet.length }} 个变更</el-tag>
+                  </template>
+                  <el-table :data="group.changeSet" size="small" stripe :row-class-name="schemaPlanRowClassName">
+                    <el-table-column label="动作" width="116">
+                      <template #default="{ row }">
+                        <el-tag size="small" :type="schemaRiskTagType(row.riskLevel)" effect="plain">
+                          {{ schemaChangeActionLabel(row.action) }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="字段" min-width="170">
+                      <template #default="{ row }">
+                        <div class="metadata-field-name">{{ row.tableName || '-' }}.{{ row.columnName || '-' }}</div>
+                        <div v-if="row.standardFieldName" class="muted-text">{{ row.standardFieldName }}</div>
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="property" label="属性" min-width="100" />
+                    <el-table-column label="风险" width="98">
+                      <template #default="{ row }">
+                        <el-tag size="small" :type="schemaRiskTagType(row.riskLevel)" effect="plain">
+                          {{ schemaRiskLabel(row.riskLevel) }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="当前值" min-width="150" show-overflow-tooltip>
+                      <template #default="{ row }">{{ formatSchemaPlanValue(row.currentValue) }}</template>
+                    </el-table-column>
+                    <el-table-column label="目标值" min-width="150" show-overflow-tooltip>
+                      <template #default="{ row }">{{ formatSchemaPlanValue(row.targetValue) }}</template>
+                    </el-table-column>
+                    <el-table-column prop="reason" label="说明" min-width="220" show-overflow-tooltip />
+                  </el-table>
+                </el-collapse-item>
+              </el-collapse>
+              <div class="schema-plan-sql">
+                <div class="list-title">dry-run SQL 草案</div>
+                <pre class="schema-plan-sql-block">{{ schemaPlan.migrationSql || '-- 暂无 SQL 草案' }}</pre>
+                <div v-if="schemaPlan.rollbackHint" class="schema-plan-rollback">
+                  回滚提示：{{ schemaPlan.rollbackHint }}
+                </div>
+              </div>
             </div>
 
             <el-alert
@@ -706,6 +808,7 @@ import {
   compareDatabaseReverseImport,
   importDatabaseCandidates,
   listDatabaseTables,
+  planDatabaseSchemaChange,
   previewDatabaseReverseImport,
   previewReverseImport,
   scanDatabaseMetadata,
@@ -771,6 +874,12 @@ import {
   securityRiskTagType,
   writeRiskLabel
 } from '@/utils/databaseSecurityDiagnostic'
+import {
+  buildSchemaPlanAiSummary,
+  schemaChangeActionLabel,
+  schemaRiskLabel,
+  schemaRiskTagType
+} from '@/utils/databaseSchemaPlan'
 import { copyRouteUrl, readEnumQuery, readPositiveIntQuery, readStringQuery, replaceRouteQuery } from '@/utils/urlState'
 import type {
   DatabaseConnectionReq,
@@ -783,6 +892,8 @@ import type {
   DatabaseMetadataCacheMode,
   DatabaseMetadataScanReq,
   DatabaseMetadataScanResult,
+  DatabaseSchemaChangeItem,
+  DatabaseSchemaChangePlan,
   DatabaseTableInfo,
   FieldCandidate,
   ReverseImportDecision,
@@ -800,6 +911,10 @@ type CompareStatusFilter = 'ALL' | ReverseImportFieldStatus
 type CompareTableGroup = Omit<ReverseImportTableDiff, 'fieldDiffs'> & {
   fieldDiffs: ReverseImportFieldDiff[]
 }
+type SchemaPlanTableGroup = {
+  tableName: string
+  changeSet: DatabaseSchemaChangeItem[]
+}
 
 const projectStore = useProjectStore()
 const route = useRoute()
@@ -808,9 +923,11 @@ const activeMode = ref<ReverseImportMode>('sql')
 const sqlText = ref('')
 const preview = ref<ReverseImportPreview | null>(null)
 const compareResult = ref<ReverseImportCompareResult | null>(null)
+const schemaPlan = ref<DatabaseSchemaChangePlan | null>(null)
 const importResult = ref<DatabaseImportResult | null>(null)
 const previewLoading = ref(false)
 const compareLoading = ref(false)
+const schemaPlanLoading = ref(false)
 const testLoading = ref(false)
 const tableLoading = ref(false)
 const scanLoading = ref(false)
@@ -876,6 +993,9 @@ const canGeneratePreview = computed(() =>
 const canGenerateCompare = computed(() =>
   activeMode.value === 'database' && canPreviewDatabase.value
 )
+const canGenerateSchemaPlan = computed(() =>
+  activeMode.value === 'database' && canPreviewDatabase.value
+)
 const canScanMetadata = computed(() =>
   activeMode.value === 'database' && canUseDatabaseConnection.value
 )
@@ -935,7 +1055,7 @@ const databaseStep = computed(() => {
   if (importResult.value) {
     return 3
   }
-  if (preview.value || compareResult.value) {
+  if (preview.value || compareResult.value || schemaPlan.value) {
     return 2
   }
   if (selectedTableCount.value > 0) {
@@ -985,6 +1105,7 @@ const activeMetadataCache = computed(() =>
   ?? scanResult.value?.metadataCache
   ?? preview.value?.metadataCache
   ?? compareResult.value?.metadataCache
+  ?? schemaPlan.value?.metadataCache
   ?? null
 )
 const metadataCacheSummaryText = computed(() =>
@@ -1052,6 +1173,25 @@ const compareGroups = computed<CompareTableGroup[]>(() =>
       )
     }))
     .filter((group) => group.fieldDiffs.length > 0)
+)
+const schemaPlanSummaryItems = computed(() => [
+  { key: 'risk', label: '整体风险', value: schemaRiskLabel(schemaPlan.value?.riskLevel) },
+  { key: 'tables', label: '表', value: schemaPlan.value?.summary?.tableCount ?? 0 },
+  { key: 'columns', label: '字段', value: schemaPlan.value?.summary?.columnCount ?? 0 },
+  { key: 'changes', label: '变更项', value: schemaPlan.value?.summary?.changeCount ?? 0 },
+  { key: 'blocked', label: '阻塞项', value: schemaPlan.value?.summary?.blockedCount ?? 0 },
+  { key: 'high', label: '高风险', value: schemaPlan.value?.summary?.highRiskCount ?? 0 }
+])
+const schemaPlanGroups = computed<SchemaPlanTableGroup[]>(() => {
+  const groups = new Map<string, DatabaseSchemaChangeItem[]>()
+  for (const item of schemaPlan.value?.changeSet ?? []) {
+    const tableName = item.tableName || '未命名表'
+    groups.set(tableName, [...(groups.get(tableName) ?? []), item])
+  }
+  return [...groups.entries()].map(([tableName, changeSet]) => ({ tableName, changeSet }))
+})
+const schemaPlanAiSummary = computed(() =>
+  buildSchemaPlanAiSummary(schemaPlan.value)
 )
 const urlSourceBatchId = computed(() =>
   readPositiveIntQuery(route.query, 'sourceBatchId') ?? readPositiveIntQuery(route.query, 'batchId')
@@ -1157,6 +1297,7 @@ watch([tableSearch, compareStatusFilter], () => {
 function resetResults() {
   preview.value = null
   compareResult.value = null
+  schemaPlan.value = null
   importResult.value = null
   metadataBrowser.value = null
   metadataSearch.value = ''
@@ -1350,6 +1491,22 @@ async function handleGenerateCompare() {
   }
 }
 
+async function handleGenerateSchemaPlan() {
+  if (!canGenerateSchemaPlan.value) {
+    return
+  }
+  schemaPlanLoading.value = true
+  try {
+    schemaPlan.value = await planDatabaseSchemaChange(databaseRequest())
+    importResult.value = null
+    connectionStatus.value = 'success'
+    connectionMessage.value = `已生成 ${schemaPlan.value.summary?.changeCount ?? 0} 个 schema 变更项`
+    ElMessage.success('迁移计划预览已生成')
+  } finally {
+    schemaPlanLoading.value = false
+  }
+}
+
 async function handleTestConnection() {
   if (!canUseDatabaseConnection.value) {
     return
@@ -1467,6 +1624,7 @@ async function handleBrowseMetadata(metadataCacheMode: DatabaseMetadataCacheMode
     metadataBrowser.value = browser
     preview.value = browser.preview ?? null
     compareResult.value = browser.compare ?? null
+    schemaPlan.value = null
     importResult.value = null
     selectedCandidateKeys.value = buildBrowserCandidateKeySet(browser)
     candidateConfirmReasons.value = {}
@@ -1527,6 +1685,11 @@ async function handleImportCandidates() {
 async function handleCopyMetadataSummary() {
   await navigator.clipboard.writeText(metadataAiSummary.value)
   ElMessage.success('AI 摘要已复制')
+}
+
+async function handleCopySchemaPlanSummary() {
+  await navigator.clipboard.writeText(schemaPlanAiSummary.value)
+  ElMessage.success('迁移计划摘要已复制')
 }
 
 function handleFileChange(uploadFile: UploadFile) {
@@ -1674,6 +1837,19 @@ function changePropertyLabel(property?: string) {
 
 function formatChangeValue(value?: string) {
   return value === undefined || value === null || value === '' ? '空' : value
+}
+
+function formatSchemaPlanValue(value?: string) {
+  return value === undefined || value === null || value === '' ? '-' : value
+}
+
+function schemaPlanRowClassName({ row }: { row: DatabaseSchemaChangeItem }) {
+  const action = (row.action ?? '').toUpperCase()
+  const riskLevel = (row.riskLevel ?? '').toUpperCase()
+  if (action === 'DROP_CANDIDATE' || riskLevel === 'HIGH' || riskLevel === 'BLOCKED') {
+    return 'schema-plan-row-danger'
+  }
+  return ''
 }
 
 function changeText(change: ReverseImportFieldChange) {
@@ -2235,6 +2411,23 @@ function browserStorage() {
   background: #fff;
 }
 
+.schema-plan-preview {
+  padding: 14px;
+  border: 1px solid #d9ecff;
+  border-radius: 6px;
+  background: #fbfdff;
+}
+
+.schema-plan-meta {
+  display: flex;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .metadata-summary {
   margin-bottom: 12px;
 }
@@ -2288,6 +2481,79 @@ function browserStorage() {
 .metadata-field-name {
   color: #1f2937;
   font-weight: 600;
+}
+
+.schema-plan-summary {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.schema-plan-notes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.schema-plan-list {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.schema-plan-list.danger {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.schema-plan-list.warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.schema-plan-list ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: #4b5563;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.schema-plan-groups {
+  margin-bottom: 12px;
+}
+
+.schema-plan-sql {
+  margin-top: 12px;
+}
+
+.schema-plan-sql-block {
+  max-height: 260px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #e5e7eb;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.schema-plan-rollback {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+:deep(.schema-plan-row-danger) {
+  --el-table-tr-bg-color: #fff7f7;
 }
 
 .summary-grid {

@@ -25,6 +25,10 @@ import com.dataspec.reverseimport.model.DatabaseMetadataScanProgress;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanSummary;
+import com.dataspec.reverseimport.model.DatabaseSchemaChangeAction;
+import com.dataspec.reverseimport.model.DatabaseSchemaChangeItem;
+import com.dataspec.reverseimport.model.DatabaseSchemaChangePlan;
+import com.dataspec.reverseimport.model.DatabaseSchemaChangeSummary;
 import com.dataspec.reverseimport.model.DatabaseSchemaColumn;
 import com.dataspec.reverseimport.model.DatabaseSchemaIndex;
 import com.dataspec.reverseimport.model.DatabaseSchemaSource;
@@ -33,6 +37,7 @@ import com.dataspec.reverseimport.model.DatabaseTableInfo;
 import com.dataspec.reverseimport.model.FieldCandidate;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.model.ReverseImportCompareSummary;
+import com.dataspec.reverseimport.model.ReverseImportFieldChange;
 import com.dataspec.reverseimport.model.ReverseImportFieldDiff;
 import com.dataspec.reverseimport.model.ReverseImportFieldStatus;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
@@ -51,6 +56,9 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -69,6 +77,10 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     private static final String TYPE_POSTGRESQL = "postgresql";
     private static final String TYPE_MYSQL = "mysql";
     private static final String RISK_SAFE = "SAFE";
+    private static final String SCHEMA_RISK_LOW = "LOW";
+    private static final String SCHEMA_RISK_MEDIUM = "MEDIUM";
+    private static final String SCHEMA_RISK_HIGH = "HIGH";
+    private static final String SCHEMA_RISK_BLOCKED = "BLOCKED";
     private static final String RISK_WARNING = "WARNING";
     private static final String RISK_DANGER = "DANGER";
     private static final String RISK_UNKNOWN = "UNKNOWN";
@@ -296,6 +308,42 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     }
 
     @Override
+    public DatabaseSchemaChangePlan planSchemaChange(DatabaseConnectionReq req) {
+        DatabaseSchemaDump dump = exportDump(req);
+        DatabaseSchemaDumpReq dumpReq = new DatabaseSchemaDumpReq();
+        dumpReq.setProjectId(req.getProjectId());
+        dumpReq.setDump(dump);
+        ReverseImportCompareResult compare = compareDump(dumpReq);
+
+        DatabaseSchemaChangePlan plan = new DatabaseSchemaChangePlan();
+        plan.setProjectId(req.getProjectId());
+        plan.setDatabaseType(sanitizeMetadataText(normalizeDiagnosticType(databaseType(req)), req));
+        plan.setDatabaseName(sanitizeMetadataText(dump.getDatabaseName(), req));
+        plan.setSchemaName(sanitizeMetadataText(dump.getSchemaName(), req));
+        plan.setCurrentSchemaHash(sha256Hex(schemaHashSource(dump)));
+        plan.setTargetSpecHash(sha256Hex(targetHashSource(compare)));
+        plan.setMetadataCache(dump.getMetadataCache());
+
+        List<String> sqlDrafts = new ArrayList<>();
+        for (ReverseImportTableDiff tableDiff : compare.getTableDiffs()) {
+            for (ReverseImportFieldDiff diff : tableDiff.getFieldDiffs()) {
+                plan.getChangeSet().addAll(changeItems(diff, req, sqlDrafts));
+            }
+        }
+        plan.setSummary(schemaPlanSummary(dump, plan.getChangeSet()));
+        plan.setRiskLevel(overallSchemaPlanRisk(plan.getSummary()));
+        plan.setMigrationSql(sanitizeMetadataText(String.join("\n\n", sqlDrafts), req));
+        plan.setRollbackHint(schemaPlanRollbackHint(plan.getRiskLevel()));
+        plan.setManualChecks(schemaPlanManualChecks(plan.getChangeSet(), req));
+        plan.setBlockedReasons(schemaPlanBlockedReasons(plan.getChangeSet(), req));
+        plan.setNextActions(schemaPlanNextActions(plan));
+        if (isBlank(plan.getMigrationSql())) {
+            plan.setMigrationSql("-- DataSpec schema plan: no schema changes suggested for the selected metadata scope.");
+        }
+        return plan;
+    }
+
+    @Override
     public FieldCoverageReport coverage(DatabaseConnectionReq req) {
         if (fieldCoverageService == null) {
             throw new BizException("字段覆盖率服务未初始化");
@@ -314,6 +362,295 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         FieldCoverageReport report = fieldCoverageService.reportTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), req.getDump()));
         report.setMetadataCache(req.getDump().getMetadataCache());
         return report;
+    }
+
+    private List<DatabaseSchemaChangeItem> changeItems(ReverseImportFieldDiff diff,
+                                                        DatabaseConnectionReq req,
+                                                        List<String> sqlDrafts) {
+        if (diff == null || diff.getStatus() == null || ReverseImportFieldStatus.MATCHED.equals(diff.getStatus())) {
+            return List.of();
+        }
+        if (ReverseImportFieldStatus.NEW.equals(diff.getStatus()) || Boolean.TRUE.equals(diff.getNonStandard())) {
+            DatabaseSchemaChangeItem item = baseSchemaChangeItem(diff, req);
+            item.setAction(DatabaseSchemaChangeAction.DROP_CANDIDATE);
+            item.setProperty("column");
+            item.setCurrentValue(sanitizeMetadataText(diff.getDataType(), req));
+            item.setRiskLevel(SCHEMA_RISK_HIGH);
+            item.setReason("字段未命中 DataSpec 标准，第一版只作为删除候选提示，不生成可执行 DROP。");
+            String blocked = "未纳管字段 " + diff.getTableName() + "." + diff.getColumnName()
+                    + " 需要人工确认是否补标准、保留兼容或另行迁移，不能自动删除。";
+            item.getBlockedReasons().add(sanitizeMetadataText(blocked, req));
+            item.getManualChecks().add(sanitizeMetadataText("确认 " + diff.getTableName() + "." + diff.getColumnName()
+                    + " 是否仍被业务代码、报表或历史数据依赖。", req));
+            item.setMigrationSql(sanitizeMetadataText("-- BLOCKED DROP_CANDIDATE "
+                    + qualifiedColumn(diff, req) + ": review manually before writing destructive SQL.", req));
+            item.setRollbackHint("未生成可执行删除 SQL；如后续人工删除，必须先准备备份和反向 ADD COLUMN 迁移。");
+            sqlDrafts.add(item.getMigrationSql());
+            return List.of(item);
+        }
+
+        List<DatabaseSchemaChangeItem> items = new ArrayList<>();
+        for (ReverseImportFieldChange change : diff.getChanges()) {
+            DatabaseSchemaChangeItem item = changeItem(diff, change, req);
+            if (item != null) {
+                items.add(item);
+                sqlDrafts.add(item.getMigrationSql());
+            }
+        }
+        return items;
+    }
+
+    private DatabaseSchemaChangeItem changeItem(ReverseImportFieldDiff diff,
+                                                ReverseImportFieldChange change,
+                                                DatabaseConnectionReq req) {
+        if (change == null || isBlank(change.getProperty())) {
+            return null;
+        }
+        DatabaseSchemaChangeItem item = baseSchemaChangeItem(diff, req);
+        item.setProperty(change.getProperty());
+        item.setCurrentValue(sanitizeMetadataText(change.getCurrentValue(), req));
+        item.setTargetValue(sanitizeMetadataText(change.getStandardValue(), req));
+        if ("comment".equals(change.getProperty())) {
+            item.setAction(DatabaseSchemaChangeAction.ALTER_COMMENT);
+            item.setRiskLevel(SCHEMA_RISK_LOW);
+            item.setReason("字段注释与 DataSpec 标准不一致，可生成注释修正草案。");
+            item.setMigrationSql(sanitizeMetadataText(commentSql(diff, change.getStandardValue(), req), req));
+            item.setRollbackHint("回滚时可将字段注释恢复为当前值：" + nullToDash(change.getCurrentValue()));
+            return item;
+        }
+
+        item.setAction(DatabaseSchemaChangeAction.ALTER_COLUMN);
+        item.setRiskLevel(SCHEMA_RISK_MEDIUM);
+        item.setReason("字段结构属性与 DataSpec 标准不一致，执行前需要确认数据兼容性。");
+        item.getManualChecks().add(sanitizeMetadataText("确认 " + diff.getTableName() + "." + diff.getColumnName()
+                + " 的 " + change.getProperty() + " 变更不会破坏历史数据、索引、默认值或业务代码。", req));
+        item.setMigrationSql(sanitizeMetadataText(alterColumnSql(diff, change, req), req));
+        item.setRollbackHint("回滚时按当前值恢复 " + change.getProperty() + "=" + nullToDash(change.getCurrentValue()) + "。");
+        return item;
+    }
+
+    private DatabaseSchemaChangeItem baseSchemaChangeItem(ReverseImportFieldDiff diff, DatabaseConnectionReq req) {
+        DatabaseSchemaChangeItem item = new DatabaseSchemaChangeItem();
+        item.setTableName(sanitizeMetadataText(diff.getTableName(), req));
+        item.setColumnName(sanitizeMetadataText(diff.getColumnName(), req));
+        item.setStandardFieldName(sanitizeMetadataText(diff.getStandardFieldName(), req));
+        return item;
+    }
+
+    private DatabaseSchemaChangeSummary schemaPlanSummary(DatabaseSchemaDump dump, List<DatabaseSchemaChangeItem> items) {
+        DatabaseSchemaChangeSummary summary = new DatabaseSchemaChangeSummary();
+        summary.setTableCount(dump.getTables().size());
+        summary.setColumnCount(dump.getTables().stream().mapToInt(table -> table.getColumns().size()).sum());
+        summary.setChangeCount(items.size());
+        for (DatabaseSchemaChangeItem item : items) {
+            if (SCHEMA_RISK_LOW.equals(item.getRiskLevel())) {
+                summary.setLowRiskCount(summary.getLowRiskCount() + 1);
+            } else if (SCHEMA_RISK_MEDIUM.equals(item.getRiskLevel())) {
+                summary.setMediumRiskCount(summary.getMediumRiskCount() + 1);
+            } else if (SCHEMA_RISK_HIGH.equals(item.getRiskLevel())) {
+                summary.setHighRiskCount(summary.getHighRiskCount() + 1);
+            }
+            if (item.getBlockedReasons() != null && !item.getBlockedReasons().isEmpty()) {
+                summary.setBlockedCount(summary.getBlockedCount() + 1);
+            }
+        }
+        return summary;
+    }
+
+    private String overallSchemaPlanRisk(DatabaseSchemaChangeSummary summary) {
+        if (summary.getBlockedCount() > 0) {
+            return SCHEMA_RISK_BLOCKED;
+        }
+        if (summary.getHighRiskCount() > 0) {
+            return SCHEMA_RISK_HIGH;
+        }
+        if (summary.getMediumRiskCount() > 0) {
+            return SCHEMA_RISK_MEDIUM;
+        }
+        if (summary.getLowRiskCount() > 0) {
+            return SCHEMA_RISK_LOW;
+        }
+        return RISK_SAFE;
+    }
+
+    private List<String> schemaPlanManualChecks(List<DatabaseSchemaChangeItem> items, DatabaseConnectionReq req) {
+        List<String> checks = new ArrayList<>();
+        for (DatabaseSchemaChangeItem item : items) {
+            for (String check : item.getManualChecks()) {
+                addDistinct(checks, sanitizeMetadataText(check, req));
+            }
+        }
+        if (!items.isEmpty()) {
+            addDistinct(checks, "执行正式迁移前，先把 dry-run SQL 交给迁移工具或 DBA 审阅，并在备份/恢复方案可用后再 apply。");
+        }
+        return checks;
+    }
+
+    private List<String> schemaPlanBlockedReasons(List<DatabaseSchemaChangeItem> items, DatabaseConnectionReq req) {
+        List<String> reasons = new ArrayList<>();
+        for (DatabaseSchemaChangeItem item : items) {
+            for (String reason : item.getBlockedReasons()) {
+                addDistinct(reasons, sanitizeMetadataText(reason, req));
+            }
+        }
+        return reasons;
+    }
+
+    private List<String> schemaPlanNextActions(DatabaseSchemaChangePlan plan) {
+        List<String> actions = new ArrayList<>();
+        if (RISK_SAFE.equals(plan.getRiskLevel())) {
+            actions.add("当前选择范围没有需要生成迁移草案的字段差异。");
+            return actions;
+        }
+        actions.add("先审阅 changeSet、manualChecks 和 blockedReasons，再决定是否生成正式迁移文件。");
+        if (!plan.getBlockedReasons().isEmpty()) {
+            actions.add("高风险或阻塞项需要人工确认后再交给迁移工具。");
+        }
+        actions.add("正式迁移前建议导出项目备份，并在业务仓库中新增可回滚迁移脚本。");
+        return actions;
+    }
+
+    private String schemaPlanRollbackHint(String riskLevel) {
+        if (SCHEMA_RISK_BLOCKED.equals(riskLevel) || SCHEMA_RISK_HIGH.equals(riskLevel)) {
+            return "存在高风险或阻塞项，未生成可自动执行计划；必须先确认备份、回滚 SQL 和业务代码引用。";
+        }
+        if (SCHEMA_RISK_MEDIUM.equals(riskLevel)) {
+            return "结构属性变更需要按字段当前值准备反向 ALTER，并在测试库验证数据兼容。";
+        }
+        if (SCHEMA_RISK_LOW.equals(riskLevel)) {
+            return "低风险注释变更可通过恢复原注释回滚。";
+        }
+        return "无迁移草案，无需回滚。";
+    }
+
+    private String commentSql(ReverseImportFieldDiff diff, String targetComment, DatabaseConnectionReq req) {
+        if (TYPE_MYSQL.equals(databaseType(req))) {
+            return "-- REVIEW MySQL comment change for " + qualifiedColumn(diff, req)
+                    + ": generate MODIFY COLUMN with the full column definition before execution.";
+        }
+        return "COMMENT ON COLUMN " + qualifiedColumn(diff, req) + " IS " + sqlLiteral(targetComment) + ";";
+    }
+
+    private String alterColumnSql(ReverseImportFieldDiff diff, ReverseImportFieldChange change, DatabaseConnectionReq req) {
+        String column = qualifiedColumn(diff, req);
+        if (TYPE_MYSQL.equals(databaseType(req))) {
+            return "-- REVIEW MySQL " + change.getProperty() + " change for " + column
+                    + ": generate ALTER TABLE MODIFY COLUMN with full type/nullability/default context.";
+        }
+        // 结构属性可能包含 AI/用户维护的类型或默认值片段，第一版只写入 REVIEW 注释，避免复制即执行的 SQL 注入或破坏性 DROP。
+        return "-- REVIEW PostgreSQL " + change.getProperty() + " change for " + column
+                + ": confirm data compatibility and generate a reviewed migration with DBA/tooling.";
+    }
+
+    private String qualifiedColumn(ReverseImportFieldDiff diff, DatabaseConnectionReq req) {
+        String schemaName = sqlSchemaName(req);
+        if (!isBlank(schemaName)) {
+            return quoteIdentifier(schemaName, req) + "." + quoteIdentifier(diff.getTableName(), req)
+                    + "." + quoteIdentifier(diff.getColumnName(), req);
+        }
+        return quoteIdentifier(diff.getTableName(), req) + "." + quoteIdentifier(diff.getColumnName(), req);
+    }
+
+    private String sqlSchemaName(DatabaseConnectionReq req) {
+        if (TYPE_MYSQL.equals(databaseType(req))) {
+            return null;
+        }
+        return firstNonBlank(req.getSchemaName(), "public");
+    }
+
+    private String quoteIdentifier(String value, DatabaseConnectionReq req) {
+        String quote = TYPE_MYSQL.equals(databaseType(req)) ? "`" : "\"";
+        String escaped = singleLineSqlIdentifier(value).replace(quote, quote + quote);
+        return quote + escaped + quote;
+    }
+
+    private String singleLineSqlIdentifier(String value) {
+        if (value == null) {
+            return "";
+        }
+        StringBuilder safe = new StringBuilder(value.length());
+        boolean lastWasSpace = false;
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if (Character.isISOControl(ch)) {
+                if (!lastWasSpace) {
+                    safe.append(' ');
+                    lastWasSpace = true;
+                }
+                continue;
+            }
+            safe.append(ch);
+            lastWasSpace = Character.isWhitespace(ch);
+        }
+        return safe.toString().trim();
+    }
+
+    private String schemaHashSource(DatabaseSchemaDump dump) {
+        StringBuilder source = new StringBuilder();
+        source.append(dump.getDatabaseType()).append('|')
+                .append(dump.getDatabaseName()).append('|')
+                .append(dump.getSchemaName()).append('|');
+        for (DatabaseSchemaTable table : dump.getTables()) {
+            source.append("table:")
+                    .append(table.getSchemaName()).append('.')
+                    .append(table.getTableName()).append(':')
+                    .append(table.getTableType()).append(':')
+                    .append(table.getComment()).append('|');
+            for (DatabaseSchemaColumn column : table.getColumns()) {
+                source.append("column:")
+                        .append(column.getOrdinalPosition()).append(':')
+                        .append(column.getColumnName()).append(':')
+                        .append(column.getDataType()).append(':')
+                        .append(column.getNullable()).append(':')
+                        .append(column.getDefaultValue()).append(':')
+                        .append(column.getComment()).append('|');
+            }
+            for (DatabaseSchemaIndex index : table.getIndexes()) {
+                source.append("index:")
+                        .append(index.getIndexName()).append(':')
+                        .append(index.getColumnName()).append(':')
+                        .append(index.getNonUnique()).append('|');
+            }
+        }
+        return source.toString();
+    }
+
+    private String targetHashSource(ReverseImportCompareResult compare) {
+        StringBuilder source = new StringBuilder();
+        for (ReverseImportTableDiff table : compare.getTableDiffs()) {
+            for (ReverseImportFieldDiff diff : table.getFieldDiffs()) {
+                source.append(diff.getTableName()).append('.')
+                        .append(diff.getColumnName()).append(':')
+                        .append(diff.getStandardFieldName()).append(':')
+                        .append(diff.getStandardDisplayName()).append(':')
+                        .append(diff.getStatus()).append('|');
+                for (ReverseImportFieldChange change : diff.getChanges()) {
+                    source.append(change.getProperty()).append('=')
+                            .append(change.getStandardValue()).append('|');
+                }
+            }
+        }
+        return source.toString();
+    }
+
+    private void addDistinct(List<String> values, String value) {
+        if (!isBlank(value) && !values.contains(value)) {
+            values.add(value);
+        }
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(nullToDash(value).getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm is required", e);
+        }
     }
 
     private DatabaseMetadataBrowser buildBrowser(DatabaseConnectionReq req,

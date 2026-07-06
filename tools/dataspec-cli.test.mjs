@@ -3138,6 +3138,86 @@ test('generate-ddl calls ddl preview api and prints json', async () => {
   assert.equal(io.stderr, '')
 })
 
+test('schema-plan posts database connection request and prints readonly plan json', async () => {
+  const calls = []
+  const previous = process.env.DATASPEC_DB_PASSWORD
+  process.env.DATASPEC_DB_PASSWORD = 'raw-db-secret'
+  try {
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            kind: 'dataspec-database-schema-change-plan',
+            riskLevel: 'BLOCKED',
+            currentSchemaHash: 'a'.repeat(64),
+            targetSpecHash: 'b'.repeat(64),
+            changeSet: [{ tableName: 'user_order', columnName: 'legacy_col', action: 'DROP_CANDIDATE' }],
+            migrationSql: '-- BLOCKED DROP_CANDIDATE "user_order"."legacy_col": review manually before writing destructive SQL.',
+            blockedReasons: ['legacy_col 需要人工确认'],
+            nextActions: ['高风险或阻塞项需要人工确认后再交给迁移工具。']
+          }
+        })
+      }
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'schema-plan',
+      '--project',
+      '7',
+      '--database-type',
+      'postgresql',
+      '--host',
+      'localhost',
+      '--port',
+      '5432',
+      '--database',
+      'demo',
+      '--schema',
+      'public',
+      '--username',
+      'readonly',
+      '--password-env',
+      'DATASPEC_DB_PASSWORD',
+      '--table',
+      'user_order',
+      '--format',
+      'json',
+      '--server',
+      'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(calls[0].url, 'http://dataspec.local/api/reverse-import/database/schema-plan')
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      projectId: 7,
+      databaseType: 'postgresql',
+      host: 'localhost',
+      port: 5432,
+      databaseName: 'demo',
+      schemaName: 'public',
+      username: 'readonly',
+      password: 'raw-db-secret',
+      tableNames: ['user_order']
+    })
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.kind, 'dataspec-database-schema-change-plan')
+    assert.equal(output.riskLevel, 'BLOCKED')
+    assert.doesNotMatch(io.stdout, /raw-db-secret|jdbc:/)
+    assert.equal(io.stderr, '')
+  } finally {
+    if (previous === undefined) {
+      delete process.env.DATASPEC_DB_PASSWORD
+    } else {
+      process.env.DATASPEC_DB_PASSWORD = previous
+    }
+  }
+})
+
 test('cli ai contract keeps stable json fields while allowing additive fields', async () => {
   const io = createIo('CREATE TABLE UserOrder (id bigint);')
   const fetchFn = async (url, options) => {

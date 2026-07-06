@@ -9,6 +9,7 @@ import com.dataspec.reverseimport.model.DatabaseImportResult;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
+import com.dataspec.reverseimport.model.DatabaseSchemaChangePlan;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
@@ -93,6 +94,14 @@ public class ReverseImportController {
     @PostMapping("/database/compare")
     public R<ReverseImportCompareResult> compareDatabase(@Valid @RequestBody DatabaseConnectionReq req) {
         return R.ok(databaseReverseImportService.compare(req));
+    }
+
+    /**
+     * 只读生成数据库 schema change plan，输出 dry-run SQL、风险和人工确认点；不会执行迁移。
+     */
+    @PostMapping("/database/schema-plan")
+    public R<DatabaseSchemaChangePlan> planDatabaseSchemaChange(@Valid @RequestBody DatabaseConnectionReq req) {
+        return R.ok(databaseReverseImportService.planSchemaChange(req));
     }
 
     @PostMapping("/dump/compare")

@@ -44,8 +44,9 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 表名/字段名 snake_case、禁用字段名、推荐字段名、必备列、金额类型、字段后缀/前缀类型和注释缺失等规则。
 - 项目级规则例外，支持按规则编码、表名和字段名声明历史兼容原因；被豁免问题保留在结果中但不计入 active error/warning/suggestion。
 - 修正 SQL 输出、复制、检查记录、分页历史和详情查看。
-- SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项、非标准字段差异和字段级映射决策，并支持填写确认理由后导入数标候选；直连模式支持按表生成数据库现状与 DataSpec 标准字段的二次比对、项目级非敏感连接预设复用、连接健康与方言能力画像、只读 metadata 浏览器、大库分页扫描计划和 AI 可读结构摘要，并追踪确认导入后的字段来源批次和 mapping decision。
+- SQL / 数据库直连反向导入预览，输出解析表、字段候选、缺注释项、非标准字段差异和字段级映射决策，并支持填写确认理由后导入数标候选；直连模式支持按表生成数据库现状与 DataSpec 标准字段的二次比对、项目级非敏感连接预设复用、连接健康与方言能力画像、只读 metadata 浏览器、大库分页扫描计划、schema change plan 预览和 AI 可读结构摘要，并追踪确认导入后的字段来源批次和 mapping decision。
 - 数据库 schema dump，支持把选定 PostgreSQL/MySQL 表结构 metadata 导出为离线 JSON，并从 dump 复现反向导入预览、标准差异比对和字段覆盖率报告；dump 会包含可用的索引 metadata，但不包含业务数据行。
+- 数据库 schema change plan，基于当前 schema metadata 与 DataSpec 标准比对生成 `currentSchemaHash`、`targetSpecHash`、`changeSet`、`riskLevel`、`migrationSql`、`rollbackHint`、`manualChecks`、`blockedReasons` 和 `nextActions`；第一版只输出 dry-run 草案和风险说明，不执行迁移、不替代 Flyway/Liquibase/Atlas。
 - 字段覆盖率报告，支持基于 SQL/DDL、数据库直连 metadata 或 schema dump 统计标准命中、别名命中、未纳管、缺注释和疑似重复字段。
 
 ### 生成与报告
@@ -79,7 +80,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 字段推荐与字段标准检索 API/CLI/MCP；启用的业务术语表会参与“会员手机号”“订单费用”等自然语言 query 的确定性匹配，并在命中原因中标记 `术语表`；推荐和检索结果包含轻量 evidence 数组，便于 AI 读取来源、置信度和文档引用。
 - DDL 生成 API/CLI/MCP。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
-- CLI 支持业务仓库初始化 `init`、AI 会话启动包 `bootstrap`、AI 任务卡 `task-card`、环境自检 `doctor`、版本兼容检查 `compat check`、capability catalog、workflow recipes、AI task run 查询、质量门禁检查、单文件 lint、批量 `lint-files`、变更感知 `changed/lint-changed`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、历史快照 Context 导出、字段推荐、字段标准检索和 DDL 生成。
+- CLI 支持业务仓库初始化 `init`、AI 会话启动包 `bootstrap`、AI 任务卡 `task-card`、环境自检 `doctor`、版本兼容检查 `compat check`、capability catalog、workflow recipes、AI task run 查询、质量门禁检查、单文件 lint、批量 `lint-files`、变更感知 `changed/lint-changed`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、历史快照 Context 导出、字段推荐、字段标准检索、DDL 生成和数据库 schema plan 只读预览。
 - MCP Server 暴露 DataSpec resources、resource templates、version compatibility、session bootstrap、agent guidance pack、task card tools、capability catalog、workflow recipes、AI task runs、prompts、核心 tools 和 evidence package 导出 tool。
 - GitHub Actions 示例支持 SQL 批量校验、PR diff inline 评论和 fallback 汇总评论。
 - 本地 Docker Compose 一键启动和 demo smoke 验证，适合个人试用、演示和 AI agent 启动前检查。
@@ -455,7 +456,7 @@ curl "http://localhost:8090/api/generator/ddl/preview?projectId=1&templateId=1&t
 
 `/api/lint/debug` 复用同一份 `LintRequest`，返回 `debugVersion`、`lintResult`、`rules[]` 和 `debugNotes[]`，用于解释每条 SQL 规则的启用状态、参数快照、匹配 trace、source range、修复策略和豁免状态。该接口是只读调试入口，不保存 SQL 检查记录、不生成 AI replay，也不会写回业务仓库；参数快照会对 password、token、secret、Authorization、JDBC URL 和 DSN 等敏感值做脱敏。前端 SQL 校验页提供“规则调试”面板，CLI 可用 `lint-debug` 输出同结构 JSON。
 
-反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、分页扫描大库、浏览只读 metadata、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。SQL 文本和数据库直连预览都会展示方言诊断；PostgreSQL 直连会提示 schema 过滤，MySQL 直连会提示 databaseName 作为 catalog、schemaName 不参与过滤等边界。连接测试会返回 `security` 与 `health` 两组诊断：`security` 继续表达只读风险，`health` 输出连接状态、耗时、失败分类、retryable、数据库产品/版本、schema/comment/index capability、所需只读权限、warnings 和 nextActions；失败信息会统一脱敏，不返回 password、token 或完整 JDBC URL。直连模式还可以生成 scan plan、只读 metadata browser 和二次比对：scan plan 返回 `scanId`、表总量估算、当前页表、cursor、progress、partialSummary、resumeCommand 和 cancel 状态，前端可按批次继续、取消并保留已选择表；metadata browser 支持按 schema、表、字段、注释、类型、索引或标准匹配搜索，展示标准命中、缺注释、属性变化、未纳管和可导入候选状态，并提供可复制的 AI schema-only 摘要；二次比对按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选。页面会按项目在浏览器本地记住数据库类型、host、port、database、schema、username、表选择、搜索词和差异筛选，不保存数据库密码、token 或完整连接串。当前项目可保存多个数据库连接预设，服务端只持久化预设名、databaseType、host、port、databaseName、schemaName 和 tableNames；反向导入页可选择预设回填连接元数据和表选择，用户名和密码仍由用户当次输入。数据库直连预览会为字段输出 `EXISTING_MATCH`、`NEW_CANDIDATE` 等 mapping decision；确认导入时可填写 `confirmReason`，未勾选候选会记录默认忽略理由，导入结果返回 `batchId` 和 imported/skipped/ignored 决策摘要。确认导入创建的新字段会记录导入批次、来源 schema/table/column、原始 metadata 快照和字段级映射决策，字段库可查看来源摘要；从导入结果跳转字段库时会自动携带字段关键词并筛选当前页结果，带 `sourceBatchId` 的链接也能直达字段库来源筛选。直连模式不会修改源数据库，也不会做定时同步或业务数据采样。
+反向导入页支持粘贴 SQL DDL，也支持 PostgreSQL/MySQL 数据库直连：填写连接信息后可测试连接、加载表、筛选并选择表、分页扫描大库、浏览只读 metadata、生成 metadata 预览、勾选字段候选并确认导入到当前项目字段库。SQL 文本和数据库直连预览都会展示方言诊断；PostgreSQL 直连会提示 schema 过滤，MySQL 直连会提示 databaseName 作为 catalog、schemaName 不参与过滤等边界。连接测试会返回 `security` 与 `health` 两组诊断：`security` 继续表达只读风险，`health` 输出连接状态、耗时、失败分类、retryable、数据库产品/版本、schema/comment/index capability、所需只读权限、warnings 和 nextActions；失败信息会统一脱敏，不返回 password、token 或完整 JDBC URL。直连模式还可以生成 scan plan、只读 metadata browser、二次比对和 schema change plan：scan plan 返回 `scanId`、表总量估算、当前页表、cursor、progress、partialSummary、resumeCommand 和 cancel 状态，前端可按批次继续、取消并保留已选择表；metadata browser 支持按 schema、表、字段、注释、类型、索引或标准匹配搜索，展示标准命中、缺注释、属性变化、未纳管和可导入候选状态，并提供可复制的 AI schema-only 摘要；二次比对按表展示已匹配、属性变化、新增、缺注释和非标准字段，并支持按状态筛选；schema change plan 在同一只读 metadata 与 compare 语义上输出整体风险、阻塞原因、人工检查、按表分组的变更项和 dry-run SQL 草案，高风险 `DROP_CANDIDATE` 只作为人工确认项，不生成可执行删除 SQL。页面会按项目在浏览器本地记住数据库类型、host、port、database、schema、username、表选择、搜索词和差异筛选，不保存数据库密码、token 或完整连接串。当前项目可保存多个数据库连接预设，服务端只持久化预设名、databaseType、host、port、databaseName、schemaName 和 tableNames；反向导入页可选择预设回填连接元数据和表选择，用户名和密码仍由用户当次输入。数据库直连预览会为字段输出 `EXISTING_MATCH`、`NEW_CANDIDATE` 等 mapping decision；确认导入时可填写 `confirmReason`，未勾选候选会记录默认忽略理由，导入结果返回 `batchId` 和 imported/skipped/ignored 决策摘要。确认导入创建的新字段会记录导入批次、来源 schema/table/column、原始 metadata 快照和字段级映射决策，字段库可查看来源摘要；从导入结果跳转字段库时会自动携带字段关键词并筛选当前页结果，带 `sourceBatchId` 的链接也能直达字段库来源筛选。直连模式不会修改源数据库，也不会做定时同步或业务数据采样。
 
 后端支持将直连 metadata 导出为离线 schema dump，并用同一份 dump 复现标准分析：
 
@@ -472,6 +473,10 @@ curl -X POST "http://localhost:8090/api/reverse-import/database/scan" \
   -H "Content-Type: application/json" \
   -d '{"projectId":1,"databaseType":"postgresql","host":"localhost","port":5432,"databaseName":"demo","schemaName":"public","username":"readonly","password":"<password>","pageSize":50}'
 
+curl -X POST "http://localhost:8090/api/reverse-import/database/schema-plan" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"databaseType":"postgresql","host":"localhost","port":5432,"databaseName":"demo","schemaName":"public","username":"readonly","password":"<password>","tableNames":["user_order"]}'
+
 curl -X POST "http://localhost:8090/api/reverse-import/dump/preview" \
   -H "Content-Type: application/json" \
   -d '{"projectId":1,"dump":{...}}'
@@ -482,6 +487,14 @@ curl -X POST "http://localhost:8090/api/reverse-import/dump/compare" \
 ```
 
 schema dump 只包含 databaseType、databaseName、schemaName、表、列、索引、类型、nullable、default、comment、tableType、generatedAt 和非敏感 source metadata；不会包含数据库密码、token、完整 JDBC URL 或业务数据行。metadata scan plan 只返回表级分页计划、当前页表、进度和脱敏恢复命令，不读取非当前页字段 metadata，也不会保存连接凭据。metadata browser 会在同一只读边界内返回 summary、表字段浏览行、候选默认选择、preview/compare/coverage 复用结果和 `aiReadableSummary`。
+
+CLI 可用同一只读接口输出未包裹的 JSON plan，推荐通过环境变量读取数据库密码：
+
+```bash
+DATASPEC_DB_PASSWORD=*** node tools/dataspec-cli.mjs schema-plan --project 1 --database-type postgresql --host localhost --database demo --schema public --username readonly --password-env DATASPEC_DB_PASSWORD --table user_order --format json
+```
+
+`schema-plan` 第一版不会执行迁移、不会生成最终迁移文件，也不会替代 Flyway/Liquibase/Atlas。`migrationSql` 是审计草案；注释修正可以给出 `COMMENT ON` 草案，类型、nullable、default 等结构属性只输出 `-- REVIEW` 人工确认文本，不拼接可执行 `ALTER TABLE`。存在 `blockedReasons` 或 `manualChecks` 时，应先人工确认再把 SQL 交给迁移工具。
 
 方言能力第一版边界：
 
