@@ -4,10 +4,10 @@
 
 ## 下一步顺序
 
-1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90 已完成第一版；P6-78 OpenSpec change 已归档到 `openspec/changes/archive/2026-07-06-add-fixedsql-file-patch-flow`，P6-88 OpenSpec change `add-code-field-reference-index` 和 P6-90 OpenSpec change `add-ai-context-budget-planner` 保持 active，后续不自动归档。
-2. 近期优先行动项已清空，后续开发由用户从 P6-91 以后候选池或新需求中选择，不再从 P6-71 到 P6-188 全量顺扫。
+1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90、P6-91、P6-92、P6-93 已完成第一版；P6-78 OpenSpec change 已归档到 `openspec/changes/archive/2026-07-06-add-fixedsql-file-patch-flow`，P6-88 OpenSpec change `add-code-field-reference-index`、P6-90 OpenSpec change `add-ai-context-budget-planner` 和 P6-93 OpenSpec change `add-contract-candidate-import` 保持 active，后续不自动归档。
+2. 近期优先行动项已清空，后续开发由用户从 P6-94 以后候选池或新需求中选择，不再从 P6-71 到 P6-188 全量顺扫。
 3. 效率优先顺序：真实数据库集成测试已作为可选 Docker profile，不默认阻塞小任务；下一项开工前按任务类型重新判断快速/常规/SDD。
-4. 暂缓池：P6-91 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
+4. 暂缓池：P6-94 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
 5. 每次开工先按任务类型决定快速/常规/SDD：文档与小前端走快速；单模块功能走常规；API/CLI/MCP/AI 外部协议、安全、存储或数据库写入才进入 SDD standard/full。
 
 ## 历史追加记录（已降级为背景）
@@ -42,7 +42,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
 - 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，P6-10 已完成数据库直连配置预设第一版，P6-11 已完成 MCP/CLI 任务化工作流模板第一版，P6-12 已完成 AI 输出契约稳定性第一版，P6-13 已完成 GitHub inline review 第一版，P6-14 已完成字段分组体验第一版，P6-15 已完成字段批量维护与回退第一版，P6-16 已完成性能基线第一版，P6-17 已完成前端冒烟门禁第一版，P6-18 已完成 AI 可读错误诊断第一版，P6-19 已完成字段标准检索第一版，P6-20 已完成 OpenSpec 归档收口第一版，P6-21 已完成历史快照导出与记录回放第一版，P6-22 已完成 SQL/DDL 多方言兼容矩阵与诊断第一版，P6-23 已完成规则模板库与项目基线套件第一版，P6-24 已完成项目备份恢复迁移包第一版，P6-25 已完成数据库直连只读安全诊断第一版，P6-26 已完成 AI 批量任务交付包第一版，P6-27 已完成 AI 使用反馈与标准改进闭环第一版，P6-28 已完成标准候选 Inbox 与采纳工作台第一版，P6-29 已完成离线 AI Context 缓存第一版，P6-30 已完成数据库 schema dump 第一版，P6-31 已完成 Prompt 模板版本化与效果评测第一版，P6-32 已完成项目活动时间线第一版，P6-33 已完成前端任务式导航第一版，P6-34 已完成本地启动包第一版，P6-35 已完成 fixedSql 策略第一版，P6-36 已完成 AI 使用画像与任务模式配置第一版，P6-37 已完成标准契约 Registry 第一版，P6-38 已完成执行证据包和交付归档第一版，P6-39 已完成前端统一状态第一版，P6-40 已完成并发幂等和任务锁第一版，P6-41 已完成标准变更 What-if 预览第一版，P6-42 已完成领域 Starter Kit 第一版，P6-43 已完成 AI 能力清单第一版，P6-44 已完成前端 URL 状态与可复现操作链接第一版，P6-45 已完成敏感信息脱敏与日志输出边界第一版，P6-46 已完成按变更范围推荐验证命令第一版，P6-47 已完成 TODO 到 OpenSpec 的实施交接助手第一版，P6-48 已完成业务术语表与同义词词根库第一版，P6-49 已完成自然语言需求到标准候选草案第一版，P6-50 已完成 AI 输出引用证据与 Explain Trace 第一版，P6-51 已完成标准字段生命周期状态机第一版，P6-52 已完成业务仓库变更感知扫描与最小上下文第一版，P6-53 已完成标准健康趋势与改进计划第一版，P6-54 已完成数据库连接健康探测与方言能力画像第一版，P6-55 已完成字段值格式与校验样例库第一版，P6-56 已完成标准字段别名冲突与命名保留字检测第一版，P6-57 已完成反向导入字段映射策略与确认理由第一版，P6-58 已完成 AI 任务失败重试与断点续跑第一版，P6-59 已完成标准质量门禁与阈值策略第一版，P6-60 已完成标准字段使用示例与反例库第一版，P6-61 已完成 AI 会话启动包与当前上下文握手第一版，P6-62 已完成 AI 任务卡与单步可恢复执行协议第一版，P6-63 已完成数据库直连元数据浏览器与候选选择页第一版，P6-64 已完成大库扫描计划、分页预览与取消恢复第一版，P6-65 已完成标准字段智能合并向导第一版，P6-66 已完成前端命令面板与最近操作续跑第一版，P6-67 已完成 AI 交接证据看板第一版，P6-68 已完成多项目标准复用包与轻量继承第一版，后续再推进 P6-69 AI 写入安全策略与 dry-run 协议。
-- 最新收束状态（2026-07-07）：P6-69 AI 写入安全策略与 dry-run 协议、P6-70 SQL 规则调试器与可解释匹配面板、P6-72 CLI/MCP 与服务端版本兼容握手、P6-73 前端类型化 API Client 与请求状态收口、P6-75 MCP/CLI 工具契约验收与示例调用库、P6-78 fixedSql 文件级补丁应用与人工确认、P6-79 标准问答只读入口与证据引用、P6-88 业务代码字段引用索引与重命名风险分析、P6-89 MCP Prompt/Resource 一等化与 Agent 引导包已完成第一版；近期开发按顶部优先行动队列推进，不再默认从完整 P6 候选池线性顺扫。
+- 最新收束状态（2026-07-07）：P6-69 AI 写入安全策略与 dry-run 协议、P6-70 SQL 规则调试器与可解释匹配面板、P6-72 CLI/MCP 与服务端版本兼容握手、P6-73 前端类型化 API Client 与请求状态收口、P6-75 MCP/CLI 工具契约验收与示例调用库、P6-78 fixedSql 文件级补丁应用与人工确认、P6-79 标准问答只读入口与证据引用、P6-88 业务代码字段引用索引与重命名风险分析、P6-89 MCP Prompt/Resource 一等化与 Agent 引导包、P6-90 AI Context 预算计划、P6-91 本地 pre-commit 与 IDE 保存前 SQL 标准检查、P6-92 标准样例自动生成、P6-93 多源契约候选导入预览已完成第一版；近期开发按顶部优先行动队列推进，不再默认从完整 P6 候选池线性顺扫。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -924,13 +924,13 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不替代人工维护的高价值真实样例，不引入外部 LLM 自动造数据，不自动写入标准使用示例库，不生成可直接写入生产库的数据。
 
 ### P6-93：多源契约反向导入到标准候选
-- 状态：待办。
+- 状态：已完成第一版，OpenSpec change `add-contract-candidate-import` 保持 active，暂不自动归档。
 - 为什么做：很多字段标准并不只存在于数据库，还散落在 OpenAPI、JSON Schema、Protobuf、事件 schema 和前端类型里；AI 建表或修 SQL 时如果只看数据库来源，会遗漏接口层已经稳定下来的业务命名。
 - 已有基础：已有 OpenAPI 类型生成、字段推荐、标准候选 Inbox、数据库反向导入、字段来源追踪、业务代码引用索引和 AI Context。
-- 缺口：缺少从 API/Schema 契约反向抽取字段候选的统一入口；无法记录字段来自哪个接口、消息、版本和属性路径，也无法和数据库字段候选合并比对。
-- 落地产物：新增契约导入预览 API/CLI；支持 OpenAPI、JSON Schema 和 Protobuf descriptor 或 `.proto` 文件输入，输出 candidateFields、sourceKind、sourcePath、schemaVersion、confidence、conflictReasons 和 recommendedAction；前端复用候选采纳台确认写入。
-- 验收标准：给定一份接口契约，能抽取字段名、类型、描述、必填性、枚举和示例值作为标准候选；候选可与已有字段、数据库反向导入结果去重；AI Context 能标明字段来源于 API 契约还是数据库。
-- 边界：第一版不做全语言类型系统解析，不直接写入正式标准，不替代数据库反向导入；复杂 oneOf/allOf/泛型先保守降级为人工确认。
+- 已完成能力：新增只读 `POST /api/contract-import/preview` 和 CLI `contract-import preview`，支持 OpenAPI、JSON Schema、Protobuf `.proto` 文本或 descriptor 风格 JSON 第一版字段抽取；输出 `candidateFields`、`contractHash`、`diagnostics`、`safety`、`nextActions` 和兼容现有候选创建语义的 `inboxPayload`。
+- 落地产物：新增后端 `contractimport` controller/service/model、后端 service/controller/contract fixture 测试、CLI 命令与测试、CLI/MCP contract fixture 校验、OpenSpec delta 和 README 说明；候选会与当前项目已有标准字段及同包重复字段做确定性去重，命中已有字段时建议 `MERGE_EXISTING`，复杂契约结构建议 `REVIEW_REQUIRED`。
+- 验收标准：给定一份接口契约，能抽取字段名、类型、描述、必填性、枚举和示例值作为标准候选；输出稳定字段和安全 metadata；契约内容、sourcePath、diagnostics、CLI stdout/stderr 默认脱敏 token、password、Authorization、API key、完整 JDBC URL、DSN 和连接串；验证证据记录在 `openspec/changes/add-contract-candidate-import/tasks.md` 的 `Verification Evidence`。
+- 边界：第一版只读，不自动写入候选 Inbox 或正式字段，不调用外部 LLM，不访问外部 URL，不读取真实业务数据行，不新增数据库表或迁移；复杂 `oneOf`、`anyOf`、`allOf`、`$ref`、泛型或深层嵌套先保守降级为人工确认。
 
 ### P6-94：标准来源可信度与 AI 置信度标记
 - 状态：待办。

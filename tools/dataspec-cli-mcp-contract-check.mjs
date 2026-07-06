@@ -31,6 +31,7 @@ const REQUIRED_CLI_COMMANDS = [
   'search-fields',
   'generate-ddl',
   'synthetic-examples-generate',
+  'contract-import-preview',
   'schema-plan'
 ]
 

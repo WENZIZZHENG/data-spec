@@ -226,6 +226,19 @@
       "recommendedNextActions": ["Use generated packages as backend fixtures or Prompt evaluation inputs.", "Convert useful cases into usage example drafts only after human review.", "Do not execute synthetic SQL directly against production databases."]
     },
     {
+      "id": "contract-import-preview",
+      "command": "contract-import preview --project <id> --source-kind <sourceKind> --input <path> --format json",
+      "description": "Preview standard candidate fields from OpenAPI, JSON Schema, or Protobuf contracts without persisting candidates.",
+      "requiredOptions": ["project", "source-kind", "input"],
+      "optionalOptions": ["max-candidates", "format", "server", "dataspec-token"],
+      "outputShape": ["kind", "schemaVersion", "projectId", "sourceKind", "sourcePath", "contractHash", "summary", "candidateFields[]", "candidateFields[].candidateKey", "candidateFields[].candidateName", "candidateFields[].displayName", "candidateFields[].dataType", "candidateFields[].required", "candidateFields[].enumValues[]", "candidateFields[].exampleValues[]", "candidateFields[].sourcePath", "candidateFields[].schemaVersion", "candidateFields[].confidence", "candidateFields[].recommendedAction", "candidateFields[].conflictReasons", "candidateFields[].inboxPayload", "diagnostics[]", "safety", "safety.readOnly", "safety.writesProject", "safety.containsRealBusinessRows", "safety.externalNetworkUsed", "safety.externalLlmUsed", "nextActions[]"],
+      "exitCodes": { "0": "contract candidate preview package printed", "2": "argument, missing input file, unsupported source kind, or request error" },
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "containsRealBusinessRows": false, "externalNetworkUsed": false, "externalLlmUsed": false, "sensitiveInputs": ["contractContent", "sourcePath", "dataspec-token"], "nextActions": ["Review REVIEW_REQUIRED candidates before creating inbox items.", "Submit inboxPayload through the existing reviewed candidate flow only after human approval."] },
+      "successExample": { "command": "node tools/dataspec-cli.mjs contract-import preview --project 1 --source-kind openapi --input contracts/order-openapi.yaml --format json", "output": { "kind": "dataspec.contract-candidate-preview", "sourceKind": "openapi", "contractHash": "0123456789abcdef", "candidateFields": [{ "candidateKey": "openapi:order_id", "candidateName": "order_id", "displayName": "订单ID", "dataType": "bigint", "required": true, "enumValues": [], "exampleValues": ["1001"], "sourcePath": "#/components/schemas/Order/properties/orderId", "schemaVersion": 1, "confidence": 82, "recommendedAction": "CREATE_CANDIDATE", "conflictReasons": [], "inboxPayload": { "sourceType": "CONTRACT_IMPORT" } }], "safety": { "readOnly": true, "writesProject": false, "containsRealBusinessRows": false, "externalNetworkUsed": false, "externalLlmUsed": false } } },
+      "failureExample": { "exitCode": 2, "diagnostic": { "code": "CONTRACT_IMPORT_INVALID", "category": "VALIDATION" } },
+      "recommendedNextActions": ["Use JSON output for AI/CI replay and fixture updates.", "Review diagnostics and conflictReasons before submitting candidateFields[].inboxPayload.", "Do not treat preview as an automatic import into the standard candidate inbox."]
+    },
+    {
       "id": "schema-plan",
       "command": "schema-plan --project <id> --database-type <postgresql|mysql> --host <host> --database <name> --username <user> --password-env <env> --table <name> --format json",
       "description": "Generate a read-only database schema change plan with dry-run SQL, risk, manual checks, blocked reasons, and next actions.",

@@ -2,7 +2,7 @@
 
 **AI 编程时代的数据字段标准系统**
 
-DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、全局命令面板、最近操作续跑、统一前端数据状态、项目活动时间线、标准健康趋势、标准质量门禁、领域 Starter Kit、业务术语表、标准使用示例与反例库、合成标准样例生成、自然语言需求草案、Explain Trace、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、标准复用包、AI Context、AI 会话启动包、AI 任务卡、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 任务失败恢复、AI 执行证据包、AI 交接证据看板、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
+DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、表模板和建表规范。当前已形成个人/小团队可用的字段标准工作台，并提供任务式入口、全局命令面板、最近操作续跑、统一前端数据状态、项目活动时间线、标准健康趋势、标准质量门禁、领域 Starter Kit、业务术语表、标准使用示例与反例库、合成标准样例生成、多源契约候选预览、自然语言需求草案、Explain Trace、SQL 校验、DDL 生成、标准候选采纳、数据字典、Excel 导入导出、项目备份恢复、标准复用包、AI Context、AI 会话启动包、AI 任务卡、AI 能力清单、AI 任务模式、AI 回放与反馈、AI 批量任务交付包、AI 任务失败恢复、AI 执行证据包、AI 交接证据看板、API Token 安全基线与管理页、单机轻量幂等写保护、CLI、MCP 和 GitHub PR Review 等能力。
 
 ## 技术栈
 
@@ -80,8 +80,9 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 字段推荐与字段标准检索 API/CLI/MCP；启用的业务术语表会参与“会员手机号”“订单费用”等自然语言 query 的确定性匹配，并在命中原因中标记 `术语表`；推荐和检索结果包含轻量 evidence 数组，便于 AI 读取来源、置信度和文档引用。
 - DDL 生成 API/CLI/MCP。
 - 合成标准样例生成 API/CLI：`/api/synthetic-examples/generate` 和 `synthetic-examples generate` 可按用户、订单、支付、审计场景生成只读样例包，包含 good/bad SQL、DDL preview 输入、字段推荐问题、标准问答案例、预期诊断、`specHash`、生成参数和安全 metadata。
+- 多源契约候选导入预览 API/CLI：`POST /api/contract-import/preview` 和 `contract-import preview` 可从 OpenAPI、JSON Schema、Protobuf `.proto` / descriptor 风格输入抽取字段候选，输出 `candidateFields`、`contractHash`、`diagnostics`、`safety`、`nextActions` 和可复用候选审核流程的 `inboxPayload`；第一版只读，不自动写入候选 Inbox 或正式字段。
 - 轻量 API Token 管理页，支持创建、禁用、授权范围查看、最近使用时间和一次性明文复制。
-- CLI 支持业务仓库初始化 `init`、AI 会话启动包 `bootstrap`、AI 任务卡 `task-card`、环境自检 `doctor`、版本兼容检查 `compat check`、capability catalog、workflow recipes、AI task run 查询、质量门禁检查、单文件 lint、批量 `lint-files`、变更感知 `changed/lint-changed`、本地 SQL 检查 hook 安装 `install-hook`、业务代码字段引用索引 `index-refs`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、AI Context 预算计划、历史快照 Context 导出、字段推荐、字段标准检索、DDL 生成、合成标准样例生成和数据库 schema plan 只读预览。
+- CLI 支持业务仓库初始化 `init`、AI 会话启动包 `bootstrap`、AI 任务卡 `task-card`、环境自检 `doctor`、版本兼容检查 `compat check`、capability catalog、workflow recipes、AI task run 查询、质量门禁检查、单文件 lint、批量 `lint-files`、变更感知 `changed/lint-changed`、本地 SQL 检查 hook 安装 `install-hook`、业务代码字段引用索引 `index-refs`、AI 批量交付包文件输出、PR inline/汇总评论式 `review-pr`、AI Context 导出、AI Context 预算计划、历史快照 Context 导出、字段推荐、字段标准检索、DDL 生成、合成标准样例生成、契约候选导入预览和数据库 schema plan 只读预览。
 - MCP Server 暴露 DataSpec resources、resource templates、version compatibility、session bootstrap、agent guidance pack、task card tools、capability catalog、workflow recipes、AI task runs、prompts、核心 tools 和 evidence package 导出 tool。
 - GitHub Actions 示例支持 SQL 批量校验、PR diff inline 评论和 fallback 汇总评论。
 - 本地 Docker Compose 一键启动和 demo smoke 验证，适合个人试用、演示和 AI agent 启动前检查。
@@ -216,6 +217,24 @@ node tools/dataspec-cli.mjs synthetic-examples generate --project 1 --scenario a
 ```
 
 返回 JSON 包含 `kind/schemaVersion/projectId/scenario/specHash/generationParams/sourceSummary/goodSql/badSql/ddlPreviewInputs/fieldSuggestionQuestions/standardQaCases/expectedDiagnostics/diagnostics/safety/nextActions`。`specHash` 基于标准摘要、场景和生成参数确定性计算；标准字段或模板摘要变化后 hash 会变化。`safety` 会声明 `readOnly=true`、`writesProject=false`、`containsRealBusinessRows=false`、`externalLlmUsed=false`。生成器不会写入标准库、不会调用外部 LLM、不会生成真实业务数据行；项目素材不足时会用内置场景字段补齐，并在 diagnostics 中标记 fallback。
+
+## 契约候选导入预览
+
+契约候选导入预览用于把 OpenAPI、JSON Schema、Protobuf `.proto` 文本或 descriptor 风格 JSON 中的字段抽成标准候选草案，并与当前项目已有标准字段做只读匹配。它适合在接口或消息契约已经稳定、但数据库反向导入还看不到这些字段时，先生成可审核候选包。
+
+```bash
+curl -X POST "http://localhost:8090/api/contract-import/preview" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"sourceKind":"openapi","sourcePath":"contracts/order-openapi.yaml","contractContent":"openapi: 3.0.3\ncomponents:\n  schemas:\n    Order:\n      type: object\n      properties:\n        orderId:\n          type: integer\n          format: int64"}'
+
+node tools/dataspec-cli.mjs contract-import preview --project 1 --source-kind openapi --input contracts/order-openapi.yaml --format json
+node tools/dataspec-cli.mjs contract-import preview --project 1 --source-kind json-schema --input contracts/customer.schema.json --format text
+node tools/dataspec-cli.mjs contract-import preview --project 1 --source-kind protobuf --input contracts/order.proto --format json
+```
+
+返回 JSON 包含 `kind/schemaVersion/projectId/sourceKind/sourcePath/contractHash/summary/candidateFields/diagnostics/safety/nextActions`。每个 `candidateFields[]` 包含 `candidateKey/candidateName/displayName/dataType/required/enumValues/exampleValues/sourcePath/schemaVersion/confidence/conflictReasons/recommendedAction/inboxPayload`。其中 `inboxPayload` 兼容现有标准候选创建语义，供人工复核后复用候选审核流程；预览本身不会自动创建候选、不会写正式字段、不会访问外部 URL、不会调用外部 LLM，也不会读取业务数据行。
+
+第一版支持 `sourceKind=openapi|json-schema|protobuf`。复杂 `oneOf`、`anyOf`、`allOf`、`$ref`、泛型或深层嵌套会产生 diagnostics，并把相关候选标记为 `REVIEW_REQUIRED`；命中已有标准字段时标记 `MERGE_EXISTING`。契约内容、sourcePath、description、example、diagnostics、CLI stdout/stderr 会默认脱敏 token、password、Authorization/Bearer、API key、完整 JDBC URL、DSN 和 connection string。
 
 ## AI 会话启动包
 
@@ -1074,7 +1093,7 @@ data-spec/
 - [x] AI Context zip 导出、按需裁剪、历史快照导出、离线 `.dataspec/context/` 缓存、分组摘要、workflow recipes 和业务项目 `.dataspec/` 约定
 - [x] AI 会话启动包，支持 API `/api/bootstrap/session`、CLI `bootstrap`、MCP `session-bootstrap` resource 和 `get_session_bootstrap` tool，输出 projectId、server、authMode、specVersion、availableCapabilities、recommendedCommands、knownRisks、docsRefs 和 nextActions
 - [x] AI task profiles，支持 `create-table`、`sql-fix`、`reverse-import`、`pr-review`、`minimal-context` 默认建议，前端可查看切换，CLI/MCP/doctor 可读取诊断
-- [x] AI 输出契约文档与 contract fixtures，覆盖 AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览、合成标准样例、CLI/MCP JSON 稳定字段
+- [x] AI 输出契约文档与 contract fixtures，覆盖 AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览、合成标准样例、契约候选导入预览、CLI/MCP JSON 稳定字段
 - [x] AI 可读错误诊断，API 失败响应、CLI stderr 和 MCP JSON-RPC error 可输出 code/category/retryable/suggestedAction/docsRef
 - [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
 - [x] AI 建表 Prompt、SQL 修正 Prompt、Prompt template registry 和本地评测
@@ -1101,7 +1120,7 @@ data-spec/
 - [x] 前端反向导入高频流程记忆，按项目恢复非敏感连接信息、表选择、筛选状态和字段库关键词跳转
 - [x] 数据库直连非敏感连接预设，支持项目级保存、选择复用和表选择恢复，不持久化用户名、密码、token 或 JDBC URL
 - [x] 数据库连接健康探测与方言能力画像，连接测试返回健康状态、失败分类、重试建议、metadata capability、只读权限提示和前端诊断展示
-- [x] DataSpec CLI：`bootstrap`、`task-card create/show/update`、`doctor`、`compat check`、`profile list/show`、`workflow list/show`、`task list/failures/show`、`quality-gate check`、`contract list/show/check`、`evidence export`、`lint`、`lint-files`、`changed`、`lint-changed`、`install-hook`、`index-refs`、`review-pr`、`export-context`、`suggest-field`、`search-fields`、`generate-ddl`、`synthetic-examples generate`，支持 `.dataspec/config.json` 默认项目配置、AI profile 默认值、业务仓库 git 变更感知、本地 pre-commit/VS Code SQL 检查模板、业务代码字段引用索引、版本兼容诊断、标准质量门禁检查、AI task card 本地交接、AI batch delivery package 文件输出、AI task run 恢复诊断、按需/历史快照 Context 导出、合成标准样例包、AI evidence package 导出和 PR diff inline/fallback SQL Review
+- [x] DataSpec CLI：`bootstrap`、`task-card create/show/update`、`doctor`、`compat check`、`profile list/show`、`workflow list/show`、`task list/failures/show`、`quality-gate check`、`contract list/show/check`、`evidence export`、`lint`、`lint-files`、`changed`、`lint-changed`、`install-hook`、`index-refs`、`review-pr`、`export-context`、`suggest-field`、`search-fields`、`generate-ddl`、`synthetic-examples generate`、`contract-import preview`，支持 `.dataspec/config.json` 默认项目配置、AI profile 默认值、业务仓库 git 变更感知、本地 pre-commit/VS Code SQL 检查模板、业务代码字段引用索引、版本兼容诊断、标准质量门禁检查、AI task card 本地交接、AI batch delivery package 文件输出、AI task run 恢复诊断、按需/历史快照 Context 导出、合成标准样例包、契约候选导入预览、AI evidence package 导出和 PR diff inline/fallback SQL Review
 - [x] DataSpec MCP Server：resources、`version-compatibility`、`session-bootstrap`、`ai-task-profiles`、`ai-task-runs`、`workflow-recipes`、`schema-registry`、prompts、`get_session_bootstrap`、`create_task_card`、`render_task_card`、`lint_sql`、`get_field_catalog`、`search_field_catalog`、`search_fields`、`suggest_fields`、`generate_table_ddl`、`get_ai_task_run`、`export_evidence_package`，支持 `.dataspec/config.json` 默认项目配置、task card 本地交接和 profile hint
 - [x] GitHub Actions 示例和 PR inline/fallback 评论式 SQL Review
 - [x] 本地 Docker Compose 一键启动包和 demo smoke 验证，支持 PostgreSQL/后端/前端联动、端口覆盖、依赖缓存、text/json 输出和敏感信息脱敏

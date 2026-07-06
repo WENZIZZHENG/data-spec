@@ -1,0 +1,43 @@
+{
+  "requiredTopLevelFields": [
+    "kind",
+    "schemaVersion",
+    "projectId",
+    "sourceKind",
+    "sourcePath",
+    "contractHash",
+    "summary",
+    "candidateFields",
+    "diagnostics",
+    "safety",
+    "nextActions"
+  ],
+  "requiredCandidateFields": [
+    "candidateKey",
+    "candidateName",
+    "displayName",
+    "dataType",
+    "required",
+    "enumValues",
+    "exampleValues",
+    "sourcePath",
+    "schemaVersion",
+    "confidence",
+    "conflictReasons",
+    "recommendedAction",
+    "inboxPayload"
+  ],
+  "requiredSafetyFields": [
+    "readOnly",
+    "writesProject",
+    "externalNetworkUsed",
+    "externalLlmUsed",
+    "containsRealBusinessRows",
+    "sensitiveInputs"
+  ],
+  "supportedSourceKinds": [
+    "openapi",
+    "json-schema",
+    "protobuf"
+  ]
+}

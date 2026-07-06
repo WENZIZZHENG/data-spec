@@ -123,6 +123,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'synthetic-examples' || command === 'synthetic-example') {
       return await runSyntheticExamples(rest, io, fetchFn)
     }
+    if (command === 'contract-import' || command === 'contractimport') {
+      return await runContractImport(rest, io, fetchFn)
+    }
     if (command === 'schema-plan') {
       return await runSchemaPlan(rest, io, fetchFn)
     }
@@ -1402,6 +1405,71 @@ async function runSyntheticExamples(args, io, fetchFn) {
   io.writeOut(format === 'json'
     ? `${JSON.stringify(result, null, 2)}\n`
     : formatSyntheticExamplesText(result))
+  return 0
+}
+
+async function runContractImport(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'preview') {
+    throw new Error('contract-import 支持子命令: preview')
+  }
+  const { positional, options } = parseArgs(rest, [
+    'project',
+    'source-kind',
+    'sourceKind',
+    'input',
+    'max-candidates',
+    'maxCandidates',
+    'format',
+    'server',
+    'dataspec-token'
+  ])
+  const config = loadDataSpecConfig(cliCwd(io))
+  if (positional.length > 0) {
+    throw new Error(`contract-import preview 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const projectId = parseProjectId(options.project ?? config.projectId)
+  const sourceKind = normalizeContractSourceKind(options.sourceKind ?? options['source-kind'])
+  const inputOption = options.input
+  if (!inputOption) {
+    throw new Error('contract-import preview 需要提供 --input <path>')
+  }
+  const format = options.format ?? 'json'
+  if (format !== 'json' && format !== 'text') {
+    throw new Error('contract-import preview 仅支持 --format text|json')
+  }
+  const maxCandidatesOption = options.maxCandidates ?? options['max-candidates']
+  const maxCandidates = maxCandidatesOption === undefined
+    ? undefined
+    : parsePositiveInteger(maxCandidatesOption, 'maxCandidates')
+  const cwd = cliCwd(io)
+  const inputPath = path.resolve(cwd, inputOption)
+  let contractContent
+  try {
+    contractContent = await readFile(inputPath, 'utf8')
+  } catch {
+    throw new Error(`contract-import preview 输入文件不可读: ${sanitizeSecretText(inputOption)}`)
+  }
+
+  const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
+  const body = removeUndefinedValues({
+    projectId,
+    sourceKind,
+    sourcePath: formatInputSourcePath(inputPath, cwd),
+    contractContent,
+    maxCandidates
+  })
+  const response = await fetchFn(`${server}/api/contract-import/preview`, {
+    method: 'POST',
+    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body)
+  })
+  const payload = await readJsonResponse(response)
+  const result = unwrapResponse(payload)
+  io.writeOut(format === 'json'
+    ? `${JSON.stringify(result, null, 2)}\n`
+    : formatContractImportPreviewText(result))
   return 0
 }
 
@@ -3723,6 +3791,34 @@ function formatSyntheticExamplesText(result) {
   return `${lines.join('\n')}\n`
 }
 
+function formatContractImportPreviewText(result) {
+  const lines = [
+    'DataSpec Contract Import Preview',
+    `sourceKind: ${redactSecrets(result.sourceKind ?? '-')}`,
+    `projectId: ${result.projectId ?? '-'}`,
+    `sourcePath: ${redactSecrets(result.sourcePath ?? '-')}`,
+    `contractHash: ${redactSecrets(result.contractHash ?? '-')}`,
+    `sourceFieldCount: ${result.summary?.sourceFieldCount ?? '-'}`,
+    `candidateFields: ${(result.candidateFields ?? []).length}`,
+    `diagnostics: ${(result.diagnostics ?? []).length}`,
+    `readOnly: ${Boolean(result.safety?.readOnly)}`,
+    `writesProject: ${Boolean(result.safety?.writesProject)}`,
+    `externalNetworkUsed: ${Boolean(result.safety?.externalNetworkUsed)}`,
+    `externalLlmUsed: ${Boolean(result.safety?.externalLlmUsed)}`,
+    `containsRealBusinessRows: ${Boolean(result.safety?.containsRealBusinessRows)}`
+  ]
+  const reviewRequired = (result.candidateFields ?? [])
+    .filter((item) => item.recommendedAction === 'REVIEW_REQUIRED')
+    .length
+  const mergeExisting = (result.candidateFields ?? [])
+    .filter((item) => item.recommendedAction === 'MERGE_EXISTING')
+    .length
+  lines.push(`reviewRequired: ${reviewRequired}`)
+  lines.push(`mergeExisting: ${mergeExisting}`)
+  appendTextList(lines, 'next actions', (result.nextActions ?? []).map((item) => redactSecrets(item)))
+  return `${lines.join('\n')}\n`
+}
+
 function formatSessionBootstrapText(bootstrap) {
   const lines = [
     'DataSpec AI Session Bootstrap',
@@ -3967,6 +4063,15 @@ function normalizeSyntheticScenario(value) {
     throw new Error(`synthetic-examples generate 需要 --scenario <${supported.join('|')}>`)
   }
   return scenario
+}
+
+function normalizeContractSourceKind(value) {
+  const sourceKind = String(value ?? '').trim().toLowerCase()
+  const supported = ['openapi', 'json-schema', 'protobuf']
+  if (!supported.includes(sourceKind)) {
+    throw new Error(`contract-import preview 需要 --source-kind <${supported.join('|')}>`)
+  }
+  return sourceKind
 }
 
 function parseOptionalProjectId(value) {
@@ -5154,6 +5259,14 @@ function formatOutputPath(filePath) {
   return outputPath.replaceAll(path.sep, '/')
 }
 
+function formatInputSourcePath(filePath, cwd) {
+  const relativePath = path.relative(cwd, filePath)
+  const sourcePath = relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
+    ? relativePath
+    : filePath
+  return sourcePath.replaceAll(path.sep, '/')
+}
+
 async function upsertPullRequestComment({ repo, prNumber, token, githubApi, body, fetchFn }) {
   const repoPath = repo.split('/').map(encodeURIComponent).join('/')
   const listUrl = `${githubApi}/repos/${repoPath}/issues/${encodeURIComponent(prNumber)}/comments?per_page=100`
@@ -5706,6 +5819,7 @@ Usage:
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs synthetic-examples generate [--project <id>] --scenario <user|order|payment|audit> [--max-cases <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs contract-import preview [--project <id>] --source-kind <openapi|json-schema|protobuf> --input <path> [--max-candidates <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs schema-plan [--project <id>] --database-type <postgresql|mysql> --host <host> [--port <n>] --database <name> [--schema <schema>] --username <user> [--password-env <env>|--password <value>] --table <name> [--table <name> ...] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
   node tools/dataspec-cli.mjs bootstrap [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
@@ -5748,6 +5862,7 @@ Options:
   context-budget plan 是导出前只读预算预检；只调用后端 planner，不下载、不缓存、不写入 AI Context 文件
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   synthetic-examples generate 只读生成合成标准样例包，可作为 fixture、Prompt 评测或人工审核草案；不会写入项目标准或调用外部 LLM
+  contract-import preview 只读读取本地 OpenAPI/JSON Schema/Protobuf 契约并生成候选预览；不会自动写入标准字段或候选 Inbox
   schema-plan 只生成数据库 schema change plan 预览，不执行迁移；推荐使用 --password-env 读取数据库密码
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   bootstrap 是 AI 新会话第一跳；服务可达时读取后端启动包，服务不可达时仍输出本地 BLOCKED JSON 和 nextActions

@@ -110,6 +110,41 @@ test('bundled fixtures include synthetic examples readonly contract', async () =
   assert.ok(command.recommendedNextActions.some((item) => item.includes('usage example') || item.includes('Prompt')))
 })
 
+test('bundled fixtures include contract import preview readonly contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'contract-import-preview')
+
+  assert.ok(command)
+  assert.equal(command.command, 'contract-import preview --project <id> --source-kind <sourceKind> --input <path> --format json')
+  assert.deepEqual(command.requiredOptions, ['project', 'source-kind', 'input'])
+  assert.ok(command.optionalOptions.includes('max-candidates'))
+  assert.ok(command.outputShape.includes('contractHash'))
+  assert.ok(command.outputShape.includes('candidateFields[]'))
+  assert.ok(command.outputShape.includes('candidateFields[].candidateKey'))
+  assert.ok(command.outputShape.includes('candidateFields[].displayName'))
+  assert.ok(command.outputShape.includes('candidateFields[].required'))
+  assert.ok(command.outputShape.includes('candidateFields[].enumValues[]'))
+  assert.ok(command.outputShape.includes('candidateFields[].exampleValues[]'))
+  assert.ok(command.outputShape.includes('candidateFields[].schemaVersion'))
+  assert.ok(command.outputShape.includes('candidateFields[].confidence'))
+  assert.ok(command.outputShape.includes('candidateFields[].inboxPayload'))
+  assert.ok(command.outputShape.includes('safety.containsRealBusinessRows'))
+  assert.ok(command.outputShape.includes('safety.externalNetworkUsed'))
+  assert.equal(command.successExample.output.candidateFields[0].candidateKey, 'openapi:order_id')
+  assert.equal(command.successExample.output.candidateFields[0].displayName, '订单ID')
+  assert.equal(command.successExample.output.candidateFields[0].required, true)
+  assert.deepEqual(command.successExample.output.candidateFields[0].enumValues, [])
+  assert.deepEqual(command.successExample.output.candidateFields[0].exampleValues, ['1001'])
+  assert.equal(command.successExample.output.candidateFields[0].schemaVersion, 1)
+  assert.equal(command.successExample.output.candidateFields[0].confidence, 82)
+  assert.equal(command.safety.readOnly, true)
+  assert.equal(command.safety.writesProject, false)
+  assert.equal(command.safety.containsRealBusinessRows, false)
+  assert.equal(command.safety.externalNetworkUsed, false)
+  assert.equal(command.safety.externalLlmUsed, false)
+  assert.ok(command.recommendedNextActions.some((item) => item.includes('inboxPayload')))
+})
+
 test('bundled fixtures include install-hook local write contract', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'install-hook')
@@ -339,6 +374,17 @@ test('fixture checker rejects unsafe context-budget examples', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'context-budget-plan') ?? fixture.cliCommands[0]
   command.successExample.command = 'node tools/dataspec-cli.mjs context-budget plan --project 1 --token-budget 2400 --query "Authorization: Bearer raw-secret" --format json'
+
+  const result = await validateContractFixtures({ fixture })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'SECRET_LIKE_VALUE'))
+})
+
+test('fixture checker rejects unsafe contract import examples', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'contract-import-preview') ?? fixture.cliCommands[0]
+  command.successExample.output.candidateFields[0].displayName = '订单 Authorization: Bearer raw-secret'
 
   const result = await validateContractFixtures({ fixture })
 

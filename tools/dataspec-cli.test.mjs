@@ -4016,6 +4016,195 @@ test('synthetic-examples generate redacts server diagnostics', async () => {
   assert.doesNotMatch(io.stderr, /raw-secret/)
 })
 
+test('contract-import preview calls preview api and prints json', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-contract-import-'))
+  try {
+    const inputPath = path.join(dir, 'order-openapi.yaml')
+    const contractContent = 'openapi: 3.0.3\ncomponents:\n  schemas:\n    Order:\n      type: object\n'
+    await writeFile(inputPath, contractContent, 'utf8')
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: contractCandidatePreviewFixture('openapi')
+        })
+      }
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'contract-import',
+      'preview',
+      '--project',
+      '7',
+      '--source-kind',
+      'openapi',
+      '--input',
+      'order-openapi.yaml',
+      '--format',
+      'json',
+      '--server',
+      'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(calls[0].url, 'http://dataspec.local/api/contract-import/preview')
+    assert.equal(calls[0].options.method, 'POST')
+    assert.equal(calls[0].options.headers['Content-Type'], 'application/json')
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      projectId: 7,
+      sourceKind: 'openapi',
+      sourcePath: 'order-openapi.yaml',
+      contractContent
+    })
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.kind, 'dataspec.contract-candidate-preview')
+    assert.equal(output.sourceKind, 'openapi')
+    assert.equal(output.safety.readOnly, true)
+    assert.equal(output.safety.writesProject, false)
+    assert.equal(output.candidateFields[0].inboxPayload.sourceType, 'CONTRACT_IMPORT')
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('contract-import preview text prints concise summary', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-contract-import-text-'))
+  try {
+    await writeFile(path.join(dir, 'customer.schema.json'), '{"type":"object"}', 'utf8')
+    const fetchFn = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: contractCandidatePreviewFixture('json-schema')
+      })
+    })
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'contract-import',
+      'preview',
+      '--project',
+      '7',
+      '--source-kind',
+      'json-schema',
+      '--input',
+      'customer.schema.json',
+      '--format',
+      'text',
+      '--server',
+      'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.match(io.stdout, /DataSpec Contract Import Preview/)
+    assert.match(io.stdout, /sourceKind: json-schema/)
+    assert.match(io.stdout, /contractHash: contract-hash-json-schema/)
+    assert.match(io.stdout, /candidateFields: 1/)
+    assert.match(io.stdout, /readOnly: true/)
+    assert.match(io.stdout, /writesProject: false/)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('contract-import preview rejects missing input file and unsupported source kind safely', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-contract-import-invalid-'))
+  try {
+    const missingIo = createIo('', dir)
+    const missingCode = await runCli([
+      'contract-import',
+      'preview',
+      '--project',
+      '7',
+      '--source-kind',
+      'openapi',
+      '--input',
+      'missing-token=raw-secret.yaml',
+      '--format',
+      'json'
+    ], missingIo, async () => {
+      throw new Error('fetch should not be called')
+    })
+
+    const unsupportedIo = createIo('', dir)
+    const unsupportedCode = await runCli([
+      'contract-import',
+      'preview',
+      '--project',
+      '7',
+      '--source-kind',
+      'swagger-token=raw-secret',
+      '--input',
+      'missing.yaml',
+      '--format',
+      'json'
+    ], unsupportedIo, async () => {
+      throw new Error('fetch should not be called')
+    })
+
+    assert.equal(missingCode, 2)
+    assert.match(missingIo.stderr, /输入文件|input/)
+    assert.doesNotMatch(missingIo.stderr, /raw-secret/)
+    assert.equal(unsupportedCode, 2)
+    assert.match(unsupportedIo.stderr, /openapi\|json-schema\|protobuf|openapi/)
+    assert.doesNotMatch(unsupportedIo.stderr, /raw-secret/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('contract-import preview redacts server diagnostics', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-contract-import-error-'))
+  try {
+    await writeFile(path.join(dir, 'order.yaml'), 'openapi: 3.0.3', 'utf8')
+    const fetchFn = async () => ({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        code: 400,
+        message: '契约导入失败 token=raw-secret jdbc:postgresql://db.internal/app',
+        error: {
+          code: 'CONTRACT_IMPORT_INVALID',
+          category: 'VALIDATION',
+          suggestedAction: '检查 Authorization: Bearer raw-secret'
+        }
+      })
+    })
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'contract-import',
+      'preview',
+      '--project',
+      '7',
+      '--source-kind',
+      'openapi',
+      '--input',
+      'order.yaml',
+      '--format',
+      'json',
+      '--server',
+      'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /DataSpecError/)
+    assert.match(io.stderr, /\*\*\*/)
+    assert.doesNotMatch(io.stderr, /raw-secret/)
+    assert.doesNotMatch(io.stderr, /db\.internal/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('schema-plan posts database connection request and prints readonly plan json', async () => {
   const calls = []
   const previous = process.env.DATASPEC_DB_PASSWORD
@@ -5499,6 +5688,62 @@ function syntheticExamplesFixture(scenario = 'order') {
       sensitiveInputs: []
     },
     nextActions: ['人工审核后再采纳为 usage example']
+  }
+}
+
+function contractCandidatePreviewFixture(sourceKind = 'openapi') {
+  return {
+    kind: 'dataspec.contract-candidate-preview',
+    schemaVersion: 1,
+    projectId: 7,
+    sourceKind,
+    sourcePath: `contracts/sample-${sourceKind}.yaml`,
+    contractHash: `contract-hash-${sourceKind}`,
+    summary: {
+      sourceFieldCount: 1,
+      candidateCount: 1,
+      duplicateCount: 0,
+      existingMatchCount: 0,
+      diagnosticCount: 0,
+      truncated: false
+    },
+    candidateFields: [
+      {
+        candidateKey: `${sourceKind}:order_id`,
+        candidateName: 'order_id',
+        displayName: '订单ID',
+        dataType: 'bigint',
+        required: true,
+        enumValues: [],
+        exampleValues: ['1001'],
+        sourcePath: '#/components/schemas/Order/properties/orderId',
+        schemaVersion: 1,
+        confidence: 82,
+        conflictReasons: [],
+        recommendedAction: 'CREATE_CANDIDATE',
+        inboxPayload: {
+          projectId: 7,
+          candidateName: 'order_id',
+          displayName: '订单ID',
+          dataType: 'bigint',
+          comment: '订单ID',
+          sourceType: 'CONTRACT_IMPORT',
+          sourceRef: `${sourceKind}:#/components/schemas/Order/properties/orderId`,
+          evidenceJson: '{}',
+          confidence: 82
+        }
+      }
+    ],
+    diagnostics: [],
+    safety: {
+      readOnly: true,
+      writesProject: false,
+      externalNetworkUsed: false,
+      externalLlmUsed: false,
+      containsRealBusinessRows: false,
+      sensitiveInputs: []
+    },
+    nextActions: ['人工复核后再提交 inboxPayload']
   }
 }
 
