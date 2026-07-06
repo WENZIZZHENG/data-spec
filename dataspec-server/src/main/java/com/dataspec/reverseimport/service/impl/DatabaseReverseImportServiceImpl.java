@@ -903,7 +903,7 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         }
         try (Statement statement = connection.createStatement()) {
             if (TYPE_POSTGRESQL.equals(type)) {
-                readPostgresqlSignals(statement, signals);
+                readPostgresqlSignals(statement, signals, req);
             } else {
                 readMysqlSignals(statement, signals);
             }
@@ -913,7 +913,9 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         return signals;
     }
 
-    private void readPostgresqlSignals(Statement statement, Map<String, Object> signals) throws SQLException {
+    private void readPostgresqlSignals(Statement statement,
+                                       Map<String, Object> signals,
+                                       DatabaseConnectionReq req) throws SQLException {
         String currentUser = queryString(statement, "select current_user");
         if (!isBlank(currentUser)) {
             signals.put("currentUser", currentUser);
@@ -925,7 +927,31 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         }
         boolean canCreateDatabase = queryBoolean(statement,
                 "select has_database_privilege(current_database(), 'CREATE')");
-        signals.put("writeRisk", canCreateDatabase);
+        String schema = schemaPattern(req);
+        boolean canCreateSchema = queryBoolean(statement,
+                "select has_schema_privilege(" + sqlLiteral(schema) + ", 'CREATE')");
+        boolean canWriteTables = queryBoolean(statement, """
+                select exists (
+                    select 1
+                    from information_schema.tables
+                    where table_schema = %s
+                      and table_type = 'BASE TABLE'
+                      and (
+                          has_table_privilege(format('%%I.%%I', table_schema, table_name), 'INSERT')
+                          or has_table_privilege(format('%%I.%%I', table_schema, table_name), 'UPDATE')
+                          or has_table_privilege(format('%%I.%%I', table_schema, table_name), 'DELETE')
+                          or has_table_privilege(format('%%I.%%I', table_schema, table_name), 'TRUNCATE')
+                          or has_table_privilege(format('%%I.%%I', table_schema, table_name), 'REFERENCES')
+                          or has_table_privilege(format('%%I.%%I', table_schema, table_name), 'TRIGGER')
+                      )
+                )
+                """.formatted(sqlLiteral(schema)));
+        boolean writeRisk = canCreateDatabase || canCreateSchema || canWriteTables;
+        signals.put("writeRisk", writeRisk);
+        if (!writeRisk) {
+            // PostgreSQL 的 JDBC/事务只读标志不等同于账号权限；无写权限时才可判定为只读安全账号。
+            signals.put("readOnly", true);
+        }
     }
 
     private void readMysqlSignals(Statement statement, Map<String, Object> signals) throws SQLException {
@@ -1263,6 +1289,10 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
             return fallback;
         }
         return value.replaceAll("[^A-Za-z0-9_]", "_");
+    }
+
+    private String sqlLiteral(String value) {
+        return "'" + (value == null ? "" : value.replace("'", "''")) + "'";
     }
 
     private String sanitizeConnectionError(String message, DatabaseConnectionReq req) {

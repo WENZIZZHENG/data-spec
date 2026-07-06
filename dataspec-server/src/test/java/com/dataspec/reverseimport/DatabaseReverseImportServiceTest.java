@@ -104,7 +104,9 @@ class DatabaseReverseImportServiceTest {
             if (sql.contains("transaction_read_only")) {
                 return stringResult("on");
             }
-            if (sql.contains("has_database_privilege")) {
+            if (sql.contains("has_database_privilege")
+                    || sql.contains("has_schema_privilege")
+                    || sql.contains("has_table_privilege")) {
                 return booleanResult(false);
             }
             throw new SQLException("unexpected query: " + sql);
@@ -136,6 +138,51 @@ class DatabaseReverseImportServiceTest {
         assertThat(security.accessibleSchemaCount()).isEqualTo(1);
         assertThat(security.accessibleTableCount()).isEqualTo(2);
         assertThat(security.recommendedSql()).anyMatch(sql -> sql.contains("GRANT SELECT ON ALL TABLES"));
+        verify(statement, never()).execute(anyString());
+        verify(statement, never()).executeUpdate(anyString());
+    }
+
+    @Test
+    void testConnection_marksPostgresqlSelectOnlyAccountSafeWhenWriteRiskIsFalse() throws Exception {
+        DatabaseConnectionReq req = connectionReq();
+        Connection connection = mock(Connection.class);
+        DatabaseMetaData metaData = mock(DatabaseMetaData.class);
+        Statement statement = mock(Statement.class);
+        when(connection.getMetaData()).thenReturn(metaData);
+        when(connection.isReadOnly()).thenReturn(false);
+        when(connection.createStatement()).thenReturn(statement);
+        when(metaData.getUserName()).thenReturn("dataspec_ro");
+        when(metaData.isReadOnly()).thenReturn(false);
+        ResultSet schemas = rowCountResult(1);
+        ResultSet tables = rowCountResult(1);
+        when(metaData.getSchemas()).thenReturn(schemas);
+        when(metaData.getTables(any(), any(), any(), any())).thenReturn(tables);
+        when(statement.executeQuery(anyString())).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0, String.class).toLowerCase();
+            if (sql.contains("current_user")) {
+                return stringResult("dataspec_ro");
+            }
+            if (sql.contains("transaction_read_only")) {
+                return stringResult("off");
+            }
+            if (sql.contains("has_database_privilege")
+                    || sql.contains("has_schema_privilege")
+                    || sql.contains("has_table_privilege")) {
+                return booleanResult(false);
+            }
+            throw new SQLException("unexpected query: " + sql);
+        });
+        DatabaseReverseImportServiceImpl service = new DatabaseReverseImportServiceImpl(
+                mock(com.dataspec.reverseimport.service.ReverseImportService.class),
+                ignored -> connection);
+
+        DatabaseConnectionResult result = service.testConnection(req);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.security().readOnly()).isTrue();
+        assertThat(result.security().writeRisk()).isFalse();
+        assertThat(result.security().riskLevel()).isEqualTo("SAFE");
+        assertThat(result.security().warnings()).isEmpty();
         verify(statement, never()).execute(anyString());
         verify(statement, never()).executeUpdate(anyString());
     }
