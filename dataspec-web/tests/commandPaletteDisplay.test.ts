@@ -13,10 +13,13 @@ import type { AiJobRecordListItem, ReverseImportDecision, SqlCheckRecord } from 
 test('builds project-scoped command routes and missing project suggestions', () => {
   const scoped = buildCommandPaletteItems({ projectId: 7 })
   const sql = scoped.find((item) => item.id === 'page.sql-lint')
+  const standardQa = scoped.find((item) => item.id === 'page.standard-qa')
   const token = scoped.find((item) => item.id === 'page.tokens')
 
   assert.equal(sql?.route.path, '/sql-lint')
   assert.equal(sql?.route.query?.projectId, 7)
+  assert.equal(standardQa?.route.path, '/standard-qa')
+  assert.equal(standardQa?.route.query?.projectId, 7)
   assert.equal(token?.route.path, '/tokens')
   assert.equal(token?.route.query?.projectId, undefined)
 

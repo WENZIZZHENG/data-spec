@@ -41,6 +41,10 @@
             <el-icon><Collection /></el-icon>
             <span>示例与反例库</span>
           </el-menu-item>
+          <el-menu-item index="/standard-qa">
+            <el-icon><Search /></el-icon>
+            <span>标准问答</span>
+          </el-menu-item>
           <el-menu-item index="/standard-candidates">
             <el-icon><Collection /></el-icon>
             <span>标准候选</span>

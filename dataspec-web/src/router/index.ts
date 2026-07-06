@@ -37,6 +37,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '示例与反例库' }
   },
   {
+    path: '/standard-qa',
+    name: 'StandardQuestion',
+    component: () => import('@/views/StandardQuestion.vue'),
+    meta: { title: '标准问答' }
+  },
+  {
     path: '/standard-candidates',
     name: 'StandardCandidate',
     component: () => import('@/views/StandardCandidate.vue'),

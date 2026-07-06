@@ -27,6 +27,7 @@ test('keeps critical frontend routes and navigation entries wired', () => {
   const criticalRoutes = [
     { path: '/fields', view: 'FieldLibrary.vue', title: '标准字段库' },
     { path: '/usage-examples', view: 'UsageExamples.vue', title: '示例与反例库' },
+    { path: '/standard-qa', view: 'StandardQuestion.vue', title: '标准问答' },
     { path: '/standard-candidates', view: 'StandardCandidate.vue', title: '标准候选' },
     { path: '/sql-lint', view: 'SqlLint.vue', title: 'SQL 校验' },
     { path: '/generator', view: 'Generator.vue', title: '生成器' },
@@ -51,6 +52,15 @@ test('keeps critical frontend routes and navigation entries wired', () => {
     ], `router ${route.path}`)
     assertContains(app, [`index="${route.path}"`, route.title], `app navigation ${route.path}`)
   }
+})
+
+test('keeps standard question glossary lookup aligned with enabled status contract', () => {
+  const view = readSource('src/views/StandardQuestion.vue')
+
+  assertContains(view, [
+    "listAllBusinessGlossary(projectId, 'enabled')"
+  ], 'StandardQuestion glossary status')
+  assert.ok(!view.includes("listAllBusinessGlossary(projectId, 'ACTIVE')"))
 })
 
 test('keeps field conflict naming risk view wired', () => {
