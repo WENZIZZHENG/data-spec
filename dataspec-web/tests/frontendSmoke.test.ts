@@ -1251,6 +1251,10 @@ test('keeps DDL generation and AI Context export flows project-scoped', () => {
   assertContains(aiExport, [
     'projectStore.currentProjectId',
     'normalizeAiContextScopeParams(scopeForm)',
+    'planAiContextBudget(projectId, budgetRequest)',
+    'budgetPlan',
+    'recommendedExportParams',
+    '() => [scopeForm.scope, scopeForm.query, scopeForm.status, scopeForm.limit, budgetForm.tokenBudget]',
     'previewDatabaseRules(projectId, scopeParams)',
     'previewFieldCatalog(projectId, scopeParams)',
     'previewRulesYaml(projectId, scopeParams)',
@@ -1263,7 +1267,8 @@ test('keeps DDL generation and AI Context export flows project-scoped', () => {
     "request.get<unknown, string>('/ai-context/database-rules'",
     "request.get<unknown, string>('/ai-context/field-catalog'",
     "request.get<unknown, string>('/ai-context/rules-yaml'",
-    "request.get<unknown, Blob>('/ai-context/package/download'"
+    "request.get<unknown, Blob>('/ai-context/package/download'",
+    "request.post<unknown, AiContextBudgetPlan>('/ai-context/budget/plan'"
   ], 'AI Context api')
 })
 
@@ -1510,7 +1515,7 @@ test('keeps critical action labels and empty states visible', () => {
     },
     {
       path: 'src/views/AiExport.vue',
-      snippets: ['AI Context', '下载 Zip', '创建演示项目', '暂无预览', '请先选择项目']
+      snippets: ['AI Context', '下载 Zip', '创建演示项目', '暂无预览', '请先选择项目', '预算预览', '质量风险', '一键填充']
     },
     {
       path: 'src/views/FieldCoverage.vue',

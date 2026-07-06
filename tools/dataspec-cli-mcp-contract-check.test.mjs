@@ -72,6 +72,23 @@ test('bundled fixtures include index-refs readonly contract', async () => {
   assert.ok(command.recommendedNextActions.some((item) => item.includes('defaultPaths') || item.includes('--path')))
 })
 
+test('bundled fixtures include context-budget plan readonly contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'context-budget-plan')
+
+  assert.ok(command)
+  assert.equal(command.command, 'context-budget plan --project <id> --token-budget <n> --format json')
+  assert.deepEqual(command.requiredOptions, ['project', 'token-budget'])
+  assert.ok(command.optionalOptions.includes('target-table'))
+  assert.ok(command.optionalOptions.includes('target-file'))
+  assert.ok(command.outputShape.includes('selectedArtifacts[]'))
+  assert.ok(command.outputShape.includes('recommendedNextActions[]'))
+  assert.equal(command.safety.readOnly, true)
+  assert.equal(command.safety.writesProject, false)
+  assert.equal(command.safety.requiresIdempotencyKey, false)
+  assert.ok(command.recommendedNextActions.some((item) => item.includes('tokenBudget') || item.includes('query')))
+})
+
 test('fixed SQL patch fixture matches actual dry-run json shape', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'fixed-sql-patch')
@@ -271,6 +288,17 @@ test('fixture checker rejects incomplete MCP tool entries', async () => {
 test('fixture checker rejects raw secret-like examples', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   fixture.cliCommands[0].successExample.command = 'node tools/dataspec-cli.mjs doctor --dataspec-token raw-secret'
+
+  const result = await validateContractFixtures({ fixture })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'SECRET_LIKE_VALUE'))
+})
+
+test('fixture checker rejects unsafe context-budget examples', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'context-budget-plan') ?? fixture.cliCommands[0]
+  command.successExample.command = 'node tools/dataspec-cli.mjs context-budget plan --project 1 --token-budget 2400 --query "Authorization: Bearer raw-secret" --format json'
 
   const result = await validateContractFixtures({ fixture })
 

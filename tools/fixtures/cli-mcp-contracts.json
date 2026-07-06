@@ -161,6 +161,19 @@
       "recommendedNextActions": ["Use scoped context for large projects."]
     },
     {
+      "id": "context-budget-plan",
+      "command": "context-budget plan --project <id> --token-budget <n> --format json",
+      "description": "Plan AI Context token budget before export with deterministic read-only estimates, artifact selection, quality risk, and recommended export parameters.",
+      "requiredOptions": ["project", "token-budget"],
+      "optionalOptions": ["format", "server", "dataspec-token", "profile", "task-type", "scope", "query", "status", "limit", "target-table", "target-file"],
+      "outputShape": ["kind", "schemaVersion", "projectId", "request", "estimation", "selectedArtifacts[]", "droppedArtifacts[]", "qualityRisk", "fallbackSteps[]", "recommendedExportParams", "diagnostics[]", "recommendedNextActions[]"],
+      "exitCodes": { "0": "budget plan printed", "2": "argument, invalid tokenBudget, or request error" },
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": ["dataspec-token", "query", "target-table", "target-file"], "nextActions": ["Use recommendedExportParams only as an explicit user action.", "Do not treat LOW risk as permission to write database or project files."] },
+      "successExample": { "command": "node tools/dataspec-cli.mjs context-budget plan --project 1 --token-budget 2400 --scope field --query user_phone --format json", "output": { "kind": "dataspec-ai-context-budget-plan", "qualityRisk": "MEDIUM", "selectedArtifacts": [".dataspec/DATABASE_RULES.md"], "recommendedExportParams": { "scope": "field", "query": "user_phone" } } },
+      "failureExample": { "exitCode": 2, "diagnostic": { "code": "DATASPEC_REQUEST_FAILED", "category": "DATASPEC" } },
+      "recommendedNextActions": ["Provide query or target hints for narrow tokenBudget values.", "Increase tokenBudget when qualityRisk is HIGH.", "Apply recommendedExportParams explicitly before export-context."]
+    },
+    {
       "id": "search-fields",
       "command": "search-fields --project <id> --query <text> --format json",
       "description": "Search standard fields with match reasons and next actions.",

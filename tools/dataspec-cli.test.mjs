@@ -2309,6 +2309,217 @@ test('export-context forwards profile defaults when no explicit scope is provide
   }
 })
 
+test('context-budget plan posts request, prints json, and does not write context files', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-budget-'))
+  try {
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: budgetPlanFixture({
+            projectId: 9,
+            request: {
+              projectId: 9,
+              tokenBudget: 2400,
+              taskType: 'CREATE_TABLE',
+              profileId: 'standard-context',
+              scope: 'field',
+              query: '用户手机',
+              status: 'enabled',
+              limit: 20,
+              targetTable: 'user_profile',
+              targetFile: 'db/user.sql',
+              totalFieldCount: 12,
+              matchedFieldCount: 2,
+              returnedFieldCount: 2
+            }
+          })
+        })
+      }
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'context-budget',
+      'plan',
+      '--project',
+      '9',
+      '--token-budget',
+      '2400',
+      '--profile',
+      'standard-context',
+      '--task-type',
+      'CREATE_TABLE',
+      '--scope',
+      'field',
+      '--query',
+      '用户手机',
+      '--status',
+      'enabled',
+      '--limit',
+      '20',
+      '--target-table',
+      'user_profile',
+      '--target-file',
+      'db/user.sql',
+      '--format',
+      'json'
+    ], io, fetchFn)
+    const output = JSON.parse(io.stdout)
+
+    assert.equal(code, 0)
+    assert.equal(calls[0].url, 'http://localhost:8090/api/ai-context/budget/plan')
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      projectId: 9,
+      tokenBudget: 2400,
+      profileId: 'standard-context',
+      taskType: 'CREATE_TABLE',
+      scope: 'field',
+      query: '用户手机',
+      status: 'enabled',
+      limit: 20,
+      targetTable: 'user_profile',
+      targetFile: 'db/user.sql'
+    })
+    assert.equal(calls[0].options.method, 'POST')
+    assert.equal(calls[0].options.headers['Content-Type'], 'application/json')
+    assert.equal(output.kind, 'dataspec-ai-context-budget-plan')
+    assert.equal(output.qualityRisk, 'MEDIUM')
+    await assert.rejects(readFile(path.join(dir, '.dataspec', 'context', 'cache-metadata.json')), /ENOENT/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('context-budget plan prints text summary', async () => {
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ code: 200, data: budgetPlanFixture() })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'context-budget',
+    'plan',
+    '--project',
+    '9',
+    '--token-budget',
+    '2400',
+    '--format',
+    'text'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.match(io.stdout, /AI Context 预算计划/)
+  assert.match(io.stdout, /qualityRisk: MEDIUM/)
+  assert.match(io.stdout, /selectedArtifacts/)
+})
+
+test('context-budget plan uses config profile defaults and explicit task type overrides config', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-budget-config-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({
+        projectId: 7,
+        server: 'http://dataspec.local/',
+        aiProfile: 'minimal-context',
+        taskType: 'SQL_FIX'
+      }),
+      'utf8'
+    )
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ code: 200, data: budgetPlanFixture({ projectId: 7 }) })
+      }
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'context-budget',
+      'plan',
+      '--token-budget',
+      '1600',
+      '--task-type',
+      'CREATE_TABLE',
+      '--format',
+      'json'
+    ], io, fetchFn)
+    const body = JSON.parse(calls[0].options.body)
+
+    assert.equal(code, 0)
+    assert.equal(calls[0].url, 'http://dataspec.local/api/ai-context/budget/plan')
+    assert.equal(body.projectId, 7)
+    assert.equal(body.tokenBudget, 1600)
+    assert.equal(body.taskType, 'CREATE_TABLE')
+    assert.equal(body.profileId, undefined)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('context-budget plan rejects missing or invalid token budget before calling server', async () => {
+  const calls = []
+  const fetchFn = async () => {
+    calls.push('called')
+    throw new Error('fetch should not be called')
+  }
+
+  const missingIo = createIo()
+  const missingCode = await runCli(['context-budget', 'plan', '--project', '9', '--format', 'json'], missingIo, fetchFn)
+  const invalidIo = createIo()
+  const invalidCode = await runCli(['context-budget', 'plan', '--project', '9', '--token-budget', '0', '--format', 'json'], invalidIo, fetchFn)
+
+  assert.equal(missingCode, 2)
+  assert.equal(invalidCode, 2)
+  assert.match(missingIo.stderr, /token-budget/)
+  assert.match(invalidIo.stderr, /token budget/)
+  assert.deepEqual(calls, [])
+})
+
+test('context-budget plan redacts service error diagnostics', async () => {
+  const fetchFn = async () => ({
+    ok: false,
+    status: 500,
+    json: async () => ({
+      message: 'budget failed token=plain-secret jdbc:postgresql://db.internal/app',
+      error: {
+        code: 'INTERNAL_ERROR',
+        category: 'SERVER',
+        retryable: true,
+        suggestedAction: '检查 token=plain-secret 和 jdbc:postgresql://db.internal/app'
+      }
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'context-budget',
+    'plan',
+    '--project',
+    '9',
+    '--token-budget',
+    '2400',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /DataSpecError/)
+  assert.doesNotMatch(io.stderr, /plain-secret/)
+  assert.doesNotMatch(io.stderr, /db\.internal/)
+})
+
 test('profile list prints machine-readable profile catalog', async () => {
   const calls = []
   const fetchFn = async (url) => {
@@ -4703,6 +4914,60 @@ function makeZip(entries) {
   end.writeUInt32LE(centralDirectory.length, 12)
   end.writeUInt32LE(offset, 16)
   return Buffer.concat([...localParts, centralDirectory, end])
+}
+
+function budgetPlanFixture(overrides = {}) {
+  return {
+    kind: 'dataspec-ai-context-budget-plan',
+    schemaVersion: 1,
+    projectId: 9,
+    request: {
+      projectId: 9,
+      tokenBudget: 2400,
+      taskType: null,
+      profileId: null,
+      scope: 'field',
+      query: '用户手机',
+      status: 'enabled',
+      limit: 20,
+      targetTable: null,
+      targetFile: null,
+      totalFieldCount: 12,
+      matchedFieldCount: 2,
+      returnedFieldCount: 2
+    },
+    estimation: {
+      tokenBudget: 2400,
+      selectedEstimatedTokens: 1800,
+      totalEstimatedTokens: 4200,
+      estimationMethod: 'deterministic-local-character-weight-v1',
+      confidence: 'conservative'
+    },
+    selectedArtifacts: [
+      {
+        artifact: '.dataspec/DATABASE_RULES.md',
+        estimatedTokens: 720,
+        reason: '保留数据库命名和规则说明。',
+        riskImpact: '缺失后 DDL/SQL 生成风险显著升高。',
+        appliedScope: { scope: 'field', query: '用户手机', status: 'enabled', limit: 20, profileId: null, taskType: null }
+      }
+    ],
+    droppedArtifacts: [
+      {
+        artifact: '.dataspec/prompts.md',
+        estimatedTokens: 320,
+        reason: '保留提示词模板。',
+        riskImpact: '缺失后 prompt 复用能力下降。',
+        appliedScope: { scope: 'field', query: '用户手机', status: 'enabled', limit: 20, profileId: null, taskType: null }
+      }
+    ],
+    qualityRisk: 'MEDIUM',
+    fallbackSteps: ['补充 query 或目标提示以提升低预算裁剪质量。'],
+    recommendedExportParams: { scope: 'field', query: '用户手机', status: 'enabled', limit: 20, profileId: null, taskType: null },
+    diagnostics: [],
+    recommendedNextActions: ['可使用 recommendedExportParams 显式填充导出参数后预览字段目录。'],
+    ...overrides
+  }
 }
 
 function contractCatalogFixture() {

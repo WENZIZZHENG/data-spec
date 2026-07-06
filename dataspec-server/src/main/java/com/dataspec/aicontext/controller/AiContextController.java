@@ -1,6 +1,9 @@
 package com.dataspec.aicontext.controller;
 
+import com.dataspec.aicontext.model.AiContextBudgetPlan;
+import com.dataspec.aicontext.model.AiContextBudgetPlanRequest;
 import com.dataspec.aicontext.model.AiContextScopeOptions;
+import com.dataspec.aicontext.service.AiContextBudgetPlannerService;
 import com.dataspec.aicontext.service.AiContextExportService;
 import com.dataspec.common.result.R;
 import jakarta.validation.Valid;
@@ -24,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 public class AiContextController {
 
     private final AiContextExportService aiContextExportService;
+    private final AiContextBudgetPlannerService aiContextBudgetPlannerService;
 
     /** 预览 DATABASE_RULES.md */
 
@@ -130,6 +134,16 @@ public class AiContextController {
     @PostMapping("/prompts/fix-sql")
     public R<String> generateFixSqlPrompt(@Valid @RequestBody FixSqlPromptReq req) {
         return R.ok(aiContextExportService.generateFixSqlPrompt(req.projectId(), req.sql()));
+    }
+
+    /**
+     * 生成 AI Context 预算计划。
+     *
+     * <p>该接口是导出前只读 preflight，只返回摘要、估算和建议，不创建 zip 或缓存文件。</p>
+     */
+    @PostMapping("/budget/plan")
+    public R<AiContextBudgetPlan> planBudget(@Valid @RequestBody AiContextBudgetPlanRequest req) {
+        return R.ok(aiContextBudgetPlannerService.plan(req));
     }
 
     /** 下载 rules.yaml */

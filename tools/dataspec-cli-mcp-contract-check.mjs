@@ -26,6 +26,7 @@ const REQUIRED_CLI_COMMANDS = [
   'fixed-sql-patch',
   'index-refs',
   'export-context',
+  'context-budget-plan',
   'search-fields',
   'generate-ddl',
   'schema-plan'

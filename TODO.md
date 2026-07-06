@@ -4,9 +4,9 @@
 
 ## 下一步顺序
 
-1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89 已完成第一版；P6-78 OpenSpec change 已归档到 `openspec/changes/archive/2026-07-06-add-fixedsql-file-patch-flow`，P6-88 OpenSpec change `add-code-field-reference-index` 保持 active，后续不自动归档。
-2. 近期只保留 1 个优先行动项，后续开发默认从这里选，不再从 P6-71 到 P6-188 全量顺扫：P6-90。
-3. 效率优先顺序：P6-88 完成验证、独立评审和本地 commit 后，下一步优先推进 P6-90；真实数据库集成测试已作为可选 Docker profile，不默认阻塞小任务。
+1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90 已完成第一版；P6-78 OpenSpec change 已归档到 `openspec/changes/archive/2026-07-06-add-fixedsql-file-patch-flow`，P6-88 OpenSpec change `add-code-field-reference-index` 和 P6-90 OpenSpec change `add-ai-context-budget-planner` 保持 active，后续不自动归档。
+2. 近期优先行动项已清空，后续开发由用户从 P6-91 以后候选池或新需求中选择，不再从 P6-71 到 P6-188 全量顺扫。
+3. 效率优先顺序：真实数据库集成测试已作为可选 Docker profile，不默认阻塞小任务；下一项开工前按任务类型重新判断快速/常规/SDD。
 4. 暂缓池：P6-91 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
 5. 每次开工先按任务类型决定快速/常规/SDD：文档与小前端走快速；单模块功能走常规；API/CLI/MCP/AI 外部协议、安全、存储或数据库写入才进入 SDD standard/full。
 
@@ -897,12 +897,12 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不绑定单一 IDE 或 agent 产品，不调用外部 LLM，不把 prompts 做成复杂审批流。
 
 ### P6-90：AI 上下文预算评估与自动裁剪策略
-- 状态：待办。
+- 状态：已完成第一版，OpenSpec change `add-ai-context-budget-planner` 保持 active，暂未自动归档。
 - 为什么做：字段标准、规则、模板、样例和历史记录越来越多后，AI Context 很容易过大；仅靠手动 scope/query/limit 不够，AI 需要知道不同预算下应该保留哪些标准、舍弃哪些上下文以及风险是什么。
 - 已有基础：已有 AI Context 按需裁剪、字段检索、标准快照、业务术语表、AI 会话启动包、上下文握手和 prompt 评测待办。
-- 缺口：缺少 token/context budget 估算、裁剪策略说明、召回质量指标和低预算降级提示；AI 也无法判断“当前包够不够完成这个任务”。
-- 落地产物：新增 context budget planner；输入任务类型、query、目标表/文件、预算上限，输出 selectedArtifacts、estimatedTokens、droppedArtifacts、qualityRisk、fallbackSteps 和 recommendedNextActions；前端 AI Context 页面展示预算预估。
-- 验收标准：同一项目可生成完整包、标准包和极简包；AI 能解释为什么保留某些字段/规则并标出缺失风险；裁剪策略有 fixture 或快照测试防漂移。
+- 已完成能力：新增只读 `/api/ai-context/budget/plan`、CLI `context-budget plan`、CLI/MCP contract fixture 和前端 AI Context 预算预览；输入任务类型、query、目标表/文件、预算上限或 scoped export 参数，输出 selectedArtifacts、estimatedTokens、droppedArtifacts、qualityRisk、fallbackSteps、recommendedExportParams 和 recommendedNextActions。
+- 落地产物：预算 planner 采用确定性本地估算，不调用外部 LLM/tokenizer，不生成 zip、不写 `.dataspec/context/` 缓存、不修改项目状态；前端只展示推荐参数，必须点击“一键填充”才会应用。
+- 验收标准：同一项目可生成完整包、标准包和极简包；AI 能解释为什么保留某些字段/规则并标出缺失风险；裁剪策略有服务层测试、CLI 测试、fixture 校验和前端 smoke/显示工具测试防漂移。
 - 边界：不依赖特定模型的精确 tokenizer，不上传标准内容到外部服务，不保证一次裁剪覆盖所有复杂任务。
 
 ### P6-91：本地 pre-commit 与 IDE 保存前 SQL 标准检查

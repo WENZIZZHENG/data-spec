@@ -102,6 +102,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'export-context') {
       return await runExportContext(rest, io, fetchFn)
     }
+    if (command === 'context-budget' || command === 'contextbudget') {
+      return await runContextBudget(rest, io, fetchFn)
+    }
     if (command === 'suggest-field') {
       return await runSuggestField(rest, io, fetchFn)
     }
@@ -784,6 +787,73 @@ async function runExportContext(args, io, fetchFn) {
       ttlDays: parseCacheTtlDays(options['cache-ttl-days'])
     })
     io.writeOut(`已缓存 AI Context 到 ${cache.cacheDir}\n`)
+  }
+  return 0
+}
+
+async function runContextBudget(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'plan') {
+    throw new Error(`context-budget 仅支持 plan 子命令: ${subcommand ?? ''}`.trim())
+  }
+  const { positional, options } = parseArgs(rest, [
+    'project',
+    'token-budget',
+    'tokenBudget',
+    'format',
+    'server',
+    'dataspec-token',
+    'profile',
+    'task-type',
+    'taskType',
+    'scope',
+    'query',
+    'status',
+    'limit',
+    'target-table',
+    'targetTable',
+    'target-file',
+    'targetFile'
+  ])
+  const config = loadDataSpecConfig(cliCwd(io))
+  if (positional.length > 0) {
+    throw new Error(`context-budget plan 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const tokenBudgetValue = options.tokenBudget ?? options['token-budget']
+  if (tokenBudgetValue === undefined) {
+    throw new Error('context-budget plan 需要提供 --token-budget <n>')
+  }
+  const projectId = parseProjectId(options.project ?? config.projectId)
+  const tokenBudget = parsePositiveInteger(tokenBudgetValue, 'token budget')
+  const format = options.format ?? 'json'
+  if (!['json', 'text'].includes(format)) {
+    throw new Error('context-budget plan 仅支持 --format json|text')
+  }
+  const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
+  const profileSelection = resolveProfileSelection(options, config)
+  const body = removeUndefinedValues({
+    projectId,
+    tokenBudget,
+    ...profileSelection,
+    scope: normalizeOptionalCliText(options.scope),
+    query: normalizeOptionalCliText(options.query),
+    status: normalizeOptionalCliText(options.status),
+    limit: options.limit === undefined ? undefined : parseLimit(options.limit),
+    targetTable: normalizeOptionalCliText(options.targetTable ?? options['target-table']),
+    targetFile: normalizeOptionalCliText(options.targetFile ?? options['target-file'])
+  })
+  const response = await fetchFn(`${server}/api/ai-context/budget/plan`, {
+    method: 'POST',
+    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body)
+  })
+  const payload = await readJsonResponse(response)
+  const plan = unwrapResponse(payload)
+  if (format === 'json') {
+    io.writeOut(`${JSON.stringify(plan, null, 2)}\n`)
+  } else {
+    io.writeOut(formatContextBudgetPlanText(plan))
   }
   return 0
 }
@@ -3143,6 +3213,42 @@ function formatCapabilityCheckText(result) {
   return lines.join('\n')
 }
 
+function formatContextBudgetPlanText(plan) {
+  const selected = plan.selectedArtifacts ?? []
+  const dropped = plan.droppedArtifacts ?? []
+  const lines = [
+    'AI Context 预算计划',
+    `projectId: ${plan.projectId ?? plan.request?.projectId ?? '-'}`,
+    `qualityRisk: ${plan.qualityRisk ?? '-'}`,
+    `estimatedTokens: ${plan.estimation?.selectedEstimatedTokens ?? '-'} / ${plan.estimation?.tokenBudget ?? '-'}`,
+    `estimationMethod: ${plan.estimation?.estimationMethod ?? '-'}`,
+    `selectedArtifacts: ${selected.length}`
+  ]
+  selected.forEach((item) => {
+    lines.push(`  - ${item.artifact} (${item.estimatedTokens ?? '-'} tokens)`)
+  })
+  lines.push(`droppedArtifacts: ${dropped.length}`)
+  dropped.forEach((item) => {
+    lines.push(`  - ${item.artifact} (${item.estimatedTokens ?? '-'} tokens): ${item.riskImpact ?? ''}`)
+  })
+  lines.push(
+    'recommendedExportParams:',
+    `  scope: ${plan.recommendedExportParams?.scope ?? '-'}`,
+    `  query: ${plan.recommendedExportParams?.query ?? '-'}`,
+    `  status: ${plan.recommendedExportParams?.status ?? '-'}`,
+    `  limit: ${plan.recommendedExportParams?.limit ?? '-'}`,
+    `diagnostics: ${(plan.diagnostics ?? []).length}`
+  )
+  ;(plan.diagnostics ?? []).forEach((item) => {
+    lines.push(`  - ${item}`)
+  })
+  lines.push('recommendedNextActions:')
+  ;(plan.recommendedNextActions ?? []).forEach((item) => {
+    lines.push(`  - ${item}`)
+  })
+  return `${lines.join('\n')}\n`
+}
+
 function formatSessionBootstrapText(bootstrap) {
   const lines = [
     'DataSpec AI Session Bootstrap',
@@ -5049,6 +5155,7 @@ Usage:
   node tools/dataspec-cli.mjs index-refs --field <name> [--alias <name|field=alias> ...] [--path <file|dir> ...] [--format text|json]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs export-context [--project <id>] [--profile <id>|--task-type <type>] [--output <zip>] [--cache] [--cache-ttl-days <days>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs context-budget plan [--project <id>] --token-budget <n> [--profile <id>|--task-type <type>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--target-table <name>] [--target-file <path>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
@@ -5090,6 +5197,7 @@ Options:
   lint-changed 只对 changed 发现的 SQL 文件调用 lint；无 SQL 变更时返回诊断且不调用服务端
   index-refs 只读扫描 defaultPaths 或 --path 内字段引用，输出重命名风险；多字段扫描时 --alias 使用 field=alias 明确归属；不会调用服务端或修改业务代码
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
+  context-budget plan 是导出前只读预算预检；只调用后端 planner，不下载、不缓存、不写入 AI Context 文件
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   schema-plan 只生成数据库 schema change plan 预览，不执行迁移；推荐使用 --password-env 读取数据库密码
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token

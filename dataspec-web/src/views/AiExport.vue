@@ -69,6 +69,128 @@
         <el-button @click="handleResetScope">重置</el-button>
       </div>
 
+      <div class="budget-preview">
+        <div class="budget-controls">
+          <div class="budget-heading">
+            <span class="budget-title">预算预览</span>
+            <span class="budget-summary-line">{{ buildBudgetPlanSummary(budgetPlan) }}</span>
+          </div>
+          <div class="budget-actions">
+            <el-input-number
+              v-model="budgetForm.tokenBudget"
+              class="budget-token-input"
+              :min="1"
+              :max="200000"
+              :step="1000"
+              controls-position="right"
+              placeholder="Token 预算"
+            />
+            <el-button type="primary" :loading="budgetLoading" @click="handlePlanBudget">
+              <el-icon><DataAnalysis /></el-icon>
+              计划
+            </el-button>
+          </div>
+        </div>
+
+        <div v-if="budgetPlan" class="budget-result">
+          <div class="budget-metrics">
+            <div class="budget-metric">
+              <span>估算 tokens</span>
+              <strong>{{ formatEstimatedTokens(budgetPlan.estimation) }}</strong>
+            </div>
+            <div class="budget-metric">
+              <span>质量风险</span>
+              <el-tag :type="budgetRiskTagType(budgetPlan.qualityRisk)">
+                {{ budgetRiskLabel(budgetPlan.qualityRisk) }}
+              </el-tag>
+            </div>
+            <div class="budget-metric">
+              <span>字段命中</span>
+              <strong>
+                {{ budgetPlan.request.returnedFieldCount }} / {{ budgetPlan.request.matchedFieldCount }}
+              </strong>
+            </div>
+            <el-button
+              size="small"
+              :disabled="!hasRecommendedExportParams"
+              @click="handleApplyRecommendedParams"
+            >
+              一键填充
+            </el-button>
+          </div>
+
+          <div v-if="recommendedParamItems.length" class="budget-recommended">
+            <span class="budget-section-label">推荐导出参数</span>
+            <el-tag
+              v-for="item in recommendedParamItems"
+              :key="item.key"
+              effect="plain"
+              type="info"
+            >
+              {{ item.label }}={{ item.value }}
+            </el-tag>
+          </div>
+
+          <div class="budget-artifacts">
+            <div class="budget-artifact-list">
+              <div class="budget-section-label">Selected artifacts</div>
+              <ul>
+                <li
+                  v-for="(artifact, index) in budgetPlan.selectedArtifacts"
+                  :key="`selected-${artifact.artifact}-${index}`"
+                >
+                  <span>{{ artifact.artifact }}</span>
+                  <strong>{{ artifact.estimatedTokens.toLocaleString('en-US') }}</strong>
+                </li>
+              </ul>
+            </div>
+            <div class="budget-artifact-list dropped">
+              <div class="budget-section-label">Dropped artifacts</div>
+              <ul v-if="budgetPlan.droppedArtifacts.length">
+                <li
+                  v-for="(artifact, index) in budgetPlan.droppedArtifacts"
+                  :key="`dropped-${artifact.artifact}-${index}`"
+                >
+                  <span>{{ artifact.artifact }}</span>
+                  <strong>{{ artifact.estimatedTokens.toLocaleString('en-US') }}</strong>
+                </li>
+              </ul>
+              <p v-else class="budget-empty">无舍弃项</p>
+            </div>
+          </div>
+
+          <div
+            v-if="budgetPlan.diagnostics.length || budgetPlan.fallbackSteps.length || budgetPlan.recommendedNextActions.length"
+            class="budget-notes"
+          >
+            <el-tag
+              v-for="item in budgetPlan.diagnostics"
+              :key="`diagnostic-${item}`"
+              type="warning"
+              effect="plain"
+            >
+              {{ item }}
+            </el-tag>
+            <el-tag
+              v-for="item in budgetPlan.fallbackSteps"
+              :key="`fallback-${item}`"
+              type="info"
+              effect="plain"
+            >
+              {{ item }}
+            </el-tag>
+            <el-tag
+              v-for="item in budgetPlan.recommendedNextActions"
+              :key="`next-${item}`"
+              type="success"
+              effect="plain"
+            >
+              {{ item }}
+            </el-tag>
+          </div>
+        </div>
+      </div>
+
       <el-tabs v-model="activeTab" class="preview-tabs">
         <el-tab-pane label="DATABASE_RULES.md" name="databaseRules">
           <pre class="preview-code">{{ databaseRules || '暂无预览' }}</pre>
@@ -85,14 +207,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Download, Refresh } from '@element-plus/icons-vue'
+import { DataAnalysis, Download, Refresh } from '@element-plus/icons-vue'
 import {
   downloadAiContextPackage,
+  planAiContextBudget,
   previewDatabaseRules,
   previewFieldCatalog,
-  previewRulesYaml
+  previewRulesYaml,
+  type AiContextBudgetPlan,
+  type AiContextRecommendedExportParams
 } from '@/api/aicontext'
 import { listStandardSnapshots } from '@/api/standardSnapshot'
 import { useProjectStore } from '@/stores/project'
@@ -102,6 +227,12 @@ import {
   normalizeAiContextScopeParams,
   type AiContextScope
 } from '@/utils/aiContextScope'
+import {
+  budgetRiskLabel,
+  budgetRiskTagType,
+  buildBudgetPlanSummary,
+  formatEstimatedTokens
+} from '@/utils/aiContextBudgetPlan'
 
 const projectStore = useProjectStore()
 const activeTab = ref<'databaseRules' | 'fieldCatalog' | 'rulesYaml'>('databaseRules')
@@ -112,7 +243,9 @@ const previewLoading = ref(false)
 const downloadLoading = ref(false)
 const demoLoading = ref(false)
 const snapshotLoading = ref(false)
+const budgetLoading = ref(false)
 const snapshots = ref<StandardSnapshotInfo[]>([])
+const budgetPlan = shallowRef<AiContextBudgetPlan | null>(null)
 const scopeForm = reactive<{
   scope: AiContextScope
   query: string
@@ -126,6 +259,11 @@ const scopeForm = reactive<{
   limit: null,
   snapshotId: 0
 })
+const budgetForm = reactive<{
+  tokenBudget: number | null
+}>({
+  tokenBudget: 8000
+})
 
 const scopeOptions: Array<{ label: string; value: AiContextScope }> = [
   { label: '全部', value: 'all' },
@@ -138,6 +276,23 @@ const scopeOptions: Array<{ label: string; value: AiContextScope }> = [
 
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
 const currentScopeParams = computed(() => normalizeAiContextScopeParams(scopeForm))
+const recommendedParamItems = computed(() => {
+  const params = budgetPlan.value?.recommendedExportParams
+  if (!params) {
+    return []
+  }
+  return ([
+    { key: 'scope', label: 'scope', value: params.scope },
+    { key: 'query', label: 'query', value: params.query },
+    { key: 'status', label: 'status', value: params.status },
+    { key: 'limit', label: 'limit', value: params.limit },
+    { key: 'profileId', label: 'profile', value: params.profileId },
+    { key: 'taskType', label: 'task', value: params.taskType }
+  ] as Array<{ key: string; label: string; value?: string | number }>).filter((item) =>
+    item.value !== undefined && item.value !== null && `${item.value}`.trim() !== ''
+  )
+})
+const hasRecommendedExportParams = computed(() => recommendedParamItems.value.length > 0)
 const snapshotOptions = computed(() =>
   snapshots.value.filter((snapshot): snapshot is StandardSnapshotInfo & { snapshotId: number } =>
     typeof snapshot.snapshotId === 'number'
@@ -155,6 +310,7 @@ onMounted(async () => {
 watch(
   () => projectStore.currentProjectId,
   () => {
+    budgetPlan.value = null
     scopeForm.snapshotId = 0
     void loadSnapshots()
     void loadPreviews()
@@ -164,7 +320,15 @@ watch(
 watch(
   () => scopeForm.snapshotId,
   () => {
+    budgetPlan.value = null
     void loadPreviews()
+  }
+)
+
+watch(
+  () => [scopeForm.scope, scopeForm.query, scopeForm.status, scopeForm.limit, budgetForm.tokenBudget],
+  () => {
+    budgetPlan.value = null
   }
 )
 
@@ -174,6 +338,7 @@ async function loadPreviews() {
     databaseRules.value = ''
     fieldCatalog.value = ''
     rulesYaml.value = ''
+    budgetPlan.value = null
     return
   }
   previewLoading.value = true
@@ -221,6 +386,44 @@ async function handleDownloadPackage() {
   }
 }
 
+async function handlePlanBudget() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  if (!budgetForm.tokenBudget || budgetForm.tokenBudget <= 0) {
+    ElMessage.warning('请输入大于 0 的 token 预算')
+    return
+  }
+  budgetLoading.value = true
+  try {
+    const budgetRequest = {
+      ...currentScopeParams.value,
+      tokenBudget: Math.floor(budgetForm.tokenBudget)
+    }
+    budgetPlan.value = await planAiContextBudget(projectId, budgetRequest)
+  } finally {
+    budgetLoading.value = false
+  }
+}
+
+function handleApplyRecommendedParams() {
+  const params = budgetPlan.value?.recommendedExportParams
+  if (!params) {
+    return
+  }
+  // Planner 推荐只作为显式用户动作应用，不能静默覆盖已有导出参数。
+  scopeForm.scope = normalizeRecommendedScope(params.scope)
+  scopeForm.query = params.query || ''
+  scopeForm.status = params.status || ''
+  scopeForm.limit = typeof params.limit === 'number' && Number.isFinite(params.limit) && params.limit > 0
+    ? Math.floor(params.limit)
+    : null
+  ElMessage.success('已填充推荐导出参数')
+  void loadPreviews()
+}
+
 async function handleCreateDemoProject() {
   demoLoading.value = true
   try {
@@ -249,6 +452,7 @@ function handleResetScope() {
   scopeForm.status = ''
   scopeForm.limit = null
   scopeForm.snapshotId = 0
+  budgetPlan.value = null
   void loadPreviews()
 }
 
@@ -257,6 +461,19 @@ function snapshotOptionLabel(snapshot: StandardSnapshotInfo) {
   const name = snapshot.name ? ` ${snapshot.name}` : ''
   const hash = snapshot.specHash ? ` / ${snapshot.specHash.slice(0, 8)}` : ''
   return `${version}${name}${hash}`
+}
+
+function normalizeRecommendedScope(scope?: AiContextRecommendedExportParams['scope']): AiContextScope {
+  return isAiContextScope(scope) ? scope : 'all'
+}
+
+function isAiContextScope(scope?: AiContextRecommendedExportParams['scope']): scope is AiContextScope {
+  return scope === 'all' ||
+    scope === 'field' ||
+    scope === 'domain' ||
+    scope === 'tag' ||
+    scope === 'table' ||
+    scope === 'changed'
 }
 </script>
 
@@ -324,6 +541,137 @@ function snapshotOptionLabel(snapshot: StandardSnapshotInfo) {
   width: 230px;
 }
 
+.budget-preview {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.budget-controls,
+.budget-actions,
+.budget-metrics,
+.budget-recommended,
+.budget-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.budget-controls {
+  justify-content: space-between;
+}
+
+.budget-heading {
+  min-width: min(100%, 360px);
+}
+
+.budget-title,
+.budget-section-label {
+  color: #374151;
+  font-weight: 600;
+}
+
+.budget-summary-line {
+  display: block;
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.budget-token-input {
+  width: 160px;
+}
+
+.budget-result {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eef2f7;
+}
+
+.budget-metrics {
+  align-items: stretch;
+}
+
+.budget-metric {
+  min-width: 128px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #f9fafb;
+}
+
+.budget-metric span {
+  display: block;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.budget-metric strong {
+  display: block;
+  margin-top: 4px;
+  color: #111827;
+  font-size: 14px;
+}
+
+.budget-recommended,
+.budget-notes {
+  margin-top: 12px;
+}
+
+.budget-artifacts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.budget-artifact-list {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #fcfcfd;
+}
+
+.budget-artifact-list.dropped {
+  background: #fffdf7;
+}
+
+.budget-artifact-list ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.budget-artifact-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid #eef2f7;
+  color: #374151;
+  font-size: 13px;
+}
+
+.budget-artifact-list li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.budget-artifact-list li strong {
+  flex: 0 0 auto;
+  color: #111827;
+}
+
+.budget-empty {
+  margin: 8px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
 .preview-code {
   min-height: 520px;
   max-height: calc(100vh - 270px);
@@ -353,8 +701,18 @@ function snapshotOptionLabel(snapshot: StandardSnapshotInfo) {
   .scope-query,
   .scope-status,
   .scope-limit,
-  .snapshot-select {
+  .snapshot-select,
+  .budget-token-input {
     width: 100%;
+  }
+
+  .budget-controls,
+  .budget-actions {
+    align-items: stretch;
+  }
+
+  .budget-artifacts {
+    grid-template-columns: 1fr;
   }
 }
 </style>
