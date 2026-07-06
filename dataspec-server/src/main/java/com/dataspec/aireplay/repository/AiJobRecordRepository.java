@@ -38,6 +38,30 @@ public class AiJobRecordRepository {
                         .last("LIMIT " + safeLimit));
     }
 
+    /**
+     * 查询热区报告所需的近期 AI 作业摘要列，不装载原始输入输出 payload，避免敏感上下文进入报告聚合。
+     */
+    public List<AiJobRecord> findRecentSummaryByProjectId(Long projectId, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 500));
+        return aiJobRecordMapper.selectList(
+                new LambdaQueryWrapper<AiJobRecord>()
+                        .select(
+                                AiJobRecord::getId,
+                                AiJobRecord::getProjectId,
+                                AiJobRecord::getJobType,
+                                AiJobRecord::getTitle,
+                                AiJobRecord::getInputSummary,
+                                AiJobRecord::getPromptVersion,
+                                AiJobRecord::getStatus,
+                                AiJobRecord::getSqlCheckRecordId,
+                                AiJobRecord::getCreatedAt,
+                                AiJobRecord::getUpdatedAt)
+                        .eq(AiJobRecord::getProjectId, projectId)
+                        .orderByDesc(AiJobRecord::getCreatedAt)
+                        .orderByDesc(AiJobRecord::getId)
+                        .last("LIMIT " + safeLimit));
+    }
+
     public IPage<AiJobRecord> findByProjectId(Long projectId, String jobType, int current, int size) {
         LambdaQueryWrapper<AiJobRecord> wrapper = new LambdaQueryWrapper<>();
         wrapper.select(
