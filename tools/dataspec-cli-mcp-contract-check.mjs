@@ -30,6 +30,7 @@ const REQUIRED_CLI_COMMANDS = [
   'context-budget-plan',
   'search-fields',
   'generate-ddl',
+  'synthetic-examples-generate',
   'schema-plan'
 ]
 

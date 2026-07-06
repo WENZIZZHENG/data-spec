@@ -3905,6 +3905,117 @@ test('generate-ddl calls ddl preview api and prints json', async () => {
   assert.equal(io.stderr, '')
 })
 
+test('synthetic-examples generate calls synthetic examples api and prints json', async () => {
+  const calls = []
+  const fetchFn = async (url) => {
+    calls.push(url)
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: syntheticExamplesFixture('order')
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'synthetic-examples',
+    'generate',
+    '--project',
+    '7',
+    '--scenario',
+    'order',
+    '--max-cases',
+    '5',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.equal(
+    calls[0],
+    'http://dataspec.local/api/synthetic-examples/generate?projectId=7&scenario=order&maxCases=5'
+  )
+  const output = JSON.parse(io.stdout)
+  assert.equal(output.kind, 'dataspec.synthetic-standard-examples')
+  assert.equal(output.scenario, 'order')
+  assert.equal(output.safety.readOnly, true)
+  assert.equal(output.safety.writesProject, false)
+  assert.equal(io.stderr, '')
+})
+
+test('synthetic-examples generate text prints concise summary', async () => {
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 200,
+      data: syntheticExamplesFixture('audit')
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'synthetic-examples',
+    'generate',
+    '--project',
+    '7',
+    '--scenario',
+    'audit',
+    '--format',
+    'text',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.match(io.stdout, /DataSpec Synthetic Examples/)
+  assert.match(io.stdout, /scenario: audit/)
+  assert.match(io.stdout, /specHash: synthetic-hash-audit/)
+  assert.match(io.stdout, /goodSql: 1/)
+  assert.match(io.stdout, /writesProject: false/)
+  assert.equal(io.stderr, '')
+})
+
+test('synthetic-examples generate redacts server diagnostics', async () => {
+  const fetchFn = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({
+      code: 400,
+      message: '不支持场景 token=raw-secret',
+      error: {
+        code: 'SYNTHETIC_SCENARIO_INVALID',
+        category: 'VALIDATION',
+        suggestedAction: '不要使用 Authorization: Bearer raw-secret'
+      }
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'synthetic-examples',
+    'generate',
+    '--project',
+    '7',
+    '--scenario',
+    'order',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /DataSpecError/)
+  assert.match(io.stderr, /\*\*\*/)
+  assert.doesNotMatch(io.stderr, /raw-secret/)
+})
+
 test('schema-plan posts database connection request and prints readonly plan json', async () => {
   const calls = []
   const previous = process.env.DATASPEC_DB_PASSWORD
@@ -5355,6 +5466,39 @@ function capabilityCatalogFixture() {
     requiredCapabilityIds: ids,
     recommendedFirstActions: ['run doctor'],
     diagnostics: [{ code: 'CATALOG_READY', status: 'pass', message: 'ready', nextAction: 'continue' }]
+  }
+}
+
+function syntheticExamplesFixture(scenario = 'order') {
+  return {
+    kind: 'dataspec.synthetic-standard-examples',
+    schemaVersion: 1,
+    projectId: 7,
+    scenario,
+    specHash: `synthetic-hash-${scenario}`,
+    generationParams: { scenario, maxCases: 5 },
+    sourceSummary: {
+      standardFieldCount: 2,
+      templateCount: 1,
+      codeSetReferenceCount: 0,
+      fallbackUsed: false,
+      selectedFieldNames: [`${scenario}_id`, 'created_at']
+    },
+    goodSql: [{ id: `${scenario}-good-sql-1`, sql: 'CREATE TABLE synthetic_case (id bigint);' }],
+    badSql: [{ id: `${scenario}-bad-sql-1`, expectedDiagnosticIds: [`${scenario}-NON_STANDARD_FIELD_NAME`] }],
+    ddlPreviewInputs: [{ id: `${scenario}-ddl-preview-1`, tableName: `synthetic_${scenario}_preview` }],
+    fieldSuggestionQuestions: [{ id: `${scenario}-field-question-1`, question: `${scenario} 字段推荐` }],
+    standardQaCases: [{ id: `${scenario}-qa-1`, question: `${scenario} 标准字段是什么？` }],
+    expectedDiagnostics: [{ id: `${scenario}-NON_STANDARD_FIELD_NAME`, severity: 'ERROR' }],
+    diagnostics: [],
+    safety: {
+      readOnly: true,
+      writesProject: false,
+      containsRealBusinessRows: false,
+      externalLlmUsed: false,
+      sensitiveInputs: []
+    },
+    nextActions: ['人工审核后再采纳为 usage example']
   }
 }
 

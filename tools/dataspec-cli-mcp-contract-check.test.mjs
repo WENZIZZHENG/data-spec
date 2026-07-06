@@ -89,6 +89,27 @@ test('bundled fixtures include context-budget plan readonly contract', async () 
   assert.ok(command.recommendedNextActions.some((item) => item.includes('tokenBudget') || item.includes('query')))
 })
 
+test('bundled fixtures include synthetic examples readonly contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'synthetic-examples-generate')
+
+  assert.ok(command)
+  assert.equal(command.command, 'synthetic-examples generate --project <id> --scenario <scenario> --format json')
+  assert.deepEqual(command.requiredOptions, ['project', 'scenario'])
+  assert.ok(command.optionalOptions.includes('max-cases'))
+  assert.ok(command.outputShape.includes('specHash'))
+  assert.ok(command.outputShape.includes('goodSql[]'))
+  assert.ok(command.outputShape.includes('badSql[]'))
+  assert.ok(command.outputShape.includes('fieldSuggestionQuestions[]'))
+  assert.ok(command.outputShape.includes('standardQaCases[]'))
+  assert.ok(command.outputShape.includes('safety.containsRealBusinessRows'))
+  assert.equal(command.safety.readOnly, true)
+  assert.equal(command.safety.writesProject, false)
+  assert.equal(command.safety.containsRealBusinessRows, false)
+  assert.equal(command.safety.externalLlmUsed, false)
+  assert.ok(command.recommendedNextActions.some((item) => item.includes('usage example') || item.includes('Prompt')))
+})
+
 test('bundled fixtures include install-hook local write contract', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'install-hook')

@@ -120,6 +120,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'generate-ddl') {
       return await runGenerateDdl(rest, io, fetchFn)
     }
+    if (command === 'synthetic-examples' || command === 'synthetic-example') {
+      return await runSyntheticExamples(rest, io, fetchFn)
+    }
     if (command === 'schema-plan') {
       return await runSchemaPlan(rest, io, fetchFn)
     }
@@ -1356,6 +1359,49 @@ async function runGenerateDdl(args, io, fetchFn) {
   const payload = await readJsonResponse(response)
   const result = unwrapResponse(payload)
   io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  return 0
+}
+
+async function runSyntheticExamples(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'generate') {
+    throw new Error('synthetic-examples 支持子命令: generate')
+  }
+  const { positional, options } = parseArgs(rest, [
+    'project',
+    'scenario',
+    'max-cases',
+    'maxCases',
+    'format',
+    'server',
+    'dataspec-token'
+  ])
+  const config = loadDataSpecConfig(cliCwd(io))
+  if (positional.length > 0) {
+    throw new Error(`synthetic-examples generate 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const projectId = parseProjectId(options.project ?? config.projectId)
+  const scenario = normalizeSyntheticScenario(options.scenario)
+  const format = options.format ?? 'json'
+  if (format !== 'json' && format !== 'text') {
+    throw new Error('synthetic-examples generate 仅支持 --format text|json')
+  }
+  const maxCasesOption = options.maxCases ?? options['max-cases']
+  const maxCases = maxCasesOption === undefined ? undefined : parsePositiveInteger(maxCasesOption, 'maxCases')
+  const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  params.set('scenario', scenario)
+  appendOptionalParam(params, 'maxCases', maxCases)
+  const response = await fetchFn(`${server}/api/synthetic-examples/generate?${params.toString()}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  const payload = await readJsonResponse(response)
+  const result = unwrapResponse(payload)
+  io.writeOut(format === 'json'
+    ? `${JSON.stringify(result, null, 2)}\n`
+    : formatSyntheticExamplesText(result))
   return 0
 }
 
@@ -3649,6 +3695,34 @@ function formatContextBudgetPlanText(plan) {
   return `${lines.join('\n')}\n`
 }
 
+function formatSyntheticExamplesText(result) {
+  const lines = [
+    'DataSpec Synthetic Examples',
+    `scenario: ${redactSecrets(result.scenario ?? '-')}`,
+    `projectId: ${result.projectId ?? '-'}`,
+    `specHash: ${redactSecrets(result.specHash ?? '-')}`,
+    `goodSql: ${(result.goodSql ?? []).length}`,
+    `badSql: ${(result.badSql ?? []).length}`,
+    `ddlPreviewInputs: ${(result.ddlPreviewInputs ?? []).length}`,
+    `fieldSuggestionQuestions: ${(result.fieldSuggestionQuestions ?? []).length}`,
+    `standardQaCases: ${(result.standardQaCases ?? []).length}`,
+    `expectedDiagnostics: ${(result.expectedDiagnostics ?? []).length}`,
+    `readOnly: ${Boolean(result.safety?.readOnly)}`,
+    `writesProject: ${Boolean(result.safety?.writesProject)}`,
+    `containsRealBusinessRows: ${Boolean(result.safety?.containsRealBusinessRows)}`,
+    `externalLlmUsed: ${Boolean(result.safety?.externalLlmUsed)}`
+  ]
+  if (result.sourceSummary) {
+    lines.push(
+      `standardFieldCount: ${result.sourceSummary.standardFieldCount ?? '-'}`,
+      `templateCount: ${result.sourceSummary.templateCount ?? '-'}`,
+      `fallbackUsed: ${Boolean(result.sourceSummary.fallbackUsed)}`
+    )
+  }
+  appendTextList(lines, 'next actions', (result.nextActions ?? []).map((item) => redactSecrets(item)))
+  return `${lines.join('\n')}\n`
+}
+
 function formatSessionBootstrapText(bootstrap) {
   const lines = [
     'DataSpec AI Session Bootstrap',
@@ -3884,6 +3958,15 @@ function parseProjectId(value) {
     throw new Error('需要提供 --project <id> 或 .dataspec/config.json 的 projectId')
   }
   return parsePositiveInteger(value, 'project id')
+}
+
+function normalizeSyntheticScenario(value) {
+  const scenario = String(value ?? '').trim().toLowerCase()
+  const supported = ['user', 'order', 'payment', 'audit']
+  if (!supported.includes(scenario)) {
+    throw new Error(`synthetic-examples generate 需要 --scenario <${supported.join('|')}>`)
+  }
+  return scenario
 }
 
 function parseOptionalProjectId(value) {
@@ -5622,6 +5705,7 @@ Usage:
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs synthetic-examples generate [--project <id>] --scenario <user|order|payment|audit> [--max-cases <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs schema-plan [--project <id>] --database-type <postgresql|mysql> --host <host> [--port <n>] --database <name> [--schema <schema>] --username <user> [--password-env <env>|--password <value>] --table <name> [--table <name> ...] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
   node tools/dataspec-cli.mjs bootstrap [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
@@ -5663,6 +5747,7 @@ Options:
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   context-budget plan 是导出前只读预算预检；只调用后端 planner，不下载、不缓存、不写入 AI Context 文件
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
+  synthetic-examples generate 只读生成合成标准样例包，可作为 fixture、Prompt 评测或人工审核草案；不会写入项目标准或调用外部 LLM
   schema-plan 只生成数据库 schema change plan 预览，不执行迁移；推荐使用 --password-env 读取数据库密码
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   bootstrap 是 AI 新会话第一跳；服务可达时读取后端启动包，服务不可达时仍输出本地 BLOCKED JSON 和 nextActions

@@ -1,0 +1,32 @@
+{
+  "requiredTopLevelFields": [
+    "kind",
+    "schemaVersion",
+    "projectId",
+    "scenario",
+    "specHash",
+    "generationParams",
+    "sourceSummary",
+    "goodSql",
+    "badSql",
+    "ddlPreviewInputs",
+    "fieldSuggestionQuestions",
+    "standardQaCases",
+    "expectedDiagnostics",
+    "safety",
+    "nextActions"
+  ],
+  "requiredSafetyFields": [
+    "readOnly",
+    "writesProject",
+    "containsRealBusinessRows",
+    "externalLlmUsed",
+    "sensitiveInputs"
+  ],
+  "supportedScenarios": [
+    "user",
+    "order",
+    "payment",
+    "audit"
+  ]
+}

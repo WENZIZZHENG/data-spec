@@ -915,13 +915,13 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不强制所有项目安装 hook，不覆盖非 DataSpec marker 管理的用户 hook 或编辑器配置，不绕过用户本地 Git 配置，不替代 CI/GitHub Review。
 
 ### P6-92：标准样例自动生成与合成业务场景库
-- 状态：待办。
+- 状态：已完成第一版。
 - 为什么做：规则、字段推荐、DDL 生成和 Prompt 评测都依赖高质量样例；手写少量 good/bad SQL 容易覆盖不足，AI 也缺少“典型业务场景下标准如何使用”的可复用素材。
 - 已有基础：已有演示项目、golden fixtures、字段使用示例与反例库、领域 Starter Kit、Prompt 评测、规则模板库和标准变更演练沙箱待办。
-- 缺口：缺少从标准字段、模板、代码集和业务对象关系自动生成 SQL/DDL/Prompt 样例的能力，也缺少按场景组织的 synthetic cases。
-- 落地产物：新增样例生成器；支持用户、订单、支付、审计等场景，生成 good SQL、bad SQL、DDL preview 输入、字段推荐问题、标准问答案例和预期诊断；样例带 specHash 与生成参数。
-- 验收标准：新规则或字段变更后可快速生成一组覆盖样例；样例可接入现有后端 fixture、前端 smoke 或 Prompt 评测；生成内容不包含真实业务数据行。
-- 边界：不替代人工维护的高价值真实样例，不引入外部 LLM 自动造数据，不生成可直接写入生产库的数据。
+- 已完成能力：新增只读 `/api/synthetic-examples/generate` 和 CLI `synthetic-examples generate`，支持 `user/order/payment/audit` 场景，输出 good SQL、bad SQL、DDL preview 输入、字段推荐问题、标准问答案例、预期诊断、`specHash`、生成参数、sourceSummary、safety 和 nextActions。
+- 落地产物：生成器会读取项目标准字段和模板摘要；素材不足时使用内置场景字段补齐并输出 fallback diagnostics；后端 contract fixture、CLI/MCP contract fixture、OpenSpec delta 和 README 已同步。
+- 验收标准：标准字段或模板摘要变化会改变 `specHash`；样例包可接入后端 fixture、Prompt 评测或前端 smoke；生成内容不包含真实业务数据行，且敏感值会脱敏。
+- 边界：不替代人工维护的高价值真实样例，不引入外部 LLM 自动造数据，不自动写入标准使用示例库，不生成可直接写入生产库的数据。
 
 ### P6-93：多源契约反向导入到标准候选
 - 状态：待办。
