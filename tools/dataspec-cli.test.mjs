@@ -1441,6 +1441,275 @@ test('changed avoids full scan when default paths are missing or no changes exis
   }
 })
 
+test('index-refs scans default paths, classifies references, redacts snippets, and skips generated dirs', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-index-refs-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    await mkdir(path.join(dir, 'models'), { recursive: true })
+    await mkdir(path.join(dir, 'node_modules', 'pkg'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({ projectId: 7, defaultPaths: ['sql', 'models', 'node_modules'] }),
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'sql', 'orders.sql'),
+      "SELECT phone FROM user_order WHERE dsn = 'jdbc:postgresql://localhost/demo' AND password='secret';",
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'models', 'user-order.ts'),
+      'export interface UserOrder { mobile_phone?: string; phoneLabel?: string }\n',
+      'utf8'
+    )
+    await writeFile(path.join(dir, 'node_modules', 'pkg', 'skip.sql'), 'SELECT phone FROM ignored;', 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli(['index-refs', '--field', 'phone', '--alias', 'mobile_phone', '--format', 'json'], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(io.stderr, '')
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.kind, 'dataspec.code-field-reference-index')
+    assert.equal(output.schemaVersion, 1)
+    assert.equal(output.fields[0].fieldName, 'phone')
+    assert.deepEqual(output.fields[0].aliases, ['mobile_phone'])
+    assert.equal(output.renameRisk, 'HIGH')
+    assert.ok(output.summary.totalReferences >= 2)
+    assert.ok(output.summary.skippedDirectoryCount >= 1)
+    assert.ok(output.references.some((item) =>
+      item.file === 'sql/orders.sql'
+        && item.referenceKind === 'SQL_IDENTIFIER'
+        && item.confidence === 'HIGH'
+        && item.line === 1
+        && item.column > 0
+    ))
+    assert.ok(output.references.some((item) =>
+      item.file === 'models/user-order.ts'
+        && item.matchedText === 'mobile_phone'
+        && item.confidence === 'MEDIUM'
+    ))
+    assert.equal(output.references.some((item) => item.file.includes('node_modules')), false)
+    assert.doesNotMatch(JSON.stringify(output), /secret|jdbc:postgresql/i)
+    assert.ok(output.nextActions.some((action) => action.includes('重命名')))
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('index-refs scans explicit paths and reports low risk when no references are found', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-index-refs-empty-'))
+  try {
+    await mkdir(path.join(dir, 'src'), { recursive: true })
+    await writeFile(path.join(dir, 'src', 'user.ts'), 'export const userId = 1\n', 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli(['index-refs', '--field', 'phone', '--path', 'src', '--format', 'json'], io, fetchFn)
+
+    assert.equal(code, 0)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.summary.totalReferences, 0)
+    assert.equal(output.renameRisk, 'LOW')
+    assert.match(output.suggestedAction, /未发现/)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('index-refs maps aliases to canonical fields in multi-field scans', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-index-refs-multi-'))
+  try {
+    await mkdir(path.join(dir, 'src'), { recursive: true })
+    await writeFile(
+      path.join(dir, 'src', 'user.sql'),
+      'SELECT phone, email, mobile_phone, email_address FROM user_profile;',
+      'utf8'
+    )
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'index-refs',
+      '--field',
+      'phone',
+      '--field',
+      'email',
+      '--alias',
+      'phone=mobile_phone',
+      '--alias',
+      'email=email_address',
+      '--path',
+      'src',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    const output = JSON.parse(io.stdout)
+    const matchedFields = output.references.map((item) => `${item.fieldName}:${item.matchedText}`).sort()
+    assert.deepEqual(matchedFields, [
+      'email:email',
+      'email:email_address',
+      'phone:mobile_phone',
+      'phone:phone'
+    ])
+    assert.equal(output.fields.find((item) => item.fieldName === 'phone').aliases[0], 'mobile_phone')
+    assert.equal(output.fields.find((item) => item.fieldName === 'email').aliases[0], 'email_address')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('index-refs rejects ambiguous aliases when multiple fields are requested', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-index-refs-ambiguous-alias-'))
+  try {
+    await mkdir(path.join(dir, 'src'), { recursive: true })
+    await writeFile(path.join(dir, 'src', 'user.sql'), 'SELECT mobile_phone FROM user_profile;', 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'index-refs',
+      '--field',
+      'phone',
+      '--field',
+      'email',
+      '--alias',
+      'mobile_phone',
+      '--path',
+      'src',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.equal(io.stdout, '')
+    assert.match(io.stderr, /field=alias/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('index-refs rejects scan paths outside the business repository root', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-index-refs-path-boundary-'))
+  const outsideDir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-index-refs-outside-'))
+  try {
+    await writeFile(path.join(outsideDir, 'outside.sql'), 'SELECT phone FROM outside_table;', 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'index-refs',
+      '--field',
+      'phone',
+      '--path',
+      outsideDir,
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.equal(io.stdout, '')
+    assert.match(io.stderr, /DATASPEC_SCAN_PATH_OUT_OF_SCOPE/)
+    assert.doesNotMatch(io.stderr, /outside_table/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+    await rm(outsideDir, { recursive: true, force: true })
+  }
+})
+
+test('index-refs returns scan path diagnostics for missing explicit paths', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-index-refs-missing-explicit-'))
+  try {
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'index-refs',
+      '--field',
+      'phone',
+      '--path',
+      'missing',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.equal(io.stdout, '')
+    assert.match(io.stderr, /DATASPEC_SCAN_PATH_NOT_FOUND/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('index-refs text output includes bounded-scan diagnostics', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-index-refs-text-diagnostics-'))
+  try {
+    await mkdir(path.join(dir, 'src'), { recursive: true })
+    await writeFile(path.join(dir, 'src', 'large.sql'), 'x'.repeat(1024 * 1024 + 1), 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'index-refs',
+      '--field',
+      'phone',
+      '--path',
+      'src',
+      '--format',
+      'text'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.match(io.stdout, /Skipped: 0 directories, 1 files/)
+    assert.match(io.stdout, /Diagnostics:/)
+    assert.match(io.stdout, /SCAN_FILE_TOO_LARGE/)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('index-refs stops without scanning the whole repository when paths are missing', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-index-refs-missing-paths-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(path.join(dir, '.dataspec', 'config.json'), JSON.stringify({ projectId: 7, defaultPaths: [] }), 'utf8')
+    await writeFile(path.join(dir, 'outside.sql'), 'SELECT phone FROM should_not_scan;', 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli(['index-refs', '--field', 'phone', '--format', 'json'], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.equal(io.stdout, '')
+    assert.match(io.stderr, /DATASPEC_DEFAULT_PATHS_MISSING/)
+    assert.doesNotMatch(io.stderr, /outside\.sql/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('review-pr posts markdown comment and returns 1 when lint has errors', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {

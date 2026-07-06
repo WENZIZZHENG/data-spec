@@ -1193,6 +1193,8 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
     'previewFieldChange(field.id, payload)',
     'standardChangeConfirmMessage(preview)',
     'getFieldImpactReport(field.id, projectStore.currentProjectId)',
+    'codeReferenceImpactCount',
+    '业务代码',
     'openMergeDialog(row)',
     'fieldMergeOptions',
     'handleMergeApplied',

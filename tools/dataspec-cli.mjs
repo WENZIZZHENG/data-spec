@@ -20,6 +20,10 @@ import {
   renderTaskCardMarkdown,
   updateTaskCardStep
 } from './dataspec-task-card.mjs'
+import {
+  buildCodeFieldReferenceIndex,
+  formatCodeFieldReferenceIndexText
+} from './dataspec-code-refs.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const CLI_VERSION = '0.1.0'
@@ -88,6 +92,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'lint-changed') {
       return await runLintChanged(rest, io, fetchFn)
+    }
+    if (command === 'index-refs') {
+      return await runIndexRefs(rest, io)
     }
     if (command === 'review-pr') {
       return await runReviewPr(rest, io, fetchFn)
@@ -612,6 +619,57 @@ async function runLintChanged(args, io, fetchFn) {
 
   io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
   return lint.summary.failedFiles > 0 ? 1 : 0
+}
+
+async function runIndexRefs(args, io) {
+  const { positional, options } = parseArgs(args, [
+    'field',
+    'alias',
+    'path',
+    'format'
+  ], [], ['field', 'alias', 'path'])
+  if (positional.length > 0) {
+    throw new Error(`index-refs 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const format = options.format ?? 'json'
+  if (!['text', 'json'].includes(format)) {
+    throw new Error('index-refs 仅支持 --format text|json')
+  }
+  const config = loadDataSpecConfig(cliCwd(io))
+  const fieldNames = optionValues(options.field)
+  const aliases = optionValues(options.alias)
+  const explicitPaths = optionValues(options.path)
+  const scanPaths = explicitPaths.length > 0 ? explicitPaths : resolveDefaultPaths(config)
+  if (scanPaths.length === 0) {
+    throw new DataSpecCliError('未配置 .dataspec/config.json 的 defaultPaths，已停止以避免扫描整个业务仓库。', {
+      code: 'DATASPEC_DEFAULT_PATHS_MISSING',
+      category: 'CONFIGURATION',
+      severity: 'WARNING',
+      retryable: true,
+      suggestedAction: '传入 --path <file|dir>，或运行 dataspec init --default-path <path> 配置 defaultPaths 后重试。'
+    })
+  }
+  let output
+  try {
+    output = await buildCodeFieldReferenceIndex({
+      fieldNames,
+      aliases,
+      scanPaths,
+      rootDir: explicitPaths.length > 0 ? cliCwd(io) : config.rootDir,
+      outputRootDir: config.configPath ? config.rootDir : cliCwd(io)
+    })
+  } catch (error) {
+    if (error?.diagnostic) {
+      throw new DataSpecCliError(error.message, error.diagnostic)
+    }
+    throw error
+  }
+  if (format === 'json') {
+    io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
+  } else {
+    io.writeOut(formatCodeFieldReferenceIndexText(output))
+  }
+  return 0
 }
 
 async function runReviewPr(args, io, fetchFn) {
@@ -1509,6 +1567,13 @@ function parseArgs(args, allowedOptions, flagOptions = [], repeatableOptions = [
     i += 1
   }
   return { positional, options }
+}
+
+function optionValues(value) {
+  if (value === undefined || value === null) {
+    return []
+  }
+  return Array.isArray(value) ? value : [value]
 }
 
 function requiredOption(value, name) {
@@ -4981,6 +5046,7 @@ Usage:
   node tools/dataspec-cli.mjs fixed-sql patch --lint-result <json> --target <file.sql> [--apply --confirm <planHash>] --format json
   node tools/dataspec-cli.mjs changed [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>]
   node tools/dataspec-cli.mjs lint-changed [--project <id>] [--profile <id>|--task-type <type>] --format json [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
+  node tools/dataspec-cli.mjs index-refs --field <name> [--alias <name|field=alias> ...] [--path <file|dir> ...] [--format text|json]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs export-context [--project <id>] [--profile <id>|--task-type <type>] [--output <zip>] [--cache] [--cache-ttl-days <days>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
@@ -5022,6 +5088,7 @@ Options:
   fixed-sql patch 默认只输出补丁计划；写入目标 SQL 文件必须显式传 --apply --confirm <planHash>
   changed 读取 git 变更并按 defaultPaths 输出文件清单、SQL 子集、最小 Context 建议和恢复诊断，不调用服务端
   lint-changed 只对 changed 发现的 SQL 文件调用 lint；无 SQL 变更时返回诊断且不调用服务端
+  index-refs 只读扫描 defaultPaths 或 --path 内字段引用，输出重命名风险；多字段扫描时 --alias 使用 field=alias 明确归属；不会调用服务端或修改业务代码
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   schema-plan 只生成数据库 schema change plan 预览，不执行迁移；推荐使用 --password-env 读取数据库密码

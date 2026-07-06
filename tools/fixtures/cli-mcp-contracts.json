@@ -135,6 +135,19 @@
       "recommendedNextActions": ["Run dry-run first, review unifiedDiff, then apply with --confirm <planHash> only after human approval."]
     },
     {
+      "id": "index-refs",
+      "command": "index-refs --field <name> --format json",
+      "description": "Scan configured local business-repository paths for standard field references and rename risk; multi-field aliases use field=alias syntax.",
+      "requiredOptions": ["field"],
+      "optionalOptions": ["alias", "path", "format"],
+      "outputShape": ["kind", "schemaVersion", "fields[]", "scan", "summary", "references[]", "references[].fieldName", "references[].matchedText", "references[].referenceKind", "references[].file", "references[].line", "references[].column", "references[].confidence", "references[].possibleReference", "references[].snippet", "renameRisk", "suggestedAction", "diagnostics[]", "nextActions[]"],
+      "exitCodes": { "0": "reference index printed", "2": "argument error, missing field, missing paths, or scan error" },
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": ["businessRepositoryFiles"], "nextActions": ["Review HIGH confidence references before renaming or deprecating a field.", "Do not auto-modify business code from this output."] },
+      "successExample": { "command": "node tools/dataspec-cli.mjs index-refs --field phone --field email --alias phone=mobile_phone --alias email=email_address --path sql --format json", "output": { "kind": "dataspec.code-field-reference-index", "renameRisk": "HIGH", "references": [] } },
+      "failureExample": { "exitCode": 2, "diagnostic": { "code": "DATASPEC_DEFAULT_PATHS_MISSING", "category": "CONFIGURATION" } },
+      "recommendedNextActions": ["Configure defaultPaths or pass --path before scanning.", "Treat HIGH renameRisk as a stop sign for human review."]
+    },
+    {
       "id": "export-context",
       "command": "export-context --project <id> --output <path>",
       "description": "Export AI context zip or cache files for a project.",

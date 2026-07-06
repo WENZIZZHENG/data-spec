@@ -619,6 +619,10 @@
             <span>快照</span>
             <strong>{{ impactReport.summary?.snapshotImpactCount ?? 0 }}</strong>
           </div>
+          <div class="impact-metric">
+            <span>业务代码</span>
+            <strong>{{ impactReport.summary?.codeReferenceImpactCount ?? 0 }}</strong>
+          </div>
         </div>
         <el-table :data="impactReport.impacts ?? []" stripe empty-text="暂无已知影响">
           <el-table-column label="类型" width="120">

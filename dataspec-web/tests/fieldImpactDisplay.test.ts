@@ -13,6 +13,7 @@ test('formats impact type and severity', () => {
   assert.equal(impactTypeLabel('IMPORT_SOURCE'), '导入来源')
   assert.equal(impactTypeLabel('SQL_CHECK'), 'SQL 检查')
   assert.equal(impactTypeLabel('STANDARD_SNAPSHOT'), '标准快照')
+  assert.equal(impactTypeLabel('CODE_REFERENCE'), '业务代码')
   assert.equal(impactSeverityTagType('HIGH'), 'danger')
   assert.equal(impactSeverityTagType('WARNING'), 'warning')
   assert.equal(impactSeverityTagType('INFO'), 'info')
@@ -21,13 +22,14 @@ test('formats impact type and severity', () => {
 test('builds summary and warning text', () => {
   assert.equal(
     fieldImpactSummaryText({
-      totalImpactCount: 4,
+      totalImpactCount: 5,
       templateImpactCount: 1,
       importSourceImpactCount: 1,
       sqlCheckImpactCount: 1,
-      snapshotImpactCount: 1
+      snapshotImpactCount: 1,
+      codeReferenceImpactCount: 1
     }),
-    '共 4 项影响：模板 1，导入来源 1，SQL 1，快照 1'
+    '共 5 项影响：模板 1，导入来源 1，SQL 1，快照 1，业务代码 1'
   )
   assert.equal(warningSummaryText([{ attribute: 'name' }, { attribute: 'dataType' }]), '字段名、数据类型')
 })

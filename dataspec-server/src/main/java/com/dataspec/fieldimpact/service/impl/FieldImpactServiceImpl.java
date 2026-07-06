@@ -260,6 +260,8 @@ public class FieldImpactServiceImpl implements FieldImpactService {
             summary.setSnapshotImpactCount(summary.getSnapshotImpactCount() + 1);
         } else if (FieldImpactType.CODE_SET.equals(type)) {
             summary.setCodeSetImpactCount(summary.getCodeSetImpactCount() + 1);
+        } else if (FieldImpactType.CODE_REFERENCE.equals(type)) {
+            summary.setCodeReferenceImpactCount(summary.getCodeReferenceImpactCount() + 1);
         }
     }
 

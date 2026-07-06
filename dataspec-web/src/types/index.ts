@@ -622,7 +622,7 @@ export interface FieldConflictReport {
 }
 
 export type FieldImpactSeverity = 'HIGH' | 'WARNING' | 'INFO'
-export type FieldImpactType = 'TEMPLATE' | 'IMPORT_SOURCE' | 'SQL_CHECK' | 'STANDARD_SNAPSHOT' | 'CODE_SET'
+export type FieldImpactType = 'TEMPLATE' | 'IMPORT_SOURCE' | 'SQL_CHECK' | 'STANDARD_SNAPSHOT' | 'CODE_SET' | 'CODE_REFERENCE'
 
 export interface FieldEditWarning {
   attribute?: string
@@ -648,6 +648,7 @@ export interface FieldImpactSummary {
   sqlCheckImpactCount?: number
   snapshotImpactCount?: number
   codeSetImpactCount?: number
+  codeReferenceImpactCount?: number
   warningCount?: number
 }
 

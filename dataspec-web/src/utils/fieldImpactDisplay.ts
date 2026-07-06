@@ -4,6 +4,7 @@ export type FieldImpactTypeLike =
   | 'SQL_CHECK'
   | 'STANDARD_SNAPSHOT'
   | 'CODE_SET'
+  | 'CODE_REFERENCE'
   | string
 
 export type FieldImpactSeverityLike = 'HIGH' | 'WARNING' | 'INFO' | string
@@ -15,6 +16,7 @@ export interface FieldImpactSummaryLike {
   sqlCheckImpactCount?: number
   snapshotImpactCount?: number
   codeSetImpactCount?: number
+  codeReferenceImpactCount?: number
 }
 
 export interface FieldEditWarningLike {
@@ -53,6 +55,9 @@ export function impactTypeLabel(type?: FieldImpactTypeLike) {
   if (type === 'CODE_SET') {
     return '代码集'
   }
+  if (type === 'CODE_REFERENCE') {
+    return '业务代码'
+  }
   return '其他影响'
 }
 
@@ -76,7 +81,8 @@ export function fieldImpactSummaryText(summary?: FieldImpactSummaryLike) {
     ['导入来源', summary?.importSourceImpactCount],
     ['SQL', summary?.sqlCheckImpactCount],
     ['快照', summary?.snapshotImpactCount],
-    ['代码集', summary?.codeSetImpactCount]
+    ['代码集', summary?.codeSetImpactCount],
+    ['业务代码', summary?.codeReferenceImpactCount]
   ]
     .filter(([, value]) => Number(value ?? 0) > 0)
     .map(([label, value]) => `${label} ${value}`)

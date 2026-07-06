@@ -55,6 +55,23 @@ test('bundled fixtures include schema plan readonly contract', async () => {
   assert.ok(command.recommendedNextActions.some((item) => item.includes('password-env')))
 })
 
+test('bundled fixtures include index-refs readonly contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'index-refs')
+
+  assert.ok(command)
+  assert.equal(command.safety.readOnly, true)
+  assert.equal(command.safety.writesProject, false)
+  assert.equal(command.safety.requiresIdempotencyKey, false)
+  assert.ok(command.outputShape.includes('references[]'))
+  assert.ok(command.outputShape.includes('references[].fieldName'))
+  assert.ok(command.outputShape.includes('references[].snippet'))
+  assert.ok(command.outputShape.includes('renameRisk'))
+  assert.ok(command.successExample.command.includes('phone=mobile_phone'))
+  assert.equal(command.failureExample.diagnostic.code, 'DATASPEC_DEFAULT_PATHS_MISSING')
+  assert.ok(command.recommendedNextActions.some((item) => item.includes('defaultPaths') || item.includes('--path')))
+})
+
 test('fixed SQL patch fixture matches actual dry-run json shape', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'fixed-sql-patch')

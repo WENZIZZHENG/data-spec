@@ -5399,7 +5399,7 @@ export interface components {
         };
         FieldImpactItem: {
             /** @enum {string} */
-            impactType?: "TEMPLATE" | "IMPORT_SOURCE" | "SQL_CHECK" | "STANDARD_SNAPSHOT" | "CODE_SET";
+            impactType?: "TEMPLATE" | "IMPORT_SOURCE" | "SQL_CHECK" | "STANDARD_SNAPSHOT" | "CODE_SET" | "CODE_REFERENCE";
             /** @enum {string} */
             severity?: "HIGH" | "WARNING" | "INFO";
             /** Format: int64 */
@@ -5437,6 +5437,8 @@ export interface components {
             snapshotImpactCount?: number;
             /** Format: int32 */
             codeSetImpactCount?: number;
+            /** Format: int32 */
+            codeReferenceImpactCount?: number;
             /** Format: int32 */
             warningCount?: number;
         };

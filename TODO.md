@@ -4,10 +4,10 @@
 
 ## 下一步顺序
 
-1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-89 已完成第一版；P6-78 OpenSpec change 已归档到 `openspec/changes/archive/2026-07-06-add-fixedsql-file-patch-flow`，P6-87 当前 change 待完成验证、评审和本地 commit 收口。
-2. 近期只保留 1 个优先行动项，后续开发默认从这里选，不再从 P6-71 到 P6-188 全量顺扫：P6-88。
-3. 效率优先顺序：P6-87 完成验证、评审和本地 commit 后，下一步优先推进 P6-88；真实数据库集成测试已作为可选 Docker profile，不默认阻塞小任务。
-4. 暂缓池：P6-90 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
+1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89 已完成第一版；P6-78 OpenSpec change 已归档到 `openspec/changes/archive/2026-07-06-add-fixedsql-file-patch-flow`，P6-88 OpenSpec change `add-code-field-reference-index` 保持 active，后续不自动归档。
+2. 近期只保留 1 个优先行动项，后续开发默认从这里选，不再从 P6-71 到 P6-188 全量顺扫：P6-90。
+3. 效率优先顺序：P6-88 完成验证、独立评审和本地 commit 后，下一步优先推进 P6-90；真实数据库集成测试已作为可选 Docker profile，不默认阻塞小任务。
+4. 暂缓池：P6-91 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
 5. 每次开工先按任务类型决定快速/常规/SDD：文档与小前端走快速；单模块功能走常规；API/CLI/MCP/AI 外部协议、安全、存储或数据库写入才进入 SDD standard/full。
 
 ## 历史追加记录（已降级为背景）
@@ -42,7 +42,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - P3 自动化与反向导入已完成第一版：SQL 反向导入预览、MySQL DDL 解析、CI/GitHub Action 和 PR 评论式 SQL Review。
 - P4 工程化与体验增强已完成第一版：SQL 定位、fixedSql diff、.dataspec/config.json、规则配置表单、OpenAPI 防漂移、Excel dry-run、HTML/ERD、MySQL 规则覆盖、安全基线、演示项目和数据库直连反向导入前端流程。
 - 后续真实待办集中在 P6：P5 已完成 dataspec doctor、数据库二次比对、导入来源追踪、SQL 定位范围增强、字段推荐质量增强、核心 fixture/golden 基线、前端高频流程细节打磨和轻量 token 管理；P6-1 已完成标准版本快照第一版，P6-2 已完成字段覆盖率第一版，P6-3 已完成 AI 回放第一版，P6-4 已完成业务仓库初始化第一版，P6-5 已完成字段质量评分第一版，P6-6 已完成轻量字段影响分析第一版，P6-7 已完成 AI Context 按需裁剪第一版，P6-8 已完成字段冲突检测第一版，P6-9 已完成规则误报豁免第一版，P6-10 已完成数据库直连配置预设第一版，P6-11 已完成 MCP/CLI 任务化工作流模板第一版，P6-12 已完成 AI 输出契约稳定性第一版，P6-13 已完成 GitHub inline review 第一版，P6-14 已完成字段分组体验第一版，P6-15 已完成字段批量维护与回退第一版，P6-16 已完成性能基线第一版，P6-17 已完成前端冒烟门禁第一版，P6-18 已完成 AI 可读错误诊断第一版，P6-19 已完成字段标准检索第一版，P6-20 已完成 OpenSpec 归档收口第一版，P6-21 已完成历史快照导出与记录回放第一版，P6-22 已完成 SQL/DDL 多方言兼容矩阵与诊断第一版，P6-23 已完成规则模板库与项目基线套件第一版，P6-24 已完成项目备份恢复迁移包第一版，P6-25 已完成数据库直连只读安全诊断第一版，P6-26 已完成 AI 批量任务交付包第一版，P6-27 已完成 AI 使用反馈与标准改进闭环第一版，P6-28 已完成标准候选 Inbox 与采纳工作台第一版，P6-29 已完成离线 AI Context 缓存第一版，P6-30 已完成数据库 schema dump 第一版，P6-31 已完成 Prompt 模板版本化与效果评测第一版，P6-32 已完成项目活动时间线第一版，P6-33 已完成前端任务式导航第一版，P6-34 已完成本地启动包第一版，P6-35 已完成 fixedSql 策略第一版，P6-36 已完成 AI 使用画像与任务模式配置第一版，P6-37 已完成标准契约 Registry 第一版，P6-38 已完成执行证据包和交付归档第一版，P6-39 已完成前端统一状态第一版，P6-40 已完成并发幂等和任务锁第一版，P6-41 已完成标准变更 What-if 预览第一版，P6-42 已完成领域 Starter Kit 第一版，P6-43 已完成 AI 能力清单第一版，P6-44 已完成前端 URL 状态与可复现操作链接第一版，P6-45 已完成敏感信息脱敏与日志输出边界第一版，P6-46 已完成按变更范围推荐验证命令第一版，P6-47 已完成 TODO 到 OpenSpec 的实施交接助手第一版，P6-48 已完成业务术语表与同义词词根库第一版，P6-49 已完成自然语言需求到标准候选草案第一版，P6-50 已完成 AI 输出引用证据与 Explain Trace 第一版，P6-51 已完成标准字段生命周期状态机第一版，P6-52 已完成业务仓库变更感知扫描与最小上下文第一版，P6-53 已完成标准健康趋势与改进计划第一版，P6-54 已完成数据库连接健康探测与方言能力画像第一版，P6-55 已完成字段值格式与校验样例库第一版，P6-56 已完成标准字段别名冲突与命名保留字检测第一版，P6-57 已完成反向导入字段映射策略与确认理由第一版，P6-58 已完成 AI 任务失败重试与断点续跑第一版，P6-59 已完成标准质量门禁与阈值策略第一版，P6-60 已完成标准字段使用示例与反例库第一版，P6-61 已完成 AI 会话启动包与当前上下文握手第一版，P6-62 已完成 AI 任务卡与单步可恢复执行协议第一版，P6-63 已完成数据库直连元数据浏览器与候选选择页第一版，P6-64 已完成大库扫描计划、分页预览与取消恢复第一版，P6-65 已完成标准字段智能合并向导第一版，P6-66 已完成前端命令面板与最近操作续跑第一版，P6-67 已完成 AI 交接证据看板第一版，P6-68 已完成多项目标准复用包与轻量继承第一版，后续再推进 P6-69 AI 写入安全策略与 dry-run 协议。
-- 最新收束状态（2026-07-06）：P6-69 AI 写入安全策略与 dry-run 协议、P6-70 SQL 规则调试器与可解释匹配面板、P6-72 CLI/MCP 与服务端版本兼容握手、P6-73 前端类型化 API Client 与请求状态收口、P6-75 MCP/CLI 工具契约验收与示例调用库、P6-78 fixedSql 文件级补丁应用与人工确认、P6-79 标准问答只读入口与证据引用、P6-89 MCP Prompt/Resource 一等化与 Agent 引导包已完成第一版；近期开发按顶部优先行动队列推进，不再默认从完整 P6 候选池线性顺扫。
+- 最新收束状态（2026-07-07）：P6-69 AI 写入安全策略与 dry-run 协议、P6-70 SQL 规则调试器与可解释匹配面板、P6-72 CLI/MCP 与服务端版本兼容握手、P6-73 前端类型化 API Client 与请求状态收口、P6-75 MCP/CLI 工具契约验收与示例调用库、P6-78 fixedSql 文件级补丁应用与人工确认、P6-79 标准问答只读入口与证据引用、P6-88 业务代码字段引用索引与重命名风险分析、P6-89 MCP Prompt/Resource 一等化与 Agent 引导包已完成第一版；近期开发按顶部优先行动队列推进，不再默认从完整 P6 候选池线性顺扫。
 
 ## P5：可用性与 AI 稳定性增强
 
@@ -870,7 +870,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不引入复杂 APM，不上传用户数据，不为了性能一次性重写所有表格组件。
 
 ### P6-87：数据库 Schema 变更计划与迁移脚本预览
-- 状态：已完成第一版，OpenSpec change `add-schema-change-plan-preview` 待完成验证、独立评审和本地 commit 收口。
+- 状态：已完成第一版，已完成验证、独立评审和本地 commit 收口。
 - 为什么做：DataSpec 已能生成 DDL、检查 SQL 和反向导入现有数据库，但真实落地还需要回答“从当前数据库变到目标标准要改哪些表/字段、风险是什么、怎么回退”；AI 不能只输出一段不可审计的 ALTER SQL。
 - 已有基础：已有表模板、DDL 生成、数据库直连 metadata、二次比对、标准快照、fixedSql diff、备份迁移包待办和 Atlas/Terraform 风格 plan/apply 参考。
 - 已完成能力：新增只读 schema plan API `/api/reverse-import/database/schema-plan`、CLI `schema-plan` 和反向导入页预览区；计划复用数据库 metadata dump 与 compare 语义，输出 `currentSchemaHash`、`targetSpecHash`、`changeSet`、`riskLevel`、`migrationSql`、`rollbackHint`、`manualChecks`、`blockedReasons` 和 `nextActions`。
@@ -879,13 +879,13 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：第一版不直接执行迁移，不替代 Flyway/Liquibase/Atlas 等迁移工具，不自动推断所有字段重命名；只服务个人/小团队的迁移草案和风险说明。
 
 ### P6-88：业务代码字段引用索引与重命名风险分析
-- 状态：待办。
+- 状态：已完成第一版，OpenSpec change `add-code-field-reference-index` 保持 active，后续按需归档。
 - 为什么做：修改字段名、废弃字段或合并标准前，用户和 AI 需要知道业务仓库里哪些 SQL、迁移文件、ORM 模型、报表或配置正在引用该字段，否则标准变更容易造成代码与数据库脱节。
 - 已有基础：已有 `.dataspec/config.json` 默认扫描路径、CLI 批量 lint、PR review、字段影响分析、变更感知扫描、fixedSql 文件补丁和业务仓库初始化。
-- 缺口：字段影响分析主要聚焦 DataSpec 内部对象，缺少对业务仓库文件的字段引用索引、引用类型、置信度、文件位置和重命名风险。
-- 落地产物：新增 `dataspec index-refs` 或等价 API/CLI；扫描 SQL、DDL、常见 ORM/配置文件，输出 fieldName、referenceKind、file、line、confidence、suggestedAction 和 renameRisk；前端字段影响弹窗可读取摘要。
-- 验收标准：给定一个标准字段，能列出业务仓库内主要引用位置；准备重命名或停用字段时能看到风险清单；扫描只读且遵守 defaultPaths/ignorePatterns。
-- 边界：不做完整代码智能平台，不解析所有语言 AST，不自动改业务代码；第一版优先覆盖 SQL、迁移文件和常见 schema/model 文件。
+- 已完成能力：新增 CLI `index-refs`，在业务仓库本地只读扫描显式 `--path` 或 `.dataspec/config.json` 的 `defaultPaths`，输出字段引用、引用类型、文件行列、置信度、重命名风险、建议动作和 nextActions；未配置扫描路径时返回 `DATASPEC_DEFAULT_PATHS_MISSING`，不会全仓误扫。
+- 落地产物：CLI/MCP 契约 fixture 已记录 `index-refs` 的输入、输出、安全 metadata 和示例；后端字段影响模型新增 `CODE_REFERENCE` 与 `codeReferenceImpactCount` 摘要字段；前端字段影响弹窗可展示业务代码引用计数。
+- 验收标准：给定一个标准字段，能列出业务仓库内主要 SQL、DDL、迁移、模型和配置引用位置；准备重命名或停用字段时能看到风险清单；扫描只读、限制在业务仓库路径内，并跳过常见生成目录；输出片段和诊断会脱敏 password、token、Authorization、JDBC URL、DSN 和连接串。
+- 边界：不做完整代码智能平台，不解析所有语言 AST，不自动改业务代码，不新增持久化引用索引表，也不让后端根据任意路径读取服务器文件系统；第一版优先覆盖 SQL、迁移文件和常见 schema/model/config 文件。
 
 ### P6-89：MCP Prompt/Resource 一等化与 Agent 引导包
 - 状态：已完成第一版，OpenSpec change 已归档到 `openspec/changes/archive/2026-07-05-add-mcp-agent-guidance-pack`。

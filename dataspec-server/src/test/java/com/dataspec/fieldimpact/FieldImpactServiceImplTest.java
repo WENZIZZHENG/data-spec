@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.fieldimpact.model.FieldImpactItem;
 import com.dataspec.fieldimpact.model.FieldImpactSeverity;
+import com.dataspec.fieldimpact.model.FieldImpactSummary;
 import com.dataspec.fieldimpact.model.FieldImpactType;
 import com.dataspec.fieldimpact.service.impl.FieldImpactServiceImpl;
 import com.dataspec.lint.entity.SqlCheckRecord;
@@ -116,6 +118,21 @@ class FieldImpactServiceImplTest {
         assertThat(report.getEditWarnings()).extracting("attribute")
                 .contains("name", "dataType", "status", "codeSetId", "sensitive");
         verify(deps.sqlCheckRecordService).listByProject(1L, 1, 20);
+    }
+
+    @Test
+    void impactModelsSupportBusinessCodeReferenceSummary() {
+        FieldImpactSummary summary = new FieldImpactSummary();
+        summary.setCodeReferenceImpactCount(2);
+        FieldImpactItem item = new FieldImpactItem();
+        item.setImpactType(FieldImpactType.CODE_REFERENCE);
+        item.getMetadata().put("renameRisk", "HIGH");
+        item.getMetadata().put("files", List.of("sql/orders.sql"));
+
+        assertThat(FieldImpactType.valueOf("CODE_REFERENCE")).isEqualTo(FieldImpactType.CODE_REFERENCE);
+        assertThat(summary.getCodeReferenceImpactCount()).isEqualTo(2);
+        assertThat(item.getImpactType()).isEqualTo(FieldImpactType.CODE_REFERENCE);
+        assertThat(item.getMetadata()).containsEntry("renameRisk", "HIGH");
     }
 
     private static TestDeps newDeps() {
