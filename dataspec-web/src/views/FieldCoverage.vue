@@ -193,6 +193,7 @@
         title="覆盖率报告生成失败"
         :description="reportState.errorMessage.value"
         :suggested-action="reportState.suggestedAction.value"
+        :next-actions="reportState.nextActions.value"
         :docs-ref="reportState.docsRef.value"
         action-text="重试"
         @action="handleGenerateReport"

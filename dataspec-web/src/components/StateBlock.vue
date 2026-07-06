@@ -2,7 +2,10 @@
   <div class="state-block" :data-state-type="type">
     <el-empty :description="title">
       <p v-if="description" class="state-description">{{ description }}</p>
-      <p v-if="suggestedAction" class="state-suggestion">建议：{{ suggestedAction }}</p>
+      <p v-if="visibleSuggestedAction" class="state-suggestion">建议：{{ visibleSuggestedAction }}</p>
+      <ul v-if="visibleNextActions.length" class="state-next-actions" aria-label="下一步动作">
+        <li v-for="action in visibleNextActions" :key="action">{{ action }}</li>
+      </ul>
       <p v-if="docsRef" class="state-docs">参考：{{ docsRef }}</p>
       <div v-if="actionText || secondaryActionText" class="state-actions">
         <el-button
@@ -22,13 +25,16 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
 export type StateBlockType = 'empty' | 'error' | 'project'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   type?: StateBlockType
   title: string
   description?: string
   suggestedAction?: string
+  nextActions?: string[]
   docsRef?: string
   actionText?: string
   secondaryActionText?: string
@@ -37,11 +43,18 @@ withDefaults(defineProps<{
   type: 'empty',
   description: '',
   suggestedAction: '',
+  nextActions: () => [],
   docsRef: '',
   actionText: '',
   secondaryActionText: '',
   loading: false
 })
+
+const visibleNextActions = computed(() => {
+  const actions = props.nextActions.map((action) => action.trim()).filter(Boolean)
+  return Array.from(new Set(actions))
+})
+const visibleSuggestedAction = computed(() => visibleNextActions.value.length > 0 ? '' : props.suggestedAction.trim())
 
 defineEmits<{
   action: []
@@ -66,6 +79,19 @@ defineEmits<{
 
 .state-suggestion {
   color: #92400e;
+}
+
+.state-next-actions {
+  max-width: 560px;
+  margin: 10px auto 0;
+  padding-left: 20px;
+  color: #92400e;
+  line-height: 1.7;
+  text-align: left;
+}
+
+.state-next-actions li + li {
+  margin-top: 4px;
 }
 
 .state-docs {

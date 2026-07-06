@@ -29,6 +29,7 @@
         title="交接证据加载失败"
         :description="loadState.errorMessage.value"
         :suggested-action="loadState.suggestedAction.value"
+        :next-actions="loadState.nextActions.value"
         :docs-ref="loadState.docsRef.value"
         action-text="重试"
         @action="loadPage"

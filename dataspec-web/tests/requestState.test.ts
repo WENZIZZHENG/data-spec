@@ -33,6 +33,7 @@ test('captures DataSpec error detail without losing suggested action', async () 
   assert.equal(state.loading.value, false)
   assert.equal(state.errorMessage.value, '后端未启动')
   assert.equal(state.suggestedAction.value, '启动 dataspec-server 后重试。')
+  assert.deepEqual(state.nextActions.value, ['启动 dataspec-server 后重试。'])
   assert.equal(state.docsRef.value, 'README.md#启动')
   assert.equal(state.retryable.value, true)
 })
@@ -76,4 +77,26 @@ test('normalizes axios response error details', () => {
   assert.equal(summary.message, '无权访问项目')
   assert.equal(summary.retryable, false)
   assert.equal(summary.suggestedAction, '切换到 token 授权的项目。')
+  assert.deepEqual(summary.nextActions, ['切换到 token 授权的项目。'])
+})
+
+test('normalizes response next actions for shared page error display', async () => {
+  const state = useRequestState<number>()
+  const error = Object.assign(new Error('数据库连接失败'), {
+    dataspecError: {
+      code: 'DATABASE_UNAVAILABLE',
+      retryable: false,
+      suggestedAction: '检查连接配置。',
+      nextActions: ['检查连接配置。', '打开连接诊断页查看失败原因。']
+    }
+  })
+
+  await assert.rejects(() => state.run(async () => {
+    throw error
+  }), /数据库连接失败/)
+
+  assert.deepEqual(state.nextActions.value, [
+    '检查连接配置。',
+    '打开连接诊断页查看失败原因。'
+  ])
 })

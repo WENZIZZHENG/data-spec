@@ -28,6 +28,7 @@
         title="工作台加载失败"
         :description="dashboardErrorMessage"
         :suggested-action="dashboardSuggestedAction"
+        :next-actions="dashboardNextActions"
         :docs-ref="dashboardDocsRef"
         action-text="重试"
         @action="loadDashboard"
@@ -258,6 +259,9 @@ const hasProject = computed(() => projectStore.currentProjectId !== null)
 const dashboardLoading = computed(() => summaryState.loading.value || activityState.loading.value)
 const dashboardErrorMessage = computed(() => summaryState.errorMessage.value || activityState.errorMessage.value)
 const dashboardSuggestedAction = computed(() => summaryState.suggestedAction.value || activityState.suggestedAction.value)
+const dashboardNextActions = computed(() =>
+  Array.from(new Set([...summaryState.nextActions.value, ...activityState.nextActions.value].filter(Boolean)))
+)
 const dashboardDocsRef = computed(() => summaryState.docsRef.value || activityState.docsRef.value)
 const metrics = computed(() => [
   { key: 'fields', label: '标准字段', value: summary.value?.fieldCount ?? 0 },

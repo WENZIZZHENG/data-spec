@@ -1,14 +1,16 @@
 import request from '@/api/request'
-import type { AiBatchRunDetail, AiBatchRunListItem, PageResult } from '@/types'
+import { typedGet } from '@/api/typedClient'
 
 export function listAiBatches(projectId: number, current = 1, size = 10) {
-  return request.get<unknown, PageResult<AiBatchRunListItem>>('/ai-batches', {
+  return typedGet('/api/ai-batches', {
     params: { projectId, current, size }
   })
 }
 
 export function getAiBatchDetail(id: number) {
-  return request.get<unknown, AiBatchRunDetail>(`/ai-batches/${id}`)
+  return typedGet('/api/ai-batches/{id}', {
+    path: { id }
+  })
 }
 
 export function downloadAiBatchPackage(id: number) {

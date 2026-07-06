@@ -385,6 +385,7 @@
               title="检查记录加载失败"
               :description="recordState.errorMessage.value"
               :suggested-action="recordState.suggestedAction.value"
+              :next-actions="recordState.nextActions.value"
               :docs-ref="recordState.docsRef.value"
               action-text="重试"
               @action="loadRecords"

@@ -72,6 +72,7 @@
         title="AI 批量任务加载失败"
         :description="listState.errorMessage.value"
         :suggested-action="listState.suggestedAction.value"
+        :next-actions="listState.nextActions.value"
         :docs-ref="listState.docsRef.value"
         action-text="重试"
         @action="refreshPage"

@@ -117,14 +117,16 @@ test('keeps AI batch delivery package page wired', () => {
   ], 'AiBatch.vue')
 
   assertContains(api, [
-    "request.get<unknown, PageResult<AiBatchRunListItem>>('/ai-batches'",
+    "typedGet('/api/ai-batches'",
+    "typedGet('/api/ai-batches/{id}'",
     'export function getAiBatchDetail(id: number)',
     'export function downloadAiBatchPackage(id: number)'
   ], 'ai batch api')
 
   assertContains(taskApi, [
-    "request.get<unknown, PageResult<AiTaskRunListItem>>('/ai-task-runs'",
-    "request.get<unknown, AiTaskRunListItem[]>('/ai-task-runs/recent-failures'",
+    "typedGet('/api/ai-task-runs'",
+    "typedGet('/api/ai-task-runs/recent-failures'",
+    "typedGet('/api/ai-task-runs/{id}'",
     'export function getAiTaskRunDetail(id: number, projectId: number)'
   ], 'ai task run api')
 
@@ -1352,6 +1354,7 @@ test('keeps unified request state and recovery entrypoints wired', () => {
   const projectRequired = readSource('src/components/ProjectRequired.vue')
   const dashboard = readSource('src/views/Dashboard.vue')
   const aiBatch = readSource('src/views/AiBatch.vue')
+  const aiHandoff = readSource('src/views/AiHandoff.vue')
   const coverage = readSource('src/views/FieldCoverage.vue')
   const sqlLint = readSource('src/views/SqlLint.vue')
   const packageJson = readSource('package.json')
@@ -1361,6 +1364,7 @@ test('keeps unified request state and recovery entrypoints wired', () => {
     'loading',
     'errorMessage',
     'suggestedAction',
+    'nextActions',
     'docsRef',
     'lastUpdatedAt',
     'async function retry',
@@ -1370,6 +1374,10 @@ test('keeps unified request state and recovery entrypoints wired', () => {
   assertContains(stateBlock, [
     'data-state-type',
     'state-suggestion',
+    'state-next-actions',
+    'nextActions',
+    'visibleSuggestedAction',
+    'new Set',
     'actionText',
     "defineEmits"
   ], 'StateBlock.vue')
@@ -1384,12 +1392,14 @@ test('keeps unified request state and recovery entrypoints wired', () => {
   for (const [context, source] of [
     ['Dashboard.vue', dashboard],
     ['AiBatch.vue', aiBatch],
+    ['AiHandoff.vue', aiHandoff],
     ['FieldCoverage.vue', coverage],
     ['SqlLint.vue', sqlLint]
   ] as const) {
     assertContains(source, [
       "import StateBlock from '@/components/StateBlock.vue'",
       "import { useRequestState } from '@/composables/useRequestState'",
+      ':next-actions=',
       'action-text="重试"'
     ], context)
   }
@@ -1398,6 +1408,7 @@ test('keeps unified request state and recovery entrypoints wired', () => {
     "import ProjectRequired from '@/components/ProjectRequired.vue'",
     '工作台加载失败',
     'dashboardSuggestedAction',
+    'dashboardNextActions',
     'void loadDashboard()',
     'void loadActivities()'
   ], 'Dashboard.vue unified state')
@@ -1414,7 +1425,8 @@ test('keeps unified request state and recovery entrypoints wired', () => {
   ], 'SqlLint.vue unified state')
 
   assertContains(packageJson, [
-    'tests/requestState.test.ts'
+    'tests/requestState.test.ts',
+    'tests/typedApiClient.test.ts'
   ], 'frontend test script')
 })
 
