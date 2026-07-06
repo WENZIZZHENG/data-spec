@@ -209,13 +209,12 @@
           </el-button>
           <span class="project-label">当前项目：</span>
           <el-select
-            v-model="projectStore.currentProjectId"
+            v-model="projectSelectValue"
             placeholder="请选择项目"
             :loading="projectStore.loading"
             style="width: 200px"
-            @change="handleProjectChange"
           >
-            <el-option label="（未选择）" :value="null" />
+            <el-option label="（未选择）" :value="0" />
             <el-option
               v-for="project in projectStore.projects"
               :key="project.id"
@@ -275,6 +274,11 @@ const commandPaletteVisible = ref(false)
 // 当前激活的菜单项，与路由路径同步
 const activeMenu = computed(() => route.path)
 const routeTitle = computed(() => String(route.meta.title || ''))
+// Element Plus option value 不接受 null；下拉层用 0 代表未选择，store 和 URL 仍保留 null 语义。
+const projectSelectValue = computed({
+  get: () => projectStore.currentProjectId ?? 0,
+  set: (value: number) => handleProjectChange(value > 0 ? value : null)
+})
 
 onMounted(async () => {
   authStore.restore()

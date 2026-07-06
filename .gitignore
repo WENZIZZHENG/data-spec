@@ -25,3 +25,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Playwright
+dataspec-web/playwright-report/
+dataspec-web/test-results/
