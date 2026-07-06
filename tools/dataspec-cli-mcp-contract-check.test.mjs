@@ -89,6 +89,25 @@ test('bundled fixtures include context-budget plan readonly contract', async () 
   assert.ok(command.recommendedNextActions.some((item) => item.includes('tokenBudget') || item.includes('query')))
 })
 
+test('bundled fixtures include install-hook local write contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'install-hook')
+
+  assert.ok(command)
+  assert.equal(command.command, 'install-hook --hook pre-commit --format json')
+  assert.deepEqual(command.requiredOptions, [])
+  assert.ok(command.optionalOptions.includes('with-vscode'))
+  assert.ok(command.outputShape.includes('writtenFiles[]'))
+  assert.ok(command.outputShape.includes('skippedFiles[]'))
+  assert.ok(command.outputShape.includes('safety.overwritesUnmanagedFiles'))
+  assert.equal(command.safety.readOnly, false)
+  assert.equal(command.safety.writesProject, true)
+  assert.equal(command.safety.overwritesUnmanagedFiles, false)
+  assert.equal(command.safety.requiresIdempotencyKey, false)
+  assert.equal(command.failureExample.diagnostic.code, 'HOOK_EXISTS_UNMANAGED')
+  assert.ok(command.recommendedNextActions.some((item) => item.includes('lint-changed')))
+})
+
 test('fixed SQL patch fixture matches actual dry-run json shape', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'fixed-sql-patch')

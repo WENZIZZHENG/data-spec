@@ -148,6 +148,19 @@
       "recommendedNextActions": ["Configure defaultPaths or pass --path before scanning.", "Treat HIGH renameRisk as a stop sign for human review."]
     },
     {
+      "id": "install-hook",
+      "command": "install-hook --hook pre-commit --format json",
+      "description": "Install DataSpec-managed local SQL check hooks and optional VS Code task files in the current business repository.",
+      "requiredOptions": [],
+      "optionalOptions": ["hook", "format", "with-vscode"],
+      "outputShape": ["kind", "schemaVersion", "hook", "hook.name", "hook.path", "hook.command", "writtenFiles[]", "skippedFiles[]", "diagnostics[]", "safety", "safety.overwritesUnmanagedFiles", "nextActions[]"],
+      "exitCodes": { "0": "requested managed hook and optional IDE files are written or refreshed", "2": "argument error, no git repository, or unmanaged local file blocks installation" },
+      "safety": { "readOnly": false, "writesProject": true, "requiresDryRun": false, "requiresIdempotencyKey": false, "overwritesUnmanagedFiles": false, "sensitiveInputs": [], "nextActions": ["Review generated .git/hooks/pre-commit before relying on local checks.", "Keep CI and PR review enabled as the authoritative gate."] },
+      "successExample": { "command": "node tools/dataspec-cli.mjs install-hook --with-vscode --format json", "output": { "kind": "dataspec.local-sql-check.install-hook", "hook": { "name": "pre-commit" }, "writtenFiles": [".git/hooks/pre-commit", ".vscode/tasks.json"], "safety": { "overwritesUnmanagedFiles": false } } },
+      "failureExample": { "exitCode": 2, "diagnostic": { "code": "HOOK_EXISTS_UNMANAGED", "category": "LOCAL_CONFIG" } },
+      "recommendedNextActions": ["Run lint-changed --format json before commit for AI-readable diagnostics.", "Run lint-changed --format text from an IDE task for file and line navigation.", "Manually merge DataSpec commands into existing local hooks instead of overwriting them."]
+    },
+    {
       "id": "export-context",
       "command": "export-context --project <id> --output <path>",
       "description": "Export AI context zip or cache files for a project.",

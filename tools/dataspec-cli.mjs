@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from 'node:child_process'
-import { lstat, mkdir, open, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, open, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -37,6 +37,9 @@ const OPENAPI_SCHEMA_PATH = path.join(DATASPEC_WEB_DIR, 'src', 'api', 'schema.ts
 const DEFAULT_INIT_PATHS = ['sql', 'db/migrations']
 const DATASPEC_AGENTS_START = '<!-- dataspec-agents:start -->'
 const DATASPEC_AGENTS_END = '<!-- dataspec-agents:end -->'
+const DATASPEC_HOOK_START = '# dataspec-install-hook:start'
+const DATASPEC_HOOK_END = '# dataspec-install-hook:end'
+const DATASPEC_JSON_MARKER = 'local-sql-check-hooks@1'
 const CONTEXT_CACHE_DIR = path.join('.dataspec', 'context')
 const CACHE_METADATA_FILE = 'cache-metadata.json'
 const DEFAULT_CONTEXT_CACHE_TTL_DAYS = 7
@@ -92,6 +95,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'lint-changed') {
       return await runLintChanged(rest, io, fetchFn)
+    }
+    if (command === 'install-hook' || command === 'install-hooks') {
+      return await runInstallHook(rest, io)
     }
     if (command === 'index-refs') {
       return await runIndexRefs(rest, io)
@@ -576,8 +582,8 @@ async function runLintChanged(args, io, fetchFn) {
     throw new Error(`lint-changed 不接受位置参数: ${positional.join(', ')}`)
   }
   const format = options.format ?? 'json'
-  if (format !== 'json') {
-    throw new Error('lint-changed 当前仅支持 --format json')
+  if (!['json', 'text'].includes(format)) {
+    throw new Error('lint-changed 仅支持 --format json|text')
   }
   const config = loadDataSpecConfig(cliCwd(io))
   const changed = await buildChangedWorkflow(config, options)
@@ -620,8 +626,402 @@ async function runLintChanged(args, io, fetchFn) {
     nextActions: buildLintChangedNextActions(changed, lint, diagnostics)
   }
 
-  io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
+  if (format === 'json') {
+    io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
+  } else {
+    io.writeOut(formatLintChangedText(output))
+  }
   return lint.summary.failedFiles > 0 ? 1 : 0
+}
+
+async function runInstallHook(args, io) {
+  const { positional, options } = parseArgs(args, ['hook', 'format'], ['with-vscode'])
+  if (positional.length > 0) {
+    throw new Error(`install-hook 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const hookName = options.hook ?? 'pre-commit'
+  if (hookName !== 'pre-commit') {
+    throw new Error(`install-hook 当前仅支持 --hook pre-commit`)
+  }
+  const format = options.format ?? 'text'
+  if (!['json', 'text'].includes(format)) {
+    throw new Error('install-hook 仅支持 --format text|json')
+  }
+
+  const config = loadDataSpecConfig(cliCwd(io))
+  const gitRoot = await findGitRoot(config.rootDir)
+  if (!gitRoot) {
+    const output = installHookOutput({
+      gitRoot: config.rootDir,
+      hookName,
+      withVscode: Boolean(options['with-vscode']),
+      writtenFiles: [],
+      skippedFiles: [],
+      diagnostics: [installHookDiagnostic('NO_GIT_REPOSITORY')]
+    })
+    writeInstallHookOutput(io, output, format)
+    return 2
+  }
+
+  const writtenFiles = []
+  const skippedFiles = []
+  const diagnostics = []
+  const hookPath = await resolveGitHookPath(gitRoot, 'pre-commit')
+  await writeManagedArtifact({
+    filePath: hookPath,
+    rootDir: gitRoot,
+    allowedRootDir: path.dirname(path.dirname(hookPath)),
+    displayPath: '.git/hooks/pre-commit',
+    artifact: 'pre-commit-hook',
+    marker: DATASPEC_HOOK_START,
+    content: renderPreCommitHook(),
+    writtenFiles,
+    skippedFiles,
+    diagnostics,
+    unmanagedCode: 'HOOK_EXISTS_UNMANAGED',
+    command: 'lint-changed --format json',
+    makeExecutable: true
+  })
+
+  if (options['with-vscode']) {
+    const vscodeDir = path.join(gitRoot, '.vscode')
+    await writeManagedArtifact({
+      filePath: path.join(vscodeDir, 'tasks.json'),
+      rootDir: gitRoot,
+      allowedRootDir: gitRoot,
+      artifact: 'vscode-task',
+      marker: DATASPEC_JSON_MARKER,
+      content: renderVsCodeTasks(),
+      writtenFiles,
+      skippedFiles,
+      diagnostics,
+      unmanagedCode: 'VSCODE_FILE_EXISTS_UNMANAGED',
+      command: 'lint-changed --format text'
+    })
+    await writeManagedArtifact({
+      filePath: path.join(vscodeDir, 'dataspec-problem-matcher.json'),
+      rootDir: gitRoot,
+      allowedRootDir: gitRoot,
+      artifact: 'vscode-problem-matcher',
+      marker: DATASPEC_JSON_MARKER,
+      content: renderVsCodeProblemMatcher(),
+      writtenFiles,
+      skippedFiles,
+      diagnostics,
+      unmanagedCode: 'VSCODE_FILE_EXISTS_UNMANAGED',
+      command: 'lint-changed --format text'
+    })
+  }
+
+  const output = installHookOutput({
+    gitRoot,
+    hookName,
+    withVscode: Boolean(options['with-vscode']),
+    writtenFiles,
+    skippedFiles,
+    diagnostics
+  })
+  writeInstallHookOutput(io, output, format)
+  return diagnostics.length > 0 ? 2 : 0
+}
+
+async function writeManagedArtifact({
+  filePath,
+  rootDir,
+  allowedRootDir = rootDir,
+  displayPath,
+  artifact,
+  marker,
+  content,
+  writtenFiles,
+  skippedFiles,
+  diagnostics,
+  unmanagedCode,
+  command,
+  makeExecutable = false
+}) {
+  const relativePath = displayPath ?? toPosixPath(path.relative(rootDir, filePath))
+  const targetSafety = await validateManagedArtifactTarget(filePath, allowedRootDir)
+  if (!targetSafety.ok) {
+    skippedFiles.push({
+      path: relativePath,
+      artifact,
+      reason: targetSafety.reason,
+      command
+    })
+    diagnostics.push(installHookDiagnostic(targetSafety.code, { path: relativePath }))
+    return
+  }
+  const existing = await readTextIfExists(filePath)
+  // 只刷新 DataSpec marker 管理的文件，避免误覆盖用户已有 hook 或编辑器配置。
+  if (existing !== null && !existing.includes(marker)) {
+    skippedFiles.push({
+      path: relativePath,
+      artifact,
+      reason: 'unmanaged-file',
+      command
+    })
+    diagnostics.push(installHookDiagnostic(unmanagedCode, { path: relativePath }))
+    return
+  }
+
+  await mkdir(path.dirname(filePath), { recursive: true })
+  await writeFile(filePath, content, 'utf8')
+  if (makeExecutable) {
+    await chmod(filePath, 0o755)
+  }
+  writtenFiles.push({
+    path: relativePath,
+    artifact,
+    action: existing === null ? 'created' : 'refreshed',
+    command
+  })
+}
+
+async function resolveGitHookPath(gitRoot, hookName) {
+  const gitPath = (await execGit(gitRoot, ['rev-parse', '--git-path', `hooks/${hookName}`])).trim()
+  return path.isAbsolute(gitPath)
+    ? path.resolve(gitPath)
+    : path.resolve(gitRoot, gitPath)
+}
+
+async function validateManagedArtifactTarget(filePath, allowedRootDir) {
+  const targetPath = path.resolve(filePath)
+  const rootDir = path.resolve(allowedRootDir)
+  if (!isPathInside(rootDir, targetPath)) {
+    return { ok: false, code: 'MANAGED_FILE_OUTSIDE_ROOT', reason: 'outside-managed-root' }
+  }
+  const rootStatus = await lstatIfExists(rootDir)
+  if (rootStatus?.isSymbolicLink()) {
+    return { ok: false, code: 'MANAGED_FILE_IS_SYMLINK', reason: 'symlink-root' }
+  }
+  const targetStatus = await lstatIfExists(targetPath)
+  if (targetStatus?.isSymbolicLink()) {
+    return { ok: false, code: 'MANAGED_FILE_IS_SYMLINK', reason: 'symlink-target' }
+  }
+  for (const parentDir of parentDirsBetween(rootDir, path.dirname(targetPath))) {
+    const parentStatus = await lstatIfExists(parentDir)
+    if (parentStatus?.isSymbolicLink()) {
+      return { ok: false, code: 'MANAGED_FILE_IS_SYMLINK', reason: 'symlink-parent' }
+    }
+  }
+  return { ok: true }
+}
+
+async function lstatIfExists(filePath) {
+  try {
+    return await lstat(filePath)
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+      return null
+    }
+    throw error
+  }
+}
+
+function parentDirsBetween(rootDir, leafDir) {
+  const root = path.resolve(rootDir)
+  let current = path.resolve(leafDir)
+  const dirs = []
+  while (current !== root && isPathInside(root, current)) {
+    dirs.push(current)
+    const parent = path.dirname(current)
+    if (parent === current) {
+      break
+    }
+    current = parent
+  }
+  return dirs.reverse()
+}
+
+function installHookOutput({ gitRoot, hookName, withVscode, writtenFiles, skippedFiles, diagnostics }) {
+  return sanitizeSecretValue({
+    kind: 'dataspec.local-sql-check.install-hook',
+    schemaVersion: 1,
+    hook: {
+      name: hookName,
+      path: '.git/hooks/pre-commit',
+      command: 'node tools/dataspec-cli.mjs lint-changed --format json',
+      managedMarker: DATASPEC_HOOK_START
+    },
+    repository: {
+      rootDir: '.',
+      gitRoot: gitRoot ? toPosixPath(path.relative(gitRoot, gitRoot) || '.') : null
+    },
+    writtenFiles,
+    skippedFiles,
+    diagnostics,
+    safety: {
+      writesProject: true,
+      writesGitHooks: true,
+      writesVSCodeSettings: Boolean(withVscode),
+      overwritesUnmanagedFiles: false,
+      storesCredentials: false,
+      callsRemoteServiceDuringInstall: false,
+      callsRemoteServiceWhenHookRuns: true,
+      remoteWrites: false,
+      sensitiveInputs: ['DATASPEC_TOKEN', '.dataspec/config.json apiToken'],
+      generatedFilesDoNotStoreSecrets: true
+    },
+    nextActions: buildInstallHookNextActions(diagnostics)
+  })
+}
+
+function buildInstallHookNextActions(diagnostics) {
+  const codes = diagnostics.map((item) => item.code)
+  if (codes.includes('NO_GIT_REPOSITORY')) {
+    return [
+      '切换到业务 git 仓库后重新运行 dataspec install-hook。',
+      '确认 .dataspec/config.json 位于业务仓库内，并配置 defaultPaths。'
+    ]
+  }
+  if (codes.includes('HOOK_EXISTS_UNMANAGED') || codes.includes('VSCODE_FILE_EXISTS_UNMANAGED')) {
+    return [
+      '手动合并 DataSpec 命令到已有本地配置，避免覆盖用户脚本。',
+      '需要保留 AI 可读输出时，在 pre-commit 中调用 dataspec lint-changed --format json。',
+      '需要 VS Code 跳转时，在 task 中调用 dataspec lint-changed --format text。'
+    ]
+  }
+  return [
+    '提交前会自动运行 dataspec lint-changed --format json。',
+    '如生成了 VS Code task，可运行 “DataSpec: lint changed SQL” 查看可跳转诊断。',
+    'CI/GitHub Review 仍应保留，local hook 只作为提交前前置反馈。'
+  ]
+}
+
+function installHookDiagnostic(code, details = {}) {
+  const diagnostics = {
+    NO_GIT_REPOSITORY: {
+      severity: 'WARNING',
+      message: '当前目录不在 git 仓库内，无法安装 pre-commit hook。',
+      suggestedAction: '切换到业务 git 仓库后重试，或先运行 git init。'
+    },
+    HOOK_EXISTS_UNMANAGED: {
+      severity: 'WARNING',
+      message: `目标 hook 已存在且不是 DataSpec 管理文件，已跳过: ${details.path ?? '.git/hooks/pre-commit'}`,
+      suggestedAction: '请手动把 dataspec lint-changed --format json 合并到已有 pre-commit hook。'
+    },
+    MANAGED_FILE_IS_SYMLINK: {
+      severity: 'WARNING',
+      message: `目标路径或父目录是符号链接，已跳过以避免写出仓库边界: ${details.path ?? '-'}`,
+      suggestedAction: '请移除符号链接或手动创建本地 DataSpec hook/task 配置。'
+    },
+    MANAGED_FILE_OUTSIDE_ROOT: {
+      severity: 'WARNING',
+      message: `目标路径不在允许的本地写入根目录内，已跳过: ${details.path ?? '-'}`,
+      suggestedAction: '请在业务 git 仓库内重新运行 install-hook，或手动合并 DataSpec 命令。'
+    },
+    VSCODE_FILE_EXISTS_UNMANAGED: {
+      severity: 'WARNING',
+      message: `VS Code 配置已存在且不是 DataSpec 管理文件，已跳过: ${details.path ?? '.vscode'}`,
+      suggestedAction: '请手动合并 DataSpec task/problem matcher，或先备份现有文件后再重试。'
+    }
+  }
+  return {
+    code,
+    path: details.path ?? null,
+    ...diagnostics[code]
+  }
+}
+
+function writeInstallHookOutput(io, output, format) {
+  if (format === 'json') {
+    io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
+  } else {
+    io.writeOut(formatInstallHookText(output))
+  }
+}
+
+function formatInstallHookText(output) {
+  const lines = ['DataSpec Local SQL Check']
+  lines.push(`Hook: ${output.hook.name}`)
+  lines.push(`Written files: ${output.writtenFiles.length}`)
+  for (const file of output.writtenFiles) {
+    lines.push(`- ${file.path}: ${file.command}`)
+  }
+  if (output.skippedFiles.length > 0) {
+    lines.push(`Skipped files: ${output.skippedFiles.length}`)
+    for (const file of output.skippedFiles) {
+      lines.push(`- ${file.path}: ${file.reason}`)
+    }
+  }
+  if (output.diagnostics.length > 0) {
+    lines.push('Diagnostics:')
+    for (const diagnostic of output.diagnostics) {
+      lines.push(`- [${diagnostic.severity}] ${diagnostic.code}: ${diagnostic.message}`)
+      lines.push(`  next: ${diagnostic.suggestedAction}`)
+    }
+  }
+  lines.push('Next actions:')
+  for (const action of output.nextActions) {
+    lines.push(`- ${action}`)
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+function renderPreCommitHook() {
+  return `#!/bin/sh
+${DATASPEC_HOOK_START}
+# Managed by DataSpec CLI. Keep credentials in local env or DataSpec config.
+if [ -n "$DATASPEC_CLI" ]; then
+  sh -c "$DATASPEC_CLI lint-changed --format json"
+else
+  node tools/dataspec-cli.mjs lint-changed --format json
+fi
+status=$?
+if [ "$status" -ne 0 ]; then
+  echo "DataSpec SQL check failed. Fix ERROR issues or run dataspec lint-changed --format json for details." >&2
+  exit "$status"
+fi
+${DATASPEC_HOOK_END}
+`
+}
+
+function renderVsCodeTasks() {
+  const matcher = dataspecSqlProblemMatcher()
+  return `${JSON.stringify({
+    version: '2.0.0',
+    dataspecManaged: 'local-sql-check-hooks@1',
+    tasks: [
+      {
+        label: 'DataSpec: lint changed SQL',
+        type: 'shell',
+        command: 'node tools/dataspec-cli.mjs lint-changed --format text',
+        problemMatcher: matcher,
+        group: 'test',
+        presentation: {
+          reveal: 'always',
+          panel: 'dedicated',
+          clear: true
+        }
+      }
+    ]
+  }, null, 2)}\n`
+}
+
+function renderVsCodeProblemMatcher() {
+  return `${JSON.stringify({
+    dataspecManaged: 'local-sql-check-hooks@1',
+    problemMatcher: [dataspecSqlProblemMatcher()]
+  }, null, 2)}\n`
+}
+
+function dataspecSqlProblemMatcher() {
+  return {
+    name: 'dataspec-sql',
+    owner: 'dataspec',
+    fileLocation: ['relative', '${workspaceFolder}'],
+    pattern: {
+      regexp: '^(.+):(\\d+):(\\d+):\\s+(ERROR|WARNING|INFO|SUGGESTION)\\s+([^\\s]+)\\s+-\\s+(.*(?:\\s+suggestion:\\s+.*)?)$',
+      file: 1,
+      line: 2,
+      column: 3,
+      severity: 4,
+      code: 5,
+      message: 6
+    }
+  }
 }
 
 async function runIndexRefs(args, io) {
@@ -3405,6 +3805,7 @@ node tools/dataspec-cli.mjs bootstrap --format json
 node tools/dataspec-cli.mjs doctor --format json
 node tools/dataspec-cli.mjs changed --format json
 node tools/dataspec-cli.mjs lint-changed --format json
+node tools/dataspec-cli.mjs install-hook --with-vscode --format json
 node tools/dataspec-cli.mjs lint-files --format json
 node tools/dataspec-cli.mjs export-context --output dataspec-ai-context.zip
 node tools/dataspec-cli.mjs export-context --cache
@@ -3427,6 +3828,7 @@ export DATASPEC_TOKEN=ds_xxx
 - 修改 SQL、migration 或 ORM entity 前，先运行 \`doctor\` 确认 DataSpec 可用。
 - 处理本次 git 变更时，先运行 \`changed --format json\` 获取变更文件、SQL 子集和最小 Context 建议。
 - 只检查本次 SQL 变更时，运行 \`lint-changed --format json\`；它不会扫描 defaultPaths 之外的大目录。
+- 需要提交前自动检查和 VS Code 跳转时，显式运行 \`install-hook --with-vscode --format json\`；该命令不会覆盖非 DataSpec 管理的用户 hook 或编辑器配置。
 - 未显式传路径时，\`lint-files\` 会读取 \`.dataspec/config.json\` 的 \`defaultPaths\`。
 - 需要完整上下文时，运行 \`export-context --cache\` 并让 AI 读取 \`.dataspec/context/\`；单个建表或修 SQL 任务可加 \`--scope field --query <关键词>\` 导出按需包。
 `
@@ -3969,6 +4371,59 @@ function buildLintChangedNextActions(changed, lint, diagnostics) {
   ]
 }
 
+function formatLintChangedText(output) {
+  const lines = ['DataSpec Lint Changed']
+  lines.push(`Changed files: ${output.summary.changedFiles}`)
+  lines.push(`Changed SQL files: ${output.summary.changedSqlFiles}`)
+  lines.push(`Failed files: ${output.summary.failedFiles}`)
+  lines.push(`ERROR: ${output.summary.errorCount}`)
+  lines.push(`WARNING: ${output.summary.warningCount}`)
+  lines.push(`SUGGESTION: ${output.summary.suggestionCount}`)
+
+  const issueLines = buildLintChangedIssueLines(output.lint.files)
+  if (issueLines.length > 0) {
+    lines.push('', 'Issues:', ...issueLines)
+  }
+
+  if (output.diagnostics.length > 0) {
+    lines.push('', 'Diagnostics:')
+    for (const diagnostic of output.diagnostics) {
+      lines.push(`${diagnostic.severity ?? 'INFO'} ${diagnostic.code}: ${oneLine(diagnostic.message)}`)
+      if (diagnostic.suggestedAction) {
+        lines.push(`next: ${oneLine(diagnostic.suggestedAction)}`)
+      }
+    }
+  }
+
+  lines.push('', 'Next actions:')
+  for (const action of output.nextActions) {
+    lines.push(`- ${oneLine(action)}`)
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+function buildLintChangedIssueLines(files) {
+  const lines = []
+  for (const file of files ?? []) {
+    for (const issue of file.result?.issues ?? []) {
+      lines.push(formatLintChangedIssueLine(file.path, issue))
+    }
+  }
+  return lines
+}
+
+function formatLintChangedIssueLine(filePath, issue) {
+  const line = parseOptionalNumber(issue.line) ?? parseOptionalNumber(issue.startLine) ?? 1
+  const column = parseOptionalNumber(issue.column) ?? parseOptionalNumber(issue.startColumn) ?? 1
+  const severity = oneLine(issue.severity ?? 'INFO').toUpperCase()
+  const rule = oneLine(issue.ruleCode ?? issue.rule ?? issue.code ?? 'dataspec_sql_issue')
+  const message = oneLine(issue.message ?? issue.description ?? 'SQL 标准问题')
+  const suggestion = oneLine(issue.suggestion ?? issue.suggestedAction ?? issue.replacement ?? '')
+  const suggestionText = suggestion ? ` suggestion: ${suggestion}` : ''
+  return `${toPosixPath(filePath)}:${line}:${column}: ${severity} ${rule} - ${message}${suggestionText}`
+}
+
 function formatChangedText(output) {
   const lines = ['DataSpec Changed Workflow']
   lines.push(`Changed files: ${output.summary.totalFiles}`)
@@ -3995,6 +4450,13 @@ function formatChangedText(output) {
   }
   lines.push('')
   return lines.join('\n')
+}
+
+function oneLine(value) {
+  return String(sanitizeSecretText(value) ?? '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function resolveDeliveryPackagePath(options) {
@@ -5151,7 +5613,8 @@ Usage:
   node tools/dataspec-cli.mjs lint-files [path...] [--project <id>] [--profile <id>|--task-type <type>] --format json [--delivery-package <json>] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs fixed-sql patch --lint-result <json> --target <file.sql> [--apply --confirm <planHash>] --format json
   node tools/dataspec-cli.mjs changed [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>]
-  node tools/dataspec-cli.mjs lint-changed [--project <id>] [--profile <id>|--task-type <type>] --format json [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
+  node tools/dataspec-cli.mjs lint-changed [--project <id>] [--profile <id>|--task-type <type>] --format text|json [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
+  node tools/dataspec-cli.mjs install-hook [--hook pre-commit] [--with-vscode] [--format text|json]
   node tools/dataspec-cli.mjs index-refs --field <name> [--alias <name|field=alias> ...] [--path <file|dir> ...] [--format text|json]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs export-context [--project <id>] [--profile <id>|--task-type <type>] [--output <zip>] [--cache] [--cache-ttl-days <days>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
@@ -5194,7 +5657,8 @@ Options:
   lint-files 可通过 --delivery-package 或 --batch-package 写出 AI 批量任务交付包，stdout JSON 保持原结构
   fixed-sql patch 默认只输出补丁计划；写入目标 SQL 文件必须显式传 --apply --confirm <planHash>
   changed 读取 git 变更并按 defaultPaths 输出文件清单、SQL 子集、最小 Context 建议和恢复诊断，不调用服务端
-  lint-changed 只对 changed 发现的 SQL 文件调用 lint；无 SQL 变更时返回诊断且不调用服务端
+  lint-changed 只对 changed 发现的 SQL 文件调用 lint；json 适合 AI 读取，text 输出 file:line:column 行格式供 IDE Problem Matcher 跳转；无 SQL 变更时返回诊断且不调用服务端
+  install-hook 显式安装 DataSpec 管理的本地 pre-commit hook；--with-vscode 会生成 VS Code task/problem matcher；不会覆盖非 DataSpec 管理的用户文件
   index-refs 只读扫描 defaultPaths 或 --path 内字段引用，输出重命名风险；多字段扫描时 --alias 使用 field=alias 明确归属；不会调用服务端或修改业务代码
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   context-budget plan 是导出前只读预算预检；只调用后端 planner，不下载、不缓存、不写入 AI Context 文件

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -1371,6 +1371,293 @@ test('lint-changed reports recoverable diagnostic when there are no changed sql 
     assert.equal(output.diagnostics[0].code, 'NO_CHANGED_SQL_FILES')
     assert.equal(output.lint.summary.totalFiles, 0)
     assert.ok(output.nextActions.some((action) => action.includes('changed')))
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('install-hook writes managed pre-commit hook and vscode task files', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-install-hook-'))
+  try {
+    await initGitRepo(dir, {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      defaultPaths: ['sql']
+    })
+    const io = createIo('', dir)
+
+    const code = await runCli(['install-hook', '--with-vscode', '--format', 'json'], io)
+
+    assert.equal(code, 0)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.kind, 'dataspec.local-sql-check.install-hook')
+    assert.equal(output.hook.name, 'pre-commit')
+    assert.equal(output.safety.writesProject, true)
+    assert.equal(output.safety.overwritesUnmanagedFiles, false)
+    assert.deepEqual(output.diagnostics, [])
+    assert.ok(output.writtenFiles.some((item) => item.path === '.git/hooks/pre-commit'))
+    assert.ok(output.writtenFiles.some((item) => item.path === '.vscode/tasks.json'))
+    assert.ok(output.writtenFiles.some((item) => item.path === '.vscode/dataspec-problem-matcher.json'))
+
+    const hook = await readFile(path.join(dir, '.git', 'hooks', 'pre-commit'), 'utf8')
+    assert.match(hook, /dataspec-install-hook:start/)
+    assert.match(hook, /lint-changed --format json/)
+    assert.doesNotMatch(hook, /token|password|Authorization|jdbc:/i)
+
+    const hookStat = await stat(path.join(dir, '.git', 'hooks', 'pre-commit'))
+    if (process.platform !== 'win32') {
+      assert.equal((hookStat.mode & 0o111) !== 0, true)
+    }
+
+    const tasks = JSON.parse(await readFile(path.join(dir, '.vscode', 'tasks.json'), 'utf8'))
+    assert.equal(tasks.tasks[0].label, 'DataSpec: lint changed SQL')
+    assert.match(tasks.tasks[0].command, /lint-changed --format text/)
+    assert.equal(tasks.tasks[0].problemMatcher.name, 'dataspec-sql')
+    assert.match(tasks.tasks[0].problemMatcher.pattern.regexp, /suggestion/)
+
+    const matcher = JSON.parse(await readFile(path.join(dir, '.vscode', 'dataspec-problem-matcher.json'), 'utf8'))
+    assert.equal(matcher.problemMatcher[0].name, 'dataspec-sql')
+    assert.match(matcher.problemMatcher[0].pattern.regexp, /suggestion/)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('install-hook refuses to overwrite unmanaged pre-commit hook', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-install-hook-unmanaged-'))
+  try {
+    await initGitRepo(dir, {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      defaultPaths: ['sql']
+    })
+    const hookPath = path.join(dir, '.git', 'hooks', 'pre-commit')
+    await writeFile(hookPath, '#!/bin/sh\necho custom-local-value\n', 'utf8')
+    const io = createIo('', dir)
+
+    const code = await runCli(['install-hook', '--format', 'json'], io)
+
+    assert.equal(code, 2)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.diagnostics[0].code, 'HOOK_EXISTS_UNMANAGED')
+    assert.equal(output.skippedFiles[0].path, '.git/hooks/pre-commit')
+    assert.equal(await readFile(hookPath, 'utf8'), '#!/bin/sh\necho custom-local-value\n')
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('install-hook refuses symlinked managed targets without writing outside repository', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-install-hook-symlink-'))
+  const outsideDir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-install-hook-symlink-outside-'))
+  try {
+    await initGitRepo(dir, {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      defaultPaths: ['sql']
+    })
+    const outsideTarget = path.join(outsideDir, 'pre-commit')
+    await writeFile(outsideTarget, '#!/bin/sh\necho outside\n', 'utf8')
+    try {
+      await rm(path.join(dir, '.git', 'hooks', 'pre-commit'), { force: true })
+      await symlink(outsideTarget, path.join(dir, '.git', 'hooks', 'pre-commit'), 'file')
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) {
+        t.skip(`当前平台无法创建 symlink: ${error.code}`)
+        return
+      }
+      throw error
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli(['install-hook', '--format', 'json'], io)
+
+    assert.equal(code, 2)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.diagnostics[0].code, 'MANAGED_FILE_IS_SYMLINK')
+    assert.equal(await readFile(outsideTarget, 'utf8'), '#!/bin/sh\necho outside\n')
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+    await rm(outsideDir, { recursive: true, force: true })
+  }
+})
+
+test('install-hook refuses symlinked git directory without writing outside repository', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-install-hook-gitlink-'))
+  const outsideDir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-install-hook-gitlink-outside-'))
+  try {
+    await initGitRepo(dir, {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      defaultPaths: ['sql']
+    })
+    const outsideGitDir = path.join(outsideDir, 'git-real')
+    await rename(path.join(dir, '.git'), outsideGitDir)
+    try {
+      await symlink(outsideGitDir, path.join(dir, '.git'), process.platform === 'win32' ? 'junction' : 'dir')
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) {
+        t.skip(`当前平台无法创建 git 目录链接: ${error.code}`)
+        return
+      }
+      throw error
+    }
+    const outsideHook = path.join(outsideGitDir, 'hooks', 'pre-commit')
+    const io = createIo('', dir)
+
+    const code = await runCli(['install-hook', '--format', 'json'], io)
+
+    assert.equal(code, 2)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.diagnostics[0].code, 'MANAGED_FILE_IS_SYMLINK')
+    await assert.rejects(readFile(outsideHook, 'utf8'), /ENOENT/)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+    await rm(outsideDir, { recursive: true, force: true })
+  }
+})
+
+test('install-hook resolves hook path in linked worktrees', async () => {
+  const sourceDir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-install-hook-source-'))
+  const worktreeDir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-install-hook-linked-'))
+  try {
+    await initGitRepo(sourceDir, {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      defaultPaths: ['sql']
+    })
+    await writeFile(path.join(sourceDir, 'README.md'), 'baseline\n', 'utf8')
+    await git(sourceDir, ['add', '.'])
+    await git(sourceDir, ['commit', '-m', 'baseline'])
+    await rm(worktreeDir, { recursive: true, force: true })
+    await git(sourceDir, ['worktree', 'add', worktreeDir, '-b', 'dataspec-linked-hook-test'])
+    await mkdir(path.join(worktreeDir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(worktreeDir, '.dataspec', 'config.json'),
+      JSON.stringify({ projectId: 7, server: 'http://dataspec.local', defaultPaths: ['sql'] }),
+      'utf8'
+    )
+    const hookPath = (await execFileAsync('git', ['rev-parse', '--git-path', 'hooks/pre-commit'], {
+      cwd: worktreeDir,
+      encoding: 'utf8'
+    })).stdout.trim()
+    const resolvedHookPath = path.resolve(worktreeDir, hookPath)
+    const io = createIo('', worktreeDir)
+
+    const code = await runCli(['install-hook', '--format', 'json'], io)
+
+    assert.equal(code, 0)
+    assert.match(await readFile(resolvedHookPath, 'utf8'), /dataspec-install-hook:start/)
+    assert.equal(JSON.parse(io.stdout).writtenFiles[0].path, '.git/hooks/pre-commit')
+  } finally {
+    await execFileAsync('git', ['worktree', 'remove', '--force', worktreeDir], { cwd: sourceDir }).catch(() => {})
+    await execFileAsync('git', ['branch', '-D', 'dataspec-linked-hook-test'], { cwd: sourceDir }).catch(() => {})
+    await rm(sourceDir, { recursive: true, force: true })
+    await rm(worktreeDir, { recursive: true, force: true })
+  }
+})
+
+test('install-hook reports no git repository without writing files', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-install-hook-no-git-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({ projectId: 7, defaultPaths: ['sql'] }),
+      'utf8'
+    )
+    const io = createIo('', dir)
+
+    const code = await runCli(['install-hook', '--format', 'json'], io)
+
+    assert.equal(code, 2)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.diagnostics[0].code, 'NO_GIT_REPOSITORY')
+    assert.deepEqual(output.writtenFiles, [])
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('lint-changed text output prints problem matcher issue lines', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-lint-changed-text-'))
+  try {
+    await initGitRepo(dir, {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      defaultPaths: ['sql']
+    })
+    await mkdir(path.join(dir, 'sql'), { recursive: true })
+    await writeFile(path.join(dir, 'sql', 'existing.sql'), 'CREATE TABLE users (id bigint);', 'utf8')
+    await git(dir, ['add', '.'])
+    await git(dir, ['commit', '-m', 'baseline'])
+
+    await writeFile(path.join(dir, 'sql', 'existing.sql'), 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    const fetchFn = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          errorCount: 1,
+          warningCount: 0,
+          suggestionCount: 0,
+          issues: [{
+            severity: 'ERROR',
+            ruleCode: 'table_naming_snake_case',
+            message: '表名不符合 snake_case',
+            line: 1,
+            column: 14,
+            suggestion: '改为 user_order'
+          }]
+        }
+      })
+    })
+    const io = createIo('', dir)
+
+    const code = await runCli(['lint-changed', '--format', 'text'], io, fetchFn)
+
+    assert.equal(code, 1)
+    assert.match(
+      io.stdout,
+      /sql\/existing\.sql:1:14: ERROR table_naming_snake_case - 表名不符合 snake_case suggestion: 改为 user_order/
+    )
+    assert.match(io.stdout, /Next actions:/)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('lint-changed text output reports no sql diagnostic without calling server', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-lint-changed-text-no-sql-'))
+  try {
+    await initGitRepo(dir, {
+      projectId: 7,
+      server: 'http://dataspec.local',
+      defaultPaths: ['models']
+    })
+    await mkdir(path.join(dir, 'models'), { recursive: true })
+    await writeFile(path.join(dir, 'models', 'user-model.ts'), 'export const user = {}\n', 'utf8')
+    await git(dir, ['add', '.'])
+    await git(dir, ['commit', '-m', 'baseline'])
+    await writeFile(path.join(dir, 'models', 'user-model.ts'), 'export const userOrder = {}\n', 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli(['lint-changed', '--format', 'text'], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.match(io.stdout, /NO_CHANGED_SQL_FILES/)
+    assert.match(io.stdout, /Next actions:/)
     assert.equal(io.stderr, '')
   } finally {
     await rm(dir, { recursive: true, force: true })

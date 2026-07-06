@@ -906,13 +906,13 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不依赖特定模型的精确 tokenizer，不上传标准内容到外部服务，不保证一次裁剪覆盖所有复杂任务。
 
 ### P6-91：本地 pre-commit 与 IDE 保存前 SQL 标准检查
-- 状态：待办。
+- 状态：已完成第一版。
 - 为什么做：CI/PR review 发现问题已经偏晚；个人使用时更希望在本地提交前或保存 SQL/迁移文件时就看到 DataSpec 诊断，让 AI 和开发者少走返工。
 - 已有基础：已有 CLI `lint-files`、PR review、`.dataspec/config.json`、GitHub Action 示例、质量门禁、changed-file 扫描和 fixedSql 文件补丁待办。
-- 缺口：缺少官方 pre-commit hook、轻量 IDE/编辑器任务配置示例和本地失败输出规范；不同业务仓库要自己拼命令。
-- 落地产物：新增 `dataspec install-hook` 或模板文档；生成 pre-commit 配置、VS Code task/Problem Matcher 示例和 `lint-changed` 快捷命令；输出 file/line/rule/severity/suggestion 便于 IDE 跳转。
-- 验收标准：业务仓库执行初始化后可一键启用本地 SQL 标准检查；提交前能只检查变更 SQL/DDL 文件；失败输出不泄漏 token/password，且可被 AI 读取继续修复。
-- 边界：不强制所有项目安装 hook，不绕过用户本地 Git 配置，不替代 CI/GitHub Review。
+- 已完成能力：新增 CLI `install-hook --hook pre-commit --with-vscode --format json`，可在业务 git 仓库内写入 DataSpec 管理的 `.git/hooks/pre-commit`，并可选生成 `.vscode/tasks.json` 与 `.vscode/dataspec-problem-matcher.json`；hook 默认运行 `lint-changed --format json`，IDE task 使用 `lint-changed --format text`。
+- 落地产物：`lint-changed --format text` 输出 `file:line:column: severity rule - message suggestion: ...` 行格式，便于 VS Code Problem Matcher 跳转；`install-hook` 输出 writtenFiles/skippedFiles/diagnostics/safety/nextActions，CLI/MCP contract fixture 已补 `install-hook` 安全契约。
+- 验收标准：业务仓库执行初始化后可显式启用本地 SQL 标准检查；提交前只检查变更 SQL/DDL 文件；失败输出不泄漏 token/password，且 JSON 可被 AI 读取继续修复，text 可被 IDE 解析。
+- 边界：不强制所有项目安装 hook，不覆盖非 DataSpec marker 管理的用户 hook 或编辑器配置，不绕过用户本地 Git 配置，不替代 CI/GitHub Review。
 
 ### P6-92：标准样例自动生成与合成业务场景库
 - 状态：待办。
