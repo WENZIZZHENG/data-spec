@@ -3192,6 +3192,7 @@ export interface components {
         ReverseImportPreview: {
             summary?: components["schemas"]["ReverseImportSummary"];
             dryRunToken?: string;
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
             tables?: components["schemas"]["TableDef"][];
             fieldCandidates?: components["schemas"]["FieldCandidate"][];
             mappingDecisions?: components["schemas"]["ReverseImportDecision"][];
@@ -3245,6 +3246,7 @@ export interface components {
             schemaName?: string;
             generatedAt?: string;
             source?: components["schemas"]["DatabaseSchemaSource"];
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
             tables?: components["schemas"]["DatabaseSchemaTable"][];
             warnings?: string[];
         };
@@ -3285,6 +3287,7 @@ export interface components {
             summary?: components["schemas"]["DatabaseMetadataBrowserSummary"];
             tables?: components["schemas"]["DatabaseMetadataBrowserTable"][];
             aiReadableSummary?: string;
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
             nextActions?: string[];
             preview?: components["schemas"]["ReverseImportPreview"];
             compare?: components["schemas"]["ReverseImportCompareResult"];
@@ -3360,6 +3363,7 @@ export interface components {
             username: string;
             password?: string;
             tableNames?: string[];
+            metadataCacheMode?: string;
             scanId?: string;
             cursor?: string;
             /** Format: int32 */
@@ -3401,7 +3405,49 @@ export interface components {
             partialSummary?: components["schemas"]["DatabaseMetadataScanSummary"];
             resumeCommand?: string;
             cancelled?: boolean;
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
             nextActions?: string[];
+        };
+        DatabaseMetadataCacheInfo: {
+            metadataFingerprint?: string;
+            cacheHit?: boolean;
+            stale?: boolean;
+            refreshMode?: string;
+            lastSeenAt?: string;
+            expiresAt?: string;
+            sourceDatabaseVersion?: string;
+            changeSummary?: components["schemas"]["DatabaseMetadataChangeSummary"];
+            nextActions?: string[];
+        };
+        DatabaseMetadataChangeSummary: {
+            changed?: boolean;
+            /** Format: int32 */
+            addedTableCount?: number;
+            /** Format: int32 */
+            removedTableCount?: number;
+            /** Format: int32 */
+            changedTableCount?: number;
+            /** Format: int32 */
+            addedColumnCount?: number;
+            /** Format: int32 */
+            removedColumnCount?: number;
+            /** Format: int32 */
+            changedColumnCount?: number;
+            tables?: components["schemas"]["DatabaseMetadataTableChange"][];
+        };
+        DatabaseMetadataTableChange: {
+            schemaName?: string;
+            tableName?: string;
+            changeType?: string;
+            oldFingerprint?: string;
+            newFingerprint?: string;
+            addedColumns?: string[];
+            removedColumns?: string[];
+            changedColumns?: components["schemas"]["DatabaseMetadataColumnChange"][];
+        };
+        DatabaseMetadataColumnChange: {
+            columnName?: string;
+            changes?: components["schemas"]["ReverseImportFieldChange"][];
         };
         RReverseImportCompareResult: {
             /** Format: int32 */
@@ -3412,6 +3458,7 @@ export interface components {
         };
         ReverseImportCompareResult: {
             summary?: components["schemas"]["ReverseImportCompareSummary"];
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
             tableDiffs?: components["schemas"]["ReverseImportTableDiff"][];
         };
         ReverseImportCompareSummary: {
@@ -3458,6 +3505,8 @@ export interface components {
         DatabaseConnectionReq: {
             /** Format: int64 */
             projectId: number;
+            /** Format: int64 */
+            presetId?: number;
             databaseType: string;
             host: string;
             /** Format: int32 */
@@ -3467,6 +3516,7 @@ export interface components {
             username: string;
             password?: string;
             tableNames?: string[];
+            metadataCacheMode?: string;
         };
         DatabaseConnectionHealthDiagnostic: {
             connectionStatus?: string;
@@ -4450,6 +4500,7 @@ export interface components {
         };
         FieldCoverageReport: {
             summary?: components["schemas"]["FieldCoverageSummary"];
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
             tables?: components["schemas"]["FieldCoverageTable"][];
             unmanagedRankings?: components["schemas"]["UnmanagedFieldRanking"][];
         };

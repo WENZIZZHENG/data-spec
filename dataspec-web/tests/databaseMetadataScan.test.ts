@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   buildScanResumeSummary,
+  buildMetadataCacheSummary,
   currentScanTableNames,
   mergeScanTableNames,
+  metadataCacheStatusLabel,
   scanProgressLabel
 } from '../src/utils/databaseMetadataScan.ts'
 
@@ -21,7 +23,22 @@ const scanResult = {
     pageSize: 40,
     hasMore: true
   },
-  resumeCommand: '继续 cursor=40 pageSize=40 password=secret jdbc:postgresql://localhost/demo'
+  resumeCommand: '继续 cursor=40 pageSize=40 password=secret jdbc:postgresql://localhost/demo',
+  metadataCache: {
+    metadataFingerprint: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    cacheHit: true,
+    stale: false,
+    refreshMode: 'AUTO',
+    lastSeenAt: '2026-07-06T10:00:00Z',
+    expiresAt: '2026-07-07T10:00:00Z',
+    sourceDatabaseVersion: 'PostgreSQL 16 password=secret',
+    changeSummary: {
+      changed: true,
+      addedColumnCount: 1,
+      removedColumnCount: 0,
+      changedColumnCount: 2
+    }
+  }
 }
 
 test('reads current scan table names and ignores nameless rows', () => {
@@ -51,4 +68,16 @@ test('builds safe resume summary without credentials', () => {
   assert.match(summary, /pageSize=40/)
   assert.doesNotMatch(summary, /password=secret/)
   assert.doesNotMatch(summary, /jdbc:postgresql/)
+})
+
+test('formats metadata cache status and summary without credentials', () => {
+  assert.equal(metadataCacheStatusLabel(scanResult.metadataCache), '缓存命中')
+
+  const summary = buildMetadataCacheSummary(scanResult.metadataCache)
+
+  assert.match(summary, /缓存命中/)
+  assert.match(summary, /0123456789ab/)
+  assert.match(summary, /新增 1/)
+  assert.match(summary, /变更 2/)
+  assert.doesNotMatch(summary, /password=secret/)
 })

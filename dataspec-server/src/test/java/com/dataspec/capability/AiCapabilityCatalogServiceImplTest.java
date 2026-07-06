@@ -215,10 +215,14 @@ class AiCapabilityCatalogServiceImplTest {
 
         assertTrue(entry.apiEndpoints().contains("POST /api/reverse-import/database/scan"));
         assertTrue(entry.apiEndpoints().contains("POST /api/reverse-import/database/browser"));
-        assertTrue(entry.optionalInputs().containsAll(List.of("schemaName", "tableNames", "pageSize", "cursor", "cancel")));
+        assertTrue(entry.optionalInputs().containsAll(List.of("schemaName", "tableNames", "pageSize", "cursor", "cancel", "metadataCacheMode")));
         assertTrue(entry.outputContracts().contains("database-metadata-scan-result"));
         assertTrue(entry.outputContracts().contains("database-metadata-browser"));
+        assertTrue(entry.outputContracts().contains("database-metadata-cache-info"));
         assertTrue(entry.contractIds().contains("database-metadata-scan-plan"));
+        assertTrue(entry.contractIds().contains("db-metadata-incremental-cache"));
+        assertTrue(entry.preflightChecks().stream().anyMatch(check -> check.contains("metadataFingerprint")));
+        assertTrue(entry.nextActions().stream().anyMatch(action -> action.contains("metadataCacheMode=REFRESH")));
     }
 
     @Test

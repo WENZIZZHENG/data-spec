@@ -1041,17 +1041,22 @@ test('keeps database reverse import and comparison flow wired', () => {
     'listDatabaseTables',
     'loadReverseImportMemory',
     'saveReverseImportMemory',
+    'buildMetadataCacheSummary',
+    'metadataCacheStatusLabel',
     'projectStore.currentProjectId',
     'async function handleLoadTables()',
     'async function handleStartMetadataScan()',
     'async function handleContinueMetadataScan()',
     'async function handleCancelMetadataScan()',
+    "async function handleRefreshMetadata()",
+    "function databaseRequest(metadataCacheMode = 'AUTO'",
+    "metadataCacheMode: metadataCacheMode",
     'countSelectedVisibleTableNames(dbForm.tableNames, databaseTables.value)',
     'const canCancelScan = computed(() =>',
     'canContinueScan.value',
     '当前页已选',
     '累计 {{ selectedTableCount }}',
-    'async function handleBrowseMetadata()',
+    'async function handleBrowseMetadata(metadataCacheMode',
     'async function handleGenerateCompare()',
     'async function handleImportCandidates()',
     'previewDialectDiagnostics',
@@ -1066,6 +1071,9 @@ test('keeps database reverse import and comparison flow wired', () => {
     '分页扫描',
     'scanProgressText',
     'scanResumeText',
+    'metadataCacheSummaryText',
+    'activeMetadataCache?.metadataFingerprint',
+    '刷新元数据',
     '元数据浏览',
     'metadataBrowserStatusLabel(row.matchStatus)',
     'handleMetadataCandidateCheck(row, $event)',
@@ -1103,11 +1111,17 @@ test('keeps database reverse import and comparison flow wired', () => {
   ], 'idempotency api')
 
   assertContains(types, [
-    'dryRunToken?: string'
+    'dryRunToken?: string',
+    'metadataCacheMode?:',
+    'export interface DatabaseMetadataCacheInfo',
+    'metadataCache?: DatabaseMetadataCacheInfo'
   ], 'reverse import types')
 
   assertContains(schema, [
-    'dryRunToken?: string;'
+    'dryRunToken?: string;',
+    'metadataCacheMode?: string;',
+    'DatabaseMetadataCacheInfo: {',
+    'metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];'
   ], 'reverse import schema')
 })
 
@@ -1325,6 +1339,14 @@ test('keeps coverage and AI replay supporting flows wired', () => {
     'projectStore.currentProjectId',
     'reportSqlCoverage(projectStore.currentProjectId as number, sqlText.value)',
     'reportDatabaseCoverage(databaseRequest())',
+    'reportDatabaseCoverage(databaseRequest(\'REFRESH\'))',
+    'buildMetadataCacheSummary',
+    'metadataCacheStatusLabel',
+    "function databaseRequest(metadataCacheMode = 'AUTO'",
+    "metadataCacheMode: metadataCacheMode",
+    'coverageMetadataCacheSummary',
+    'report.value?.metadataCache?.metadataFingerprint',
+    '刷新元数据后生成',
     'testDatabaseConnection(databaseRequest())',
     'listDatabaseTables(databaseRequest())',
     'connectionSecurity',

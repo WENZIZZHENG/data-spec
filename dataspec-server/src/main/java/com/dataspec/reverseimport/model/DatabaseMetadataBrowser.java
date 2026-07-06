@@ -45,6 +45,9 @@ public class DatabaseMetadataBrowser {
     /** 浏览后的建议动作，不代表自动写入。 */
     private List<String> nextActions = new ArrayList<>();
 
+    /** 本次浏览所用数据库结构的 cache/fingerprint 证据。 */
+    private DatabaseMetadataCacheInfo metadataCache;
+
     /** 复用既有反向导入预览结果，供前端候选导入流程继续使用。 */
     private ReverseImportPreview preview;
 

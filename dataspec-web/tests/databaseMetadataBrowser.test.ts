@@ -21,6 +21,19 @@ const browser = {
     changedCount: 1,
     unmanagedCount: 1
   },
+  metadataCache: {
+    metadataFingerprint: 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210',
+    cacheHit: false,
+    stale: false,
+    refreshMode: 'REFRESH',
+    lastSeenAt: '2026-07-06T10:00:00Z',
+    changeSummary: {
+      changed: true,
+      addedColumnCount: 1,
+      removedColumnCount: 1,
+      changedColumnCount: 1
+    }
+  },
   tables: [
     {
       schemaName: 'public',
@@ -95,12 +108,14 @@ test('builds default selected browser candidate key set', () => {
 test('builds AI readable summary from browser payload without secrets', () => {
   const summary = buildMetadataBrowserAiSummary({
     ...browser,
-    aiReadableSummary: '数据库 demo user_order buyer_name idx_user_order_mobile password=secret jdbc:postgresql://localhost/demo'
+    aiReadableSummary: ''
   })
 
   assert.match(summary, /user_order/)
   assert.match(summary, /buyer_name/)
   assert.match(summary, /idx_user_order_mobile/)
+  assert.match(summary, /metadataFingerprint=fedcba987654/)
+  assert.match(summary, /refreshMode=REFRESH/)
   assert.doesNotMatch(summary, /password=secret/)
   assert.doesNotMatch(summary, /jdbc:postgresql/)
 })

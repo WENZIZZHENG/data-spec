@@ -55,4 +55,7 @@ public class DatabaseMetadataScanResult {
 
     /** 扫描后的建议动作，不代表自动写入。 */
     private List<String> nextActions = new ArrayList<>();
+
+    /** 当前扫描页关联的 metadata cache 证据，不包含凭据或业务数据行。 */
+    private DatabaseMetadataCacheInfo metadataCache;
 }

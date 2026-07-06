@@ -14,6 +14,10 @@
           <el-icon><DataAnalysis /></el-icon>
           生成报告
         </el-button>
+        <el-button plain :disabled="activeMode !== 'database' || !canGenerateReport" :loading="reportLoading" @click="handleRefreshMetadataReport">
+          <el-icon><Refresh /></el-icon>
+          刷新元数据后生成
+        </el-button>
       </div>
     </div>
 
@@ -217,6 +221,19 @@
             </div>
           </div>
         </div>
+        <div v-if="report.metadataCache" class="metadata-cache-panel">
+          <div class="metadata-cache-header">
+            <el-tag :type="coverageMetadataCacheTagType" effect="plain">
+              {{ metadataCacheStatusLabel(report.metadataCache) }}
+            </el-tag>
+            <span>{{ coverageMetadataCacheSummary }}</span>
+          </div>
+          <div class="metadata-cache-meta">
+            <span v-if="report.metadataCache.metadataFingerprint">fingerprint={{ coverageMetadataFingerprint }}</span>
+            <span v-if="report.metadataCache.lastSeenAt">lastSeenAt={{ report.metadataCache.lastSeenAt }}</span>
+            <span v-if="report.metadataCache.expiresAt">expiresAt={{ report.metadataCache.expiresAt }}</span>
+          </div>
+        </div>
 
         <div class="evidence-actions">
           <el-button size="small" :loading="evidenceLoading" @click="handleCopyCoverageEvidence">
@@ -340,6 +357,10 @@ import {
   formatCoverageRate
 } from '@/utils/fieldCoverageDisplay'
 import {
+  buildMetadataCacheSummary,
+  metadataCacheStatusLabel
+} from '@/utils/databaseMetadataScan'
+import {
   filterDatabaseTables,
   mergeSelectedTableNames
 } from '@/utils/reverseImportSelection'
@@ -360,6 +381,7 @@ import {
 import { copyRouteUrl, readEnumQuery, readStringQuery, replaceRouteQuery } from '@/utils/urlState'
 import type {
   DatabaseConnectionHealthDiagnostic,
+  DatabaseMetadataCacheMode,
   DatabaseConnectionReq,
   DatabaseConnectionSecurityDiagnostic,
   DatabaseTableInfo,
@@ -457,6 +479,28 @@ const statusOptions: Array<{ value: StatusFilter; label: string }> = [
 const filteredFields = computed(() =>
   filterCoverageFields(report.value?.tables ?? [], tableFilter.value, statusFilter.value)
 )
+const coverageMetadataCacheSummary = computed(() =>
+  buildMetadataCacheSummary(report.value?.metadataCache)
+)
+const coverageMetadataFingerprint = computed(() =>
+  report.value?.metadataCache?.metadataFingerprint?.slice(0, 12) ?? ''
+)
+const coverageMetadataCacheTagType = computed(() => {
+  const cache = report.value?.metadataCache
+  if (!cache) {
+    return 'info'
+  }
+  if (cache.refreshMode === 'BYPASS') {
+    return 'warning'
+  }
+  if (cache.cacheHit) {
+    return 'success'
+  }
+  if (cache.refreshMode === 'REFRESH') {
+    return cache.changeSummary?.changed ? 'warning' : 'success'
+  }
+  return cache.stale ? 'warning' : 'info'
+})
 
 applyCoverageUrlState()
 
@@ -516,11 +560,12 @@ function resetDatabaseConnectionState() {
   connectionHealth.value = null
 }
 
-function databaseRequest(): DatabaseConnectionReq {
+function databaseRequest(metadataCacheMode = 'AUTO'): DatabaseConnectionReq {
   return {
     ...dbForm,
     projectId: projectStore.currentProjectId ?? undefined,
-    tableNames: [...(dbForm.tableNames ?? [])]
+    tableNames: [...(dbForm.tableNames ?? [])],
+    metadataCacheMode: metadataCacheMode as DatabaseMetadataCacheMode
   }
 }
 
@@ -532,6 +577,18 @@ async function handleGenerateReport() {
     await reportState.run(() => activeMode.value === 'sql'
       ? reportSqlCoverage(projectStore.currentProjectId as number, sqlText.value)
       : reportDatabaseCoverage(databaseRequest()))
+    applyCoverageUrlState()
+  } catch {
+    // 页面内 StateBlock 会展示可重试状态，避免只留下全局消息。
+  }
+}
+
+async function handleRefreshMetadataReport() {
+  if (!projectStore.currentProjectId || activeMode.value !== 'database' || !canGenerateReport.value) {
+    return
+  }
+  try {
+    await reportState.run(() => reportDatabaseCoverage(databaseRequest('REFRESH')))
     applyCoverageUrlState()
   } catch {
     // 页面内 StateBlock 会展示可重试状态，避免只留下全局消息。
@@ -936,6 +993,35 @@ function goToReverseImport() {
   gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 16px;
+}
+
+.metadata-cache-panel {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.metadata-cache-header,
+.metadata-cache-meta {
+  display: flex;
+  gap: 8px 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.metadata-cache-header {
+  font-weight: 600;
+}
+
+.metadata-cache-meta {
+  color: #64748b;
 }
 
 .coverage-rate {

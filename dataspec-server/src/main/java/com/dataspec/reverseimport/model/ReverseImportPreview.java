@@ -24,4 +24,6 @@ public class ReverseImportPreview {
     private List<MissingCommentIssue> missingComments = new ArrayList<>();
     private List<NonStandardField> nonStandardFields = new ArrayList<>();
     private List<DialectDiagnostic> dialectDiagnostics = new ArrayList<>();
+    /** 数据库直连预览关联的 metadata cache 证据；SQL 文本预览场景为空。 */
+    private DatabaseMetadataCacheInfo metadataCache;
 }

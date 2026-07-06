@@ -11,6 +11,7 @@ import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseConnectionSecurityDiagnostic;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
+import com.dataspec.reverseimport.model.DatabaseMetadataCacheMode;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
@@ -20,6 +21,9 @@ import com.dataspec.reverseimport.model.FieldCandidate;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
 import com.dataspec.reverseimport.model.ReverseImportFieldStatus;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
+import com.dataspec.reverseimport.entity.DatabaseMetadataCacheEntry;
+import com.dataspec.reverseimport.repository.DatabaseMetadataCacheRepository;
+import com.dataspec.reverseimport.service.impl.DatabaseMetadataCacheServiceImpl;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.reverseimport.service.impl.DatabaseReverseImportServiceImpl;
 import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
@@ -32,11 +36,15 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,7 +68,10 @@ class DatabaseReverseImportServiceTest {
     void testConnectionAndListTables_readJdbcMetadata() throws Exception {
         prepareMetadataDatabase();
         FieldService fieldService = mock(FieldService.class);
-        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
         DatabaseConnectionReq req = connectionReq();
 
         assertThat(service.testConnection(req).success()).isTrue();
@@ -337,7 +348,10 @@ class DatabaseReverseImportServiceTest {
                 standardField("id", null),
                 standardField("mobile_no", "phone,mobile")
         ));
-        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
         DatabaseConnectionReq req = connectionReq();
         req.setTableNames(List.of("USER_ORDER"));
 
@@ -376,11 +390,55 @@ class DatabaseReverseImportServiceTest {
     }
 
     @Test
+    void exportDump_autoCacheHitSkipsJdbcConnection() throws Exception {
+        prepareMetadataDatabase();
+        DatabaseMetadataCacheServiceImpl cacheService = cacheService(new InMemoryDatabaseMetadataCacheRepository());
+        DatabaseReverseImportServiceImpl service = service(mock(FieldService.class), req -> openMetadataConnection(), cacheService);
+        DatabaseConnectionReq req = connectionReq();
+        req.setTableNames(List.of("USER_ORDER"));
+
+        var first = service.exportDump(req);
+
+        assertThat(first.getMetadataCache().isCacheHit()).isFalse();
+        assertThat(first.getMetadataCache().getMetadataFingerprint()).hasSize(64);
+
+        DatabaseReverseImportServiceImpl hitService = service(mock(FieldService.class), ignored -> {
+            throw new SQLException("缓存命中时不应打开 JDBC 连接");
+        }, cacheService);
+
+        var second = hitService.exportDump(req);
+
+        assertThat(second.getMetadataCache().isCacheHit()).isTrue();
+        assertThat(second.getMetadataCache().getRefreshMode()).isEqualTo(DatabaseMetadataCacheMode.AUTO.name());
+        assertThat(second.getMetadataCache().getMetadataFingerprint()).isEqualTo(first.getMetadataCache().getMetadataFingerprint());
+        assertThat(second.getTables().get(0).getColumns()).extracting("columnName")
+                .containsExactly("ID", "PHONE", "USER_NAME");
+    }
+
+    @Test
+    void exportDump_failureRedactsConnectionSecrets() {
+        DatabaseReverseImportServiceImpl service = service(mock(FieldService.class), ignored -> {
+            throw new SQLException("read failed password=top-secret jdbc:postgresql://localhost:5432/demo Bearer token123");
+        }, cacheService(new InMemoryDatabaseMetadataCacheRepository()));
+        DatabaseConnectionReq req = connectionReq();
+        req.setPassword("top-secret");
+        req.setTableNames(List.of("USER_ORDER"));
+
+        BizException error = assertThrows(BizException.class, () -> service.exportDump(req));
+
+        assertThat(error.getMessage()).contains("读取数据库表结构失败");
+        assertThat(error.getMessage()).doesNotContain("top-secret", "jdbc:postgresql://", "Bearer token123");
+    }
+
+    @Test
     void exportDumpAndBrowse_redactsSensitiveMetadataText() throws Exception {
         prepareSensitiveMetadataDatabase();
         FieldService fieldService = mock(FieldService.class);
         when(fieldService.listByProject(1L)).thenReturn(List.of());
-        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
         DatabaseConnectionReq req = connectionReq();
         req.setPassword("top-secret");
         req.setTableNames(List.of("SECRET_ORDER"));
@@ -419,7 +477,10 @@ class DatabaseReverseImportServiceTest {
                 "未命中已有标准字段",
                 "user_name",
                 false)));
-        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
         DatabaseConnectionReq req = connectionReq();
         req.setPassword("top-secret");
         req.setTableNames(List.of("USER_ORDER"));
@@ -427,6 +488,8 @@ class DatabaseReverseImportServiceTest {
         DatabaseMetadataBrowser browser = service.browse(req);
 
         assertThat(browser.getKind()).isEqualTo("dataspec-database-metadata-browser");
+        assertThat(browser.getMetadataCache().getMetadataFingerprint()).hasSize(64);
+        assertThat(browser.getMetadataCache().getRefreshMode()).isEqualTo(DatabaseMetadataCacheMode.AUTO.name());
         assertThat(browser.getSummary().getTableCount()).isEqualTo(1);
         assertThat(browser.getSummary().getColumnCount()).isEqualTo(3);
         assertThat(browser.getSummary().getIndexCount()).isGreaterThanOrEqualTo(1);
@@ -445,10 +508,15 @@ class DatabaseReverseImportServiceTest {
                     assertThat(column.getCandidateKey()).isEqualTo("USER_ORDER.USER_NAME");
                 });
         assertThat(browser.getAiReadableSummary()).contains("USER_ORDER", "USER_NAME", "IDX_USER_ORDER_PHONE");
+        assertThat(browser.getAiReadableSummary()).contains("metadataFingerprint=");
         assertThat(browser.getAiReadableSummary()).doesNotContain("top-secret", "jdbc:");
         assertThat(browser.getPreview().getFieldCandidates()).extracting(FieldCandidate::getColumnName)
                 .containsExactly("USER_NAME");
+        assertThat(browser.getPreview().getMetadataCache().getMetadataFingerprint())
+                .isEqualTo(browser.getMetadataCache().getMetadataFingerprint());
         assertThat(browser.getCoverage().getSummary().getColumnCount()).isEqualTo(3);
+        assertThat(browser.getCoverage().getMetadataCache().getMetadataFingerprint())
+                .isEqualTo(browser.getMetadataCache().getMetadataFingerprint());
         verify(fieldService, never()).create(any(Field.class));
     }
 
@@ -456,7 +524,10 @@ class DatabaseReverseImportServiceTest {
     void scanMetadata_paginatesLargeDatabaseAndBuildsSafeResumeCommand() throws Exception {
         prepareLargeMetadataDatabase(123);
         FieldService fieldService = mock(FieldService.class);
-        DatabaseReverseImportServiceImpl service = service(fieldService, ignored -> openLargeMetadataConnection());
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                ignored -> openLargeMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
         DatabaseMetadataScanReq req = scanReq();
         req.setPassword("top-secret");
         req.setPageSize(40);
@@ -472,6 +543,8 @@ class DatabaseReverseImportServiceTest {
         assertThat(firstPage.getProgress().isHasMore()).isTrue();
         assertThat(firstPage.getCursor()).isEqualTo("40");
         assertThat(firstPage.getResumeCommand()).contains("cursor=40", "pageSize=40");
+        assertThat(firstPage.getMetadataCache().getRefreshMode()).isEqualTo(DatabaseMetadataCacheMode.AUTO.name());
+        assertThat(firstPage.getMetadataCache()).isNotNull();
         assertThat(firstPage.getResumeCommand()).doesNotContain("top-secret", "jdbc:");
 
         req.setScanId(firstPage.getScanId());
@@ -482,6 +555,30 @@ class DatabaseReverseImportServiceTest {
         assertThat(secondPage.getTables()).hasSize(40);
         assertThat(secondPage.getTables().get(0).tableName()).isEqualTo("SCAN_TABLE_041");
         assertThat(secondPage.getProgress().getProcessedTableCount()).isEqualTo(80);
+        verify(fieldService, never()).create(any(Field.class));
+    }
+
+    @Test
+    void scanMetadata_refreshesSelectedTablesAndReturnsCacheEvidence() throws Exception {
+        prepareLargeMetadataDatabase(3);
+        FieldService fieldService = mock(FieldService.class);
+        InMemoryDatabaseMetadataCacheRepository repository = new InMemoryDatabaseMetadataCacheRepository();
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                ignored -> openLargeMetadataConnection(),
+                cacheService(repository));
+        DatabaseMetadataScanReq req = scanReq();
+        req.setPageSize(2);
+        req.setTableNames(List.of("SCAN_TABLE_001", "SCAN_TABLE_002"));
+        req.setMetadataCacheMode(DatabaseMetadataCacheMode.REFRESH.name());
+
+        DatabaseMetadataScanResult result = service.scan(req);
+
+        assertThat(result.getTables()).hasSize(2);
+        assertThat(result.getMetadataCache().getRefreshMode()).isEqualTo(DatabaseMetadataCacheMode.REFRESH.name());
+        assertThat(result.getMetadataCache().getMetadataFingerprint()).hasSize(64);
+        assertThat(result.getMetadataCache().getChangeSummary().getAddedTableCount()).isEqualTo(2);
+        assertThat(repository.entries).hasSize(2);
         verify(fieldService, never()).create(any(Field.class));
     }
 
@@ -559,7 +656,10 @@ class DatabaseReverseImportServiceTest {
                 "未命中已有标准字段",
                 "user_name",
                 false)));
-        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
         DatabaseConnectionReq connectionReq = connectionReq();
         connectionReq.setTableNames(List.of("USER_ORDER"));
         DatabaseSchemaDumpReq dumpReq = new DatabaseSchemaDumpReq();
@@ -570,6 +670,9 @@ class DatabaseReverseImportServiceTest {
         ReverseImportCompareResult compare = service.compareDump(dumpReq);
         var coverage = service.coverageDump(dumpReq);
 
+        assertThat(preview.getMetadataCache().getMetadataFingerprint()).hasSize(64);
+        assertThat(compare.getMetadataCache().getMetadataFingerprint()).isEqualTo(preview.getMetadataCache().getMetadataFingerprint());
+        assertThat(coverage.getMetadataCache().getMetadataFingerprint()).isEqualTo(preview.getMetadataCache().getMetadataFingerprint());
         assertThat(preview.getSummary().getColumnCount()).isEqualTo(3);
         assertThat(compare.getSummary().getColumnCount()).isEqualTo(3);
         assertThat(compare.getSummary().getNewCount()).isEqualTo(1);
@@ -590,12 +693,16 @@ class DatabaseReverseImportServiceTest {
         mobileNo.setNullable(true);
         mobileNo.setComment("手机号");
         when(fieldService.listByProject(1L)).thenReturn(List.of(id, mobileNo));
-        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
         DatabaseConnectionReq req = connectionReq();
         req.setTableNames(List.of("USER_ORDER"));
 
         ReverseImportCompareResult result = service.compare(req);
 
+        assertThat(result.getMetadataCache().getMetadataFingerprint()).hasSize(64);
         assertThat(result.getSummary().getTableCount()).isEqualTo(1);
         assertThat(result.getSummary().getColumnCount()).isEqualTo(3);
         assertThat(result.getSummary().getMatchedCount()).isEqualTo(2);
@@ -628,12 +735,16 @@ class DatabaseReverseImportServiceTest {
                 "未命中已有标准字段",
                 "user_name",
                 false)));
-        DatabaseReverseImportServiceImpl service = service(fieldService);
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(new InMemoryDatabaseMetadataCacheRepository()));
         DatabaseConnectionReq req = connectionReq();
         req.setTableNames(List.of("USER_ORDER"));
 
         var report = service.coverage(req);
 
+        assertThat(report.getMetadataCache().getMetadataFingerprint()).hasSize(64);
         assertThat(report.getSummary().getColumnCount()).isEqualTo(3);
         assertThat(report.getSummary().getCoveredCount()).isEqualTo(2);
         assertThat(report.getSummary().getUnmanagedCount()).isEqualTo(1);
@@ -693,6 +804,12 @@ class DatabaseReverseImportServiceTest {
 
     private DatabaseReverseImportServiceImpl service(FieldService fieldService,
                                                     DatabaseReverseImportServiceImpl.ConnectionProvider connectionProvider) {
+        return service(fieldService, connectionProvider, null);
+    }
+
+    private DatabaseReverseImportServiceImpl service(FieldService fieldService,
+                                                    DatabaseReverseImportServiceImpl.ConnectionProvider connectionProvider,
+                                                    DatabaseMetadataCacheServiceImpl cacheService) {
         ReverseImportServiceImpl reverseImportService = new ReverseImportServiceImpl(
                 new com.dataspec.lint.engine.SqlParserService(),
                 fieldService,
@@ -700,7 +817,16 @@ class DatabaseReverseImportServiceTest {
         return new DatabaseReverseImportServiceImpl(
                 reverseImportService,
                 new FieldCoverageServiceImpl(fieldService, new com.dataspec.lint.engine.SqlParserService()),
-                connectionProvider);
+                connectionProvider,
+                new com.dataspec.reverseimport.service.impl.JdbcDatabaseMetadataAdapter(),
+                cacheService);
+    }
+
+    private DatabaseMetadataCacheServiceImpl cacheService(DatabaseMetadataCacheRepository repository) {
+        return new DatabaseMetadataCacheServiceImpl(
+                repository,
+                new ObjectMapper(),
+                Clock.fixed(Instant.parse("2026-07-06T10:00:00Z"), ZoneOffset.UTC));
     }
 
     private void prepareMetadataDatabase() throws Exception {
@@ -855,6 +981,33 @@ class DatabaseReverseImportServiceTest {
 
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private static class InMemoryDatabaseMetadataCacheRepository implements DatabaseMetadataCacheRepository {
+
+        private final Map<String, DatabaseMetadataCacheEntry> entries = new LinkedHashMap<>();
+
+        @Override
+        public Optional<DatabaseMetadataCacheEntry> findActive(Long projectId,
+                                                               String sourceScopeHash,
+                                                               String schemaName,
+                                                               String tableName) {
+            return Optional.ofNullable(entries.get(key(projectId, sourceScopeHash, schemaName, tableName)));
+        }
+
+        @Override
+        public void upsert(DatabaseMetadataCacheEntry entry) {
+            entries.put(key(entry.getProjectId(), entry.getSourceScopeHash(), entry.getSchemaName(), entry.getTableName()), entry);
+        }
+
+        @Override
+        public void expire(DatabaseMetadataCacheEntry entry) {
+            entries.put(key(entry.getProjectId(), entry.getSourceScopeHash(), entry.getSchemaName(), entry.getTableName()), entry);
+        }
+
+        private String key(Long projectId, String sourceScopeHash, String schemaName, String tableName) {
+            return projectId + "|" + sourceScopeHash + "|" + schemaName + "|" + tableName;
+        }
     }
 
     private record FailureCase(String databaseType,

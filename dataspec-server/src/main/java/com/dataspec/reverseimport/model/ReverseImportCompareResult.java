@@ -13,4 +13,6 @@ public class ReverseImportCompareResult {
 
     private ReverseImportCompareSummary summary = new ReverseImportCompareSummary();
     private List<ReverseImportTableDiff> tableDiffs = new ArrayList<>();
+    /** 数据库直连二次比对关联的 metadata cache 证据；dump-only 场景可为空。 */
+    private DatabaseMetadataCacheInfo metadataCache;
 }

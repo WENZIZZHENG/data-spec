@@ -16,6 +16,9 @@ public class DatabaseConnectionReq {
     @NotNull(message = "项目ID不能为空")
     private Long projectId;
 
+    /** 非敏感连接预设 ID；为空时使用连接信息的脱敏指纹作为缓存来源边界。 */
+    private Long presetId;
+
     @NotBlank(message = "数据库类型不能为空")
     private String databaseType;
 
@@ -33,6 +36,9 @@ public class DatabaseConnectionReq {
     private String username;
 
     private String password;
+
+    /** metadata cache 策略：AUTO/REFRESH/BYPASS；为空时按 AUTO 兼容旧客户端。 */
+    private String metadataCacheMode;
 
     private List<String> tableNames = new ArrayList<>();
 }

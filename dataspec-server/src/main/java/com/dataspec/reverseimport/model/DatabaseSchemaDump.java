@@ -27,6 +27,9 @@ public class DatabaseSchemaDump {
 
     private DatabaseSchemaSource source = new DatabaseSchemaSource();
 
+    /** metadata cache 证据；只描述 schema-only 缓存状态，不包含凭据或业务数据行。 */
+    private DatabaseMetadataCacheInfo metadataCache;
+
     private List<DatabaseSchemaTable> tables = new ArrayList<>();
 
     private List<String> warnings = new ArrayList<>();

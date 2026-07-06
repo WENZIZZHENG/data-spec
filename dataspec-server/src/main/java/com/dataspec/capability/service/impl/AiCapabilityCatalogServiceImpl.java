@@ -323,22 +323,24 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
         ));
         add(map, cap(
                 "reverse-import", "database", "数据库反向导入",
-                "从现有 PostgreSQL/MySQL metadata 分页扫描、浏览、预览字段候选、差异，并确认导入标准候选。",
+                "从现有 PostgreSQL/MySQL metadata 分页扫描、浏览、预览字段候选、差异，并用 metadataFingerprint 判断结构是否需要刷新。",
                 true, "WRITES_DATASPEC_STANDARD",
                 list("projectId", "databaseType", "host", "databaseName", "username"),
-                list("schemaName", "tableNames", "pageSize", "cursor", "scanId", "cancel"),
-                list("database-metadata-scan-result", "database-metadata-browser", "reverse-import-preview", "reverse-import-compare-result"),
+                list("schemaName", "tableNames", "pageSize", "cursor", "scanId", "cancel", "metadataCacheMode"),
+                list("database-metadata-scan-result", "database-metadata-browser", "database-metadata-cache-info",
+                        "reverse-import-preview", "reverse-import-compare-result"),
                 list("POST /api/reverse-import/database/scan", "POST /api/reverse-import/database/browser",
                         "POST /api/reverse-import/database/preview", "POST /api/reverse-import/database/compare",
                         "POST /api/reverse-import/database/import"),
                 list("dataspec workflow show reverse-import-standards --format json"),
                 list(), list(),
                 list("/reverse-import"),
-                list("database-metadata-scan-plan", "database-metadata-browser"), list("reverse-import-standards"),
+                list("database-metadata-scan-plan", "database-metadata-browser", "db-metadata-incremental-cache"), list("reverse-import-standards"),
                 list("reverse-import"),
                 examples("Workflow", "dataspec workflow show reverse-import-standards --format json", null),
-                list("使用只读数据库账号", "不要保存密码到仓库", "大库先 scan/browser，再选择当前批次表预览", "确认导入前查看候选和来源"),
-                list("大库先调用 scan 获取 cursor 和当前批次表，再 browser/preview/compare，最后把候选纳入标准候选 Inbox 或确认导入。"),
+                list("使用只读数据库账号", "不要保存密码到仓库", "大库先 scan/browser，再选择当前批次表预览",
+                        "确认导入前查看候选、来源和 metadataFingerprint；当结构风险较高时使用 metadataCacheMode=REFRESH。"),
+                list("大库先调用 scan 获取 cursor 和当前批次表，再 browser/preview/compare；metadataFingerprint 未变化时可复用分析，结构不确定时传 metadataCacheMode=REFRESH。"),
                 "README.md#sql-规范闭环"
         ));
         add(map, cap(

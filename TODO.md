@@ -5,8 +5,8 @@
 ## 下一步顺序
 
 1. 当前状态：P6-1 到 P6-70、P6-72、P6-73、P6-75、P6-78、P6-79、P6-89 已完成第一版；P6-78 OpenSpec change 已归档到 `openspec/changes/archive/2026-07-06-add-fixedsql-file-patch-flow`。
-2. 近期剩余 5 个优先行动项，后续开发默认从这里选，不再从 P6-71 到 P6-188 全量顺扫：P6-71、P6-81、P6-82、P6-87、P6-88。
-3. 效率优先顺序：下一步优先推进 P6-71；浏览器级或数据库级验证（P6-81/P6-82）按风险触发，不默认阻塞小任务。
+2. 近期剩余 5 个优先行动项，后续开发默认从这里选，不再从 P6-71 到 P6-188 全量顺扫：P6-71（验证收口中）、P6-81、P6-82、P6-87、P6-88。
+3. 效率优先顺序：P6-71 完成验证、评审和本地 commit 后，下一步优先推进 P6-81；浏览器级或数据库级验证（P6-81/P6-82）按风险触发，不默认阻塞小任务。
 4. 暂缓池：P6-90 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
 5. 每次开工先按任务类型决定快速/常规/SDD：文档与小前端走快速；单模块功能走常规；API/CLI/MCP/AI 外部协议、安全、存储或数据库写入才进入 SDD standard/full。
 
@@ -725,11 +725,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不暴露完整复杂 AST 编辑器，不要求所有规则第一版都有深度 trace；不改变现有 lint 结果兼容字段。
 
 ### P6-71：数据库元数据增量缓存与变更指纹
-- 状态：待办。
+- 状态：验证收口中，OpenSpec change 为 `openspec/changes/add-db-metadata-incremental-cache`。
 - 为什么做：数据库直连反向导入、覆盖率报告和元数据浏览会反复读取同一批 schema；没有增量缓存时，大库会慢，AI 也无法判断“这次和上次相比变了什么”。
 - 已有基础：已有数据库直连、连接预设、metadata 预览、覆盖率报告、字段来源批次、schema dump 待办、大库扫描计划待办和变更感知扫描待办。
-- 缺口：缺少 metadata fingerprint、lastSeenAt、changeSummary 和缓存失效策略；每次扫描结果也没有稳定 hash 供 AI 判断是否需要重新生成 Context 或导入候选。
-- 落地产物：新增只保存结构信息的 metadata cache；按连接预设、schema、table 计算 fingerprint；输出新增/删除/变更表字段摘要、缓存时间、刷新方式和源数据库版本。
+- 已完成能力：新增只保存结构信息的 metadata cache；按连接预设或脱敏连接来源、schema、table 计算 fingerprint；scan/browser/dump/preview/compare/coverage 返回 cache status、lastSeenAt、expiresAt、refreshMode、metadataFingerprint 和变化摘要；前端展示缓存状态并提供 `REFRESH` 手动刷新入口。
+- 收口要求：完成 OpenSpec strict、后端/前端验证、`git diff --check`、敏感词扫描和独立子 agent 只读评审后创建本地 commit；不主动 archive 或 push。
 - 验收标准：重复扫描同一数据库可复用缓存并提示是否过期；字段变化能生成差异摘要；缓存不保存密码、不保存业务数据行；AI 可根据 fingerprint 决定是否重跑反向导入。
 - 边界：不做实时同步，不监听数据库 binlog，不默认后台扫描全库。
 

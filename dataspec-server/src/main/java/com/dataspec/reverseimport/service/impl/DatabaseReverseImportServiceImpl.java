@@ -13,6 +13,8 @@ import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseConnectionSecurityDiagnostic;
 import com.dataspec.reverseimport.model.DatabaseDialectCapability;
+import com.dataspec.reverseimport.model.DatabaseMetadataCacheInfo;
+import com.dataspec.reverseimport.model.DatabaseMetadataCacheMode;
 import com.dataspec.reverseimport.model.DatabaseSchemaDump;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
@@ -37,6 +39,7 @@ import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.model.ReverseImportSummary;
 import com.dataspec.reverseimport.model.ReverseImportTableDiff;
 import com.dataspec.reverseimport.service.DatabaseMetadataAdapter;
+import com.dataspec.reverseimport.service.DatabaseMetadataCacheService;
 import com.dataspec.reverseimport.service.DatabaseReverseImportService;
 import com.dataspec.reverseimport.service.ReverseImportService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -84,34 +87,47 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     private final FieldCoverageService fieldCoverageService;
     private final ConnectionProvider connectionProvider;
     private final DatabaseMetadataAdapter metadataAdapter;
+    private final DatabaseMetadataCacheService metadataCacheService;
     private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
 
     @Autowired
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
                                             FieldCoverageService fieldCoverageService,
-                                            DatabaseMetadataAdapter metadataAdapter) {
-        this(reverseImportService, fieldCoverageService, new DriverManagerConnectionProvider(), metadataAdapter);
+                                            DatabaseMetadataAdapter metadataAdapter,
+                                            DatabaseMetadataCacheService metadataCacheService) {
+        this(reverseImportService, fieldCoverageService, new DriverManagerConnectionProvider(), metadataAdapter, metadataCacheService);
     }
 
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
                                             ConnectionProvider connectionProvider) {
-        this(reverseImportService, null, connectionProvider, new JdbcDatabaseMetadataAdapter());
+        this(reverseImportService, null, connectionProvider, new JdbcDatabaseMetadataAdapter(), null);
     }
 
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
                                             FieldCoverageService fieldCoverageService,
                                             ConnectionProvider connectionProvider) {
-        this(reverseImportService, fieldCoverageService, connectionProvider, new JdbcDatabaseMetadataAdapter());
+        this(reverseImportService, fieldCoverageService, connectionProvider, new JdbcDatabaseMetadataAdapter(), null);
     }
 
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
                                             FieldCoverageService fieldCoverageService,
                                             ConnectionProvider connectionProvider,
                                             DatabaseMetadataAdapter metadataAdapter) {
+        this(reverseImportService, fieldCoverageService, connectionProvider, metadataAdapter, null);
+    }
+
+    public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
+                                            FieldCoverageService fieldCoverageService,
+                                            ConnectionProvider connectionProvider,
+                                            DatabaseMetadataAdapter metadataAdapter,
+                                            DatabaseMetadataCacheService metadataCacheService) {
         this.reverseImportService = reverseImportService;
         this.fieldCoverageService = fieldCoverageService;
         this.connectionProvider = connectionProvider;
         this.metadataAdapter = metadataAdapter;
+        this.metadataCacheService = metadataCacheService == null
+                ? NoopDatabaseMetadataCacheService.INSTANCE
+                : metadataCacheService;
     }
 
     @Override
@@ -166,11 +182,57 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         result.setCursor(toIndex < total ? String.valueOf(toIndex) : null);
         result.setProgress(scanProgress(toIndex, total, pageSize, toIndex < total));
         result.setPartialSummary(scanSummary(page.size(), total, req));
+        result.setMetadataCache(scanMetadataCache(req, page));
         result.setResumeCommand(buildScanResumeCommand(req, result));
         result.getNextActions().add(toIndex < total
                 ? "可使用 cursor 继续加载下一批表，或选择当前批次生成部分 metadata browser。"
                 : "已到最后一批，可选择表生成 metadata browser 或反向导入预览。");
         return result;
+    }
+
+    private DatabaseMetadataCacheInfo scanMetadataCache(DatabaseMetadataScanReq req, List<DatabaseTableInfo> page) {
+        List<String> tableNames = scanCacheTableNames(req, page);
+        if (metadataCacheMode(req) == DatabaseMetadataCacheMode.REFRESH && !tableNames.isEmpty()) {
+            DatabaseConnectionReq refreshReq = copyConnectionReq(req, tableNames);
+            return metadataCacheService.resolveDump(refreshReq, () -> readDatabaseDump(refreshReq)).getMetadataCache();
+        }
+        return metadataCacheService.summarize(req, tableNames);
+    }
+
+    private List<String> scanCacheTableNames(DatabaseMetadataScanReq req, List<DatabaseTableInfo> page) {
+        if (req.getTableNames() != null && !req.getTableNames().isEmpty()) {
+            return req.getTableNames();
+        }
+        return page.stream()
+                .map(DatabaseTableInfo::tableName)
+                .toList();
+    }
+
+    private DatabaseConnectionReq copyConnectionReq(DatabaseConnectionReq source, List<String> tableNames) {
+        DatabaseConnectionReq req = new DatabaseConnectionReq();
+        req.setProjectId(source.getProjectId());
+        req.setPresetId(source.getPresetId());
+        req.setDatabaseType(source.getDatabaseType());
+        req.setHost(source.getHost());
+        req.setPort(source.getPort());
+        req.setDatabaseName(source.getDatabaseName());
+        req.setSchemaName(source.getSchemaName());
+        req.setUsername(source.getUsername());
+        req.setPassword(source.getPassword());
+        req.setMetadataCacheMode(source.getMetadataCacheMode());
+        req.setTableNames(new ArrayList<>(tableNames));
+        return req;
+    }
+
+    private DatabaseMetadataCacheMode metadataCacheMode(DatabaseConnectionReq req) {
+        if (req == null || req.getMetadataCacheMode() == null || req.getMetadataCacheMode().isBlank()) {
+            return DatabaseMetadataCacheMode.AUTO;
+        }
+        try {
+            return DatabaseMetadataCacheMode.valueOf(req.getMetadataCacheMode().trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            return DatabaseMetadataCacheMode.AUTO;
+        }
     }
 
     @Override
@@ -179,10 +241,14 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         if (req.getTableNames() == null || req.getTableNames().isEmpty()) {
             throw new BizException("请至少选择一张表");
         }
+        return sanitizeDump(metadataCacheService.resolveDump(req, () -> readDatabaseDump(req)), req);
+    }
+
+    private DatabaseSchemaDump readDatabaseDump(DatabaseConnectionReq req) {
         try (Connection connection = connectionProvider.open(req)) {
             return sanitizeDump(metadataAdapter.exportDump(connection, req), req);
         } catch (SQLException e) {
-            throw new BizException("读取数据库表结构失败: " + e.getMessage());
+            throw new BizException("读取数据库表结构失败: " + sanitizeConnectionError(e.getMessage(), req));
         }
     }
 
@@ -203,23 +269,30 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         DatabaseSchemaDump dump = exportDump(req);
         ReverseImportPreview preview = reverseImportService.previewTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), dump));
         preview.setDialectDiagnostics(dialectCompatibilityService.diagnoseDatabase(req.getDatabaseType(), req.getSchemaName()));
+        preview.setMetadataCache(dump.getMetadataCache());
         return preview;
     }
 
     @Override
     public ReverseImportPreview previewDump(DatabaseSchemaDumpReq req) {
-        return reverseImportService.previewTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), req.getDump()));
+        ReverseImportPreview preview = reverseImportService.previewTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), req.getDump()));
+        preview.setMetadataCache(req.getDump().getMetadataCache());
+        return preview;
     }
 
     @Override
     public ReverseImportCompareResult compare(DatabaseConnectionReq req) {
         DatabaseSchemaDump dump = exportDump(req);
-        return reverseImportService.compareTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), dump));
+        ReverseImportCompareResult result = reverseImportService.compareTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), dump));
+        result.setMetadataCache(dump.getMetadataCache());
+        return result;
     }
 
     @Override
     public ReverseImportCompareResult compareDump(DatabaseSchemaDumpReq req) {
-        return reverseImportService.compareTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), req.getDump()));
+        ReverseImportCompareResult result = reverseImportService.compareTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), req.getDump()));
+        result.setMetadataCache(req.getDump().getMetadataCache());
+        return result;
     }
 
     @Override
@@ -228,7 +301,9 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
             throw new BizException("字段覆盖率服务未初始化");
         }
         DatabaseSchemaDump dump = exportDump(req);
-        return fieldCoverageService.reportTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), dump));
+        FieldCoverageReport report = fieldCoverageService.reportTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), dump));
+        report.setMetadataCache(dump.getMetadataCache());
+        return report;
     }
 
     @Override
@@ -236,7 +311,9 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         if (fieldCoverageService == null) {
             throw new BizException("字段覆盖率服务未初始化");
         }
-        return fieldCoverageService.reportTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), req.getDump()));
+        FieldCoverageReport report = fieldCoverageService.reportTables(req.getProjectId(), metadataAdapter.toTableDefs(req.getProjectId(), req.getDump()));
+        report.setMetadataCache(req.getDump().getMetadataCache());
+        return report;
     }
 
     private DatabaseMetadataBrowser buildBrowser(DatabaseConnectionReq req,
@@ -258,6 +335,7 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
                 : new ArrayList<>(dump.getSource().getSelectedTableNames() == null
                 ? List.of()
                 : dump.getSource().getSelectedTableNames()));
+        browser.setMetadataCache(dump.getMetadataCache());
         browser.setPreview(preview);
         browser.setCompare(compare);
         browser.setCoverage(coverage);
@@ -463,6 +541,14 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         text.append("database=").append(browser.getDatabaseType()).append('/')
                 .append(browser.getDatabaseName()).append('/')
                 .append(browser.getSchemaName()).append('\n');
+        if (browser.getMetadataCache() != null) {
+            text.append("metadataFingerprint=").append(nullToDash(browser.getMetadataCache().getMetadataFingerprint())).append('\n');
+            text.append("metadataCache=")
+                    .append(browser.getMetadataCache().getRefreshMode())
+                    .append(" hit=").append(browser.getMetadataCache().isCacheHit())
+                    .append(" stale=").append(browser.getMetadataCache().isStale())
+                    .append('\n');
+        }
         DatabaseMetadataBrowserSummary summary = browser.getSummary();
         text.append("summary: tables=").append(summary.getTableCount())
                 .append(", columns=").append(summary.getColumnCount())
@@ -653,6 +739,9 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
                 + " scanId=" + result.getScanId()
                 + " cursor=" + cursor
                 + " pageSize=" + result.getProgress().getPageSize();
+        if (result.getMetadataCache() != null && result.getMetadataCache().getMetadataFingerprint() != null) {
+            command += " metadataFingerprint=" + result.getMetadataCache().getMetadataFingerprint();
+        }
         return SensitiveDataSanitizer.redactText(command, 1000, req.getPassword());
     }
 

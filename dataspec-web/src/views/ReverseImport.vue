@@ -157,6 +157,10 @@
                     <el-icon><View /></el-icon>
                     浏览元数据
                   </el-button>
+                  <el-button :disabled="!canBrowseMetadata" :loading="metadataLoading" @click="handleRefreshMetadata">
+                    <el-icon><Refresh /></el-icon>
+                    刷新元数据
+                  </el-button>
                 </div>
                 <div v-if="connectionSecurity || connectionHealth" class="security-diagnostic">
                   <div v-if="connectionHealth" class="security-section">
@@ -256,6 +260,10 @@
                     <el-button size="small" :disabled="!canCancelScan" @click="handleCancelMetadataScan">取消扫描</el-button>
                     <span class="muted-text">{{ scanResumeText }}</span>
                   </div>
+                  <div v-if="scanResult.metadataCache" class="scan-row metadata-cache-row">
+                    <el-tag :type="metadataCacheTagType" effect="plain">{{ metadataCacheStatusLabel(scanResult.metadataCache) }}</el-tag>
+                    <span>{{ buildMetadataCacheSummary(scanResult.metadataCache) }}</span>
+                  </div>
                 </div>
 
                 <div v-if="databaseTables.length === 0 && selectedTableCount > 0" class="saved-table-list">
@@ -289,6 +297,13 @@
                 <h3>元数据浏览</h3>
                 <div class="inline-actions">
                   <el-tag type="info" effect="plain">只读 schema metadata</el-tag>
+                  <el-tag v-if="activeMetadataCache" :type="metadataCacheTagType" effect="plain">
+                    {{ metadataCacheStatusLabel(activeMetadataCache) }}
+                  </el-tag>
+                  <el-button size="small" plain :disabled="!canBrowseMetadata" :loading="metadataLoading" @click="handleRefreshMetadata">
+                    <el-icon><Refresh /></el-icon>
+                    刷新元数据
+                  </el-button>
                   <el-button size="small" plain @click="handleCopyMetadataSummary">
                     <el-icon><Link /></el-icon>
                     复制 AI 摘要
@@ -299,6 +314,19 @@
                 <div v-for="item in metadataSummaryItems" :key="item.key" class="summary-item">
                   <div class="summary-label">{{ item.label }}</div>
                   <div class="summary-value">{{ item.value }}</div>
+                </div>
+              </div>
+              <div v-if="activeMetadataCache" class="metadata-cache-panel">
+                <div class="metadata-cache-summary">{{ metadataCacheSummaryText }}</div>
+                <div class="metadata-cache-meta">
+                  <span v-if="activeMetadataCache?.metadataFingerprint">fingerprint={{ activeMetadataCache?.metadataFingerprint?.slice(0, 12) }}</span>
+                  <span v-if="activeMetadataCache?.lastSeenAt">lastSeenAt={{ activeMetadataCache.lastSeenAt }}</span>
+                  <span v-if="activeMetadataCache?.expiresAt">expiresAt={{ activeMetadataCache.expiresAt }}</span>
+                </div>
+                <div v-if="activeMetadataCache?.changeSummary?.changed" class="metadata-cache-meta">
+                  <span>新增字段 {{ activeMetadataCache.changeSummary.addedColumnCount ?? 0 }}</span>
+                  <span>删除字段 {{ activeMetadataCache.changeSummary.removedColumnCount ?? 0 }}</span>
+                  <span>变更字段 {{ activeMetadataCache.changeSummary.changedColumnCount ?? 0 }}</span>
                 </div>
               </div>
               <div class="metadata-tools">
@@ -706,8 +734,10 @@ import {
   type DatabaseMetadataBrowserRow
 } from '@/utils/databaseMetadataBrowser'
 import {
+  buildMetadataCacheSummary,
   buildScanResumeSummary,
   mergeScanTableNames,
+  metadataCacheStatusLabel,
   scanProgressLabel
 } from '@/utils/databaseMetadataScan'
 import {
@@ -750,6 +780,7 @@ import type {
   DatabaseConnectionSecurityDiagnostic,
   DatabaseImportResult,
   DatabaseMetadataBrowser,
+  DatabaseMetadataCacheMode,
   DatabaseMetadataScanReq,
   DatabaseMetadataScanResult,
   DatabaseTableInfo,
@@ -949,6 +980,32 @@ const metadataSummaryItems = computed(() => [
 const metadataAiSummary = computed(() =>
   buildMetadataBrowserAiSummary(metadataBrowser.value)
 )
+const activeMetadataCache = computed(() =>
+  metadataBrowser.value?.metadataCache
+  ?? scanResult.value?.metadataCache
+  ?? preview.value?.metadataCache
+  ?? compareResult.value?.metadataCache
+  ?? null
+)
+const metadataCacheSummaryText = computed(() =>
+  buildMetadataCacheSummary(activeMetadataCache.value)
+)
+const metadataCacheTagType = computed(() => {
+  const cache = activeMetadataCache.value
+  if (!cache) {
+    return 'info'
+  }
+  if (cache.refreshMode === 'BYPASS') {
+    return 'warning'
+  }
+  if (cache.cacheHit) {
+    return 'success'
+  }
+  if (cache.refreshMode === 'REFRESH') {
+    return cache.changeSummary?.changed ? 'warning' : 'success'
+  }
+  return cache.stale ? 'warning' : 'info'
+})
 const scanProgressText = computed(() =>
   scanProgressLabel(scanResult.value)
 )
@@ -1234,11 +1291,13 @@ function defaultPresetName() {
   return database || [dbForm.host, dbForm.port].filter(Boolean).join(':') || '数据库连接'
 }
 
-function databaseRequest(): DatabaseConnectionReq {
+function databaseRequest(metadataCacheMode = 'AUTO'): DatabaseConnectionReq {
   return {
     ...dbForm,
     projectId: projectStore.currentProjectId ?? undefined,
-    tableNames: [...(dbForm.tableNames ?? [])]
+    presetId: presetId.value ?? undefined,
+    tableNames: [...(dbForm.tableNames ?? [])],
+    metadataCacheMode: metadataCacheMode as DatabaseMetadataCacheMode
   }
 }
 
@@ -1388,9 +1447,9 @@ async function runMetadataScan(options: { cursor: string | null; resetTables: bo
   }
 }
 
-function scanRequest(cursor: string | null, cancel: boolean): DatabaseMetadataScanReq {
+function scanRequest(cursor: string | null, cancel: boolean, metadataCacheMode: DatabaseMetadataCacheMode = 'AUTO'): DatabaseMetadataScanReq {
   return {
-    ...databaseRequest(),
+    ...databaseRequest(metadataCacheMode),
     scanId: scanResult.value?.scanId,
     cursor: cursor ?? undefined,
     pageSize: scanPageSize.value,
@@ -1398,13 +1457,13 @@ function scanRequest(cursor: string | null, cancel: boolean): DatabaseMetadataSc
   }
 }
 
-async function handleBrowseMetadata() {
+async function handleBrowseMetadata(metadataCacheMode: DatabaseMetadataCacheMode = 'AUTO') {
   if (!canBrowseMetadata.value) {
     return
   }
   metadataLoading.value = true
   try {
-    const browser = await browseDatabaseMetadata(databaseRequest())
+    const browser = await browseDatabaseMetadata(databaseRequest(metadataCacheMode))
     metadataBrowser.value = browser
     preview.value = browser.preview ?? null
     compareResult.value = browser.compare ?? null
@@ -1417,6 +1476,12 @@ async function handleBrowseMetadata() {
   } finally {
     metadataLoading.value = false
   }
+}
+
+async function handleRefreshMetadata() {
+  const selectedTables = [...(dbForm.tableNames ?? [])]
+  await handleBrowseMetadata('REFRESH')
+  dbForm.tableNames = selectedTables
 }
 
 async function handleImportCandidates() {
@@ -2102,6 +2167,13 @@ function browserStorage() {
   flex-wrap: wrap;
 }
 
+.metadata-cache-row {
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  line-height: 1.5;
+}
+
 .table-check-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
@@ -2165,6 +2237,30 @@ function browserStorage() {
 
 .metadata-summary {
   margin-bottom: 12px;
+}
+
+.metadata-cache-panel {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.metadata-cache-summary {
+  font-weight: 600;
+}
+
+.metadata-cache-meta {
+  display: flex;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+  color: #64748b;
 }
 
 .metadata-tools {

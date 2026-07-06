@@ -29,6 +29,40 @@ export interface DatabaseMetadataScanResultLike {
     /** 是否还有下一批。 */
     hasMore?: boolean
   }
+  /** 当前扫描页关联的 metadata cache 证据。 */
+  metadataCache?: DatabaseMetadataCacheInfoLike
+}
+
+/** metadata cache 结构变化摘要的最小前端形状。 */
+export interface DatabaseMetadataChangeSummaryLike {
+  /** true 表示刷新后相对旧缓存存在结构变化。 */
+  changed?: boolean
+  /** 新增字段数量。 */
+  addedColumnCount?: number
+  /** 删除字段数量。 */
+  removedColumnCount?: number
+  /** 字段属性变化数量。 */
+  changedColumnCount?: number
+}
+
+/** 前端展示缓存状态所需的最小 metadata cache 证据。 */
+export interface DatabaseMetadataCacheInfoLike {
+  /** 聚合结构 fingerprint，供 AI 判断是否重跑下游分析。 */
+  metadataFingerprint?: string
+  /** true 表示结果来自新鲜缓存。 */
+  cacheHit?: boolean
+  /** true 表示缓存过期或缺失后重新读取源库。 */
+  stale?: boolean
+  /** 实际缓存策略。 */
+  refreshMode?: string
+  /** 最近读取源库 metadata 的时间。 */
+  lastSeenAt?: string
+  /** 当前缓存过期时间。 */
+  expiresAt?: string
+  /** 源数据库版本摘要。 */
+  sourceDatabaseVersion?: string
+  /** 结构变化摘要。 */
+  changeSummary?: DatabaseMetadataChangeSummaryLike
 }
 
 /** 读取当前扫描页的有效表名，避免空表名进入批次选择。 */
@@ -70,6 +104,50 @@ export function buildScanResumeSummary(scan?: DatabaseMetadataScanResultLike | n
   const cursor = scan?.cursor ?? 'DONE'
   const pageSize = scan?.progress?.pageSize ?? 0
   return `cursor=${cursor} pageSize=${pageSize}`
+}
+
+/** 将缓存状态压缩为可扫读的中文标签。 */
+export function metadataCacheStatusLabel(cache?: DatabaseMetadataCacheInfoLike | null): string {
+  if (!cache) {
+    return '无缓存'
+  }
+  if (cache.refreshMode === 'BYPASS') {
+    return '绕过缓存'
+  }
+  if (cache.cacheHit) {
+    return '缓存命中'
+  }
+  if (cache.refreshMode === 'REFRESH') {
+    return '已刷新'
+  }
+  if (cache.stale) {
+    return '缓存已过期'
+  }
+  return '缓存未命中'
+}
+
+/** 构建不含凭据的 cache 摘要，供扫描面板、浏览器和覆盖率报告复用。 */
+export function buildMetadataCacheSummary(cache?: DatabaseMetadataCacheInfoLike | null): string {
+  if (!cache) {
+    return 'metadata cache：暂无'
+  }
+  const parts = [
+    metadataCacheStatusLabel(cache),
+    cache.refreshMode ? `mode=${cache.refreshMode}` : '',
+    cache.metadataFingerprint ? `fingerprint=${cache.metadataFingerprint.slice(0, 12)}` : '',
+    cache.lastSeenAt ? `lastSeenAt=${cache.lastSeenAt}` : '',
+    cache.expiresAt ? `expiresAt=${cache.expiresAt}` : ''
+  ].filter(Boolean)
+  const summary = cache.changeSummary
+  if (summary?.changed) {
+    parts.push(`新增 ${summary.addedColumnCount ?? 0}`)
+    parts.push(`删除 ${summary.removedColumnCount ?? 0}`)
+    parts.push(`变更 ${summary.changedColumnCount ?? 0}`)
+  }
+  if (cache.sourceDatabaseVersion) {
+    parts.push(`source=${cache.sourceDatabaseVersion}`)
+  }
+  return redactSensitiveText(parts.join(' | '))
 }
 
 function redactSensitiveText(text: string): string {

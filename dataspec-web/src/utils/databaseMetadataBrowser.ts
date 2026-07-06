@@ -1,3 +1,5 @@
+import { buildMetadataCacheSummary, type DatabaseMetadataCacheInfoLike } from './databaseMetadataScan.ts'
+
 export interface DatabaseMetadataBrowserIndexLike {
   indexName?: string
   columnName?: string
@@ -37,6 +39,7 @@ export interface DatabaseMetadataBrowserLike {
   schemaName?: string
   selectedTableNames?: string[]
   aiReadableSummary?: string
+  metadataCache?: DatabaseMetadataCacheInfoLike
   summary?: {
     tableCount?: number
     columnCount?: number
@@ -118,6 +121,11 @@ export function buildMetadataBrowserAiSummary(browser?: DatabaseMetadataBrowserL
     `database=${browser?.databaseType ?? '-'} / ${browser?.databaseName ?? '-'} / ${browser?.schemaName ?? '-'}`,
     `summary: tables=${summary?.tableCount ?? 0}, columns=${summary?.columnCount ?? 0}, indexes=${summary?.indexCount ?? 0}, candidates=${summary?.candidateCount ?? 0}`
   ]
+  if (browser?.metadataCache) {
+    lines.push(`metadataFingerprint=${browser.metadataCache.metadataFingerprint?.slice(0, 12) ?? '-'}`)
+    lines.push(`refreshMode=${browser.metadataCache.refreshMode ?? '-'}`)
+    lines.push(buildMetadataCacheSummary(browser.metadataCache))
+  }
   for (const table of browser?.tables ?? []) {
     lines.push(`- table ${table.tableName ?? '-'} ${table.comment ?? ''}`.trim())
     const indexes = (table.indexes ?? []).map((index) => `${index.indexName ?? '-'}(${index.columnName ?? '-'})`)

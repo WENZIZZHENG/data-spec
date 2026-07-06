@@ -1311,6 +1311,8 @@ export interface ReverseImportPreview {
   summary?: ReverseImportSummary
   /** 本次预览生成的 dry-run evidence，确认导入字段候选时必须随请求带回。 */
   dryRunToken?: string
+  /** 数据库直连预览关联的 metadata cache 证据；SQL 预览或旧响应可能为空。 */
+  metadataCache?: DatabaseMetadataCacheInfo
   tables?: TableDef[]
   fieldCandidates?: FieldCandidate[]
   mappingDecisions?: ReverseImportDecision[]
@@ -1365,11 +1367,17 @@ export interface ReverseImportTableDiff {
 
 export interface ReverseImportCompareResult {
   summary?: ReverseImportCompareSummary
+  /** 数据库直连差异结果关联的 metadata cache 证据，用于判断结构是否需要刷新。 */
+  metadataCache?: DatabaseMetadataCacheInfo
   tableDiffs?: ReverseImportTableDiff[]
 }
 
+export type DatabaseMetadataCacheMode = 'AUTO' | 'REFRESH' | 'BYPASS' | (string & {})
+
 export interface DatabaseConnectionReq {
   projectId?: number
+  /** 连接预设 ID；存在时服务端以预设作为 metadata cache 来源边界。 */
+  presetId?: number
   databaseType?: 'postgresql' | 'mysql'
   host?: string
   port?: number
@@ -1378,6 +1386,8 @@ export interface DatabaseConnectionReq {
   username?: string
   password?: string
   tableNames?: string[]
+  /** metadata cache 策略：AUTO 默认复用新鲜缓存，REFRESH 强制刷新，BYPASS 绕过缓存。 */
+  metadataCacheMode?: DatabaseMetadataCacheMode
 }
 
 export interface DatabaseConnectionPreset {
@@ -1481,7 +1491,75 @@ export interface DatabaseMetadataScanResult {
   resumeCommand?: string
   /** true 表示用户已请求取消，不应继续下一批。 */
   cancelled?: boolean
+  /** 当前扫描页关联的 metadata cache 证据。 */
+  metadataCache?: DatabaseMetadataCacheInfo
   /** 扫描后的建议动作，不代表自动写入。 */
+  nextActions?: string[]
+}
+
+export interface DatabaseMetadataColumnChange {
+  /** 发生变化的字段名。 */
+  columnName?: string
+  /** 字段属性变化列表；currentValue 为旧缓存值，standardValue 为刷新后的新值。 */
+  changes?: ReverseImportFieldChange[]
+}
+
+export interface DatabaseMetadataTableChange {
+  /** 表所在 schema；MySQL 场景可能为空。 */
+  schemaName?: string
+  /** 发生变化的表名。 */
+  tableName?: string
+  /** 表变化类型：ADDED/REMOVED/CHANGED/UNCHANGED。 */
+  changeType?: string
+  /** 旧缓存表结构 fingerprint；新增表可能为空。 */
+  oldFingerprint?: string
+  /** 刷新后表结构 fingerprint；删除表可能为空。 */
+  newFingerprint?: string
+  /** 新增字段名列表，仅来自 schema metadata。 */
+  addedColumns?: string[]
+  /** 删除字段名列表，仅来自 schema metadata。 */
+  removedColumns?: string[]
+  /** 字段属性变化列表。 */
+  changedColumns?: DatabaseMetadataColumnChange[]
+}
+
+export interface DatabaseMetadataChangeSummary {
+  /** true 表示本次刷新相对旧缓存存在结构变化。 */
+  changed?: boolean
+  /** 新增表数量。 */
+  addedTableCount?: number
+  /** 删除表数量。 */
+  removedTableCount?: number
+  /** 存在字段或索引属性变化的表数量。 */
+  changedTableCount?: number
+  /** 新增字段数量。 */
+  addedColumnCount?: number
+  /** 删除字段数量。 */
+  removedColumnCount?: number
+  /** 字段属性变化数量。 */
+  changedColumnCount?: number
+  /** 有界表级变化示例。 */
+  tables?: DatabaseMetadataTableChange[]
+}
+
+export interface DatabaseMetadataCacheInfo {
+  /** 聚合结构 fingerprint，供 AI 判断是否重跑反向导入或覆盖率。 */
+  metadataFingerprint?: string
+  /** true 表示本次结果完全来自新鲜缓存。 */
+  cacheHit?: boolean
+  /** true 表示曾发现缓存过期或缺失，需要重新读取源库。 */
+  stale?: boolean
+  /** 实际使用的刷新策略：AUTO/REFRESH/BYPASS。 */
+  refreshMode?: string
+  /** 本次结构快照最近一次读取源库 metadata 的时间。 */
+  lastSeenAt?: string
+  /** 当前缓存过期时间；为空表示本次未写入或未读取缓存。 */
+  expiresAt?: string
+  /** 源数据库产品和版本的脱敏摘要。 */
+  sourceDatabaseVersion?: string
+  /** 刷新时产生的结构变化摘要。 */
+  changeSummary?: DatabaseMetadataChangeSummary
+  /** 面向用户和 AI 的安全下一步提示，不包含凭据。 */
   nextActions?: string[]
 }
 
@@ -1553,6 +1631,8 @@ export interface DatabaseMetadataBrowser {
   summary?: DatabaseMetadataBrowserSummary
   tables?: DatabaseMetadataBrowserTable[]
   aiReadableSummary?: string
+  /** 元数据浏览结果关联的 cache 证据。 */
+  metadataCache?: DatabaseMetadataCacheInfo
   nextActions?: string[]
   preview?: ReverseImportPreview
   compare?: ReverseImportCompareResult
@@ -1664,6 +1744,8 @@ export interface UnmanagedFieldRanking {
 
 export interface FieldCoverageReport {
   summary?: FieldCoverageSummary
+  /** 覆盖率报告关联的 metadata cache 证据，用于判断报告所基于的结构版本。 */
+  metadataCache?: DatabaseMetadataCacheInfo
   tables?: FieldCoverageTable[]
   unmanagedRankings?: UnmanagedFieldRanking[]
 }
