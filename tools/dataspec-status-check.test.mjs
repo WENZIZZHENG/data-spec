@@ -544,6 +544,129 @@ DataSpec SHALL expose a read-only SQL rule debug endpoint.
   }
 })
 
+test('runStatusCheckCli reports missing and empty Purpose in main OpenSpec specs', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'missing-purpose'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'empty-purpose'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'missing-purpose', 'spec.md'),
+      `# missing-purpose Specification
+
+## Requirements
+### Requirement: Missing purpose example
+DataSpec SHALL keep a requirement.
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'empty-purpose', 'spec.md'),
+      `# empty-purpose Specification
+
+## Purpose
+
+## Requirements
+### Requirement: Empty purpose example
+DataSpec SHALL keep another requirement.
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    const missingIssue = output.issues.find((issue) => issue.code === 'OPENSPEC_SPEC_PURPOSE_MISSING')
+    const emptyIssue = output.issues.find((issue) => issue.code === 'OPENSPEC_SPEC_PURPOSE_EMPTY')
+    const openSpecCheck = output.checks.find((check) => check.id === 'openspec-state')
+
+    assert.equal(code, 1)
+    assert.equal(output.status, 'fail')
+    assert.ok(missingIssue)
+    assert.equal(missingIssue.file, 'openspec/specs/missing-purpose/spec.md')
+    assert.equal(missingIssue.line, 1)
+    assert.ok(emptyIssue)
+    assert.equal(emptyIssue.file, 'openspec/specs/empty-purpose/spec.md')
+    assert.equal(emptyIssue.line, 3)
+    assert.equal(openSpecCheck.status, 'fail')
+    assert.equal(openSpecCheck.errorCount, 2)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('runStatusCheckCli treats Purpose with only subheadings as empty', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'heading-only-purpose'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'heading-only-purpose', 'spec.md'),
+      `# heading-only-purpose Specification
+
+## Purpose
+### Details
+
+## Requirements
+### Requirement: Heading only purpose example
+DataSpec SHALL keep a requirement.
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+    const issue = output.issues.find((candidate) => candidate.code === 'OPENSPEC_SPEC_PURPOSE_EMPTY')
+
+    assert.equal(code, 1)
+    assert.ok(issue)
+    assert.equal(issue.file, 'openspec/specs/heading-only-purpose/spec.md')
+    assert.equal(issue.line, 3)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 function createIo() {
   return {
     stdout: '',

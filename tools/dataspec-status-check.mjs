@@ -409,11 +409,32 @@ function checkTodoActiveChangeReferences(todoText, activeChanges, issues) {
 function checkOpenSpecSpecPurposes(specTexts, issues) {
   for (const [capability, text] of specTexts) {
     const lines = String(text ?? '').split(/\r?\n/)
+    const purposeIndex = lines.findIndex((line) => /^##\s+Purpose\s*$/.test(line.trim()))
+    const specPath = `openspec/specs/${capability}/spec.md`
+    if (purposeIndex === -1) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_PURPOSE_MISSING',
+        message: `${specPath} 缺少 ## Purpose 小节，AI 读取主规格时会缺少能力目的说明。`,
+        file: specPath,
+        line: 1,
+        suggestedFix: '在 Requirements 前补充 ## Purpose，并用一句稳定中文说明该能力服务的项目目标。'
+      }))
+      continue
+    }
+    if (!hasPurposeBody(lines, purposeIndex)) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_PURPOSE_EMPTY',
+        message: `${specPath} 的 ## Purpose 小节为空，AI 读取主规格时会缺少能力目的说明。`,
+        file: specPath,
+        line: purposeIndex + 1,
+        suggestedFix: '在 ## Purpose 下补充一句稳定中文能力目的说明，并确认不改变 Requirements/Scenario 语义。'
+      }))
+      continue
+    }
     const placeholderIndex = lines.findIndex((line) => OPENSPEC_PURPOSE_PLACEHOLDER_PATTERN.test(line))
     if (placeholderIndex === -1) {
       continue
     }
-    const specPath = `openspec/specs/${capability}/spec.md`
     issues.push(issue({
       code: 'OPENSPEC_SPEC_PURPOSE_PLACEHOLDER',
       message: `${specPath} 仍包含归档生成的默认 Purpose 占位，AI 读取主规格时会缺少能力目的说明。`,
@@ -422,6 +443,22 @@ function checkOpenSpecSpecPurposes(specTexts, issues) {
       suggestedFix: '将默认 Purpose 占位替换为一句稳定的中文能力目的说明，并确认不改变 Requirements/Scenario 语义。'
     }))
   }
+}
+
+function hasPurposeBody(lines, purposeIndex) {
+  for (let index = purposeIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (/^##\s+/.test(line)) {
+      return false
+    }
+    if (/^#{3,6}\s+/.test(line)) {
+      continue
+    }
+    if (line) {
+      return true
+    }
+  }
+  return false
 }
 
 function checkReadmeToolEntry(readmeText, relativeFiles, issues) {
