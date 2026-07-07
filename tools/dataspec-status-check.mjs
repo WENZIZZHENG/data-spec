@@ -1615,7 +1615,7 @@ function parseArgs(args) {
       continue
     }
     if (arg.startsWith('--root=')) {
-      options.root = arg.slice('--root='.length)
+      options.root = readInlineValue(arg, '--root')
       continue
     }
     if (arg === '--todo') {
@@ -1624,7 +1624,7 @@ function parseArgs(args) {
       continue
     }
     if (arg.startsWith('--todo=')) {
-      options.todoPath = arg.slice('--todo='.length)
+      options.todoPath = readInlineValue(arg, '--todo')
       continue
     }
     if (arg === '--readme') {
@@ -1633,7 +1633,7 @@ function parseArgs(args) {
       continue
     }
     if (arg.startsWith('--readme=')) {
-      options.readmePath = arg.slice('--readme='.length)
+      options.readmePath = readInlineValue(arg, '--readme')
       continue
     }
     if (arg === '--format') {
@@ -1642,7 +1642,7 @@ function parseArgs(args) {
       continue
     }
     if (arg.startsWith('--format=')) {
-      options.format = normalizeFormat(arg.slice('--format='.length))
+      options.format = normalizeFormat(readInlineValue(arg, '--format'))
       continue
     }
     throw new Error(`未知参数: ${arg}`)
@@ -1653,10 +1653,22 @@ function parseArgs(args) {
 
 function readValue(args, index, arg) {
   const value = args[index + 1]
-  if (!value) {
+  if (!isOptionValue(value)) {
     throw new Error(`${arg} 需要取值`)
   }
   return value
+}
+
+function readInlineValue(arg, name) {
+  const value = arg.slice(`${name}=`.length)
+  if (!value) {
+    throw new Error(`${name} 需要取值`)
+  }
+  return value
+}
+
+function isOptionValue(value) {
+  return typeof value === 'string' && value.length > 0 && !value.startsWith('-')
 }
 
 function normalizeFormat(value) {

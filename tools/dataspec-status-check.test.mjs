@@ -1485,6 +1485,26 @@ test('runStatusCheckCli supports json output and returns non-zero on errors', as
   }
 })
 
+test('runStatusCheckCli rejects missing option values before option-like arguments', async () => {
+  const cases = [
+    { args: ['--root', '--format', 'json'], message: /--root 需要取值/ },
+    { args: ['--root='], message: /--root 需要取值/ },
+    { args: ['--todo='], message: /--todo 需要取值/ },
+    { args: ['--readme='], message: /--readme 需要取值/ },
+    { args: ['--format', '--root', '.'], message: /--format 需要取值/ },
+    { args: ['--format='], message: /--format 需要取值/ }
+  ]
+
+  for (const testCase of cases) {
+    const io = createIo()
+    const code = await runStatusCheckCli(testCase.args, io)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, testCase.message)
+    assert.equal(io.stdout, '')
+  }
+})
+
 test('runStatusCheckCli reports missing Markdown links in active OpenSpec change docs and ignores archive docs', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
   try {
