@@ -98,6 +98,15 @@ const VALIDATION_RULES = [
     patterns: [/^tools\/dataspec-todo-openspec-handoff\.(mjs|test\.mjs)$/]
   },
   {
+    id: 'code-refs-tests',
+    category: 'cli',
+    command: 'node --test tools/dataspec-cli.test.mjs --test-name-pattern "index-refs"',
+    cwd: '.',
+    estimatedSeconds: 8,
+    reason: '字段引用索引扫描工具改动需要跑 index-refs CLI 定点测试，确认扫描边界、脱敏和诊断输出稳定。',
+    patterns: [/^tools\/dataspec-code-refs\.mjs$/]
+  },
+  {
     id: 'status-check',
     category: 'docs',
     command: 'node tools/dataspec-status-check.mjs --format json',

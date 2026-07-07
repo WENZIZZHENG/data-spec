@@ -205,6 +205,17 @@ test('recommends TODO handoff tests for handoff tool paths', () => {
   )
 })
 
+test('recommends index-refs tests for code reference index tool paths', () => {
+  const advice = buildValidationAdvice(['tools/dataspec-code-refs.mjs'])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  const indexRefsTests = advice.commands.find((command) => command.id === 'code-refs-tests')
+  assert.ok(commandIds.includes('code-refs-tests'))
+  assert.ok(commandIds.includes('diff-check'))
+  assert.equal(indexRefsTests.command, 'node --test tools/dataspec-cli.test.mjs --test-name-pattern "index-refs"')
+  assert.match(indexRefsTests.reason, /字段引用索引/)
+})
+
 test('cli supports --changed json output with injected changed paths', async () => {
   const io = createIo()
   const code = await runAdvisorCli(['--changed', '--format', 'json'], io, {
