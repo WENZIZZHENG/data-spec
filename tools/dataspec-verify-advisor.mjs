@@ -100,11 +100,20 @@ const VALIDATION_RULES = [
   {
     id: 'code-refs-tests',
     category: 'cli',
-    command: 'node --test tools/dataspec-cli.test.mjs --test-name-pattern "index-refs"',
+    command: 'node --test --test-name-pattern "index-refs" tools/dataspec-cli.test.mjs',
     cwd: '.',
     estimatedSeconds: 8,
     reason: '字段引用索引扫描工具改动需要跑 index-refs CLI 定点测试，确认扫描边界、脱敏和诊断输出稳定。',
     patterns: [/^tools\/dataspec-code-refs\.mjs$/]
+  },
+  {
+    id: 'task-card-tests',
+    category: 'cli',
+    command: 'node --test --test-name-pattern "task-card|task card|create_task_card|render_task_card" tools/dataspec-task-card.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs',
+    cwd: '.',
+    estimatedSeconds: 8,
+    reason: 'AI 任务卡协议、渲染或本地更新逻辑改动需要跑 task-card 共享模块、CLI 与 MCP 定点测试。',
+    patterns: [/^tools\/dataspec-task-card\.(mjs|test\.mjs)$/]
   },
   {
     id: 'status-check',

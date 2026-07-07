@@ -212,8 +212,25 @@ test('recommends index-refs tests for code reference index tool paths', () => {
   const indexRefsTests = advice.commands.find((command) => command.id === 'code-refs-tests')
   assert.ok(commandIds.includes('code-refs-tests'))
   assert.ok(commandIds.includes('diff-check'))
-  assert.equal(indexRefsTests.command, 'node --test tools/dataspec-cli.test.mjs --test-name-pattern "index-refs"')
+  assert.equal(indexRefsTests.command, 'node --test --test-name-pattern "index-refs" tools/dataspec-cli.test.mjs')
   assert.match(indexRefsTests.reason, /字段引用索引/)
+})
+
+test('recommends task-card tests for task card protocol tool paths', () => {
+  const advice = buildValidationAdvice([
+    'tools/dataspec-task-card.mjs',
+    'tools/dataspec-task-card.test.mjs'
+  ])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  const taskCardTests = advice.commands.find((command) => command.id === 'task-card-tests')
+  assert.equal(commandIds.filter((id) => id === 'task-card-tests').length, 1)
+  assert.ok(commandIds.includes('diff-check'))
+  assert.equal(
+    taskCardTests.command,
+    'node --test --test-name-pattern "task-card|task card|create_task_card|render_task_card" tools/dataspec-task-card.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs'
+  )
+  assert.match(taskCardTests.reason, /AI 任务卡/)
 })
 
 test('cli supports --changed json output with injected changed paths', async () => {
