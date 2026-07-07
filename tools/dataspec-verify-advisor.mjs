@@ -180,6 +180,8 @@ export function buildValidationAdvice(inputPaths = []) {
     }
   }
 
+  refineOpenSpecValidationCommand(commands, paths)
+
   if (paths.length > 0) {
     addCommand(commands, seen, BASE_DIFF_CHECK)
   }
@@ -350,6 +352,46 @@ function addCommand(commands, seen, rule) {
     estimatedSeconds: rule.estimatedSeconds,
     category: rule.category
   })
+}
+
+function refineOpenSpecValidationCommand(commands, paths) {
+  const command = commands.find((item) => item.id === 'openspec-validate')
+  if (!command) {
+    return
+  }
+
+  const changeId = singleActiveOpenSpecChangeId(paths)
+  if (!changeId) {
+    return
+  }
+
+  command.command = `openspec validate ${changeId} --strict`
+  command.reason = `OpenSpec active change ${changeId} 改动优先运行 change strict 校验；多 change、主规格或归档改动再使用 openspec validate --all。`
+}
+
+function singleActiveOpenSpecChangeId(paths) {
+  const openSpecPaths = paths.filter((inputPath) => inputPath.startsWith('openspec/'))
+  if (openSpecPaths.length === 0) {
+    return null
+  }
+
+  const changeIds = new Set()
+  for (const inputPath of openSpecPaths) {
+    const match = /^openspec\/changes\/([^/]+)(?:\/|$)/.exec(inputPath)
+    if (!match || match[1] === 'archive' || !isSafeOpenSpecChangeId(match[1])) {
+      return null
+    }
+    changeIds.add(match[1])
+    if (changeIds.size > 1) {
+      return null
+    }
+  }
+
+  return [...changeIds][0] ?? null
+}
+
+function isSafeOpenSpecChangeId(changeId) {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(changeId)
 }
 
 function normalizePaths(inputPaths) {

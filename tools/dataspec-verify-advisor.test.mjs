@@ -30,6 +30,59 @@ test('recommends backend, openspec, docs and diff checks from paths', () => {
   assert.equal(advice.summary.totalCommands, advice.commands.length)
 })
 
+test('recommends strict validation for a single active OpenSpec change', () => {
+  const advice = buildValidationAdvice([
+    'openspec/changes/add-field-quality/specs/field-quality/spec.md',
+    'openspec/changes/add-field-quality/tasks.md'
+  ])
+
+  const openSpecCommand = advice.commands.find((command) => command.id === 'openspec-validate')
+  assert.equal(openSpecCommand.command, 'openspec validate add-field-quality --strict')
+  assert.equal(openSpecCommand.category, 'openspec')
+  assert.equal(openSpecCommand.cwd, '.')
+  assert.match(openSpecCommand.reason, /add-field-quality/)
+  assert.ok(advice.commands.some((command) => command.id === 'diff-check'))
+})
+
+test('keeps all OpenSpec validation for multiple changes and main specs', () => {
+  const multiChangeAdvice = buildValidationAdvice([
+    'openspec/changes/add-a/tasks.md',
+    'openspec/changes/add-b/tasks.md'
+  ])
+  const mainSpecAdvice = buildValidationAdvice(['openspec/specs/field-quality/spec.md'])
+  const archiveAdvice = buildValidationAdvice(['openspec/changes/archive/2026-07-07-add-a/tasks.md'])
+
+  assert.equal(
+    multiChangeAdvice.commands.find((command) => command.id === 'openspec-validate').command,
+    'openspec validate --all'
+  )
+  assert.equal(
+    mainSpecAdvice.commands.find((command) => command.id === 'openspec-validate').command,
+    'openspec validate --all'
+  )
+  assert.equal(
+    archiveAdvice.commands.find((command) => command.id === 'openspec-validate').command,
+    'openspec validate --all'
+  )
+})
+
+test('falls back to all OpenSpec validation for unsafe change ids', () => {
+  const advice = buildValidationAdvice(['openspec/changes/add-x && echo injected/tasks.md'])
+  const openSpecCommand = advice.commands.find((command) => command.id === 'openspec-validate')
+
+  assert.equal(openSpecCommand.command, 'openspec validate --all')
+  assert.doesNotMatch(openSpecCommand.command, /&&|;|\|/)
+})
+
+test('recognizes a single active OpenSpec change directory path', () => {
+  const advice = buildValidationAdvice(['openspec/changes/add-field-quality'])
+
+  assert.equal(
+    advice.commands.find((command) => command.id === 'openspec-validate').command,
+    'openspec validate add-field-quality --strict'
+  )
+})
+
 test('recommends status check for TODO and status-check tool paths', () => {
   const advice = buildValidationAdvice([
     'TODO.md',
@@ -136,7 +189,11 @@ test('recommends TODO handoff tests for handoff tool paths', () => {
 test('cli supports --changed json output with injected changed paths', async () => {
   const io = createIo()
   const code = await runAdvisorCli(['--changed', '--format', 'json'], io, {
-    getChangedPaths: async () => ['docker-compose.local.yml', 'tools/dataspec-local-smoke.mjs']
+    getChangedPaths: async () => [
+      'docker-compose.local.yml',
+      'tools/dataspec-local-smoke.mjs',
+      'openspec/changes/add-field-quality/tasks.md'
+    ]
   })
 
   const output = JSON.parse(io.stdout)
@@ -144,6 +201,10 @@ test('cli supports --changed json output with injected changed paths', async () 
   assert.equal(code, 0)
   assert.ok(commandIds.includes('local-smoke-tests'))
   assert.ok(commandIds.includes('docker-compose-config'))
+  assert.equal(
+    output.commands.find((command) => command.id === 'openspec-validate').command,
+    'openspec validate add-field-quality --strict'
+  )
   assert.deepEqual(output.nextActions.slice(0, 1), ['先运行推荐命令中耗时最短且最贴近本次改动的检查。'])
 })
 
