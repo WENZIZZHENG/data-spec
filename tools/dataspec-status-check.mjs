@@ -1071,7 +1071,8 @@ function extractMarkdownLinkTargets(line) {
     }
     const labelEnd = findMarkdownLinkLabelEnd(searchableLine, labelStart + 1)
     if (labelEnd === -1) {
-      break
+      cursor = labelStart + 1
+      continue
     }
     if (searchableLine[labelEnd + 1] !== '(') {
       cursor = labelEnd + 1
@@ -1107,10 +1108,19 @@ function extractMarkdownLinkTargets(line) {
 }
 
 function findMarkdownLinkLabelEnd(line, start) {
+  let nestedBrackets = 0
   for (let index = start; index < line.length; index += 1) {
-    if (line[index] === ']' && !isEscapedMarkdownDelimiter(line, index)) {
+    if (line[index] === '[' && !isEscapedMarkdownDelimiter(line, index)) {
+      nestedBrackets += 1
+      continue
+    }
+    if (line[index] !== ']' || isEscapedMarkdownDelimiter(line, index)) {
+      continue
+    }
+    if (nestedBrackets === 0) {
       return index
     }
+    nestedBrackets -= 1
   }
   return -1
 }
