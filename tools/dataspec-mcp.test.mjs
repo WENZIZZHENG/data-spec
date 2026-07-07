@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { createMcpHandler, parseServerArgs } from './dataspec-mcp.mjs'
+import { supportedWorkflowRecipeIds } from './dataspec-workflows.mjs'
 
 test('initialize advertises resources, prompts, and tools capabilities', async () => {
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
@@ -585,6 +586,11 @@ test('task card tools create and render local cards without backend calls', asyn
   const tools = await handler({ jsonrpc: '2.0', id: 65, method: 'tools/list' })
   assert.ok(tools.result.tools.some((tool) => tool.name === 'create_task_card'))
   assert.ok(tools.result.tools.some((tool) => tool.name === 'render_task_card'))
+  const taskCardTool = tools.result.tools.find((tool) => tool.name === 'create_task_card')
+  const workflowIdDescription = taskCardTool.inputSchema.properties.workflowId.description
+  for (const workflowId of supportedWorkflowRecipeIds()) {
+    assert.match(workflowIdDescription, new RegExp(workflowId))
+  }
   const lintTool = tools.result.tools.find((tool) => tool.name === 'lint_sql')
   assert.equal(lintTool.safety.readOnly, false)
   assert.equal(lintTool.safety.writesProject, true)

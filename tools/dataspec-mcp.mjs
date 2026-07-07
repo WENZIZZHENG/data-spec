@@ -3,7 +3,10 @@
 import { createInterface } from 'node:readline'
 import { pathToFileURL } from 'node:url'
 import { loadDataSpecConfig } from './dataspec-config.mjs'
-import { workflowRecipesResourcePayload } from './dataspec-workflows.mjs'
+import {
+  supportedWorkflowRecipeIds,
+  workflowRecipesResourcePayload
+} from './dataspec-workflows.mjs'
 import {
   createTaskCard,
   renderTaskCardMarkdown
@@ -652,7 +655,7 @@ function listTools() {
           properties: {
             workflowId: {
               type: 'string',
-              description: 'workflow recipe id，例如 create-table、review-pr-sql、reverse-import-standards、export-min-context。'
+              description: `workflow recipe id，例如 ${supportedWorkflowRecipeIds().join('、')}。`
             },
             goal: {
               type: 'string',
