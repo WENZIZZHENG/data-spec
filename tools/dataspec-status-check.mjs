@@ -726,7 +726,14 @@ function isRequirementBodyLine(line) {
   if (!line) {
     return false
   }
-  return !/^-\s+\*\*(WHEN|THEN|AND)\*\*/i.test(line)
+  if (/^-\s+\*\*(WHEN|THEN|AND)\*\*/i.test(line)) {
+    return false
+  }
+  return hasMeaningfulRequirementBodyText(line)
+}
+
+function hasMeaningfulRequirementBodyText(text) {
+  return /[\p{L}\p{N}]/u.test(String(text ?? ''))
 }
 
 function findRequirementsWithoutScenario(lines, requirementsIndex) {
