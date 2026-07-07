@@ -75,13 +75,40 @@
         <section class="answer-panel" :data-confidence="answer.confidence">
           <div class="answer-heading">
             <h3>答案</h3>
-            <el-tag :type="confidenceTagType(answer.confidence)" effect="plain">
-              置信度：{{ confidenceText(answer.confidence) }}
-            </el-tag>
+            <div class="answer-tags">
+              <el-tag :type="answerStatusTagType(answer.answerStatus)" effect="plain">
+                {{ answerStatusText(answer.answerStatus) }}
+              </el-tag>
+              <el-tag type="info" effect="plain">
+                {{ answerabilityText(answer.answerability) }}
+              </el-tag>
+              <el-tag :type="confidenceTagType(answer.confidence)" effect="plain">
+                置信度：{{ confidenceText(answer.confidence) }}
+              </el-tag>
+            </div>
           </div>
           <p class="answer-text">{{ answer.answer }}</p>
+          <p class="confidence-reason">{{ answer.confidenceReason }}</p>
           <div v-if="answer.unresolvedQuestions.length" class="unresolved-list">
             <div v-for="item in answer.unresolvedQuestions" :key="item">{{ item }}</div>
+          </div>
+          <div v-if="answer.missingEvidence.length || answer.conflicts.length || answer.suggestedNextQuery" class="answerability-grid">
+            <div v-if="answer.missingEvidence.length" class="answerability-block">
+              <strong>缺失证据</strong>
+              <ul>
+                <li v-for="item in answer.missingEvidence" :key="item">{{ item }}</li>
+              </ul>
+            </div>
+            <div v-if="answer.conflicts.length" class="answerability-block">
+              <strong>标准冲突</strong>
+              <ul>
+                <li v-for="item in answer.conflicts" :key="item.message">{{ item.message }}</li>
+              </ul>
+            </div>
+            <div v-if="answer.suggestedNextQuery" class="answerability-block">
+              <strong>建议追问</strong>
+              <p>{{ answer.suggestedNextQuery }}</p>
+            </div>
           </div>
         </section>
 
@@ -154,11 +181,14 @@ import { readStringQuery, replaceRouteQuery } from '@/utils/urlState'
 import {
   buildStandardQuestionAnswer,
   buildStandardQuestionMarkdown,
+  answerabilityText,
+  answerStatusText,
   confidenceText,
   createStandardQuestionRequestGuard,
   evidenceTypeText,
   statusText,
   type StandardQuestionAnswer,
+  type StandardQuestionAnswerStatus,
   type StandardQuestionConfidence
 } from '@/utils/standardQuestion'
 
@@ -272,6 +302,16 @@ function confidenceTagType(confidence: StandardQuestionConfidence) {
   }
   return 'info'
 }
+
+function answerStatusTagType(status: StandardQuestionAnswerStatus) {
+  if (status === 'ADOPTABLE') {
+    return 'success'
+  }
+  if (status === 'NEEDS_CONFIRMATION') {
+    return 'warning'
+  }
+  return 'danger'
+}
 </script>
 
 <style scoped>
@@ -311,12 +351,57 @@ function confidenceTagType(confidence: StandardQuestionConfidence) {
   line-height: 1.7;
 }
 
+.answer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.confidence-reason {
+  margin: 8px 0 0;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
 .unresolved-list {
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 6px;
   background: #fff7ed;
   color: #9a3412;
+  line-height: 1.6;
+}
+
+.answerability-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eef2f7;
+}
+
+.answerability-block {
+  padding-left: 10px;
+  border-left: 3px solid #d1d5db;
+  color: #374151;
+}
+
+.answerability-block strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #111827;
+}
+
+.answerability-block ul {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+
+.answerability-block p {
+  margin: 0;
   line-height: 1.6;
 }
 
@@ -365,6 +450,14 @@ function confidenceTagType(confidence: StandardQuestionConfidence) {
   }
 
   .result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .answer-tags {
+    justify-content: flex-start;
+  }
+
+  .answerability-grid {
     grid-template-columns: 1fr;
   }
 }

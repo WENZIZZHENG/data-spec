@@ -1873,13 +1873,15 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不做完整指标平台，不要求每个字段都补齐契约；第一版优先高风险金额、状态、时间、用户和敏感字段。
 
 ### P6-188：标准问答答案可采纳度与低置信处理
-- 状态：待办。
+- 状态：已完成第一版。
 - 为什么做：标准问答能让 AI 或用户快速问“字段叫什么”，但答案如果证据不足、标准冲突或命中候选字段，应该明确低置信，而不是给出一个看似确定的字段名。
 - 已有基础：已有字段检索、标准问答入口、业务术语表、标准证据置信度、AI 输出引用证据、候选 Inbox、字段质量评分和标准查询 DSL 待办。
-- 缺口：缺少 answerability、confidenceReason、missingEvidence、candidateOnly、conflictingStandards、suggestedNextQuery 和 escalateToInbox；问答结果还不能稳定表达“可直接采用/需要确认/不能回答”。
+- 已完成能力：标准问答结果新增 `answerStatus`、`answerability`、`confidenceReason`、`missingEvidence`、`missingFacts`、`candidateOnly`、`conflictingStandards/conflicts`、`evidenceRefs`、`suggestedNextQuery`、`escalateToInbox` 和 `nextActions`；前端答案面板展示可直接采用 / 需要确认 / 不能回答、缺失证据、标准冲突和建议追问。
 - 参考项目：`sourcegraph/sourcegraph` 的搜索解释、`promptfoo/promptfoo` 的评测断言和 `langfuse/langfuse` 的评分记录；只借鉴答案评分与证据展示，不接入在线问答模型。
 - 落地产物：为标准问答和字段搜索增加可采纳度摘要；输出 answerStatus、confidence、evidenceRefs、missingFacts、conflicts 和 nextActions；前端展示低置信提示，CLI/MCP 可机器读取。
 - 验收标准：同义词冲突、候选未采纳、字段缺格式、低质量字段或无命中时，问答不会伪装成确定答案；AI 能根据 answerStatus 决定采用、追问、转候选或停止。
+- 验证证据：`node --test tests/standardQuestionDisplay.test.ts` 12 pass；`pnpm test` 159 pass；`pnpm build` 通过，保留现有第三方 pure annotation、chunk size 和 plugin timings warning；`git diff --check` 通过，仅 LF/CRLF warning；`node tools/dataspec-status-check.mjs --format json` warn，仅已知 active change `add-ai-context-quality-check`。
+- 评审证据：独立子 agent `019f3d2f-b5c4-75d3-886d-c1c83c759dab` 完成只读评审并已关闭；发现的格式证据缺失 P1 已补失败测试并修复，停用字段覆盖和废弃字段替代信息误报风险已处理。
 - 边界：不实现通用自然语言问答引擎，不调用外部 LLM；第一版基于现有检索、术语表、证据和质量分确定性判断。
 
 ## 参考项目索引

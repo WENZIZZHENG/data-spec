@@ -2,6 +2,8 @@ import type { BusinessGlossary, Field, FieldSearchItem, FieldSearchResult, RuleC
 
 export type StandardQuestionConfidence = 'HIGH' | 'MEDIUM' | 'LOW'
 export type StandardQuestionEvidenceType = 'field' | 'glossary' | 'rule' | 'search'
+export type StandardQuestionAnswerability = 'DIRECT' | 'PARTIAL' | 'NONE'
+export type StandardQuestionAnswerStatus = 'ADOPTABLE' | 'NEEDS_CONFIRMATION' | 'UNANSWERABLE'
 
 export interface StandardQuestionInput {
   /** 用户输入的自然语言问题，只用于只读匹配和答案展示。 */
@@ -37,6 +39,20 @@ export interface StandardQuestionMatchedField {
   formatSummary?: string
   /** 生命周期或替代字段提示。 */
   lifecycleSummary?: string
+  /** 替代字段 ID，用于判断废弃字段是否已有结构化替代证据。 */
+  replacementFieldId?: number
+  /** 替代说明，用于低置信答案解释和缺失事实判断。 */
+  replacementReason?: string
+  /** 字段格式类型，如 mobile、money、date。 */
+  formatType?: string
+  /** 字段格式校验模式或正则。 */
+  formatPattern?: string
+  /** 字段单位，如 CNY、cent、ms。 */
+  formatUnit?: string
+  /** 字段精度或小数位约束。 */
+  formatPrecision?: string
+  /** 时间字段时区约束。 */
+  formatTimezone?: string
   /** 字段库跳转链接。 */
   detailRoute: string
 }
@@ -63,19 +79,54 @@ export interface StandardQuestionRelatedRule {
   enabled?: boolean
 }
 
+export interface StandardQuestionConflict {
+  /** 冲突类型，用于前端和 AI 判断是否需要人工裁决。 */
+  type: 'SIMILAR_SCORE' | 'LIFECYCLE'
+  /** 冲突说明。 */
+  message: string
+  /** 涉及冲突的标准字段名。 */
+  fieldNames: string[]
+  /** 冲突严重度，WARNING 表示不能直接采纳答案。 */
+  severity: 'WARNING' | 'INFO'
+}
+
 export interface StandardQuestionAnswer {
   /** 可直接复制给用户或 AI 的短回答。 */
   answer: string
+  /** 答案可采纳状态，AI 应优先使用该字段决定采用、追问或停止。 */
+  answerStatus: StandardQuestionAnswerStatus
+  /** 当前证据能否直接回答问题。 */
+  answerability: StandardQuestionAnswerability
   /** 回答置信度，只表示 DataSpec 当前标准证据是否足够。 */
   confidence: StandardQuestionConfidence
+  /** 解释置信度和采纳状态的主要原因。 */
+  confidenceReason: string
   /** 匹配到的标准字段。 */
   matchedFields: StandardQuestionMatchedField[]
   /** 回答引用的字段、术语、规则和检索摘要证据。 */
   evidence: StandardQuestionEvidence[]
+  /** 机器可读证据引用，便于 CLI/MCP 或 AI 在复制答案时保留出处。 */
+  evidenceRefs: string[]
   /** 与本次问题相关的项目规则。 */
   relatedRules: StandardQuestionRelatedRule[]
+  /** 缺失的证据说明，用于低置信提示和后续补标准。 */
+  missingEvidence: string[]
+  /** 缺失的结构化事实字段名或业务事实。 */
+  missingFacts: string[]
+  /** true 表示只命中草稿、候选或未正式采纳的字段。 */
+  candidateOnly: boolean
+  /** 标准冲突摘要，兼容 P6-188 的命名。 */
+  conflictingStandards: StandardQuestionConflict[]
+  /** 标准冲突摘要，提供更短的机器读取字段名。 */
+  conflicts: StandardQuestionConflict[]
   /** 建议下一步动作，不会直接写入标准库。 */
   suggestedNextActions: string[]
+  /** 建议用户或 AI 继续追问时使用的问题。 */
+  suggestedNextQuery: string
+  /** true 表示建议转入标准候选 Inbox，而不是直接采用答案。 */
+  escalateToInbox: boolean
+  /** 机器读取的下一步动作，与旧字段 suggestedNextActions 保持同源。 */
+  nextActions: string[]
   /** 低置信度或废弃字段时需要人工补充确认的问题。 */
   unresolvedQuestions: string[]
 }
@@ -108,24 +159,48 @@ export function buildStandardQuestionAnswer(input: StandardQuestionInput): Stand
   const glossaryEvidence = findGlossaryEvidence(question, input.glossary, topField?.id)
   const relatedRules = resolveRelatedRules(question, matchedFields, input.rules)
 
-  const confidence = resolveConfidence(topField)
+  const baseConfidence = resolveConfidence(topField)
+  const conflicts = detectConflictingStandards(matchedFields)
+  const missingFacts = buildMissingFacts(question, topField)
+  const missingEvidence = buildMissingEvidence(topField, missingFacts, conflicts)
+  const candidateOnly = topField?.status === 'draft'
+  const answerStatus = resolveAnswerStatus(topField, baseConfidence, missingEvidence, conflicts)
+  const answerability = resolveAnswerability(answerStatus)
+  const confidence = resolveAnswerConfidence(baseConfidence, answerStatus, missingEvidence, conflicts)
+  const confidenceReason = buildConfidenceReason(answerStatus, confidence, topField, missingEvidence, conflicts)
   const evidence = buildEvidence(input.fieldSearch, matchedFields, glossaryEvidence, relatedRules)
+  const evidenceRefs = buildEvidenceRefs(evidence)
   const unresolvedQuestions = buildUnresolvedQuestions(confidence, topField)
+  const suggestedNextQuery = buildSuggestedNextQuery(question, topField, answerStatus, missingFacts, conflicts)
   const suggestedNextActions = uniqueText([
     ...input.fieldSearch.nextActions ?? [],
     ...((input.fieldSearch.items ?? []).flatMap((item) => item.nextActions ?? [])),
+    ...buildAnswerabilityActions(answerStatus, missingEvidence, conflicts, topField),
     '复制答案并附带证据给 AI 或协作者',
     topField ? `打开字段库查看 ${topField.name} 的完整标准` : '进入标准候选 Inbox 补充候选字段',
     confidence === 'LOW' ? '把问题转成标准候选草案后人工确认' : ''
   ])
+  const escalateToInbox = answerStatus !== 'ADOPTABLE'
 
   return {
     answer: buildAnswerText(confidence, question, topField, glossaryEvidence),
+    answerStatus,
+    answerability,
     confidence,
+    confidenceReason,
     matchedFields,
     evidence,
+    evidenceRefs,
     relatedRules,
+    missingEvidence,
+    missingFacts,
+    candidateOnly,
+    conflictingStandards: conflicts,
+    conflicts,
     suggestedNextActions,
+    suggestedNextQuery,
+    escalateToInbox,
+    nextActions: suggestedNextActions,
     unresolvedQuestions
   }
 }
@@ -146,13 +221,21 @@ export function buildStandardQuestionMarkdown(answer: StandardQuestionAnswer) {
     '## 答案',
     answer.answer,
     '',
+    `采纳状态：${answerStatusText(answer.answerStatus)}`,
     `置信度：${confidenceText(answer.confidence)}`,
+    `原因：${answer.confidenceReason}`,
     '',
     '## 匹配字段',
     fields,
     '',
     '## 证据',
     evidence,
+    '',
+    '## 缺失证据',
+    answer.missingEvidence.map((item) => `- ${item}`).join('\n') || '- 无',
+    '',
+    '## 冲突',
+    answer.conflicts.map((item) => `- ${item.message}`).join('\n') || '- 无',
     '',
     '## 下一步',
     nextActions
@@ -202,6 +285,13 @@ function normalizeMatchedFields(items: FieldSearchItem[]): StandardQuestionMatch
         recommendedUse: item.recommendedUse,
         formatSummary: formatConstraintSummary(field),
         lifecycleSummary: formatLifecycleSummary(field),
+        replacementFieldId: field.replacementFieldId,
+        replacementReason: field.replacementReason,
+        formatType: field.formatType,
+        formatPattern: field.formatPattern,
+        formatUnit: field.formatUnit,
+        formatPrecision: field.formatPrecision,
+        formatTimezone: field.formatTimezone,
         detailRoute: `/fields?keyword=${encodeURIComponent(field.name)}`
       }
     })
@@ -245,6 +335,206 @@ function resolveConfidence(field: StandardQuestionMatchedField | undefined): Sta
     return 'MEDIUM'
   }
   return (field.score ?? 0) >= 75 ? 'HIGH' : 'MEDIUM'
+}
+
+function resolveAnswerConfidence(
+  confidence: StandardQuestionConfidence,
+  status: StandardQuestionAnswerStatus,
+  missingEvidence: string[],
+  conflicts: StandardQuestionConflict[]
+): StandardQuestionConfidence {
+  if (status === 'UNANSWERABLE') {
+    return 'LOW'
+  }
+  if (status === 'NEEDS_CONFIRMATION' && (missingEvidence.length > 0 || conflicts.length > 0)) {
+    return confidence === 'LOW' ? 'LOW' : 'MEDIUM'
+  }
+  return confidence
+}
+
+function resolveAnswerStatus(
+  field: StandardQuestionMatchedField | undefined,
+  confidence: StandardQuestionConfidence,
+  missingEvidence: string[],
+  conflicts: StandardQuestionConflict[]
+): StandardQuestionAnswerStatus {
+  if (!field) {
+    return 'UNANSWERABLE'
+  }
+  if (confidence !== 'HIGH' || missingEvidence.length > 0 || conflicts.length > 0) {
+    return 'NEEDS_CONFIRMATION'
+  }
+  return 'ADOPTABLE'
+}
+
+function resolveAnswerability(status: StandardQuestionAnswerStatus): StandardQuestionAnswerability {
+  if (status === 'ADOPTABLE') {
+    return 'DIRECT'
+  }
+  if (status === 'UNANSWERABLE') {
+    return 'NONE'
+  }
+  return 'PARTIAL'
+}
+
+function buildConfidenceReason(
+  status: StandardQuestionAnswerStatus,
+  confidence: StandardQuestionConfidence,
+  field: StandardQuestionMatchedField | undefined,
+  missingEvidence: string[],
+  conflicts: StandardQuestionConflict[]
+) {
+  if (!field) {
+    return '未命中可引用的字段标准证据。'
+  }
+  if (conflicts.length > 0) {
+    return '存在多个分数接近的候选标准，需先裁决冲突后再采纳。'
+  }
+  if (field.status === 'deprecated' || field.status === 'disabled' || field.status === 'draft') {
+    return `字段生命周期状态为${statusText(field.status)}，需要人工确认是否可用于当前问题。`
+  }
+  if (missingEvidence.length > 0) {
+    return `已命中字段，但缺少${missingEvidence.join('、')}。`
+  }
+  if (status === 'ADOPTABLE' && confidence === 'HIGH') {
+    return '字段检索、生命周期和必要证据均满足直接采纳条件。'
+  }
+  return '已命中字段，但检索分数或证据完整性不足以高置信采纳。'
+}
+
+function buildMissingFacts(question: string, field: StandardQuestionMatchedField | undefined) {
+  if (!field) {
+    return ['标准字段名或显示名', '字段所属业务术语或候选来源']
+  }
+  const normalizedQuestion = normalizeMatchText(question)
+  const lifecycleSummary = field.lifecycleSummary ?? ''
+  const formatSummary = field.formatSummary ?? ''
+  const hasReplacementEvidence = Boolean(field.replacementFieldId || field.replacementReason || /替代|改用/.test(lifecycleSummary))
+  const hasUnitEvidence = Boolean(field.formatUnit || formatSummary.includes('单位'))
+  const hasFormatPatternEvidence = Boolean(field.formatType || field.formatPattern || /格式：|模式：/.test(formatSummary))
+  const hasPrecisionEvidence = Boolean(field.formatPrecision || formatSummary.includes('精度'))
+  const hasTimezoneEvidence = Boolean(field.formatTimezone || formatSummary.includes('时区'))
+  const missing: string[] = []
+  if ((field.status === 'deprecated' || field.status === 'disabled') && !hasReplacementEvidence) {
+    missing.push('replacementFieldId 或 replacementReason')
+  }
+  if (field.status === 'draft') {
+    missing.push('正式标准采纳状态')
+  }
+  if (/单位|币种|金额口径/.test(normalizedQuestion) && !hasUnitEvidence) {
+    missing.push('formatUnit')
+  }
+  if (/格式|正则|模式|校验/.test(normalizedQuestion) && !hasFormatPatternEvidence) {
+    missing.push('formatPattern 或 formatType')
+  }
+  if (/精度|小数/.test(normalizedQuestion) && !hasPrecisionEvidence) {
+    missing.push('formatPrecision')
+  }
+  if (/时区/.test(normalizedQuestion) && !hasTimezoneEvidence) {
+    missing.push('formatTimezone')
+  }
+  return uniqueText(missing)
+}
+
+function buildMissingEvidence(
+  field: StandardQuestionMatchedField | undefined,
+  missingFacts: string[],
+  conflicts: StandardQuestionConflict[]
+) {
+  if (!field) {
+    return ['字段标准证据']
+  }
+  const missing: string[] = []
+  if (field.status === 'deprecated') {
+    missing.push('可采用替代字段证据')
+  }
+  if (field.status === 'disabled') {
+    missing.push('停用字段恢复或替代方案证据')
+  }
+  if (field.status === 'draft') {
+    missing.push('已采纳标准证据')
+  }
+  if (missingFacts.includes('formatUnit')) {
+    missing.push('单位(formatUnit)证据')
+  }
+  if (missingFacts.includes('formatPattern 或 formatType')) {
+    missing.push('格式约束证据')
+  }
+  if (missingFacts.includes('formatPrecision')) {
+    missing.push('精度证据')
+  }
+  if (missingFacts.includes('formatTimezone')) {
+    missing.push('时区证据')
+  }
+  if (conflicts.length > 0) {
+    missing.push('冲突裁决证据')
+  }
+  return uniqueText(missing)
+}
+
+function detectConflictingStandards(fields: StandardQuestionMatchedField[]): StandardQuestionConflict[] {
+  const [topField, secondField] = fields
+  if (!topField || !secondField) {
+    return []
+  }
+  const topScore = topField.score ?? 0
+  const secondScore = secondField.score ?? 0
+  const isSimilarlyStrong = topScore >= 75 && secondScore >= 70 && topScore - secondScore <= 8
+  if (!isSimilarlyStrong) {
+    return []
+  }
+  return [{
+    type: 'SIMILAR_SCORE',
+    message: `存在多个高分标准字段：${topField.name} 与 ${secondField.name} 分数接近，需确认业务口径后再采纳。`,
+    fieldNames: [topField.name, secondField.name],
+    severity: 'WARNING'
+  }]
+}
+
+function buildEvidenceRefs(evidence: StandardQuestionEvidence[]) {
+  return evidence.map((item) => {
+    const ref = item.ref || item.title
+    return `${item.type}:${ref}`
+  })
+}
+
+function buildSuggestedNextQuery(
+  question: string,
+  field: StandardQuestionMatchedField | undefined,
+  status: StandardQuestionAnswerStatus,
+  missingFacts: string[],
+  conflicts: StandardQuestionConflict[]
+) {
+  if (status === 'ADOPTABLE') {
+    return ''
+  }
+  if (!field) {
+    return `补充“${question}”对应的标准字段名、显示名、业务术语和使用场景`
+  }
+  if (conflicts.length > 0) {
+    return `确认“${question}”在 ${conflicts[0].fieldNames.join(' / ')} 中应采用哪个标准字段`
+  }
+  if (missingFacts.length > 0) {
+    return `补充 ${field.name} 的 ${missingFacts.join('、')} 后再回答“${question}”`
+  }
+  return `确认 ${field.name} 是否可用于回答“${question}”`
+}
+
+function buildAnswerabilityActions(
+  status: StandardQuestionAnswerStatus,
+  missingEvidence: string[],
+  conflicts: StandardQuestionConflict[],
+  field: StandardQuestionMatchedField | undefined
+) {
+  if (status === 'ADOPTABLE') {
+    return []
+  }
+  return uniqueText([
+    conflicts.length > 0 ? '先处理标准字段冲突，再决定可采纳答案' : '',
+    missingEvidence.length > 0 ? `补充缺失证据：${missingEvidence.join('、')}` : '',
+    field?.status === 'draft' ? '将草稿字段转入人工确认，采纳后再作为正式答案' : '',
+    status === 'UNANSWERABLE' ? '进入标准候选 Inbox 补充候选字段和证据' : '人工确认后再采纳答案'
+  ])
 }
 
 function buildEvidence(
@@ -419,6 +709,26 @@ export function confidenceText(confidence: StandardQuestionConfidence) {
     return '中'
   }
   return '低'
+}
+
+export function answerStatusText(status: StandardQuestionAnswerStatus) {
+  if (status === 'ADOPTABLE') {
+    return '可直接采用'
+  }
+  if (status === 'NEEDS_CONFIRMATION') {
+    return '需要确认'
+  }
+  return '不能回答'
+}
+
+export function answerabilityText(answerability: StandardQuestionAnswerability) {
+  if (answerability === 'DIRECT') {
+    return '可直接回答'
+  }
+  if (answerability === 'PARTIAL') {
+    return '部分可回答'
+  }
+  return '暂无可用答案'
 }
 
 export function evidenceTypeText(type: StandardQuestionEvidenceType) {

@@ -55,6 +55,9 @@ test('builds readonly standard answer with matched field evidence', () => {
   })
 
   assert.equal(answer.confidence, 'HIGH')
+  assert.equal(answer.answerStatus, 'ADOPTABLE')
+  assert.equal(answer.answerability, 'DIRECT')
+  assert.equal(answer.suggestedNextQuery, '')
   assert.match(answer.answer, /user_mobile/)
   assert.match(answer.answer, /手机号/)
   assert.match(answer.answer, /敏感字段/)
@@ -85,9 +88,16 @@ test('marks unresolved answer when no standard field evidence is found', () => {
   })
 
   assert.equal(answer.confidence, 'LOW')
+  assert.equal(answer.answerStatus, 'UNANSWERABLE')
+  assert.equal(answer.answerability, 'NONE')
+  assert.equal(answer.escalateToInbox, true)
   assert.match(answer.answer, /没有找到可直接确认的标准字段/)
+  assert.ok(answer.missingEvidence.some((item) => item.includes('字段标准证据')))
+  assert.ok(answer.missingFacts.some((item) => item.includes('标准字段')))
   assert.ok(answer.unresolvedQuestions.some((item) => item.includes('标准候选')))
   assert.ok(answer.suggestedNextActions.some((item) => item.includes('候选 Inbox')))
+  assert.ok(answer.nextActions.some((item) => item.includes('候选 Inbox')))
+  assert.match(answer.suggestedNextQuery, /积分等级/)
 })
 
 test('downgrades confidence for deprecated matched field', () => {
@@ -114,8 +124,200 @@ test('downgrades confidence for deprecated matched field', () => {
   })
 
   assert.equal(answer.confidence, 'MEDIUM')
+  assert.equal(answer.answerStatus, 'NEEDS_CONFIRMATION')
+  assert.equal(answer.answerability, 'PARTIAL')
   assert.match(answer.answer, /已废弃/)
+  assert.ok(answer.confidenceReason.includes('生命周期'))
+  assert.ok(answer.missingEvidence.some((item) => item.includes('替代字段')))
+  assert.ok(!answer.missingFacts.some((item) => item.includes('replacementFieldId')))
   assert.ok(answer.unresolvedQuestions.some((item) => item.includes('替代字段')))
+})
+
+test('requires confirmation for disabled matched field', () => {
+  const answer = buildStandardQuestionAnswer({
+    question: '停用状态字段还能用吗',
+    fieldSearch: {
+      projectId: 7,
+      query: '停用状态字段还能用吗',
+      summary: { matchedCount: 1, returnedCount: 1 },
+      items: [{
+        score: 90,
+        field: {
+          id: 22,
+          name: 'legacy_status',
+          displayName: '旧状态',
+          status: 'disabled'
+        },
+        matchReasons: ['命中显示名：旧状态']
+      }]
+    },
+    glossary: [],
+    rules: []
+  })
+
+  assert.equal(answer.answerStatus, 'NEEDS_CONFIRMATION')
+  assert.equal(answer.answerability, 'PARTIAL')
+  assert.equal(answer.escalateToInbox, true)
+  assert.ok(answer.missingEvidence.some((item) => item.includes('停用字段')))
+  assert.ok(answer.unresolvedQuestions.some((item) => item.includes('生命周期状态')))
+})
+
+test('marks draft matched field as candidate only and requires confirmation', () => {
+  const answer = buildStandardQuestionAnswer({
+    question: '会员等级字段叫什么',
+    fieldSearch: {
+      projectId: 7,
+      query: '会员等级字段叫什么',
+      summary: { matchedCount: 1, returnedCount: 1 },
+      items: [{
+        score: 88,
+        field: {
+          id: 41,
+          name: 'member_level',
+          displayName: '会员等级',
+          status: 'draft'
+        },
+        matchReasons: ['命中显示名：会员等级']
+      }]
+    },
+    glossary: [],
+    rules: []
+  })
+
+  assert.equal(answer.answerStatus, 'NEEDS_CONFIRMATION')
+  assert.equal(answer.answerability, 'PARTIAL')
+  assert.equal(answer.candidateOnly, true)
+  assert.equal(answer.escalateToInbox, true)
+  assert.ok(answer.missingFacts.some((item) => item.includes('正式标准')))
+  assert.ok(answer.nextActions.some((item) => item.includes('人工确认')))
+})
+
+test('reports conflicting standards when similarly strong fields compete', () => {
+  const answer = buildStandardQuestionAnswer({
+    question: '订单金额字段用哪个',
+    fieldSearch: {
+      projectId: 7,
+      query: '订单金额字段用哪个',
+      summary: { matchedCount: 2, returnedCount: 2 },
+      items: [
+        {
+          score: 91,
+          field: { id: 51, name: 'order_amount', displayName: '订单金额', status: 'enabled', dataType: 'decimal' },
+          matchReasons: ['命中显示名：订单金额']
+        },
+        {
+          score: 87,
+          field: { id: 52, name: 'pay_amount', displayName: '支付金额', status: 'enabled', dataType: 'decimal' },
+          matchReasons: ['同义词命中：金额']
+        }
+      ]
+    },
+    glossary: [{
+      id: 61,
+      term: '金额',
+      synonyms: '订单金额,支付金额',
+      status: 'ACTIVE'
+    }],
+    rules: []
+  })
+
+  assert.equal(answer.answerStatus, 'NEEDS_CONFIRMATION')
+  assert.equal(answer.answerability, 'PARTIAL')
+  assert.ok(answer.conflicts.length >= 1)
+  assert.deepEqual(answer.conflictingStandards, answer.conflicts)
+  assert.ok(answer.conflicts[0].fieldNames.includes('order_amount'))
+  assert.ok(answer.confidenceReason.includes('存在多个'))
+  assert.ok(answer.nextActions.some((item) => item.includes('冲突')))
+})
+
+test('requires confirmation when question asks format facts that matched field lacks', () => {
+  const answer = buildStandardQuestionAnswer({
+    question: '订单金额应该用什么单位',
+    fieldSearch: {
+      projectId: 7,
+      query: '订单金额应该用什么单位',
+      summary: { matchedCount: 1, returnedCount: 1 },
+      items: [{
+        score: 94,
+        field: {
+          id: 71,
+          name: 'order_amount',
+          displayName: '订单金额',
+          status: 'enabled',
+          dataType: 'decimal'
+        },
+        matchReasons: ['命中显示名：订单金额']
+      }]
+    },
+    glossary: [],
+    rules: []
+  })
+
+  assert.equal(answer.answerStatus, 'NEEDS_CONFIRMATION')
+  assert.equal(answer.answerability, 'PARTIAL')
+  assert.ok(answer.missingEvidence.some((item) => item.includes('单位')))
+  assert.ok(answer.missingFacts.some((item) => item.includes('formatUnit')))
+  assert.ok(answer.suggestedNextQuery.includes('订单金额'))
+})
+
+test('requires confirmation when question asks format but field only has unit evidence', () => {
+  const answer = buildStandardQuestionAnswer({
+    question: '订单金额格式是什么',
+    fieldSearch: {
+      projectId: 7,
+      query: '订单金额格式是什么',
+      summary: { matchedCount: 1, returnedCount: 1 },
+      items: [{
+        score: 94,
+        field: {
+          id: 72,
+          name: 'order_amount',
+          displayName: '订单金额',
+          status: 'enabled',
+          dataType: 'decimal',
+          formatUnit: 'CNY'
+        },
+        matchReasons: ['命中显示名：订单金额']
+      }]
+    },
+    glossary: [],
+    rules: []
+  })
+
+  assert.equal(answer.answerStatus, 'NEEDS_CONFIRMATION')
+  assert.equal(answer.answerability, 'PARTIAL')
+  assert.ok(answer.missingFacts.some((item) => item.includes('formatPattern')))
+  assert.ok(answer.missingEvidence.some((item) => item.includes('格式约束')))
+})
+
+test('requires confirmation for medium score field even when lifecycle is enabled', () => {
+  const answer = buildStandardQuestionAnswer({
+    question: '客户来源字段叫什么',
+    fieldSearch: {
+      projectId: 7,
+      query: '客户来源字段叫什么',
+      summary: { matchedCount: 1, returnedCount: 1 },
+      items: [{
+        score: 64,
+        field: {
+          id: 81,
+          name: 'customer_source',
+          displayName: '客户来源',
+          status: 'enabled',
+          dataType: 'varchar'
+        },
+        matchReasons: ['弱匹配：来源']
+      }]
+    },
+    glossary: [],
+    rules: []
+  })
+
+  assert.equal(answer.confidence, 'MEDIUM')
+  assert.equal(answer.answerStatus, 'NEEDS_CONFIRMATION')
+  assert.equal(answer.answerability, 'PARTIAL')
+  assert.ok(answer.confidenceReason.includes('检索分数'))
+  assert.ok(answer.nextActions.some((item) => item.includes('人工确认')))
 })
 
 test('does not present unrelated enabled rules as answer evidence', () => {
