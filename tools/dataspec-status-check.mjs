@@ -389,6 +389,7 @@ function checkOpenSpecState(todoItems, changeEntries, specEntries, specTexts, re
   }
 
   checkOpenSpecSpecPurposes(specTexts, issues)
+  checkOpenSpecSpecRequirements(specTexts, issues)
 }
 
 function checkTodoActiveChangeReferences(todoText, activeChanges, issues) {
@@ -455,6 +456,46 @@ function hasPurposeBody(lines, purposeIndex) {
       continue
     }
     if (line) {
+      return true
+    }
+  }
+  return false
+}
+
+function checkOpenSpecSpecRequirements(specTexts, issues) {
+  for (const [capability, text] of specTexts) {
+    const lines = String(text ?? '').split(/\r?\n/)
+    const requirementsIndex = lines.findIndex((line) => /^##\s+Requirements\s*$/.test(line.trim()))
+    const specPath = `openspec/specs/${capability}/spec.md`
+    if (requirementsIndex === -1) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_REQUIREMENTS_MISSING',
+        message: `${specPath} 缺少 ## Requirements 小节，AI 读取主规格时会缺少可执行能力契约。`,
+        file: specPath,
+        line: 1,
+        suggestedFix: '补充 ## Requirements，并至少包含一个 ### Requirement: 条目和对应 Scenario。'
+      }))
+      continue
+    }
+    if (!hasRequirementEntry(lines, requirementsIndex)) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_REQUIREMENTS_EMPTY',
+        message: `${specPath} 的 ## Requirements 小节缺少 ### Requirement: 条目，AI 无法稳定识别能力契约。`,
+        file: specPath,
+        line: requirementsIndex + 1,
+        suggestedFix: '在 ## Requirements 下补充至少一个 ### Requirement: 条目，并保留 OpenSpec Scenario 结构。'
+      }))
+    }
+  }
+}
+
+function hasRequirementEntry(lines, requirementsIndex) {
+  for (let index = requirementsIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (/^##\s+/.test(line)) {
+      return false
+    }
+    if (/^###\s+Requirement\s*:/.test(line)) {
       return true
     }
   }

@@ -667,6 +667,75 @@ DataSpec SHALL keep a requirement.
   }
 })
 
+test('runStatusCheckCli reports missing and empty Requirements in main OpenSpec specs', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'missing-requirements'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'empty-requirements'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'missing-requirements', 'spec.md'),
+      `# missing-requirements Specification
+
+## Purpose
+用于验证缺少 Requirements 小节的主规格。
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'empty-requirements', 'spec.md'),
+      `# empty-requirements Specification
+
+## Purpose
+用于验证没有 Requirement 条目的主规格。
+## Requirements
+说明文字不能替代稳定的 Requirement 条目。
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    const missingIssue = output.issues.find((issue) => issue.code === 'OPENSPEC_SPEC_REQUIREMENTS_MISSING')
+    const emptyIssue = output.issues.find((issue) => issue.code === 'OPENSPEC_SPEC_REQUIREMENTS_EMPTY')
+    const openSpecCheck = output.checks.find((check) => check.id === 'openspec-state')
+
+    assert.equal(code, 1)
+    assert.equal(output.status, 'fail')
+    assert.ok(missingIssue)
+    assert.equal(missingIssue.file, 'openspec/specs/missing-requirements/spec.md')
+    assert.equal(missingIssue.line, 1)
+    assert.ok(emptyIssue)
+    assert.equal(emptyIssue.file, 'openspec/specs/empty-requirements/spec.md')
+    assert.equal(emptyIssue.line, 5)
+    assert.equal(openSpecCheck.status, 'fail')
+    assert.equal(openSpecCheck.errorCount, 2)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 function createIo() {
   return {
     stdout: '',
