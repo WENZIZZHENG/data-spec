@@ -34,4 +34,7 @@
 - `git diff --check`：通过，仅 Git LF/CRLF 提示。
 - `node tools/dataspec-status-check.mjs --format json`：status warn；唯一 warning 为 `OPENSPEC_ACTIVE_CHANGE_PRESENT`，本 change 按项目约定实现完成后默认保留 active，暂不自动归档。
 - 评审：独立子 agent `019f3d19-63a0-7252-b194-24ddeda1d36b` 只读评审；完成后已关闭。评审发现 2 个 Important 和 2 个 Minor：已补 budget plan 格式校验和退化 plan 负向测试，修正 fixture 的三选一输入契约和 failureExample，补 `unclassified` 覆盖 bucket 与测试，并收口本 Verification Evidence。
+- 2026-07-08 归档预检：delta spec 已同步到主规格 `openspec/specs/dataspec-cli/spec.md`；归档前 `openspec validate add-ai-context-quality-check --strict` valid，`openspec validate --all` 120 passed / 0 failed，`git diff --check` 通过，仅 Git LF/CRLF 提示。
+- 2026-07-08 归档后验证：归档到 `openspec/changes/archive/2026-07-08-add-ai-context-quality-check` 后，`openspec validate --all` 119 passed / 0 failed；`openspec list --json` 返回 `{"changes":[]}`；`git diff --check` 通过，仅 Git LF/CRLF 提示。
+- 2026-07-08 归档评审：独立只读子 agent `019f3d87-87fc-7932-9c83-e3a4d166cc05`（Cicero the 2nd）评审 TODO 测试库授权边界、OpenSpec 归档路径、主规格同步、验证证据和敏感信息风险，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。
 - 未覆盖风险：第一版评分为确定性静态启发式，不替代真实 AI 任务结果；后续若扩展前端/API 展示需另建 OpenSpec change。

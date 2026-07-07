@@ -4,11 +4,12 @@
 
 ## 下一步顺序
 
-1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90、P6-91、P6-92、P6-93、P6-186 已完成第一版；P6-78、P6-82、P6-88、P6-90、P6-93 对应 OpenSpec change 均已归档；P6-186 对应 OpenSpec change `add-ai-context-quality-check` 保持 active，按项目默认暂未归档。
+1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90、P6-91、P6-92、P6-93、P6-186 已完成第一版；P6-78、P6-82、P6-88、P6-90、P6-93、P6-186 对应 OpenSpec change 均已归档。
 2. 近期优先行动项已清空，后续开发由用户从 P6-94 以后候选池或新需求中选择，不再从 P6-71 到 P6-188 全量顺扫。
 3. 效率优先顺序：真实数据库集成测试已作为可选 Docker profile，不默认阻塞小任务；下一项开工前按任务类型重新判断快速/常规/SDD。
 4. 暂缓池：P6-94 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
 5. 每次开工先按任务类型决定快速/常规/SDD：文档与小前端走快速；单模块功能走常规；API/CLI/MCP/AI 外部协议、安全、存储或数据库写入才进入 SDD standard/full。
+6. 真实自测库授权边界：用户已授权 `localhost:5432/ai_test` 作为可写的一次性 PostgreSQL 测试库，后续待办需要真实闭环验证时可用于写入、读回和清理；仅限测试库，不扩展到其他库，不把密码写入仓库，操作后记录验证范围与清理结果。
 
 ## 历史追加记录（已降级为背景）
 
@@ -1852,7 +1853,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不自动写入业务数据库，不保证满足所有业务规则；第一版聚焦字段级和轻量对象级样例。
 
 ### P6-186：AI Context 质量预算与可用性评分
-- 状态：已完成第一版，OpenSpec change `add-ai-context-quality-check` 保持 active，暂未归档。
+- 状态：已完成第一版，OpenSpec change `add-ai-context-quality-check` 已于 2026-07-08 归档到 `openspec/changes/archive/2026-07-08-add-ai-context-quality-check`。
 - 为什么做：AI Context 已能裁剪和导出，但 AI 还需要知道“这份上下文是否够用”：字段是否缺枚举、样例是否太少、规则是否被截断、token 预算是否被低价值内容占满。
 - 已有基础：已有 AI Context zip、按需裁剪、上下文预算、字段质量评分、标准查询 DSL、AI profile、Context 增量更新包和 Prompt 评测待办。
 - 已完成能力：新增 CLI-only `context-quality check`，可本地只读读取已导出的 AI Context 目录、AI Context zip 或 `context-budget plan` JSON，输出 `contextQualityScore`、`qualityLevel`、`tokenBudgetBreakdown`、`missingCriticalResources`、`truncatedResources`、`coverageByCategory`、`taskFitHints` 和 `nextContextActions`；覆盖退化 budget plan、unsafe zip、未分类资源、fixture 三选一输入契约和敏感示例拦截。
@@ -1883,7 +1884,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 参考项目：`sourcegraph/sourcegraph` 的搜索解释、`promptfoo/promptfoo` 的评测断言和 `langfuse/langfuse` 的评分记录；只借鉴答案评分与证据展示，不接入在线问答模型。
 - 落地产物：为标准问答和字段搜索增加可采纳度摘要；输出 answerStatus、confidence、evidenceRefs、missingFacts、conflicts 和 nextActions；前端展示低置信提示，CLI/MCP 可机器读取。
 - 验收标准：同义词冲突、候选未采纳、字段缺格式、低质量字段或无命中时，问答不会伪装成确定答案；AI 能根据 answerStatus 决定采用、追问、转候选或停止。
-- 验证证据：`node --test tests/standardQuestionDisplay.test.ts` 12 pass；`pnpm test` 159 pass；`pnpm build` 通过，保留现有第三方 pure annotation、chunk size 和 plugin timings warning；`git diff --check` 通过，仅 LF/CRLF warning；`node tools/dataspec-status-check.mjs --format json` warn，仅已知 active change `add-ai-context-quality-check`。
+- 验证证据：`node --test tests/standardQuestionDisplay.test.ts` 12 pass；`pnpm test` 159 pass；`pnpm build` 通过，保留现有第三方 pure annotation、chunk size 和 plugin timings warning；`git diff --check` 通过，仅 LF/CRLF warning；当时 `node tools/dataspec-status-check.mjs --format json` warn 仅因 active change `add-ai-context-quality-check`，该 warning 已随 P6-186 归档消除。
 - 评审证据：独立子 agent `019f3d2f-b5c4-75d3-886d-c1c83c759dab` 完成只读评审并已关闭；发现的格式证据缺失 P1 已补失败测试并修复，停用字段覆盖和废弃字段替代信息误报风险已处理。
 - 边界：不实现通用自然语言问答引擎，不调用外部 LLM；第一版基于现有检索、术语表、证据和质量分确定性判断。
 
