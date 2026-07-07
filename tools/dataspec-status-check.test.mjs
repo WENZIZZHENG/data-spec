@@ -769,6 +769,71 @@ DataSpec SHALL keep another requirement.
   }
 })
 
+test('runStatusCheckCli reports too short Purpose in main OpenSpec specs', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'too-short-purpose'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+
+#### Scenario: Debug rule hit
+- **WHEN** the user requests a rule explanation
+- **THEN** DataSpec returns evidence
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'too-short-purpose', 'spec.md'),
+      `# too-short-purpose Specification
+
+## Purpose
+用于验证。
+## Requirements
+### Requirement: Too short purpose example
+DataSpec SHALL keep a requirement.
+
+#### Scenario: Keep requirement
+- **WHEN** the main spec is checked
+- **THEN** the requirement remains executable
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    const issue = output.issues.find((candidate) => candidate.code === 'OPENSPEC_SPEC_PURPOSE_TOO_SHORT')
+    const openSpecCheck = output.checks.find((check) => check.id === 'openspec-state')
+
+    assert.equal(code, 1)
+    assert.equal(output.status, 'fail')
+    assert.ok(issue)
+    assert.equal(issue.file, 'openspec/specs/too-short-purpose/spec.md')
+    assert.equal(issue.line, 4)
+    assert.match(issue.message, /过短/)
+    assert.equal(openSpecCheck.status, 'fail')
+    assert.equal(openSpecCheck.errorCount, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('runStatusCheckCli treats Purpose with only subheadings as empty', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
   try {

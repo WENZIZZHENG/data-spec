@@ -10,6 +10,8 @@ const REPO_ROOT = path.resolve(path.dirname(SCRIPT_PATH), '..')
 const KIND = 'dataspec.status-check'
 const SCHEMA_VERSION = 1
 const OPENSPEC_PURPOSE_PLACEHOLDER_PATTERN = /TBD\s*-\s*created by archiving change|Update Purpose after archive/i
+// 低于该长度的 Purpose 通常仍是模板式占位，AI 无法据此判断能力服务的项目目标。
+const OPENSPEC_PURPOSE_MIN_MEANINGFUL_CHARS = 6
 const SKIPPED_DIRS = new Set([
   '.git',
   'node_modules',
@@ -451,13 +453,24 @@ function checkOpenSpecSpecPurposes(specTexts, issues) {
       }))
       continue
     }
-    if (!hasPurposeBody(lines, purposeIndex)) {
+    const purposeBody = collectPurposeBody(lines, purposeIndex)
+    if (!purposeBody.hasBody) {
       issues.push(issue({
         code: 'OPENSPEC_SPEC_PURPOSE_EMPTY',
         message: `${specPath} 的 ## Purpose 小节为空，AI 读取主规格时会缺少能力目的说明。`,
         file: specPath,
         line: purposeIndex + 1,
         suggestedFix: '在 ## Purpose 下补充一句稳定中文能力目的说明，并确认不改变 Requirements/Scenario 语义。'
+      }))
+      continue
+    }
+    if (isPurposeTooShort(purposeBody.text)) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_PURPOSE_TOO_SHORT',
+        message: `${specPath} 的 ## Purpose 小节说明过短，AI 难以判断该能力服务的项目目标。`,
+        file: specPath,
+        line: purposeBody.firstLine,
+        suggestedFix: '将 Purpose 扩展为一句稳定中文说明，至少点明能力对象、使用场景或对数据字段标准维护的价值。'
       }))
       continue
     }
@@ -475,20 +488,32 @@ function checkOpenSpecSpecPurposes(specTexts, issues) {
   }
 }
 
-function hasPurposeBody(lines, purposeIndex) {
+function collectPurposeBody(lines, purposeIndex) {
+  const bodyLines = []
+  let firstLine
   for (let index = purposeIndex + 1; index < lines.length; index += 1) {
     const line = lines[index].trim()
     if (/^##\s+/.test(line)) {
-      return false
+      break
     }
     if (/^#{3,6}\s+/.test(line)) {
       continue
     }
     if (line) {
-      return true
+      firstLine ??= index + 1
+      bodyLines.push(line)
     }
   }
-  return false
+  return {
+    hasBody: bodyLines.length > 0,
+    text: bodyLines.join(' '),
+    firstLine
+  }
+}
+
+function isPurposeTooShort(text) {
+  const meaningfulText = String(text ?? '').replace(/[\s\p{P}\p{S}]/gu, '')
+  return meaningfulText.length < OPENSPEC_PURPOSE_MIN_MEANINGFUL_CHARS
 }
 
 function checkOpenSpecSpecRequirements(specTexts, issues) {
