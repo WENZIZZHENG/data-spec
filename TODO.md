@@ -1863,7 +1863,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：评分不替代真实任务结果，不保证 AI 一定生成正确；第一版只基于 DataSpec 元数据和导出内容做静态评估。
 
 ### P6-187：字段使用契约与禁用场景说明
-- 状态：已完成实现、独立评审修复和验证，待 OpenSpec 归档。
+- 状态：已完成第一版，OpenSpec change `add-field-usage-contracts` 已于 2026-07-08 归档到 `openspec/changes/archive/2026-07-08-add-field-usage-contracts`。
 - 为什么做：同一个字段“是什么”不等于“什么时候该用”；AI 生成 SQL/DDL 时常会混用统计口径、展示字段、内部状态或废弃字段，需要字段级 usage contract 明确推荐场景和禁用场景。
 - 已有基础：已有字段状态、敏感标记、字段格式约束、派生字段/单位规则、指标口径映射、字段知识卡、业务对象关系图和标准问答入口。
 - 已完成能力：字段标准新增 `preferredUseCases`、`avoidWhen`、`joinHints`、`defaultFilters`、`aggregationHints`、`replacementGuidance` 和 `misuseExamples`；字段库创建/编辑、字段检索、标准问答、AI Context、DDL/Prompt guidance、标准快照、项目备份恢复和标准复用包均已读取或传播使用契约；命中禁用场景时会降级为需要确认，不把字段直接视为可采纳。
