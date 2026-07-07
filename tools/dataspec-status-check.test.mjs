@@ -482,6 +482,31 @@ test('buildStatusReport accepts URL-encoded Markdown link paths', () => {
   assert.equal(missingLinks.length, 0)
 })
 
+test('buildStatusReport accepts Markdown link paths with query strings', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: `${CLEAN_README}\n参考 [带 query 文档](docs/archive/example.md?raw=1#section)。\n`,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'pass')
+  assert.equal(missingLinks.length, 0)
+})
+
 test('buildStatusReport accepts angle-bracket Markdown links with titles', () => {
   const report = buildStatusReport({
     todoText: CLEAN_TODO,
