@@ -1,7 +1,7 @@
 # ai-write-safety-protocol Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-write-safety-protocol. Update Purpose after archive.
+定义 AI 可调用操作的写入安全元数据和 dry-run 约束，使能力目录、CLI、MCP、API 和前端输出能明确区分只读、项目写入、高风险写入和恢复路径。
 ## Requirements
 ### Requirement: Unified AI write safety metadata
 DataSpec SHALL define a machine-readable write safety metadata object for AI-consumed capability, CLI, MCP, API, and frontend outputs.

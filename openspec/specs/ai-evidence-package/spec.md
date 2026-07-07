@@ -1,7 +1,7 @@
 # ai-evidence-package Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-evidence-package-export. Update Purpose after archive.
+定义 AI 辅助任务的机器可读证据包，把任务来源、标准快照、输入输出摘要、验证结果、产物和建议命令组织成可交付、可复查的 JSON 契约。
 ## Requirements
 ### Requirement: Evidence package model
 DataSpec SHALL generate a machine-readable AI evidence package for completed or previewed AI-assisted tasks.

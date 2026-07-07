@@ -1,7 +1,7 @@
 # ai-prompt-generator Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-prompt-generator. Update Purpose after archive.
+定义 DataSpec 的标准化 prompt 生成能力，为建表和 SQL 修复场景输出包含字段目录、命名规则、修复要求和模板版本的稳定文本提示。
 ## Requirements
 ### Requirement: Create Table Prompt
 The system SHALL generate a plain-text prompt for creating database tables with DataSpec standards, and the prompt SHALL include the registry promptVersion used for generation.

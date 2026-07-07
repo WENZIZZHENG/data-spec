@@ -1,7 +1,7 @@
 # dataspec-mcp Specification
 
 ## Purpose
-TBD - created by archiving change add-dataspec-mcp. Update Purpose after archive.
+定义 DataSpec MCP stdio server 的资源、prompt 和工具契约，使 MCP 客户端能安全读取项目标准、调用 SQL lint、获取字段目录并使用标准化提示。
 ## Requirements
 ### Requirement: MCP Initialization
 The system SHALL provide a MCP stdio server that can be initialized by MCP clients.

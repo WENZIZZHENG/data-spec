@@ -1,7 +1,7 @@
 # cli-mcp-contract-fixtures Specification
 
 ## Purpose
-TBD - created by archiving change add-cli-mcp-contract-fixtures. Update Purpose after archive.
+定义高频 AI 入口的 CLI/MCP 契约 fixture 和本地校验规则，确保命令、工具、资源、prompt、示例、输出形状和安全元数据保持可追踪兼容。
 ## Requirements
 ### Requirement: CLI/MCP contract fixtures
 DataSpec SHALL provide machine-readable contract fixtures for high-frequency AI-facing CLI and MCP entrypoints.

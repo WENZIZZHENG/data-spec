@@ -1,7 +1,7 @@
 # version-compatibility-handshake Specification
 
 ## Purpose
-TBD - created by archiving change add-version-compatibility-handshake. Update Purpose after archive.
+定义 API、CLI 和 MCP 之间的只读版本兼容握手，让 AI Agent 能判断客户端版本、服务端能力、弃用字段、升级建议和是否可以继续执行。
 ## Requirements
 ### Requirement: Read-only version compatibility handshake
 DataSpec SHALL expose a read-only version compatibility handshake for AI agents, CLI clients, and MCP clients.

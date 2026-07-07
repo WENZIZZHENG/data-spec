@@ -1,7 +1,7 @@
 # ai-session-bootstrap Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-session-bootstrap. Update Purpose after archive.
+定义 AI 会话启动包的只读契约，帮助 Agent 在开始工作前识别项目状态、可用能力、推荐命令、安全风险和下一步动作。
 ## Requirements
 ### Requirement: AI Session Bootstrap API
 DataSpec SHALL expose a read-only AI session bootstrap package for a DataSpec project.

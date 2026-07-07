@@ -1,7 +1,7 @@
 # ai-contract-fixtures Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-contract-fixtures. Update Purpose after archive.
+定义 AI 可消费输出的 golden fixture 和兼容性策略，确保上下文包、SQL lint/fix、字段推荐、DDL 预览、CLI 和 MCP 输出的稳定字段不会无意漂移。
 ## Requirements
 ### Requirement: AI contracts have golden coverage
 The system SHALL provide contract fixtures or golden assertions for the primary AI-consumed outputs.

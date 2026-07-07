@@ -1,7 +1,7 @@
 # ai-workflow-recipes Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-workflow-recipes. Update Purpose after archive.
+定义面向 AI 和用户的 DataSpec 工作流 recipe，用稳定目录描述常见任务的输入、预检、步骤、命令、预期产物、失败处理和后续动作。
 ## Requirements
 ### Requirement: Publish AI workflow recipes
 The system SHALL provide workflow recipes that describe common AI/DataSpec tasks with inputs, ordered steps, commands, expected outputs, failure handling, and next actions.

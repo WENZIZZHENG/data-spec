@@ -1,7 +1,7 @@
 # ai-decision-replay Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-decision-replay. Update Purpose after archive.
+定义 AI 相关操作的轻量回放记录，保存输入摘要、输出载荷、prompt 版本和标准快照信息，方便复盘 DataSpec 生成、修复和预览决策。
 ## Requirements
 ### Requirement: Persist AI job records
 The system SHALL persist lightweight AI job records for DataSpec-generated prompts, SQL lint/fix operations, and DDL preview operations.

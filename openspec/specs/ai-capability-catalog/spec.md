@@ -1,7 +1,7 @@
 # ai-capability-catalog Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-capability-catalog. Update Purpose after archive.
+定义 DataSpec 面向 AI 的只读能力目录，让 API、CLI、MCP 和前端入口能够以稳定、可诊断、无副作用的方式暴露可用任务、调用边界和后续动作。
 ## Requirements
 ### Requirement: Expose machine-readable AI capability catalog
 DataSpec SHALL expose a read-only capability catalog that describes stable AI-usable tasks and their invocation surfaces.

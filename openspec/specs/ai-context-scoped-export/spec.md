@@ -1,7 +1,7 @@
 # ai-context-scoped-export Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-context-scoped-export. Update Purpose after archive.
+定义 AI Context 和字段目录的按需裁剪导出能力，通过字段、领域、影响范围和数量限制减少上下文体积，同时保留可解释的 scope metadata。
 ## Requirements
 ### Requirement: Scoped field catalog export
 The system SHALL support optional scope filters when exporting the AI field catalog.

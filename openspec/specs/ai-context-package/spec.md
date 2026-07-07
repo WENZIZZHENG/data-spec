@@ -1,7 +1,7 @@
 # ai-context-package Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-context-package. Update Purpose after archive.
+定义项目级 AI Context zip 包的下载契约、稳定文件布局和字段目录 schema，使 AI 能离线读取 DataSpec 规则、字段标准、示例和 Agent 指令片段。
 ## Requirements
 ### Requirement: Downloadable AI Context Package
 The system SHALL provide a downloadable AI Context zip package for a project.

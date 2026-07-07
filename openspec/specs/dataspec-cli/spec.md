@@ -1,7 +1,7 @@
 # dataspec-cli Specification
 
 ## Purpose
-TBD - created by archiving change add-dataspec-cli. Update Purpose after archive.
+定义 DataSpec CLI 的核心命令契约，让用户、CI 和 AI Agent 能通过命令行执行 SQL lint、导出 AI Context、生成 prompt 和读取稳定 JSON 输出。
 ## Requirements
 ### Requirement: Lint SQL From CLI
 The system SHALL provide a CLI command that lints SQL by calling the DataSpec server.

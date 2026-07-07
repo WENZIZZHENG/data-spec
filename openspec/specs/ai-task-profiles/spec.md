@@ -1,7 +1,7 @@
 # ai-task-profiles Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-task-profiles. Update Purpose after archive.
+定义项目级 AI 任务画像，描述常见 DataSpec 任务的上下文范围、规则集、输出格式、默认策略、诊断结果和推荐命令。
 ## Requirements
 ### Requirement: Project AI task profiles
 The system SHALL expose AI task profiles that describe how an AI agent should use DataSpec for common project tasks.

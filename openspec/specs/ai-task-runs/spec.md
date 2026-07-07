@@ -1,7 +1,7 @@
 # ai-task-runs Specification
 
 ## Purpose
-TBD - created by archiving change add-ai-task-retry-resume. Update Purpose after archive.
+定义项目级 AI 任务运行记录和重试恢复诊断，用于追踪任务生命周期、失败步骤、部分产物、幂等键、恢复命令和安全的元数据摘要。
 ## Requirements
 ### Requirement: Persist AI task runs
 DataSpec SHALL persist project-scoped AI task run records for retry and resume diagnostics.

@@ -1,7 +1,7 @@
 # mcp-agent-guidance-pack Specification
 
 ## Purpose
-TBD - created by archiving change add-mcp-agent-guidance-pack. Update Purpose after archive.
+定义 MCP Agent guidance pack 和资源模板，让 AI 客户端在本地、只读、脱敏的前提下获取常见工作流的输入要求、工具顺序、停止条件和证据要求。
 ## Requirements
 ### Requirement: MCP agent guidance pack
 DataSpec SHALL expose a local MCP agent guidance pack resource for common AI workflows.

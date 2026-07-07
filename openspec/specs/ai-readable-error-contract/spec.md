@@ -1,7 +1,7 @@
 # ai-readable-error-contract Specification
 
 ## Purpose
-TBD - created by archiving change standardize-ai-readable-errors. Update Purpose after archive.
+定义 API、CLI 和 MCP 共享的 AI 可读错误诊断契约，在保留既有错误字段的同时提供分类、可重试性、建议动作和文档引用。
 ## Requirements
 ### Requirement: API error diagnostics
 
