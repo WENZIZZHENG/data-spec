@@ -566,12 +566,15 @@ function buildNextActions(status, issues) {
     return ['状态一致性检查通过；提交前仍需按变更范围运行对应测试和 `git diff --check`。']
   }
   const hasError = issues.some((item) => item.severity === 'error')
+  const issueCodeSummary = buildIssueCodeSummary(issues)
+    .map((item) => `${item.code}(count=${item.count},severity=${item.severity})`)
+    .join('、')
   return [
     hasError
       ? '优先修复 severity=error 的状态漂移，再重新运行本命令。'
       : '优先处理或确认 severity=warning 的状态漂移，再重新运行本命令。',
     '如果发现脚本误报，先补测试 fixture，再调整确定性规则。',
-    `当前问题编码：${[...new Set(issues.map((item) => item.code))].join('、')}`
+    `当前问题编码：${issueCodeSummary}`
   ]
 }
 

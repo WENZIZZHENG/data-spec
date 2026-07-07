@@ -205,6 +205,7 @@ test('buildStatusReport reports deterministic TODO and OpenSpec drift', () => {
   const queueMissingSummary = report.summary.issueCodes.find((item) => item.code === 'TODO_QUEUE_ITEM_MISSING')
   assert.equal(queueMissingSummary.count, 1)
   assert.equal(queueMissingSummary.severity, 'error')
+  assert.match(report.nextActions[2], /TODO_QUEUE_ITEM_MISSING\(count=1,severity=error\)/)
   const text = formatStatusReportText(report)
   assert.match(text, /状态：fail/)
   assert.match(text, /检查项:/)
@@ -271,8 +272,11 @@ test('buildStatusReport treats active changes as warning unless TODO claims queu
   assert.equal(openSpecCheck.status, 'pass')
   assert.equal(openSpecCheck.warningCount, 2)
   assert.equal(openSpecCheck.errorCount, 0)
+  assert.equal(report.nextActions[0], '优先处理或确认 severity=warning 的状态漂移，再重新运行本命令。')
+  assert.equal(report.nextActions[1], '如果发现脚本误报，先补测试 fixture，再调整确定性规则。')
   assert.doesNotMatch(report.nextActions[0], /severity=error/)
   assert.match(report.nextActions[0], /severity=warning/)
+  assert.equal(report.nextActions[2], '当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=2,severity=warning)')
   assert.match(
     formatStatusReportText(report),
     /- openspec-state \(OpenSpec active\/archive\/main spec 一致性\): status=pass issues=2 errors=0 warnings=2/
@@ -297,6 +301,7 @@ test('runStatusCheckCli supports json output and returns non-zero on errors', as
     const queueMissingSummary = output.summary.issueCodes.find((item) => item.code === 'TODO_QUEUE_ITEM_MISSING')
     assert.equal(queueMissingSummary.count, 1)
     assert.equal(queueMissingSummary.severity, 'error')
+    assert.match(output.nextActions[2], /TODO_QUEUE_ITEM_MISSING\(count=1,severity=error\)/)
     assert.match(output.nextActions[0], /severity=error/)
     const todoQueueCheck = output.checks.find((check) => check.id === 'todo-queue')
     assert.equal(todoQueueCheck.errorCount, 2)
