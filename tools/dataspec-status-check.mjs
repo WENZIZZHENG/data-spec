@@ -485,6 +485,16 @@ function checkOpenSpecSpecRequirements(specTexts, issues) {
         line: requirementsIndex + 1,
         suggestedFix: '在 ## Requirements 下补充至少一个 ### Requirement: 条目，并保留 OpenSpec Scenario 结构。'
       }))
+      continue
+    }
+    for (const requirement of findRequirementsWithoutScenario(lines, requirementsIndex)) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_REQUIREMENT_SCENARIO_MISSING',
+        message: `${specPath} 的 ${requirement.title} 缺少 #### Scenario:，AI 无法把能力契约映射成可验证行为。`,
+        file: specPath,
+        line: requirement.line,
+        suggestedFix: '在该 Requirement 下补充至少一个 #### Scenario:，描述 WHEN/THEN 或等价验收行为。'
+      }))
     }
   }
 }
@@ -500,6 +510,38 @@ function hasRequirementEntry(lines, requirementsIndex) {
     }
   }
   return false
+}
+
+function findRequirementsWithoutScenario(lines, requirementsIndex) {
+  const missing = []
+  let currentRequirement = null
+  let hasScenario = false
+
+  const flushRequirement = () => {
+    if (currentRequirement && !hasScenario) {
+      missing.push(currentRequirement)
+    }
+  }
+
+  for (let index = requirementsIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (/^##\s+/.test(line)) {
+      flushRequirement()
+      return missing
+    }
+    if (/^###\s+Requirement\s*:/.test(line)) {
+      flushRequirement()
+      currentRequirement = { line: index + 1, title: line }
+      hasScenario = false
+      continue
+    }
+    if (currentRequirement && /^####\s+Scenario\s*:/.test(line)) {
+      hasScenario = true
+    }
+  }
+
+  flushRequirement()
+  return missing
 }
 
 function checkReadmeToolEntry(readmeText, relativeFiles, issues) {
