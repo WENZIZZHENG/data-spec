@@ -241,6 +241,21 @@ test('recommends TODO handoff tests for handoff tool paths', () => {
   )
 })
 
+test('recommends OpenSpec readiness tests for readiness tool paths', () => {
+  const advice = buildValidationAdvice([
+    'tools/dataspec-openspec-readiness.mjs',
+    'tools/dataspec-openspec-readiness.test.mjs'
+  ])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  assert.ok(commandIds.includes('openspec-readiness-tests'))
+  assert.ok(commandIds.includes('diff-check'))
+  assert.equal(
+    advice.commands.find((command) => command.id === 'openspec-readiness-tests').command,
+    'node --test tools/dataspec-openspec-readiness.test.mjs'
+  )
+})
+
 test('recommends index-refs tests for code reference index tool paths', () => {
   const advice = buildValidationAdvice(['tools/dataspec-code-refs.mjs'])
 

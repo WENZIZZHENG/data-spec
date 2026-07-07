@@ -110,6 +110,15 @@ const VALIDATION_RULES = [
     patterns: [/^tools\/dataspec-todo-openspec-handoff\.(mjs|test\.mjs)$/]
   },
   {
+    id: 'openspec-readiness-tests',
+    category: 'tooling',
+    command: 'node --test tools/dataspec-openspec-readiness.test.mjs',
+    cwd: '.',
+    estimatedSeconds: 5,
+    reason: 'OpenSpec readiness 评分、缺口诊断或 CLI 输出改动需要跑准备度检查单测。',
+    patterns: [/^tools\/dataspec-openspec-readiness\.(mjs|test\.mjs)$/]
+  },
+  {
     id: 'code-refs-tests',
     category: 'cli',
     command: 'node --test --test-name-pattern "index-refs" tools/dataspec-cli.test.mjs',

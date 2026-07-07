@@ -1763,13 +1763,14 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不要求所有第三方工具接入，不阻止个人本地实验性变更；第一版覆盖 DataSpec 自有消费端和示例 adapter。
 
 ### P6-177：OpenSpec Change 准备度评分与缺口检查
-- 状态：待办。
+- 状态：已完成第一版，OpenSpec change `add-openspec-readiness-check` 已于 2026-07-08 归档到 `openspec/changes/archive/2026-07-08-add-openspec-readiness-check`。
 - 为什么做：TODO 到 OpenSpec 草稿生成后，真正开工前还需要判断 proposal、design、spec、tasks 是否已经足够明确；如果缺影响范围、验证命令或边界，AI 很容易边做边猜。
 - 已有基础：已有 TODO 到 OpenSpec 交接助手、OpenSpec validate、验证命令推荐工具、P6 里程碑收束待办和多次归档经验。
-- 缺口：缺少 readinessScore、missingFacts、affectedSpecs、validationPlan、reviewBoundary、riskFlags 和 humanQuestions；当前只能看格式是否通过，不能看需求是否可实施。
+- 已完成能力：新增 `tools/dataspec-openspec-readiness.mjs`，支持 `--change <change-id>` 和 `--format text|json`，只读扫描 active change 的 proposal/design/spec/tasks，输出 `readinessScore`、`readinessLevel`、`missingFacts`、`affectedSpecs`、`validationPlan`、`reviewBoundary`、`riskFlags`、`humanQuestions`、`checks` 和 `nextActions`；缺验收标准、边界、有效 spec delta、Impact 内容、验证命令、占位内容或人工确认点时会降分并给出可执行诊断；validationPlan 会脱敏 token、password、JDBC URL、DSN 和 URL userinfo。
 - 参考项目：`stoplightio/spectral` 的规则化 lint、`open-policy-agent/conftest` 的策略校验和 `Redocly/redocly-cli` 的契约检查；只借鉴可配置规则与诊断输出，不引入复杂治理流程。
-- 落地产物：新增 OpenSpec change 准备度检查 CLI/脚本；扫描 proposal/design/spec/tasks，输出评分、缺口、建议验证命令、可能影响的能力和需要用户确认的问题。
-- 验收标准：对一个待实施 change 能输出可读报告和 JSON；缺少验收标准、边界、影响规格或验证命令时给出明确诊断；通过准备度检查不自动实现、不自动归档。
+- 落地产物：新增 OpenSpec change 准备度检查脚本、Node 单测、README 验证入口和 OpenSpec change `add-openspec-readiness-check`。
+- 验收标准：对一个待实施 change 能输出可读报告和 JSON；缺少验收标准、边界、影响规格或验证命令时给出明确诊断；通过准备度检查不自动实现、不自动归档。已通过定点 Node 测试、tools 全量测试、OpenSpec 全量校验、状态检查和独立子 agent 评审。
+- 验证证据：`node --test tools/dataspec-openspec-readiness.test.mjs` 10 pass；`node --test tools/dataspec-verify-advisor.test.mjs` 30 pass；`node --test tools/*.test.mjs` 358 pass、2 skipped（当前平台无法创建部分 symlink）；`openspec validate add-openspec-readiness-check --strict` valid；归档前 readiness JSON 为 `readinessScore=100`、`readinessLevel=READY`、`missingFacts=[]`；独立评审 agent `019f3d97-f09d-7872-808e-fa3d0d11ffa8` 的 4 个 Important 和 1 个 Minor finding 均已修复并关闭 agent；归档后 `openspec validate --all` 120 passed、0 failed，`openspec list --json` 为 `changes=[]`，`node tools/dataspec-status-check.mjs --format json` status pass、0 issues。
 - 边界：不替代人工判断，不把所有低分 change 阻塞掉；第一版作为本地开工前提示和 AI 自检入口。
 
 ### P6-178：MCP 会话状态与当前项目记忆
