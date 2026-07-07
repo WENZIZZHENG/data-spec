@@ -488,3 +488,170 @@ The DataSpec repository SHALL keep contract fixture coverage for the `fixed-sql 
 #### Scenario: Fixture rejects unsafe examples
 - **WHEN** the fixedSql patch fixture includes raw token, password, Authorization header, API key, complete JDBC URL, DSN, or connection string values
 - **THEN** the fixture check fails.
+
+### Requirement: CLI Contract Candidate Import Preview
+The DataSpec CLI SHALL expose contract candidate import preview as a machine-readable read-only command for AI, CI, and local review workflows.
+
+#### Scenario: Preview contract import as JSON
+- **WHEN** a user runs `contract-import preview --project <id> --source-kind <openapi|json-schema|protobuf> --input <path> --format json`
+- **THEN** the CLI reads the local contract file
+- **AND** calls `/api/contract-import/preview` on the configured DataSpec server
+- **AND** prints the returned contract candidate preview package JSON without removing stable fields.
+
+#### Scenario: Preview contract import as text summary
+- **WHEN** a user runs `contract-import preview --project <id> --source-kind <sourceKind> --input <path> --format text`
+- **THEN** the CLI prints a concise summary containing source kind, contract hash, candidate count, diagnostics, safety summary, and next actions
+- **AND** the text output does not become the stable machine-readable contract.
+
+#### Scenario: Contract import command failure
+- **WHEN** arguments are invalid, the input file is missing, the source kind is unsupported, or the server request fails
+- **THEN** the CLI exits with code `2`
+- **AND** it prints a readable diagnostic without exposing token, password, Authorization header, complete JDBC URL, DSN, or connection string values.
+
+### Requirement: CLI contract import fixture coverage
+The DataSpec repository SHALL keep contract fixture coverage for the `contract-import preview` command.
+
+#### Scenario: Fixture covers contract import preview command
+- **WHEN** a developer runs the CLI/MCP contract fixture check
+- **THEN** it verifies a fixture entry for `contract-import preview`
+- **AND** the fixture documents required options, optional options, output shape, exit code semantics, safety metadata, success example, failure example, and recommended next actions.
+
+#### Scenario: Fixture rejects unsafe contract import examples
+- **WHEN** the contract import fixture includes raw token, password, Authorization header, API key, complete JDBC URL, DSN, or connection string values
+- **THEN** the fixture check fails.
+
+### Requirement: CLI Synthetic Example Generation
+The DataSpec CLI SHALL expose synthetic standard example generation as a machine-readable command for AI, CI, and fixture workflows.
+
+#### Scenario: Generate synthetic examples as JSON
+- **WHEN** a user runs `synthetic-examples generate --project <id> --scenario <user|order|payment|audit> --format json`
+- **THEN** the CLI calls `/api/synthetic-examples/generate` on the configured DataSpec server
+- **AND** it prints the returned synthetic example package JSON without removing stable fields.
+
+#### Scenario: Generate synthetic examples as text summary
+- **WHEN** a user runs `synthetic-examples generate --project <id> --scenario <scenario> --format text`
+- **THEN** the CLI prints a concise summary containing scenario, `specHash`, generated case counts, safety summary, and next actions
+- **AND** the text output does not become the stable machine-readable contract.
+
+#### Scenario: Synthetic examples command failure
+- **WHEN** arguments are invalid, the scenario is unsupported, or the server request fails
+- **THEN** the CLI exits with code `2`
+- **AND** it prints a readable diagnostic without exposing token, password, Authorization header, complete JDBC URL, DSN, or connection string values.
+
+### Requirement: CLI synthetic examples fixture coverage
+The DataSpec repository SHALL keep contract fixture coverage for the `synthetic-examples generate` command.
+
+#### Scenario: Fixture covers synthetic examples command
+- **WHEN** a developer runs the CLI/MCP contract fixture check
+- **THEN** it verifies a fixture entry for `synthetic-examples generate`
+- **AND** the fixture documents required options, optional options, output shape, exit code semantics, safety metadata, success example, failure example, and recommended next actions.
+
+#### Scenario: Fixture rejects unsafe synthetic examples
+- **WHEN** the synthetic examples fixture includes raw token, password, Authorization header, API key, complete JDBC URL, DSN, or connection string values
+- **THEN** the fixture check fails.
+
+### Requirement: CLI install-hook command
+The DataSpec CLI SHALL expose an `install-hook` command for explicitly enabling local SQL standard checks.
+
+#### Scenario: Install hook with JSON output
+- **WHEN** a user runs `dataspec install-hook --hook pre-commit --format json`
+- **THEN** the CLI SHALL install or refresh the DataSpec-managed pre-commit hook in the current git repository.
+- **AND** it SHALL print stable JSON with `kind`, `schemaVersion`, `hook`, `writtenFiles`, `skippedFiles`, `diagnostics`, `safety`, and `nextActions`.
+- **AND** it SHALL exit with code `0` when all requested managed artifacts are written or already up to date.
+
+#### Scenario: Install hook with VS Code files
+- **WHEN** a user runs `dataspec install-hook --with-vscode --format json`
+- **THEN** the CLI SHALL generate DataSpec-managed VS Code task and Problem Matcher files in `.vscode/`.
+- **AND** the JSON output SHALL list those files and the local command each artifact uses.
+
+#### Scenario: Install hook refuses unsafe overwrite
+- **WHEN** the target hook or VS Code file exists without the DataSpec managed marker
+- **THEN** the CLI SHALL skip that file, exit with code `2`, and print a non-sensitive diagnostic.
+- **AND** it SHALL not partially overwrite unmanaged content.
+
+#### Scenario: Install hook argument failure
+- **WHEN** the user passes an unsupported hook name, unsupported format, positional argument, or runs outside a git repository
+- **THEN** the CLI SHALL exit with code `2`.
+- **AND** stderr SHALL contain a readable error that does not expose token, password, Authorization header, complete JDBC URL, DSN, or connection string.
+
+### Requirement: CLI lint-changed text output
+The DataSpec CLI SHALL support a text output mode for `lint-changed` that can be consumed by IDE Problem Matchers.
+
+#### Scenario: Print matchable SQL issue lines
+- **WHEN** a user runs `dataspec lint-changed --format text`
+- **THEN** the CLI SHALL lint only changed SQL files using the existing changed-file workflow.
+- **AND** it SHALL print one line per SQL issue using `file:line:column: severity rule - message` plus ` suggestion: <text>` when available.
+- **AND** it SHALL preserve existing `lint-changed` exit code semantics.
+
+#### Scenario: Print recoverable text diagnostics
+- **WHEN** there are no changed SQL files or the changed-file workflow returns a recoverable diagnostic
+- **THEN** the CLI SHALL print a concise non-sensitive text diagnostic and next actions.
+- **AND** it SHALL not call the DataSpec server when no changed SQL files exist.
+
+### Requirement: CLI AI Context budget plan command
+The DataSpec CLI SHALL expose a `context-budget plan` command for AI Context budget planning.
+
+#### Scenario: Print budget plan JSON
+- **WHEN** a user runs `dataspec context-budget plan --project <id> --token-budget <n> --format json`
+- **THEN** the CLI calls the configured DataSpec server budget planner endpoint.
+- **AND** it prints the returned budget plan JSON without downloading, caching, or writing AI Context files.
+- **AND** it exits with code `0` when the request succeeds.
+
+#### Scenario: Forward scope and task hints
+- **WHEN** a user passes `--profile`, `--task-type`, `--scope`, `--query`, `--status`, `--limit`, `--target-table`, or `--target-file`
+- **THEN** the CLI forwards those values to the budget planner endpoint.
+- **AND** explicit CLI options take precedence over `.dataspec/config.json` profile defaults.
+
+#### Scenario: Budget plan command failure
+- **WHEN** arguments are invalid, tokenBudget is missing or non-positive, or the server request fails
+- **THEN** the CLI exits with code `2`.
+- **AND** stderr contains a non-sensitive diagnostic without exposing token, password, Authorization header, complete JDBC URL, DSN, or connection string.
+
+### Requirement: CLI budget planner fixture coverage
+The DataSpec repository SHALL keep contract fixture coverage for the `context-budget plan` command.
+
+#### Scenario: Fixture covers context-budget plan
+- **WHEN** a developer runs the CLI/MCP contract fixture check
+- **THEN** it verifies a fixture entry for `context-budget plan`.
+- **AND** the fixture documents required options, optional options, output shape, exit code semantics, safety metadata, examples, and recommended next actions.
+
+#### Scenario: Fixture rejects unsafe budget examples
+- **WHEN** the budget planner fixture includes raw token, password, Authorization header, API key, complete JDBC URL, DSN, or connection string values
+- **THEN** the fixture check fails.
+
+### Requirement: CLI field reference index command
+The DataSpec CLI SHALL expose an `index-refs` command for local business-repository field reference indexing.
+
+#### Scenario: Index references with JSON output
+- **WHEN** a user runs `dataspec index-refs --field <name> --format json` from a repository with `.dataspec/config.json` `defaultPaths`
+- **THEN** the CLI scans only the configured paths.
+- **AND** it prints the code field reference index JSON without requiring a running DataSpec backend.
+- **AND** it exits with code `0` when the scan completes.
+
+#### Scenario: Index references with explicit paths
+- **WHEN** a user runs `dataspec index-refs --field <name> --path <path> --format json`
+- **THEN** the CLI scans the explicit path or paths instead of requiring `defaultPaths`.
+- **AND** output paths are relative to the DataSpec config root or current working directory.
+
+#### Scenario: Multiple aliases
+- **WHEN** a user passes multiple `--field` or `--alias` values
+- **THEN** the CLI searches all provided names as match candidates.
+- **AND** each reference identifies the canonical requested `fieldName` it matched.
+- **AND** when multiple `--field` values are present, alias values MUST use `field=alias` syntax so each alias has an unambiguous canonical field.
+
+#### Scenario: CLI argument or scan error
+- **WHEN** arguments are invalid, paths are missing, or no scan paths are configured
+- **THEN** the CLI exits with code `2`.
+- **AND** stderr contains a non-sensitive diagnostic and next action.
+
+### Requirement: CLI field reference fixture coverage
+The DataSpec repository SHALL keep contract fixture coverage for the `index-refs` command.
+
+#### Scenario: Fixture covers index-refs command
+- **WHEN** a developer runs the CLI/MCP contract fixture check
+- **THEN** it verifies a fixture entry for `index-refs`.
+- **AND** the fixture documents required options, optional options, output shape, exit code semantics, safety metadata, examples, and recommended next actions.
+
+#### Scenario: Fixture rejects unsafe examples
+- **WHEN** the `index-refs` fixture includes raw token, password, Authorization header, API key, complete JDBC URL, DSN, or connection string values
+- **THEN** the fixture check fails.

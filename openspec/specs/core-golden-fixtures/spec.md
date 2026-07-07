@@ -20,3 +20,15 @@ DataSpec SHALL keep reusable core SQL and reverse-import examples as test resour
 - **WHEN** reverse import fixture metadata is loaded
 - **THEN** the reverse import preview reports stable candidate, missing-comment, and non-standard-field summaries
 - **AND** the fixture is parsed as structured JSON instead of ad hoc string checks
+
+### Requirement: Synthetic example golden fixtures
+DataSpec SHALL keep reusable synthetic standard example fixtures that are executed by the backend test suite.
+
+#### Scenario: Synthetic scenarios are generated in backend tests
+- **WHEN** `mvn test` runs backend tests for synthetic examples
+- **THEN** user, order, payment, and audit scenario packages are generated from deterministic metadata
+- **AND** tests verify stable fields, `specHash`, case counts, safety metadata, and expected diagnostic references.
+
+#### Scenario: Bad SQL expected diagnostics are checked
+- **WHEN** a generated bad SQL case declares an expected diagnostic
+- **THEN** backend tests verify the diagnostic id, severity, and related case id are present in the generated package.

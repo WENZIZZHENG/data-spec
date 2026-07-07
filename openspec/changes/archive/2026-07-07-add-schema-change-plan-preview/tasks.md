@@ -28,3 +28,13 @@
 - 2026-07-07：第一轮独立子 agent 评审 `019f38a8-e70f-7f52-b29e-867b5eb8bdde`（用途：P6-87 评审整改复评）发现 1 个 Critical、1 个 Important、1 个 Minor；已修复 SQL 注释逃逸、默认 schema 前缀和 design 口径，并关闭该 agent。
 - 2026-07-07：第二轮独立子 agent 复评 `019f38b2-71ca-71b3-bdbc-8aa35e3e535b`（用途：P6-87 findings 修复复评）未发现 Critical/Important；Minor 为建议补 schemaName 换行测试，已补充并关闭该 agent。
 - 2026-07-07：未单独运行 `pnpm run check:api`；该脚本需要已启动后端 `/api-docs`。本轮以 `mvn test`、前端 `schema.ts` smoke 断言、`pnpm test` 和 `pnpm build` 覆盖新增 OpenAPI/前端消费契约。
+
+## Archive Verification Evidence
+
+- 2026-07-07：执行 `openspec archive add-schema-change-plan-preview --yes`，同步 `db-reverse-import-compare`、`db-schema-change-plan` 主规格，并归档到 `openspec/changes/archive/2026-07-07-add-schema-change-plan-preview/`。
+- 2026-07-07：补齐新建主规格 `openspec/specs/db-schema-change-plan/spec.md` 的 Purpose，确认默认占位文本扫描无命中。
+- 2026-07-07：`openspec validate --all` 通过，118 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 8 降至 2；第三条 next action 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=2,severity=warning)`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：独立只读复评子 agent `019f3ac9-9655-7961-9767-c75277266b0a`（Noether）复评 staged archive diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。

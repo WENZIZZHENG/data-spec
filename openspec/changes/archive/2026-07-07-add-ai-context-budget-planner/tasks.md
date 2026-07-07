@@ -74,3 +74,13 @@
   - 第一版仍是确定性字符权重估算，不代表模型精确 token。
   - 预算 planner 不生成真实 AI Context 包，也不保证极低预算覆盖复杂任务。
   - 历史 snapshot 的预算语义未单独建模；前端切换 snapshot 会清空旧预算计划，后续如需 snapshot-aware planner 需另开 change。
+
+## Archive Verification Evidence
+
+- 2026-07-07：执行 `openspec archive add-ai-context-budget-planner --yes`，同步 `ai-context-budget-planner`、`ai-context-scoped-export`、`dataspec-cli` 主规格，并归档到 `openspec/changes/archive/2026-07-07-add-ai-context-budget-planner/`。
+- 2026-07-07：补齐新建主规格 `openspec/specs/ai-context-budget-planner/spec.md` 的 Purpose，确认默认占位文本扫描无命中。
+- 2026-07-07：`openspec validate --all` 通过，118 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 8 降至 2；第三条 next action 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=2,severity=warning)`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：独立只读复评子 agent `019f3ac9-9655-7961-9767-c75277266b0a`（Noether）复评 staged archive diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。

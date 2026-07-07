@@ -65,3 +65,13 @@
 - staged 文件名敏感词扫描：`password|passwd|token|secret|authorization|api_key|apikey|jdbc:|dsn` 无命中。
 - staged diff 敏感词扫描：命中均为 README/CLI 参数名、OpenSpec 安全边界说明、脱敏函数名、测试假值 `raw-secret`、`Authorization` 脱敏用例或 `dataspec-token` 字段说明；未发现真实 password、token、Authorization、API key、JDBC URL 或 DSN。
 - 本地 commit：门禁通过后创建；不 push，不自动 archive OpenSpec。
+
+## Archive Verification Evidence
+
+- 2026-07-07：执行 `openspec archive add-synthetic-standard-examples --yes`，同步 `ai-contract-fixtures`、`cli-mcp-contract-fixtures`、`core-golden-fixtures`、`dataspec-cli`、`standard-usage-examples`、`synthetic-standard-examples` 主规格，并归档到 `openspec/changes/archive/2026-07-07-add-synthetic-standard-examples/`。
+- 2026-07-07：补齐新建主规格 `openspec/specs/synthetic-standard-examples/spec.md` 的 Purpose，确认默认占位文本扫描无命中。
+- 2026-07-07：`openspec validate --all` 通过，118 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 8 降至 2；第三条 next action 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=2,severity=warning)`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：独立只读复评子 agent `019f3ac9-9655-7961-9767-c75277266b0a`（Noether）复评 staged archive diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。

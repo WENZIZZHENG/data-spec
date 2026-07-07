@@ -35,3 +35,13 @@
 - 独立代码评审：子 agent `019f38d3-b599-7243-b9b3-f7ad0e7307fe` 用途为 P6-88 强制只读代码评审。首轮发现两个 Important：扫描路径可越界、顶层缺失路径仍返回 0；另有 text diagnostics、fixture outputShape、TODO `ignorePatterns` wording 等 Minor。已修复并补测试；复核结论为无新的 Critical / Important，可进入最终验证 / commit。该 agent 已关闭。
 - 提交门禁：写入本 Evidence 后，按项目 Git 规则复跑 `git status --short`、`git diff --check`、`git diff --cached --check`、`git diff --cached --stat`、staged 文件名敏感词扫描和 staged diff 敏感词扫描。敏感词扫描只允许命中安全边界说明、脱敏规则、fixture/test 中的占位或脱敏示例，不得包含真实 password、token、secret、Authorization、JDBC URL、DSN 或连接串。
 - 未覆盖风险：第一版是确定性文本扫描，不做完整 AST / language server，不自动修改业务代码，不新增持久化引用索引表，不让后端读取任意业务仓库路径；低置信命中仍需人工确认。
+
+## Archive Verification Evidence
+
+- 2026-07-07：执行 `openspec archive add-code-field-reference-index --yes`，同步 `code-field-reference-index`、`dataspec-cli`、`field-impact-analysis` 主规格，并归档到 `openspec/changes/archive/2026-07-07-add-code-field-reference-index/`。
+- 2026-07-07：补齐新建主规格 `openspec/specs/code-field-reference-index/spec.md` 的 Purpose，确认默认占位文本扫描无命中。
+- 2026-07-07：`openspec validate --all` 通过，118 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 8 降至 2；第三条 next action 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=2,severity=warning)`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：独立只读复评子 agent `019f3ac9-9655-7961-9767-c75277266b0a`（Noether）复评 staged archive diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。

@@ -43,3 +43,13 @@
 - 结构化自审：需求覆盖 API、CLI、CLI/MCP fixture、README/TODO 和 OpenSpec；只读边界通过 `safety.readOnly=true`、`writesProject=false`、无写入 service 调用和测试断言覆盖；复杂 schema 组合与 `$ref` 走 diagnostics / `REVIEW_REQUIRED`；现有字段命中走 `MERGE_EXISTING`；输出、错误、`sourcePath`、`sourceRef`、evidence 和文本摘要均走脱敏路径；实现未新增数据库表、迁移、外部网络或外部 LLM 调用。
 - 子 agent 评审：`019f396f-af2e-7160-98bc-25a8aff0fb7c`（Maxwell），用途为 API/CLI/MCP/AI 可观察契约强制只读代码评审；发现 2 个 Critical、2 个 Important、1 个 Minor，均已修复并补回归测试或 schema 描述；已调用 `close_agent` 关闭，关闭结果返回 completed 状态。
 - 未覆盖风险：未运行完整后端 `mvn test` 和前端 `pnpm test`/`pnpm build`；本次变更未触及前端，后端风险用 contractimport 定点 service/controller/fixture 测试覆盖，tools 风险用全量 `node --test tools/*.test.mjs` 覆盖。
+
+## Archive Verification Evidence
+
+- 2026-07-07：执行 `openspec archive add-contract-candidate-import --yes`，同步 `ai-contract-fixtures`、`cli-mcp-contract-fixtures`、`contract-candidate-import`、`dataspec-cli`、`standard-candidate-inbox` 主规格，并归档到 `openspec/changes/archive/2026-07-07-add-contract-candidate-import/`。
+- 2026-07-07：补齐新建主规格 `openspec/specs/contract-candidate-import/spec.md` 的 Purpose，确认默认占位文本扫描无命中。
+- 2026-07-07：`openspec validate --all` 通过，118 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 8 降至 2；第三条 next action 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=2,severity=warning)`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：独立只读复评子 agent `019f3ac9-9655-7961-9767-c75277266b0a`（Noether）复评 staged archive diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。

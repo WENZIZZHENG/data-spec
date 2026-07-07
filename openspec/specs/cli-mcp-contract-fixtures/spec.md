@@ -58,3 +58,39 @@ The DataSpec repository SHALL keep contract fixture entries for first-class MCP 
 #### Scenario: Agent prompt descriptor drifts
 - **WHEN** a prompt name, description, required argument, output shape, safety metadata, or recommended next action changes without updating the fixture
 - **THEN** the fixture check fails with a diagnostic naming the affected prompt and contract path.
+
+### Requirement: CLI fixture covers contract import preview
+The CLI/MCP contract fixtures SHALL document the `contract-import preview` command as a read-only AI-facing workflow.
+
+#### Scenario: Contract import fixture is validated
+- **WHEN** a developer runs the CLI/MCP contract fixture check
+- **THEN** the fixture set includes `contract-import-preview`
+- **AND** the entry lists required options, optional options, output shape, exit codes, safety metadata, success example, failure example, and recommended next actions.
+
+#### Scenario: Contract import fixture safety metadata
+- **WHEN** the fixture check reads the `contract-import-preview` entry
+- **THEN** its safety metadata declares `readOnly=true`, `writesProject=false`, `containsRealBusinessRows=false`, `externalNetworkUsed=false`, `externalLlmUsed=false`, and no raw sensitive example values.
+
+### Requirement: CLI fixture covers synthetic examples
+The CLI/MCP contract fixtures SHALL document the `synthetic-examples generate` command as a read-only AI-facing workflow.
+
+#### Scenario: Synthetic examples fixture is validated
+- **WHEN** a developer runs the CLI/MCP contract fixture check
+- **THEN** the fixture set includes `synthetic-examples-generate`
+- **AND** the entry lists required options, optional options, output shape, exit codes, safety metadata, success example, failure example, and recommended next actions.
+
+#### Scenario: Synthetic examples fixture safety metadata
+- **WHEN** the fixture check reads the `synthetic-examples-generate` entry
+- **THEN** its safety metadata declares `readOnly=true`, `writesProject=false`, `containsRealBusinessRows=false`, `externalLlmUsed=false`, and no raw sensitive example values.
+
+### Requirement: CLI install-hook fixture coverage
+The DataSpec repository SHALL keep contract fixture coverage for the `install-hook` command.
+
+#### Scenario: Fixture covers install-hook command
+- **WHEN** a developer runs the CLI/MCP contract fixture check
+- **THEN** it SHALL verify a fixture entry for `install-hook`.
+- **AND** the fixture SHALL document required options, optional options, generated artifacts, output shape, exit code semantics, safety metadata, examples, and recommended next actions.
+
+#### Scenario: Fixture rejects unsafe hook examples
+- **WHEN** the `install-hook` fixture includes raw token, password, Authorization header, API key, complete JDBC URL, DSN, or connection string values
+- **THEN** the fixture check SHALL fail with a readable diagnostic.

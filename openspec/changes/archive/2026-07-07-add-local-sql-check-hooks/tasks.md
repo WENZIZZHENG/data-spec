@@ -58,3 +58,13 @@
   - 写入前校验与实际写入之间仍存在本地 TOCTOU 窗口；当前按个人/小团队本地工具定位接受，后续高安全场景可再引入更原子化文件创建策略。
   - VS Code 第一版只生成 task/problem matcher 示例，不实现保存即自动运行的插件或编辑器扩展。
   - 当前平台无法创建文件级 symlink，因此文件级 symlink 测试在本机跳过；实现路径仍对目标文件、父目录和 root symlink 均做拒绝。
+
+## Archive Verification Evidence
+
+- 2026-07-07：执行 `openspec archive add-local-sql-check-hooks --yes`，同步 `cli-mcp-contract-fixtures`、`dataspec-cli`、`local-sql-check-hooks` 主规格，并归档到 `openspec/changes/archive/2026-07-07-add-local-sql-check-hooks/`。
+- 2026-07-07：补齐新建主规格 `openspec/specs/local-sql-check-hooks/spec.md` 的 Purpose，确认默认占位文本扫描无命中。
+- 2026-07-07：`openspec validate --all` 通过，118 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 8 降至 2；第三条 next action 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=2,severity=warning)`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：独立只读复评子 agent `019f3ac9-9655-7961-9767-c75277266b0a`（Noether）复评 staged archive diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。
