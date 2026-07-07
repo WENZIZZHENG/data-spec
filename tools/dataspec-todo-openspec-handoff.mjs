@@ -210,7 +210,7 @@ function parseArgs(args) {
       continue
     }
     if (arg.startsWith('--item=')) {
-      options.itemId = arg.slice('--item='.length)
+      options.itemId = requireInlineValue(arg, '--item=', '--item')
       continue
     }
     if (arg === '--todo') {
@@ -219,7 +219,7 @@ function parseArgs(args) {
       continue
     }
     if (arg.startsWith('--todo=')) {
-      options.todoPath = path.resolve(arg.slice('--todo='.length))
+      options.todoPath = path.resolve(requireInlineValue(arg, '--todo=', '--todo'))
       continue
     }
     if (arg === '--output-dir') {
@@ -228,7 +228,7 @@ function parseArgs(args) {
       continue
     }
     if (arg.startsWith('--output-dir=')) {
-      options.outputDir = path.resolve(arg.slice('--output-dir='.length))
+      options.outputDir = path.resolve(requireInlineValue(arg, '--output-dir=', '--output-dir'))
       continue
     }
     if (arg === '--change') {
@@ -237,7 +237,7 @@ function parseArgs(args) {
       continue
     }
     if (arg.startsWith('--change=')) {
-      options.changeId = arg.slice('--change='.length)
+      options.changeId = requireInlineValue(arg, '--change=', '--change')
       continue
     }
     if (arg === '--capability') {
@@ -246,7 +246,7 @@ function parseArgs(args) {
       continue
     }
     if (arg.startsWith('--capability=')) {
-      options.capability = arg.slice('--capability='.length)
+      options.capability = requireInlineValue(arg, '--capability=', '--capability')
       continue
     }
     if (arg === '--format') {
@@ -255,7 +255,7 @@ function parseArgs(args) {
       continue
     }
     if (arg.startsWith('--format=')) {
-      options.format = normalizeFormat(arg.slice('--format='.length))
+      options.format = normalizeFormat(requireInlineValue(arg, '--format=', '--format'))
       continue
     }
     if (arg.startsWith('-')) {
@@ -277,10 +277,22 @@ function parseArgs(args) {
 
 function requireValue(args, index, name) {
   const value = args[index + 1]
-  if (!value) {
+  if (!isOptionValue(value)) {
     throw new Error(`${name} 需要参数值`)
   }
   return value
+}
+
+function requireInlineValue(arg, prefix, name) {
+  const value = arg.slice(prefix.length)
+  if (!isOptionValue(value)) {
+    throw new Error(`${name} 需要参数值`)
+  }
+  return value
+}
+
+function isOptionValue(value) {
+  return typeof value === 'string' && value.length > 0 && !value.startsWith('-')
 }
 
 function normalizeFormat(value) {

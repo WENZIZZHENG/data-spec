@@ -131,6 +131,20 @@ test('runHandoffCli supports dry-run json without writing files', async () => {
   }
 })
 
+test('runHandoffCli rejects option-like values before reading files', async () => {
+  for (const option of ['--item', '--todo', '--output-dir', '--change', '--capability', '--format']) {
+    for (const args of [[option, '-h'], [`${option}=-h`], [`${option}=`]]) {
+      const io = createIo()
+
+      const code = await runHandoffCli(args, io)
+
+      assert.equal(code, 2)
+      assert.equal(io.stdout, '')
+      assert.match(io.stderr, new RegExp(`${option} 需要参数值`))
+    }
+  }
+})
+
 async function exists(filePath) {
   try {
     await stat(filePath)
