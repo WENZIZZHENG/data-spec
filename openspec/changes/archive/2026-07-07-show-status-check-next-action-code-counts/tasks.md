@@ -33,3 +33,9 @@
 - 2026-07-07：`git diff --check` 退出码 0；PowerShell 输出仅包含 Git 的 CRLF 工作区提示。
 - 2026-07-07：新增 diff 常见敏感字段扫描无命中。
 - 2026-07-07：独立只读子 agent `019f3aa0-4697-7e62-ad08-4d83a765617b`（Herschel）完成评审并已关闭；结论 Ready，无 Critical。Important 提醒 OpenSpec change 目录为 untracked，提交前已纳入精确 stage；Minor 建议混合 severity 直接断言，因当前可观察入口不会自然生成同 code 同时 warning/error，且本次主要风险已由 warning/error 分场景覆盖，暂不扩大测试接口。
+- 2026-07-07：归档时已同步 `openspec/specs/ai-contract-fixtures/spec.md`，并移动到 `openspec/changes/archive/2026-07-07-show-status-check-next-action-code-counts/`。
+- 2026-07-07：归档后 `openspec validate --all` 通过，129 passed、0 failed。
+- 2026-07-07：归档后 `node --test tools/dataspec-status-check.test.mjs` 通过，8 pass、0 fail。
+- 2026-07-07：归档后 `node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 24 降为 23；第三条 `nextActions[]` 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=23,severity=warning)`。
+- 2026-07-07：归档后 `git diff --check` 退出码 0；PowerShell 输出仅包含 Git 的 CRLF 工作区提示。
+- 2026-07-07：独立只读子 agent `019f3aa5-424f-7cb1-9981-6adbd9ce3e3a`（Harvey）完成归档 diff 复评并已关闭；结论 Ready，无 Critical/Important/Minor。
