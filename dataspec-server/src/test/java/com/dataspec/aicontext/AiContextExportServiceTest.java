@@ -109,6 +109,8 @@ class AiContextExportServiceTest {
         assertTrue(entries.get(".dataspec/workflows.md").contains("review-pr-sql"));
         assertTrue(entries.get(".dataspec/workflows.md").contains("reverse-import-standards"));
         assertTrue(entries.get(".dataspec/workflows.md").contains("export-min-context"));
+        assertTrue(entries.get(".dataspec/workflows.md").contains("standard-evidence-review"));
+        assertTrue(entries.get(".dataspec/workflows.md").contains("GET /api/standard-evidence"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/manifest.json"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/schema-registry.json"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/capabilities.json"));
@@ -390,6 +392,8 @@ class AiContextExportServiceTest {
         assertTrue(workflows.contains("## review-pr-sql"));
         assertTrue(workflows.contains("## reverse-import-standards"));
         assertTrue(workflows.contains("## export-min-context"));
+        assertTrue(workflows.contains("## standard-evidence-review"));
+        assertTrue(workflows.contains("dataspec capability show standard-evidence"));
     }
 
     @Test

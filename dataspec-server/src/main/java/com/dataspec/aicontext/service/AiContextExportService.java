@@ -1338,11 +1338,25 @@ public class AiContextExportService {
                   3. 读取 `.dataspec/workflows.md` 和 `.dataspec/field-catalog.json`
                 - 产物：dataspec-ai-context.zip、contextScope 摘要、standard.specVersion/specHash。
                 - 失败恢复：字段过少时扩大 scope/query；包过大时收窄 scope/query/status；unversioned 需要在交付中说明。
+
+                ## standard-evidence-review：字段标准证据复核
+
+                - 目标：在回答字段标准依据、可信度、最近使用情况或准备调整标准前，先读取跨来源标准证据。
+                - 输入：projectId=%d、subjectType（通常为 FIELD）、subjectId。
+                - 前置检查：`dataspec doctor --project %d --format json`；`dataspec capability show standard-evidence --project %d --format json`。
+                - 步骤：
+                  1. `GET /api/standard-evidence?projectId=%d&subjectType=<subjectType>&subjectId=<subjectId>`
+                  2. 检查 evidenceSummary、confidence、recentUsage、coverage 和 gaps。
+                  3. 在任务说明中记录证据摘要、采信原因、未采信来源和后续动作。
+                - 产物：字段标准证据摘要、可信度/覆盖率判断、证据缺口和后续动作说明。
+                - 失败恢复：证据为空或可信度不足时先补充 Context/字段目录/使用示例；来源冲突时交给人工确认。
+                - 安全边界：只读 API 计划，不声明独立 CLI/MCP 工具，不保存 raw evidence、token 或业务数据行。
                 """.formatted(
                 projectId, projectId, projectId, projectId, projectId, projectId,
                 projectId, projectId, projectId, projectId, projectId,
                 projectId, projectId,
-                projectId, projectId, projectId
+                projectId, projectId, projectId,
+                projectId, projectId, projectId, projectId
         );
     }
 

@@ -33,3 +33,21 @@
 - 2026-07-07：`git diff --check` 通过；新增行敏感词扫描命中 README/OpenSpec 的安全边界说明和扫描命令文本，人工确认不是 raw secret、Authorization header、JDBC URL、DSN 或业务数据行。
 - 2026-07-07：独立只读评审子 agent `019f3a27-6036-7ce1-b5bf-d0912b659464`（Mill）用于评审 workflow recipe、CLI/MCP 外部协议、安全边界和测试，结论为通过，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。
 - 2026-07-07：本地 commit 由本次验证收口后的 Git 提交动作完成，最终 commit hash 以仓库 Git history 为准。
+
+## 4. 后端 AI Context follow-up
+
+- [x] 4.1 更新 spec delta，明确 AI Context `.dataspec/workflows.md` 也必须包含 `standard-evidence-review`。
+- [x] 4.2 先补 `AiContextExportServiceTest` 失败断言，覆盖离线 workflows markdown 包含 `standard-evidence-review` 和 `GET /api/standard-evidence`。
+- [x] 4.3 更新 `AiContextExportService.generateWorkflowsMarkdown()`，补齐标准证据复核 recipe，并保持只读、plan-only、无独立 CLI/MCP surface 边界。
+- [x] 4.4 运行后端 AI Context 定点测试、OpenSpec strict、`git diff --check` 和敏感词扫描。
+- [x] 4.5 启动独立子 agent 只读评审后端 AI Context markdown、OpenSpec 一致性和安全边界；关闭子 agent 并处理 findings。
+- [x] 4.6 追加本轮 `Verification Evidence` 并创建本地 commit。
+
+## Verification Evidence - AI Context follow-up
+
+- 2026-07-07：先运行 `mvn -Dtest=AiContextExportServiceTest#generateAiContextPackage_containsAgentReadyContextFiles+generateAiContextPackageAiContract_exposesStableContextFields test`，红灯 2 项，原因是 `.dataspec/workflows.md` 尚未包含 `standard-evidence-review` 和 `GET /api/standard-evidence`。
+- 2026-07-07：补齐 `generateWorkflowsMarkdown()` 后重跑同一 Maven 命令通过，结果为 2 tests、0 failures、0 errors；Maven 最终 `BUILD SUCCESS`。本机 Maven 仓库仍输出 `jvnet-parent-3.pom` non-parseable warning，属于既有环境噪音。
+- 2026-07-07：`openspec validate add-standard-evidence-review-workflow --strict` 通过。
+- 2026-07-07：`git diff --check` 通过；新增行敏感词扫描只命中 Java markdown 安全边界中的 `token` 说明，人工确认不是 raw secret、Authorization header、JDBC URL、DSN 或业务数据行。
+- 2026-07-07：独立只读评审子 agent `019f3a39-b226-7543-ad25-d41c01e0688b`（Erdos）用于评审后端 AI Context markdown、OpenSpec 一致性、`.formatted(...)` 占位符数量和安全边界，结论为通过，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。
+- 2026-07-07：本地 commit 由本轮验证收口后的 Git 提交动作完成，最终 commit hash 以仓库 Git history 为准。

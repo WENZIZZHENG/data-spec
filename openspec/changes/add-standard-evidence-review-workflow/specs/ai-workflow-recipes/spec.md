@@ -15,3 +15,16 @@ The system SHALL provide workflow recipes that describe common AI/DataSpec tasks
 - **WHEN** an AI agent requests the standard-evidence-review recipe
 - **THEN** the recipe describes a read-only, plan-only workflow that uses projectId, subjectType, and subjectId to read `GET /api/standard-evidence`
 - **AND** it does not claim a dedicated CLI command, MCP tool, or MCP resource for standard evidence.
+
+### Requirement: Include recipes in AI Context package
+The AI Context package SHALL include workflow recipe guidance for offline coding agents.
+
+#### Scenario: Context package contains workflows file
+- **WHEN** a user downloads an AI Context zip
+- **THEN** the zip contains `.dataspec/workflows.md`
+- **AND** the manifest and `.dataspec/README.md` reference the workflow file.
+
+#### Scenario: Context workflows include standard evidence review
+- **WHEN** a user downloads an AI Context zip after standard evidence review is supported
+- **THEN** `.dataspec/workflows.md` includes the standard-evidence-review recipe
+- **AND** the recipe describes `GET /api/standard-evidence` as a read-only API step without claiming a dedicated CLI or MCP surface.
