@@ -1,6 +1,7 @@
 package com.dataspec.bootstrap;
 
 import com.dataspec.bootstrap.model.AiSessionBootstrap;
+import com.dataspec.bootstrap.model.AiSessionBootstrapCapability;
 import com.dataspec.bootstrap.service.impl.AiSessionBootstrapServiceImpl;
 import com.dataspec.capability.service.impl.AiCapabilityCatalogServiceImpl;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
@@ -10,6 +11,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -54,6 +56,15 @@ class AiSessionBootstrapServiceImplTest {
         assertEquals("abc123", bootstrap.standardSnapshot().specHash());
         assertTrue(bootstrap.availableCapabilities().stream().anyMatch(capability -> "lint-sql".equals(capability.id())));
         assertTrue(bootstrap.availableCapabilities().stream().anyMatch(capability -> "reverse-import".equals(capability.id())));
+        AiSessionBootstrapCapability standardEvidence = bootstrap.availableCapabilities().stream()
+                .filter(capability -> "standard-evidence".equals(capability.id()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("READ_ONLY", standardEvidence.writeRisk());
+        assertEquals(List.of("GET /api/standard-evidence"), standardEvidence.apiEndpoints());
+        assertEquals(List.of(), standardEvidence.cliCommands());
+        assertEquals(List.of(), standardEvidence.mcpResources());
+        assertEquals(List.of(), standardEvidence.mcpTools());
         assertTrue(bootstrap.recommendedCommands().stream().anyMatch(command -> command.contains("dataspec lint")));
         assertTrue(bootstrap.recommendedCommands().stream().anyMatch(command -> command.contains("export-context")));
         assertTrue(bootstrap.recommendedCommands().stream().anyMatch(command -> command.contains("reverse-import-standards")));

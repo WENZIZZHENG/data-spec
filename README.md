@@ -250,7 +250,9 @@ node tools/dataspec-cli.mjs bootstrap --project 1 --format text
 
 返回 JSON 包含 `kind/schemaVersion/generatedAt/status/projectId/server/authMode/specVersion/standardSnapshot/availableCapabilities/recommendedCommands/knownRisks/docsRefs/checks/nextActions`。`status=READY` 表示可以继续按推荐命令工作；`DEGRADED` 常见于标准快照未版本化；`BLOCKED` 常见于未选择项目、服务不可达或 token/项目访问失败。CLI 在服务不可达时仍会输出本地 fallback 启动包，包含 `RUN_DOCTOR`、启动服务和选择项目等 nextActions，便于 AI 不靠猜测恢复。
 
-MCP 中可读取 `dataspec://project/1/session-bootstrap`，也可调用 `get_session_bootstrap` tool 覆盖 projectId。推荐 AI 新会话顺序是：先读取 session bootstrap，再按 `recommendedCommands` 运行 `doctor`、导出 AI Context、执行 SQL lint、查看反向导入 workflow 或生成 DDL。
+`availableCapabilities` 会摘要高频入口，包括 SQL lint、AI Context 导出、反向导入、DDL 生成和 `standard-evidence`。其中 `standard-evidence` 只声明 `GET /api/standard-evidence`，用于 AI 在回答字段标准来源、可信度和最近使用证据前读取跨来源证据视图，不声明 CLI command、MCP resource 或 MCP tool。session bootstrap 只暴露发现摘要；实际证据需要单独调用 `GET /api/standard-evidence`，bootstrap 本身不执行证据聚合，也不会返回 raw SQL、AI payload、候选 raw evidence、raw source metadata、token、password、Authorization、JDBC URL、DSN 或业务数据行。
+
+MCP 中可读取 `dataspec://project/1/session-bootstrap`，也可调用 `get_session_bootstrap` tool 覆盖 projectId。推荐 AI 新会话顺序是：先读取 session bootstrap，再按 `recommendedCommands` 运行 `doctor`、导出 AI Context、执行 SQL lint、查看反向导入 workflow、生成 DDL，或在需要字段证据时读取 standard evidence。
 
 ## AI 任务卡
 

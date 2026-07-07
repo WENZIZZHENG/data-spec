@@ -39,7 +39,8 @@ public class AiSessionBootstrapServiceImpl implements AiSessionBootstrapService 
             "export-ai-context",
             "lint-sql",
             "reverse-import",
-            "generate-ddl"
+            "generate-ddl",
+            "standard-evidence"
     );
 
     private final AiCapabilityCatalogService capabilityCatalogService;
