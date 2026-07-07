@@ -1069,7 +1069,7 @@ function extractMarkdownLinkTargets(line) {
       cursor = labelStart + 1
       continue
     }
-    const labelEnd = searchableLine.indexOf(']', labelStart + 1)
+    const labelEnd = findMarkdownLinkLabelEnd(searchableLine, labelStart + 1)
     if (labelEnd === -1) {
       break
     }
@@ -1104,6 +1104,15 @@ function extractMarkdownLinkTargets(line) {
     cursor = parenEnd + 1
   }
   return targets
+}
+
+function findMarkdownLinkLabelEnd(line, start) {
+  for (let index = start; index < line.length; index += 1) {
+    if (line[index] === ']' && !isEscapedMarkdownDelimiter(line, index)) {
+      return index
+    }
+  }
+  return -1
 }
 
 function findMarkdownLinkTargetEnd(line, targetStart) {
