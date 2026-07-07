@@ -45,6 +45,17 @@ test('recommends status check for TODO and status-check tool paths', () => {
   assert.match(statusCheck.reason, /README\/TODO\/OpenSpec/)
 })
 
+test('recommends status check for AI contract documentation paths', () => {
+  const advice = buildValidationAdvice(['docs/ai-contracts.md'])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  const statusCheck = advice.commands.find((command) => command.id === 'status-check')
+  assert.ok(commandIds.includes('status-check'))
+  assert.ok(commandIds.includes('diff-check'))
+  assert.equal(statusCheck.command, 'node tools/dataspec-status-check.mjs --format json')
+  assert.match(statusCheck.reason, /AI workflow recipe/)
+})
+
 test('recommends frontend tests, build and OpenAPI check for frontend contract paths', () => {
   const advice = buildValidationAdvice([
     'dataspec-web/src/views/SqlLint.vue',
