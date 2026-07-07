@@ -63,6 +63,19 @@ test('prompt fixture cli reports missing option value', async () => {
   )
 })
 
+test('prompt fixture cli rejects option-like values', async () => {
+  const io = createIo()
+
+  await assert.rejects(
+    () => runPromptTemplateEval(['--template', '-h'], io),
+    /--template 缺少参数值/
+  )
+  await assert.rejects(
+    () => runPromptTemplateEval(['--format', '--template', 'create-table-prompt'], io),
+    /--format 缺少参数值/
+  )
+})
+
 function createIo() {
   return {
     stdout: '',

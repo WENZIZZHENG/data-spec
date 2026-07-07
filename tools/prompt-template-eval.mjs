@@ -143,10 +143,14 @@ function parseArgs(argv) {
 
 function requiredValue(argv, index, flag) {
   const value = argv[index]
-  if (!value || value.startsWith('--')) {
+  if (!isOptionValue(value)) {
     throw new Error(`${flag} 缺少参数值`)
   }
   return value
+}
+
+function isOptionValue(value) {
+  return typeof value === 'string' && value.length > 0 && !value.startsWith('-')
 }
 
 function formatText(result) {
