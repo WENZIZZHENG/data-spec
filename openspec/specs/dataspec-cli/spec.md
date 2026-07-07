@@ -240,6 +240,11 @@ The DataSpec CLI SHALL provide commands for AI agents to list, inspect, and vali
 - **THEN** the CLI verifies that required core AI capabilities exist in the catalog
 - **AND** reports missing ids or incompatible schemaVersion without executing those capabilities.
 
+#### Scenario: Standard evidence capability fixture
+- **WHEN** local CLI capability catalog fixtures are used in tests or AI-readable examples
+- **THEN** they include `standard-evidence`
+- **AND** `standard-evidence` is read-only, API-only, and lists `GET /api/standard-evidence` without CLI or MCP surfaces.
+
 #### Scenario: Server unavailable
 - **WHEN** the CLI cannot reach the DataSpec server while reading capabilities
 - **THEN** it returns the existing AI-readable DataSpecError diagnostics

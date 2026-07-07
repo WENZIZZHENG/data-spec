@@ -128,6 +128,11 @@ The AI Context package SHALL include the DataSpec capability catalog so offline 
 - **THEN** it contains `.dataspec/capabilities.json`
 - **AND** manifest files list the capability catalog artifact.
 
+#### Scenario: Exported capabilities include standard evidence
+- **WHEN** an AI Context zip is generated
+- **THEN** `.dataspec/capabilities.json` includes `standard-evidence`
+- **AND** `standard-evidence` is read-only, API-only, and lists `GET /api/standard-evidence`.
+
 #### Scenario: Capability catalog is documented in package README
 - **WHEN** a caller reads the package README or AGENTS fragment
 - **THEN** it instructs AI agents to read `.dataspec/capabilities.json` before selecting CLI, MCP, or API actions.

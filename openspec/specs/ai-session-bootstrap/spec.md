@@ -9,7 +9,8 @@ DataSpec SHALL expose a read-only AI session bootstrap package for a DataSpec pr
 #### Scenario: Project bootstrap is ready
 - **WHEN** a caller requests the session bootstrap with a valid `projectId`
 - **THEN** DataSpec returns `kind`, `schemaVersion`, `generatedAt`, `status`, `projectId`, `server`, `authMode`, `specVersion`, `standardSnapshot`, `availableCapabilities`, `recommendedCommands`, `knownRisks`, `docsRefs`, `checks`, and `nextActions`
-- **AND** the package tells the caller whether lint, AI Context export, database reverse import, and DDL generation are available through API, CLI, or MCP surfaces.
+- **AND** the package tells the caller whether lint, AI Context export, database reverse import, DDL generation, and standard evidence lookup are available through API, CLI, or MCP surfaces.
+- **AND** `availableCapabilities` includes `standard-evidence` as a read-only API-only capability for `GET /api/standard-evidence`.
 
 #### Scenario: Missing project id
 - **WHEN** a caller requests the session bootstrap without `projectId`

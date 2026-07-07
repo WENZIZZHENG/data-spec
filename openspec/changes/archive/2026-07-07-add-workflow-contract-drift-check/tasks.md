@@ -38,3 +38,12 @@
 - 2026-07-07：修复评审 findings 后，`node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`、0 errors；`workflow-recipes` check 为 pass，仅保留既有 active change warning。
 - 2026-07-07：修复评审 findings 后，`openspec validate add-workflow-contract-drift-check --strict` 通过。
 - 2026-07-07：修复评审 findings 后，`git diff --check` 通过，仅输出 Windows LF/CRLF 提示。
+
+## Archive Verification Evidence
+
+- 2026-07-07：将 `ai-workflow-recipes` delta 同步到 `openspec/specs/ai-workflow-recipes/spec.md`，并将 change 移动到 `openspec/changes/archive/2026-07-07-add-workflow-contract-drift-check/`。
+- 2026-07-07：`openspec validate --all` 通过，119 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 19 降至 13；第三条 next action 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=13,severity=warning)`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：独立只读复评子 agent `019f3ab2-2e82-7ae0-82e5-291a3a3b6dd7`（Pasteur）复评 staged archive diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。
