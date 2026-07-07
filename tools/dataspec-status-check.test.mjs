@@ -975,6 +975,78 @@ DataSpec SHALL report duplicate requirement titles.
   }
 })
 
+test('runStatusCheckCli normalizes duplicate Requirement titles before comparison', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'normalized-duplicate-requirement'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+
+#### Scenario: Debug rule hit
+- **WHEN** the user requests a rule explanation
+- **THEN** DataSpec returns evidence
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'normalized-duplicate-requirement', 'spec.md'),
+      `# normalized-duplicate-requirement Specification
+
+## Purpose
+用于验证重复 Requirement 标题比较会忽略首尾空白和大小写。
+## Requirements
+### Requirement: Duplicate title
+DataSpec SHALL normalize requirement titles before comparing duplicates.
+
+#### Scenario: First normalized requirement
+- **WHEN** the first requirement is checked
+- **THEN** DataSpec accepts it
+
+### Requirement:   duplicate TITLE${'  '}
+DataSpec SHALL report normalized duplicate requirement titles.
+
+#### Scenario: Normalized duplicate requirement
+- **WHEN** the normalized duplicate is checked
+- **THEN** DataSpec reports it
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    const issues = output.issues.filter((issue) => issue.code === 'OPENSPEC_SPEC_REQUIREMENT_DUPLICATE')
+    const openSpecCheck = output.checks.find((check) => check.id === 'openspec-state')
+
+    assert.equal(code, 1)
+    assert.equal(output.status, 'fail')
+    assert.equal(output.issues.length, 1)
+    assert.equal(issues.length, 1)
+    assert.equal(issues[0].file, 'openspec/specs/normalized-duplicate-requirement/spec.md')
+    assert.equal(issues[0].line, 13)
+    assert.match(issues[0].message, /line 6/)
+    assert.equal(openSpecCheck.errorCount, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('runStatusCheckCli reports Requirement entries without Scenario in main OpenSpec specs', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
   try {
