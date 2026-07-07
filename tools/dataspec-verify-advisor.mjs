@@ -103,9 +103,11 @@ const VALIDATION_RULES = [
     command: 'node tools/dataspec-status-check.mjs --format json',
     cwd: '.',
     estimatedSeconds: 5,
-    reason: 'README/TODO/OpenSpec、AI 契约文档或状态检查工具改动需要检查文档与规格入口、AI workflow recipe 清单是否漂移。',
+    reason: 'README/TODO/OpenSpec、项目规范、AI 契约文档或状态检查工具改动需要检查文档与规格入口、AI workflow recipe 清单是否漂移。',
     patterns: [
+      /^AGENTS\.md$/,
       /^README\.md$/,
+      /^SDD\.md$/,
       /^TODO\.md$/,
       /^docs\/ai-contracts\.md$/,
       /^openspec\//,
