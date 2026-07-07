@@ -31,3 +31,13 @@
 - 通用检查：`git diff --check`，结果无空白错误；Git 提示 `StandardCandidateRepository.java` 工作区 LF 将在 Git touch 时转换为 CRLF。
 - 敏感词扫描：`rg -n "password|passwd|token|secret|authorization|api_key|apikey|jdbc:|dsn" ...`，命中项均为 OpenSpec 禁止 raw secret 的说明和测试中的脱敏假输入，无真实凭据。
 - 评审：子 agent `019f3994-ea6a-7a90-85a4-7d3c4fdf05fb` 做只读代码评审，结论为 `With fixes`，Important findings 为 `primarySourceType` 未脱敏、无证据字段等级与 OpenSpec 不一致、缺少 MockMvc 路由契约测试；三项均已修复。该 agent 已调用 `close_agent` 关闭。前一个中断期间创建的评审 agent `019f398e-c0ea-78e1-8ca2-b1d1e68f490f` 后续查询/关闭均返回 `not_found`，无需继续清理。
+
+## Archive Verification Evidence
+
+- 2026-07-07：执行 `openspec archive add-field-provenance-confidence-summary --yes`，创建主规格 `openspec/specs/field-provenance-confidence/spec.md`，并归档到 `openspec/changes/archive/2026-07-07-add-field-provenance-confidence-summary/`。
+- 2026-07-07：`openspec validate --all` 通过，118 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 13 降至 8；第三条 next action 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=8,severity=warning)`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：独立只读复评子 agent `019f3abb-7619-78c0-98de-9672aa19b115`（Planck）复评 staged archive diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。
+- 2026-07-07：补齐新增主规格 Purpose 后，独立只读复评子 agent `019f3ac0-d02f-75a1-801f-b97679d4f29c`（Helmholtz）复评 staged diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。

@@ -30,3 +30,13 @@
 - 通用检查：`git diff --check`，结果通过。
 - 敏感词扫描：`rg -n "password|passwd|token|secret|authorization|api_key|apikey|jdbc:|dsn" dataspec-server/src/main/java/com/dataspec/aitaskrecommendation dataspec-server/src/test/java/com/dataspec/aitaskrecommendation openspec/changes/add-ai-task-recommendation-queue`，命中项均为 OpenSpec 禁止 raw secret 的说明、测试中的脱敏假输入和出口脱敏正则，无真实凭据。
 - 评审：子 agent `019f39c7-e6a6-7a80-af63-61965d6c2fca` 结论 `With fixes`，指出任务数与 OpenSpec 不一致、健康动作 route query 拼接错误、候选任务重复和脱敏测试不足；已修复并关闭。
+
+## Archive Verification Evidence
+
+- 2026-07-07：执行 `openspec archive add-ai-task-recommendation-queue --yes`，创建主规格 `openspec/specs/ai-task-recommendation-queue/spec.md`，并归档到 `openspec/changes/archive/2026-07-07-add-ai-task-recommendation-queue/`。
+- 2026-07-07：`openspec validate --all` 通过，118 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 13 降至 8；第三条 next action 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=8,severity=warning)`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：独立只读复评子 agent `019f3abb-7619-78c0-98de-9672aa19b115`（Planck）复评 staged archive diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。
+- 2026-07-07：补齐新增主规格 Purpose 后，独立只读复评子 agent `019f3ac0-d02f-75a1-801f-b97679d4f29c`（Helmholtz）复评 staged diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。

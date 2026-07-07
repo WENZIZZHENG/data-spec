@@ -34,3 +34,13 @@
 - 独立评审：子 agent `019f39df-2ab8-7450-b8d9-34c34dddb355`，用途为 P6-115 只读代码评审，已调用 `close_agent` 关闭。评审提出 4 条 findings：SQL 原文装入聚合链路、AI 摘要缺少主要来源和候选/变更摘要、驼峰敏感标签脱敏不足、summary 查询缺少回归测试。
 - 评审处理：SQL 命中改为复用使用热区安全计数；`aiEvidenceSummary` 改为从结构化 `items` 派生主要来源和候选/变更摘要；脱敏覆盖 `accessToken`、`jdbcUrl`、`clientSecret` 等驼峰标签；新增 `StandardEvidenceRepositorySummaryTest` 断言候选和变更日志 summary 查询不选择 raw 字段。
 - 剩余风险：SQL 检查和 AI 作业命中仍是字段名近似匹配，不代表完整血缘；第一版只支持 `subjectType=FIELD`。
+
+## Archive Verification Evidence
+
+- 2026-07-07：执行 `openspec archive add-cross-source-standard-evidence-view --yes`，创建主规格 `openspec/specs/cross-source-standard-evidence-view/spec.md`，并归档到 `openspec/changes/archive/2026-07-07-add-cross-source-standard-evidence-view/`。
+- 2026-07-07：`openspec validate --all` 通过，118 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 13 降至 8；第三条 next action 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=8,severity=warning)`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：独立只读复评子 agent `019f3abb-7619-78c0-98de-9672aa19b115`（Planck）复评 staged archive diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。
+- 2026-07-07：补齐新增主规格 Purpose 后，独立只读复评子 agent `019f3ac0-d02f-75a1-801f-b97679d4f29c`（Helmholtz）复评 staged diff，结论 Ready，无 Critical / Important / Minor findings；已调用 `close_agent` 关闭。
