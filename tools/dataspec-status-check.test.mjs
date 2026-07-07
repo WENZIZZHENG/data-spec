@@ -312,6 +312,124 @@ test('buildStatusReport reports Scenario AND steps without text', () => {
   assert.equal(openSpecCheck.errorCount, 1)
 })
 
+test('buildStatusReport reports empty Requirement and Scenario titles', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: CLEAN_README,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger'],
+    openSpecSpecTexts: new Map([
+      ['sql-rule-debugger', `# sql-rule-debugger Specification
+
+## Purpose
+用于稳定描述 SQL 规则调试器的可验证能力边界。
+
+## Requirements
+### Requirement:
+系统必须给每个 Requirement 提供稳定标题。
+
+#### Scenario: 读取调试结果
+- **WHEN** 用户请求查看 SQL 规则调试结果
+- **THEN** 系统返回可验证的匹配说明
+
+### Requirement: 展示 SQL 规则调试结果
+系统必须向 AI 和人工用户提供稳定的调试结果说明。
+
+#### Scenario:
+- **WHEN** 用户请求查看 SQL 规则调试结果
+- **THEN** 系统返回可验证的匹配说明
+`]
+    ])
+  })
+
+  const requirementIssue = report.issues.find((candidate) =>
+    candidate.code === 'OPENSPEC_SPEC_REQUIREMENT_TITLE_MISSING'
+  )
+  const scenarioIssue = report.issues.find((candidate) =>
+    candidate.code === 'OPENSPEC_SPEC_SCENARIO_TITLE_MISSING'
+  )
+  const openSpecCheck = report.checks.find((check) => check.id === 'openspec-state')
+
+  assert.equal(report.status, 'fail')
+  assert.ok(requirementIssue)
+  assert.equal(requirementIssue.file, 'openspec/specs/sql-rule-debugger/spec.md')
+  assert.equal(requirementIssue.line, 7)
+  assert.ok(scenarioIssue)
+  assert.equal(scenarioIssue.file, 'openspec/specs/sql-rule-debugger/spec.md')
+  assert.equal(scenarioIssue.line, 17)
+  assert.equal(openSpecCheck.errorCount, 2)
+})
+
+test('buildStatusReport does not duplicate empty Requirement and Scenario title issues', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: CLEAN_README,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger'],
+    openSpecSpecTexts: new Map([
+      ['sql-rule-debugger', `# sql-rule-debugger Specification
+
+## Purpose
+用于稳定描述 SQL 规则调试器的可验证能力边界。
+
+## Requirements
+### Requirement:
+系统必须给每个 Requirement 提供稳定标题。
+
+#### Scenario:
+- **WHEN** 用户请求查看 SQL 规则调试结果
+- **THEN** 系统返回可验证的匹配说明
+
+#### Scenario:${'   '}
+- **WHEN** 用户再次请求查看 SQL 规则调试结果
+- **THEN** 系统返回可验证的匹配说明
+
+### Requirement:${'   '}
+系统必须避免把空标题二次识别为重复标题。
+
+#### Scenario: 命名场景
+- **WHEN** 用户请求查看 SQL 规则调试结果
+- **THEN** 系统返回可验证的匹配说明
+`]
+    ])
+  })
+
+  const titleIssues = report.issues.filter((candidate) =>
+    candidate.code === 'OPENSPEC_SPEC_REQUIREMENT_TITLE_MISSING' ||
+    candidate.code === 'OPENSPEC_SPEC_SCENARIO_TITLE_MISSING'
+  )
+  const duplicateIssues = report.issues.filter((candidate) =>
+    candidate.code === 'OPENSPEC_SPEC_REQUIREMENT_DUPLICATE' ||
+    candidate.code === 'OPENSPEC_SPEC_SCENARIO_DUPLICATE'
+  )
+
+  assert.equal(report.status, 'fail')
+  assert.equal(titleIssues.length, 4)
+  assert.equal(duplicateIssues.length, 0)
+})
+
 test('buildStatusReport accepts angle-bracket Markdown links with spaces', () => {
   const report = buildStatusReport({
     todoText: CLEAN_TODO,

@@ -545,6 +545,15 @@ function checkOpenSpecSpecRequirements(specTexts, issues) {
       }))
       continue
     }
+    for (const requirement of findRequirementsWithMissingTitle(lines, requirementsIndex)) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_REQUIREMENT_TITLE_MISSING',
+        message: `${specPath} 的 Requirement 标题为空，AI 难以唯一引用能力契约。`,
+        file: specPath,
+        line: requirement.line,
+        suggestedFix: '在 ### Requirement: 后补充稳定、唯一的能力契约标题。'
+      }))
+    }
     for (const duplicate of findDuplicateRequirements(lines, requirementsIndex)) {
       issues.push(issue({
         code: 'OPENSPEC_SPEC_REQUIREMENT_DUPLICATE',
@@ -579,6 +588,15 @@ function checkOpenSpecSpecRequirements(specTexts, issues) {
         file: specPath,
         line: scenario.line,
         suggestedFix: '在该 Scenario 下补齐 - **WHEN** 与 - **THEN** 步骤；可按需保留 - **AND** 作为补充条件。'
+      }))
+    }
+    for (const scenario of findScenariosWithMissingTitle(lines, requirementsIndex)) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_SCENARIO_TITLE_MISSING',
+        message: `${specPath} 的 Scenario 标题为空，AI 难以唯一引用验收行为。`,
+        file: specPath,
+        line: scenario.line,
+        suggestedFix: '在 #### Scenario: 后补充稳定、唯一的验收场景标题。'
       }))
     }
     for (const step of findScenariosWithEmptyStepText(lines, requirementsIndex)) {
@@ -628,6 +646,9 @@ function findDuplicateRequirements(lines, requirementsIndex) {
       continue
     }
     const normalizedTitle = line.replace(/^###\s+Requirement\s*:\s*/, '').trim().toLowerCase()
+    if (!normalizedTitle) {
+      continue
+    }
     if (seen.has(normalizedTitle)) {
       duplicates.push({ line: index + 1, firstLine: seen.get(normalizedTitle), title: line })
       continue
@@ -636,6 +657,21 @@ function findDuplicateRequirements(lines, requirementsIndex) {
   }
 
   return duplicates
+}
+
+function findRequirementsWithMissingTitle(lines, requirementsIndex) {
+  const missing = []
+  for (let index = requirementsIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (/^##\s+/.test(line)) {
+      return missing
+    }
+    const match = /^###\s+Requirement\s*:\s*(?<title>.*)$/.exec(line)
+    if (match && !match.groups.title.trim()) {
+      missing.push({ line: index + 1 })
+    }
+  }
+  return missing
 }
 
 function findRequirementsWithoutBody(lines, requirementsIndex) {
@@ -796,6 +832,29 @@ function findScenariosWithEmptyStepText(lines, requirementsIndex) {
   return missing
 }
 
+function findScenariosWithMissingTitle(lines, requirementsIndex) {
+  const missing = []
+  let inRequirement = false
+  for (let index = requirementsIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (/^##\s+/.test(line)) {
+      return missing
+    }
+    if (/^###\s+/.test(line)) {
+      inRequirement = /^###\s+Requirement\s*:/.test(line)
+      continue
+    }
+    if (!inRequirement) {
+      continue
+    }
+    const match = /^####\s+Scenario\s*:\s*(?<title>.*)$/.exec(line)
+    if (match && !match.groups.title.trim()) {
+      missing.push({ line: index + 1 })
+    }
+  }
+  return missing
+}
+
 function findDuplicateScenarios(lines, requirementsIndex) {
   const duplicates = []
   let inRequirement = false
@@ -815,6 +874,9 @@ function findDuplicateScenarios(lines, requirementsIndex) {
       continue
     }
     const normalizedTitle = line.replace(/^####\s+Scenario\s*:\s*/, '').trim().toLowerCase()
+    if (!normalizedTitle) {
+      continue
+    }
     if (seenScenarios.has(normalizedTitle)) {
       duplicates.push({ line: index + 1, firstLine: seenScenarios.get(normalizedTitle), title: line })
       continue
