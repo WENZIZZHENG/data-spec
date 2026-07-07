@@ -283,6 +283,15 @@ test('normalizes absolute workspace paths before matching validation rules', () 
   assert.ok(commandIds.includes('diff-check'))
 })
 
+test('drops bare workspace root paths from validation advice inputs', () => {
+  const root = process.cwd()
+  const advice = buildValidationAdvice([root, `${root}\\`])
+
+  assert.deepEqual(advice.inputPaths, [])
+  assert.deepEqual(advice.commands, [])
+  assert.match(advice.nextActions[0], /传入变更路径/)
+})
+
 test('collects NUL-delimited git changed paths', () => {
   assert.deepEqual(
     collectChangedPathsFromGitOutput(

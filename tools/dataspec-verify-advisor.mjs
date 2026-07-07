@@ -429,14 +429,16 @@ function normalizePaths(inputPaths) {
   return [...new Set(inputPaths
     .map((inputPath) => String(inputPath ?? '').trim())
     .filter(Boolean)
-    .map(normalizePathSeparators))]
+    .map(normalizePathSeparators)
+    .filter(Boolean))]
 }
 
 function normalizeGitChangedPaths(inputPaths) {
   return [...new Set(inputPaths
     .map((inputPath) => String(inputPath ?? ''))
     .filter((inputPath) => inputPath.length > 0)
-    .map(normalizePathSeparators))]
+    .map(normalizePathSeparators)
+    .filter((inputPath) => inputPath.length > 0))]
 }
 
 function normalizePathSeparators(inputPath) {
