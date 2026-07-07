@@ -39,6 +39,8 @@ const FIELD_MAP = new Map([
  *
  * `workflowRecipeIds` 应来自 `supportedWorkflowRecipeIds()`；AI 可见 workflow recipe
  * 是跨 CLI、MCP、AI Context 和任务卡复用的契约，不能在文档中手写漂移。
+ * `openSpecActiveChangeTexts` 使用仓库相对路径作为 key，仅表示仍在开发的 active change；
+ * archive 历史文档由 CLI 跳过，避免旧链接阻塞当前状态检查。
  */
 export function buildStatusReport(input = {}) {
   const todoText = String(input.todoText ?? '')
@@ -51,6 +53,7 @@ export function buildStatusReport(input = {}) {
   const changeEntries = [...(input.openSpecChangeEntries ?? [])].map(String)
   const specEntries = new Set([...(input.openSpecSpecEntries ?? [])].map(String))
   const specTexts = normalizeOpenSpecSpecTexts(input.openSpecSpecTexts ?? new Map())
+  const activeChangeTexts = normalizeOpenSpecActiveChangeTexts(input.openSpecActiveChangeTexts ?? new Map())
   const todoItems = parseTodoItems(todoText)
   const queueItems = parseQueueItems(todoText)
   const issues = []
@@ -67,6 +70,9 @@ export function buildStatusReport(input = {}) {
   }
   for (const [capability, specText] of specTexts) {
     checkMarkdownLinks(`openspec/specs/${capability}/spec.md`, specText, relativeFiles, issues)
+  }
+  for (const [file, changeText] of [...activeChangeTexts.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    checkMarkdownLinks(file, changeText, relativeFiles, issues)
   }
 
   const errors = issues.filter((issue) => issue.severity === 'error').length
@@ -139,14 +145,15 @@ export async function runStatusCheckCli(args = process.argv.slice(2), io = defau
     }
 
     const root = path.resolve(options.root)
-    const [todoText, readmeText, aiContractsText, relativeFiles, changeEntries, specEntries, specTexts] = await Promise.all([
+    const [todoText, readmeText, aiContractsText, relativeFiles, changeEntries, specEntries, specTexts, changeTexts] = await Promise.all([
       readFile(path.resolve(root, options.todoPath), 'utf8'),
       readFile(path.resolve(root, options.readmePath), 'utf8'),
       readOptionalFile(path.resolve(root, 'docs', 'ai-contracts.md')),
       collectRelativePaths(root),
       readDirectoryNames(path.join(root, 'openspec', 'changes')),
       readDirectoryNames(path.join(root, 'openspec', 'specs')),
-      readOpenSpecMainSpecTexts(path.join(root, 'openspec', 'specs'))
+      readOpenSpecMainSpecTexts(path.join(root, 'openspec', 'specs')),
+      readOpenSpecActiveChangeTexts(path.join(root, 'openspec', 'changes'))
     ])
     const report = buildStatusReport({
       todoText,
@@ -156,7 +163,8 @@ export async function runStatusCheckCli(args = process.argv.slice(2), io = defau
       relativeFiles,
       openSpecChangeEntries: changeEntries,
       openSpecSpecEntries: specEntries,
-      openSpecSpecTexts: specTexts
+      openSpecSpecTexts: specTexts,
+      openSpecActiveChangeTexts: changeTexts
     })
 
     if (options.format === 'json') {
@@ -1386,6 +1394,31 @@ async function readOpenSpecMainSpecTexts(specsDir) {
   return result
 }
 
+async function readOpenSpecActiveChangeTexts(changesDir) {
+  const result = new Map()
+  const changeIds = (await readDirectoryNames(changesDir)).filter((changeId) => changeId !== 'archive')
+  for (const changeId of changeIds) {
+    await addOptionalOpenSpecChangeText(result, changesDir, changeId, 'proposal.md')
+    await addOptionalOpenSpecChangeText(result, changesDir, changeId, 'tasks.md')
+
+    const specDir = path.join(changesDir, changeId, 'specs')
+    const capabilities = await readDirectoryNames(specDir)
+    for (const capability of capabilities) {
+      await addOptionalOpenSpecChangeText(result, changesDir, changeId, `specs/${capability}/spec.md`)
+    }
+  }
+  return result
+}
+
+async function addOptionalOpenSpecChangeText(result, changesDir, changeId, changeRelativePath) {
+  const text = await readOptionalFile(path.join(changesDir, changeId, ...changeRelativePath.split('/')))
+  if (text === null) {
+    return
+  }
+  // active change 是当前工作态；archive 历史文档不参与该检查，避免旧链接阻塞新开发。
+  result.set(`openspec/changes/${changeId}/${changeRelativePath}`, text)
+}
+
 async function readOptionalFile(filePath) {
   try {
     return await readFile(filePath, 'utf8')
@@ -1409,6 +1442,16 @@ function normalizeOpenSpecSpecTexts(specTexts) {
     return new Map(specTexts.map(([key, value]) => [String(key), String(value ?? '')]))
   }
   return new Map(Object.entries(specTexts).map(([key, value]) => [String(key), String(value ?? '')]))
+}
+
+function normalizeOpenSpecActiveChangeTexts(changeTexts) {
+  if (changeTexts instanceof Map) {
+    return new Map([...changeTexts.entries()].map(([key, value]) => [normalizeRelativePath(key), String(value ?? '')]))
+  }
+  if (Array.isArray(changeTexts)) {
+    return new Map(changeTexts.map(([key, value]) => [normalizeRelativePath(key), String(value ?? '')]))
+  }
+  return new Map(Object.entries(changeTexts).map(([key, value]) => [normalizeRelativePath(key), String(value ?? '')]))
 }
 
 function normalizeWorkflowRecipeIds(ids) {

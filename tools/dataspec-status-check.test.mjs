@@ -1142,6 +1142,101 @@ test('runStatusCheckCli supports json output and returns non-zero on errors', as
   }
 })
 
+test('runStatusCheckCli reports missing Markdown links in active OpenSpec change docs and ignores archive docs', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'add-link-coverage', 'specs', 'link-coverage'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(
+      path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger', 'specs', 'sql-rule-debugger'),
+      { recursive: true }
+    )
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await writeFile(
+      path.join(dir, 'TODO.md'),
+      CLEAN_TODO.replace('active change 队列恢复为空。', 'active change 队列保留正在实施项。'),
+      'utf8'
+    )
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+
+#### Scenario: Debug rule hit
+- **WHEN** the user requests a rule explanation
+- **THEN** DataSpec returns evidence
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'changes', 'add-link-coverage', 'proposal.md'),
+      '# Proposal\n\n参考 [缺失方案资料](docs/missing-proposal.md)。\n',
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'changes', 'add-link-coverage', 'tasks.md'),
+      '# Tasks\n\n- [ ] 对齐 [缺失任务资料](missing-task.md)。\n',
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'changes', 'add-link-coverage', 'specs', 'link-coverage', 'spec.md'),
+      `## ADDED Requirements
+### Requirement: Link coverage
+DataSpec SHALL check active change links and reference [缺失 delta 资料](notes/missing-delta.md).
+
+#### Scenario: Check active change links
+- **WHEN** the status check reads active change docs
+- **THEN** it reports broken relative links
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger', 'proposal.md'),
+      '# Archived proposal\n\n历史资料 [缺失但忽略](missing-archive.md)。\n',
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger', 'tasks.md'),
+      '# Archived tasks\n\n- [x] 历史任务 [缺失但忽略](missing-archive-task.md)。\n',
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger', 'specs', 'sql-rule-debugger', 'spec.md'),
+      '## ADDED Requirements\n### Requirement: Archived delta\n历史 delta 引用 [缺失但忽略](missing-archive-delta.md)。\n',
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+    const missingLinks = output.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+    const markdownCheck = output.checks.find((check) => check.id === 'markdown-links')
+
+    assert.equal(code, 1)
+    assert.equal(missingLinks.length, 3)
+    assert.ok(missingLinks.every((issue) => issue.file.startsWith('openspec/changes/add-link-coverage/')))
+    assert.ok(missingLinks.some((issue) => issue.file === 'openspec/changes/add-link-coverage/proposal.md'))
+    assert.ok(missingLinks.some((issue) => issue.file === 'openspec/changes/add-link-coverage/tasks.md'))
+    assert.ok(missingLinks.some((issue) => issue.file === 'openspec/changes/add-link-coverage/specs/link-coverage/spec.md'))
+    assert.ok(!missingLinks.some((issue) => issue.message.includes('missing-archive.md')))
+    assert.ok(!missingLinks.some((issue) => issue.message.includes('missing-archive-task.md')))
+    assert.ok(!missingLinks.some((issue) => issue.message.includes('missing-archive-delta.md')))
+    assert.equal(markdownCheck.status, 'fail')
+    assert.equal(markdownCheck.errorCount, 3)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('runStatusCheckCli reports missing and mismatched main OpenSpec spec titles', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
   try {
