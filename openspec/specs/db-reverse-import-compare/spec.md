@@ -1,7 +1,7 @@
 # db-reverse-import-compare Specification
 
 ## Purpose
-TBD - created by archiving change add-db-reverse-import-compare. Update Purpose after archive.
+定义数据库直连反向导入的只读差异比对能力，帮助用户按表查看数据库字段与当前项目标准之间的匹配、变化、新增和非标准状态。
 ## Requirements
 ### Requirement: 数据库直连差异比对
 DataSpec SHALL provide a read-only database reverse import compare API that compares selected database tables against the current project's field standards.

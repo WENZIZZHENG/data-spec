@@ -1,7 +1,7 @@
 # ddl-generator-tool Specification
 
 ## Purpose
-TBD - created by archiving change add-ddl-generator-tool. Update Purpose after archive.
+定义基于 DataSpec 表模板生成 DDL 的工具契约，输出带注释的建表 SQL、lint 自检结果、AI 入口和标准快照元数据。
 ## Requirements
 ### Requirement: Template DDL Generation
 The system SHALL generate PostgreSQL DDL from a DataSpec table template.

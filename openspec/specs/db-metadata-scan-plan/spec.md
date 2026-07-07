@@ -1,7 +1,7 @@
 # db-metadata-scan-plan Specification
 
 ## Purpose
-TBD - created by archiving change add-database-scan-plan. Update Purpose after archive.
+定义大库 metadata 只读扫描计划，通过分页、cursor、进度、取消、恢复命令和部分预览控制反向导入前的数据库结构探索范围。
 ## Requirements
 ### Requirement: 数据库 metadata scan plan
 DataSpec SHALL provide a read-only scan plan for large database metadata browsing.

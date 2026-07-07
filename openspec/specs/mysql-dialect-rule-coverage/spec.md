@@ -1,7 +1,7 @@
 # mysql-dialect-rule-coverage Specification
 
 ## Purpose
-TBD - created by archiving change enhance-mysql-dialect-rules. Update Purpose after archive.
+定义 MySQL 方言解析和规则兼容覆盖范围，确保常见数值类型、表选项、索引声明和布尔命名规则能被 lint 与预览稳定消费。
 ## Requirements
 ### Requirement: MySQL unsigned and decimal parsing
 The SQL parser SHALL preserve common MySQL numeric type details for lint and preview consumers.

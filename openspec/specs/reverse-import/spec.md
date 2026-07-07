@@ -1,7 +1,7 @@
 # reverse-import Specification
 
 ## Purpose
-TBD - created by archiving change add-reverse-sql-import. Update Purpose after archive.
+定义 SQL 文本、SQL 文件和数据库直连来源的反向导入预览流程，在确认前只读解析表字段、候选标准、缺注释和非标准摘要。
 ## Requirements
 ### Requirement: SQL Reverse Import Preview
 

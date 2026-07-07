@@ -1,7 +1,7 @@
 # field-coverage-report Specification
 
 ## Purpose
-TBD - created by archiving change add-field-coverage-report. Update Purpose after archive.
+定义从解析表结构生成字段覆盖率报告的契约，用确定性状态统计标准命中、别名命中、缺注释、疑似重复和未管理字段。
 ## Requirements
 ### Requirement: Generate field coverage report from parsed tables
 The system SHALL generate a project-level field coverage report from parsed database table definitions without modifying the source database or the DataSpec standard library.

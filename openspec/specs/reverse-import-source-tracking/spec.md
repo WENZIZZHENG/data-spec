@@ -1,7 +1,7 @@
 # reverse-import-source-tracking Specification
 
 ## Purpose
-TBD - created by archiving change add-reverse-import-source-tracking. Update Purpose after archive.
+定义数据库直连反向导入的批次和字段来源追踪，让新建标准字段能回溯到来源 schema、表、列、类型、注释和导入统计。
 ## Requirements
 ### Requirement: 反向导入批次记录
 DataSpec SHALL record a reverse import batch when database direct reverse import candidates are confirmed and at least one new field is created.

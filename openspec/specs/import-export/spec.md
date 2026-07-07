@@ -1,7 +1,7 @@
 # import-export Specification
 
 ## Purpose
-TBD - created by archiving change add-excel-import-export. Update Purpose after archive.
+定义 Excel 模板、导入预览、导入应用和导出能力，用工作簿维护标准字段、枚举字典和枚举值，并在写入前暴露校验结果。
 ## Requirements
 ### Requirement: Excel Field And Code Set Template
 

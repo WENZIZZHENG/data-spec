@@ -1,7 +1,7 @@
 # html-erd-data-dictionary Specification
 
 ## Purpose
-TBD - created by archiving change add-html-erd-data-dictionary. Update Purpose after archive.
+定义离线 HTML 数据字典和 Mermaid 关系图导出能力，把领域、字段、枚举、模板和关系组织成可预览、可下载的项目文档。
 ## Requirements
 ### Requirement: HTML data dictionary export
 The system SHALL generate a project-level HTML data dictionary that can be opened offline in a browser.

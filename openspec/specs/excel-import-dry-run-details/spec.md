@@ -1,7 +1,7 @@
 # excel-import-dry-run-details Specification
 
 ## Purpose
-TBD - created by archiving change enhance-excel-import-dry-run. Update Purpose after archive.
+定义 Excel 导入 dry-run 的行级明细和字段级 diff，让用户在应用前看到创建、更新、冲突、阻塞原因以及前后值变化。
 ## Requirements
 ### Requirement: Excel dry-run row details
 Excel import preview SHALL return row-level dry-run details for fields, enum dictionaries, and enum values.

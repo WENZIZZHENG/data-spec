@@ -1,7 +1,7 @@
 # ddl-preview-page Specification
 
 ## Purpose
-TBD - created by archiving change build-ddl-preview-page. Update Purpose after archive.
+定义 DDL 预览页面的用户流程，让用户选择项目和表模板、生成建表 SQL、查看 lint 自检、复制或下载结果。
 ## Requirements
 ### Requirement: DDL Preview Page
 The generator page SHALL let users generate DDL from table templates.

@@ -1,7 +1,7 @@
 # db-connection-presets Specification
 
 ## Purpose
-TBD - created by archiving change add-db-connection-presets. Update Purpose after archive.
+定义项目级数据库连接预设的非敏感元数据管理边界，支持复用连接名称、类型、主机、库名、schema 和表范围，同时禁止保存可复用凭据。
 ## Requirements
 ### Requirement: Manage project database connection presets
 The system SHALL let users manage project-scoped database connection presets that contain only non-sensitive connection metadata.

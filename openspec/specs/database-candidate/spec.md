@@ -1,7 +1,7 @@
 # database-candidate Specification
 
 ## Purpose
-TBD - created by archiving change add-database-candidate. Update Purpose after archive.
+定义数据库 metadata 浏览和候选字段选择能力，让用户在写入标准库前安全查看表结构、标准匹配、候选状态和 AI 可读 schema 摘要。
 ## Requirements
 ### Requirement: 数据库 metadata 浏览器
 DataSpec SHALL allow users to browse selected database schema metadata before importing candidates.

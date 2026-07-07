@@ -1,7 +1,7 @@
 # data-dictionary Specification
 
 ## Purpose
-TBD - created by archiving change enhance-data-dictionary-markdown. Update Purpose after archive.
+定义 Markdown 数据字典导出内容，汇总项目概览、标准字段、领域关系、枚举字典、枚举值和表模板信息，便于人工和 AI 阅读。
 ## Requirements
 ### Requirement: Enhanced Markdown Data Dictionary
 The system SHALL generate a richer Markdown data dictionary from project standards.

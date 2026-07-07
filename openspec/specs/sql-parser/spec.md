@@ -1,7 +1,7 @@
 # sql-parser Specification
 
 ## Purpose
-TBD - created by archiving change support-mysql-create-table. Update Purpose after archive.
+定义 SQL 解析器对 MySQL 建表语法和方言诊断的支持边界，让反向导入、lint 和预览能识别字段 metadata 与兼容性限制。
 ## Requirements
 ### Requirement: MySQL Create Table Parsing
 
