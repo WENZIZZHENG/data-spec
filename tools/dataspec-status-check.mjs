@@ -841,7 +841,11 @@ function checkMarkdownLinks(file, text, relativeFiles, issues) {
     if (fence) {
       return
     }
-    for (const rawTarget of extractMarkdownLinkTargets(line)) {
+    const rawTargets = [
+      ...extractMarkdownLinkTargets(line),
+      ...extractMarkdownReferenceDefinitionTargets(line)
+    ]
+    for (const rawTarget of rawTargets) {
       const target = parseMarkdownLinkTarget(rawTarget)
       if (shouldSkipLink(target)) {
         continue
@@ -912,6 +916,18 @@ function extractMarkdownLinkTargets(line) {
     cursor = parenEnd + 1
   }
   return targets
+}
+
+function extractMarkdownReferenceDefinitionTargets(line) {
+  const match = /^ {0,3}\[(?<label>[^\]]+)\]:[ \t]*(?<target>.+?)\s*$/.exec(line)
+  if (!match) {
+    return []
+  }
+  const label = match.groups.label.trim()
+  if (label.startsWith('^')) {
+    return []
+  }
+  return [match.groups.target.trim()]
 }
 
 function maskMarkdownCodeSpans(line) {

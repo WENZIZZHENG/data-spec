@@ -554,6 +554,94 @@ test('buildStatusReport ignores Markdown links with escaped opening brackets', (
   assert.match(missingLinks[0].message, /docs\/archive\/missing-after-escaped-label\.md/)
 })
 
+test('buildStatusReport checks reference-style Markdown link definitions', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: [
+      CLEAN_README,
+      '[缺失资料]: docs/archive/missing-reference-style.md "资料说明"',
+      ''
+    ].join('\n'),
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'fail')
+  assert.equal(missingLinks.length, 1)
+  assert.match(missingLinks[0].message, /docs\/archive\/missing-reference-style\.md/)
+})
+
+test('buildStatusReport ignores Markdown footnote definitions when checking links', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: [
+      CLEAN_README,
+      '[^说明]: 这是一段脚注说明，不是相对链接目标。',
+      ''
+    ].join('\n'),
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'pass')
+  assert.equal(missingLinks.length, 0)
+})
+
+test('buildStatusReport ignores tab-indented reference definitions inside code samples', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: [
+      CLEAN_README,
+      '\t[示例链接]: docs/archive/missing-tab-indented-reference.md',
+      ''
+    ].join('\n'),
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'pass')
+  assert.equal(missingLinks.length, 0)
+})
+
 test('buildStatusReport reports deterministic TODO and OpenSpec drift', () => {
   const report = buildStatusReport({
     todoText: CLEAN_TODO.replace('P6-71、P6-72', 'P6-70、P6-404').replace('- 后续增强：更深 trace。', '- 缺口：旧缺口仍残留。'),
