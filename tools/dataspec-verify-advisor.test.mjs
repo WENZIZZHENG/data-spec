@@ -74,6 +74,14 @@ test('falls back to all OpenSpec validation for unsafe change ids', () => {
   assert.doesNotMatch(openSpecCommand.command, /&&|;|\|/)
 })
 
+test('falls back to all OpenSpec validation for traversal-like OpenSpec paths', () => {
+  const parentAdvice = buildValidationAdvice(['openspec/changes/add-field-quality/../archive/2026-07-07-add-field-quality/tasks.md'])
+  const sameDirAdvice = buildValidationAdvice(['openspec/changes/add-field-quality/./tasks.md'])
+
+  assert.equal(parentAdvice.commands.find((command) => command.id === 'openspec-validate').command, 'openspec validate --all')
+  assert.equal(sameDirAdvice.commands.find((command) => command.id === 'openspec-validate').command, 'openspec validate --all')
+})
+
 test('recognizes a single active OpenSpec change directory path', () => {
   const advice = buildValidationAdvice(['openspec/changes/add-field-quality'])
 

@@ -383,6 +383,9 @@ function singleActiveOpenSpecChangeId(paths) {
 
   const changeIds = new Set()
   for (const inputPath of openSpecPaths) {
+    if (hasTraversalSegment(inputPath)) {
+      return null
+    }
     const match = /^openspec\/changes\/([^/]+)(?:\/|$)/.exec(inputPath)
     if (!match || match[1] === 'archive' || !isSafeOpenSpecChangeId(match[1])) {
       return null
@@ -394,6 +397,10 @@ function singleActiveOpenSpecChangeId(paths) {
   }
 
   return [...changeIds][0] ?? null
+}
+
+function hasTraversalSegment(inputPath) {
+  return inputPath.split('/').some((segment) => segment === '.' || segment === '..')
 }
 
 function isSafeOpenSpecChangeId(changeId) {
