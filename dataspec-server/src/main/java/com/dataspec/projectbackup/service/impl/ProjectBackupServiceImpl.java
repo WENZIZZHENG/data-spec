@@ -824,6 +824,13 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
         target.setValidExamplesJson(source.getValidExamplesJson());
         target.setInvalidExamplesJson(source.getInvalidExamplesJson());
         target.setFormatNotes(source.getFormatNotes());
+        target.setPreferredUseCases(source.getPreferredUseCases());
+        target.setAvoidWhen(source.getAvoidWhen());
+        target.setJoinHints(source.getJoinHints());
+        target.setDefaultFilters(source.getDefaultFilters());
+        target.setAggregationHints(source.getAggregationHints());
+        target.setReplacementGuidance(source.getReplacementGuidance());
+        target.setMisuseExamples(source.getMisuseExamples());
     }
 
     private RuleConfig copyForRestore(RuleConfig source, Long projectId) {

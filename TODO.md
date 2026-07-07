@@ -1863,13 +1863,16 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：评分不替代真实任务结果，不保证 AI 一定生成正确；第一版只基于 DataSpec 元数据和导出内容做静态评估。
 
 ### P6-187：字段使用契约与禁用场景说明
-- 状态：待办。
+- 状态：已完成实现、独立评审修复和验证，待 OpenSpec 归档。
 - 为什么做：同一个字段“是什么”不等于“什么时候该用”；AI 生成 SQL/DDL 时常会混用统计口径、展示字段、内部状态或废弃字段，需要字段级 usage contract 明确推荐场景和禁用场景。
 - 已有基础：已有字段状态、敏感标记、字段格式约束、派生字段/单位规则、指标口径映射、字段知识卡、业务对象关系图和标准问答入口。
-- 缺口：缺少 preferredUseCases、avoidWhen、joinHints、defaultFilters、aggregationHints、replacementGuidance 和 misuseExamples；当前 AI 只能从描述和标签推断使用边界。
+- 已完成能力：字段标准新增 `preferredUseCases`、`avoidWhen`、`joinHints`、`defaultFilters`、`aggregationHints`、`replacementGuidance` 和 `misuseExamples`；字段库创建/编辑、字段检索、标准问答、AI Context、DDL/Prompt guidance、标准快照、项目备份恢复和标准复用包均已读取或传播使用契约；命中禁用场景时会降级为需要确认，不把字段直接视为可采纳。
 - 参考项目：`dbt-labs/dbt-core` 的模型文档、`OpenLineage/OpenLineage` 的上下游语义和 `open-metadata/OpenMetadata` 的资产说明；只借鉴使用说明结构，不建设重型血缘平台。
 - 落地产物：扩展字段标准或新增轻量使用契约模型；字段详情、AI Context、DDL/Prompt 生成、标准问答和字段推荐可读取使用建议、禁用场景和常见误用。
-- 验收标准：AI 查询“订单金额应该用哪个字段统计”时能看到单位、聚合、过滤、join hints 和禁用提示；废弃、内部状态或展示专用字段不会被推荐为写入字段；误用样例可进入规则、字段知识卡或问答提示。
+- 验收标准：AI 查询“订单金额应该用哪个字段统计”时能看到单位、聚合、过滤、join hints 和禁用提示；废弃、内部状态或展示专用字段不会被推荐为写入字段；误用样例可进入规则、字段知识卡或问答提示。已通过后端、前端、OpenAPI、OpenSpec、独立评审和真实 PostgreSQL 写入/清空验证。
+- 验证证据：`openspec validate add-field-usage-contracts --strict` valid；`mvn test` 553 pass；`pnpm test` 162 pass；`pnpm build` 通过，保留既有第三方 pure annotation、chunk size 和 plugin timings warning；真实 OpenAPI `node scripts/check-openapi-schema.mjs --source http://localhost:18092/api-docs` 通过；用户授权的一次性 `ai_test` 中已启动临时后端/前端，`tools/dataspec-local-smoke.mjs --skip-demo` web/api-docs pass，并通过 API 新建一次性项目 `projectId=2`、字段 `fieldId=11`，成功写入和读回 usage contract；评审修复后再次连接 `ai_test` 新建一次性项目 `projectId=5`、字段 `fieldId=14`，确认七个 usage contract 字段可通过更新接口清空并读回为空，且“统计订单金额”不会因只共享“金额”单个中文 bigram 被误降级。
+- 评审记录：独立只读子 agent `019f3d66-fa51-74d2-91b0-e63149641419` 未发现 Critical，2 个 Important 已修复并关闭；修复点为 usage contract 字段允许 null 更新、禁用场景中文匹配阈值和 suggest 降级 evidence。
+- 真实库遗留：完整 demo smoke 在复用旧 `ai_test` 演示项目时命中既有 `ds_rule_baseline.applied_at` 的 TIMESTAMPTZ 到 `LocalDateTime` 映射问题，已用不导入内置标准的一次性项目绕开并验证本变更真实写入；该历史数据问题不属于 P6-187。
 - 边界：不做完整指标平台，不要求每个字段都补齐契约；第一版优先高风险金额、状态、时间、用户和敏感字段。
 
 ### P6-188：标准问答答案可采纳度与低置信处理

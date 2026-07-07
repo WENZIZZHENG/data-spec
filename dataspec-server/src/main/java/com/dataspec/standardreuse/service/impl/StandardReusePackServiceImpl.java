@@ -282,7 +282,14 @@ public class StandardReusePackServiceImpl implements StandardReusePackService {
                 safeText(field.getFormatNullPolicy()),
                 safeFieldJsonValue(sensitiveField, field.getValidExamplesJson()),
                 safeFieldJsonValue(sensitiveField, field.getInvalidExamplesJson()),
-                safeText(field.getFormatNotes()));
+                safeText(field.getFormatNotes()),
+                safeText(field.getPreferredUseCases()),
+                safeText(field.getAvoidWhen()),
+                safeText(field.getJoinHints()),
+                safeText(field.getDefaultFilters()),
+                safeText(field.getAggregationHints()),
+                safeText(field.getReplacementGuidance()),
+                safeText(field.getMisuseExamples()));
     }
 
     private PackTemplateField toPackTemplateField(TemplateField field, Map<Long, String> fieldNames) {
@@ -479,7 +486,14 @@ public class StandardReusePackServiceImpl implements StandardReusePackService {
                 && Objects.equals(pack.formatNullPolicy(), existing.getFormatNullPolicy())
                 && Objects.equals(pack.validExamplesJson(), existing.getValidExamplesJson())
                 && Objects.equals(pack.invalidExamplesJson(), existing.getInvalidExamplesJson())
-                && Objects.equals(pack.formatNotes(), existing.getFormatNotes());
+                && Objects.equals(pack.formatNotes(), existing.getFormatNotes())
+                && Objects.equals(pack.preferredUseCases(), existing.getPreferredUseCases())
+                && Objects.equals(pack.avoidWhen(), existing.getAvoidWhen())
+                && Objects.equals(pack.joinHints(), existing.getJoinHints())
+                && Objects.equals(pack.defaultFilters(), existing.getDefaultFilters())
+                && Objects.equals(pack.aggregationHints(), existing.getAggregationHints())
+                && Objects.equals(pack.replacementGuidance(), existing.getReplacementGuidance())
+                && Objects.equals(pack.misuseExamples(), existing.getMisuseExamples());
         return same
                 ? new StandardReusePackPlanItem("field", pack.name(), "MATCHED", "字段内容一致")
                 : new StandardReusePackPlanItem(
@@ -674,6 +688,13 @@ public class StandardReusePackServiceImpl implements StandardReusePackService {
         field.setValidExamplesJson(pack.validExamplesJson());
         field.setInvalidExamplesJson(pack.invalidExamplesJson());
         field.setFormatNotes(pack.formatNotes());
+        field.setPreferredUseCases(pack.preferredUseCases());
+        field.setAvoidWhen(pack.avoidWhen());
+        field.setJoinHints(pack.joinHints());
+        field.setDefaultFilters(pack.defaultFilters());
+        field.setAggregationHints(pack.aggregationHints());
+        field.setReplacementGuidance(pack.replacementGuidance());
+        field.setMisuseExamples(pack.misuseExamples());
         return field;
     }
 
@@ -1122,7 +1143,14 @@ public class StandardReusePackServiceImpl implements StandardReusePackService {
             String formatNullPolicy,
             String validExamplesJson,
             String invalidExamplesJson,
-            String formatNotes
+            String formatNotes,
+            String preferredUseCases,
+            String avoidWhen,
+            String joinHints,
+            String defaultFilters,
+            String aggregationHints,
+            String replacementGuidance,
+            String misuseExamples
     ) {
     }
 

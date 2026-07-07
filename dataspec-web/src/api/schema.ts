@@ -276,6 +276,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/standard-reuse-packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPacks"];
+        put?: never;
+        post: operations["createPack"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-reuse-packs/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["applyPack"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-reuse-packs/apply/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewApply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/standard-health/snapshots": {
         parameters: {
             query?: never;
@@ -564,6 +612,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reverse-import/database/schema-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["planDatabaseSchemaChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reverse-import/database/scan": {
         parameters: {
             query?: never;
@@ -574,22 +638,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["scanDatabaseMetadata"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/reverse-import/database/browser": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["browseDatabaseMetadata"];
         delete?: never;
         options?: never;
         head?: never;
@@ -660,7 +708,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/reverse-import/database/schema-plan": {
+    "/api/reverse-import/database/browser": {
         parameters: {
             query?: never;
             header?: never;
@@ -669,7 +717,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["planDatabaseSchemaChange"];
+        post: operations["browseDatabaseMetadata"];
         delete?: never;
         options?: never;
         head?: never;
@@ -829,7 +877,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["lintDebug"];
+        post: operations["debug"];
         delete?: never;
         options?: never;
         head?: never;
@@ -926,6 +974,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["undoFieldChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/merge/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["preview_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/merge/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["apply_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1124,6 +1204,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/contract-import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["preview_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-context/prompts/fix-sql": {
         parameters: {
             query?: never;
@@ -1150,6 +1246,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["generateCreateTablePrompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-context/budget/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["planBudget"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1220,6 +1332,22 @@ export interface paths {
         patch: operations["disable"];
         trace?: never;
     };
+    "/api/synthetic-examples/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["generate_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/starter-kits": {
         parameters: {
             query?: never;
@@ -1252,6 +1380,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/standard-usage/heatmap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-reuse-packs/{packId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-reuse-packs/{packId}/drift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["driftReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-reuse-packs/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listApplications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/standard-health/trend": {
         parameters: {
             query?: never;
@@ -1276,6 +1468,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["plan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["report_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1707,7 +1915,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["report"];
+        get: operations["report_2"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1755,7 +1963,23 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["report_1"];
+        get: operations["report_3"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fields/provenance-confidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["report_4"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1787,7 +2011,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["report_2"];
+        get: operations["report_5"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1908,6 +2132,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/capabilities/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["versionCompatibility"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/bootstrap/session": {
         parameters: {
             query?: never;
@@ -1988,6 +2228,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai-task-recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["report_6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-profiles": {
         parameters: {
             query?: never;
@@ -2059,7 +2315,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["report_3"];
+        get: operations["report_7"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2252,11 +2508,28 @@ export interface components {
             status?: string;
         };
         ErrorDetail: {
+            /** @description 稳定机器可读错误码；用于 CLI/MCP/AI 判断错误类别，不包含敏感明文。 */
             code?: string;
+            /** @description 错误大类，例如 AUTH、SAFETY、VALIDATION、DATABASE、SQL 或 SERVER。 */
             category?: string;
+            /** @description true 表示修正输入、补 token、重试或稍后重试后通常可以恢复。 */
             retryable?: boolean;
+            /** @description 面向用户和 AI 的下一步建议；生成前已按项目脱敏规则处理。 */
             suggestedAction?: string;
+            /** @description 关联文档锚点；为空表示暂无稳定文档入口。 */
             docsRef?: string;
+            /** @description 缺失的安全参数或必填输入名，例如 Idempotency-Key、dryRunToken。 */
+            missing?: string[];
+            /** @description 触发错误的高风险写入 operation 标识；用于复用幂等 key 或重新生成 dry-run 证据。 */
+            operation?: string;
+            /** @description 触发错误的 capability id；为空表示无法从错误中稳定识别能力。 */
+            capabilityId?: string;
+            /** @description 与错误直接相关的安全约束摘要；只包含布尔/短文本约束，不包含 raw secret。 */
+            safety?: {
+                [key: string]: Record<string, never>;
+            };
+            /** @description AI 或用户修复该错误的可执行下一步列表；不得包含 token、密码、JDBC URL 或 DSN。 */
+            nextActions?: string[];
         };
         RStandardUsageExample: {
             /** Format: int32 */
@@ -2536,6 +2809,20 @@ export interface components {
             validExamplesJson?: string;
             invalidExamplesJson?: string;
             formatNotes?: string;
+            /** @description 字段推荐使用场景，说明字段适合用于哪些 SQL、指标、写入或 DDL 场景；不得包含凭据或业务数据行。 */
+            preferredUseCases?: string;
+            /** @description 字段禁用或需确认场景，AI 命中这些场景时不得直接采纳；不得包含密码、token、完整 JDBC URL、DSN 或私钥。 */
+            avoidWhen?: string;
+            /** @description 字段 Join 使用提示，如推荐关联键、关联方向或不适合 Join 的边界；只做只读指导。 */
+            joinHints?: string;
+            /** @description 字段默认过滤条件或统计口径提示，如状态、时间范围或软删除条件；不自动改写 SQL。 */
+            defaultFilters?: string;
+            /** @description 字段聚合口径提示，如 sum/count/distinct/单位换算；不替代指标平台。 */
+            aggregationHints?: string;
+            /** @description 字段在特定场景下的替代字段或迁移指导，与生命周期替代说明互补。 */
+            replacementGuidance?: string;
+            /** @description 字段常见误用或反例说明，用于 AI 低置信提示；不得包含真实业务数据行或凭据。 */
+            misuseExamples?: string;
         };
         Field: {
             /** Format: int64 */
@@ -2576,6 +2863,20 @@ export interface components {
             validExamplesJson?: string;
             invalidExamplesJson?: string;
             formatNotes?: string;
+            /** @description 字段推荐使用场景，说明字段适合用于哪些 SQL、指标、写入或 DDL 场景；不得包含凭据或业务数据行。 */
+            preferredUseCases?: string;
+            /** @description 字段禁用或需确认场景，AI 命中这些场景时不得直接采纳；不得包含密码、token、完整 JDBC URL、DSN 或私钥。 */
+            avoidWhen?: string;
+            /** @description 字段 Join 使用提示，如推荐关联键、关联方向或不适合 Join 的边界；只做只读指导。 */
+            joinHints?: string;
+            /** @description 字段默认过滤条件或统计口径提示，如状态、时间范围或软删除条件；不自动改写 SQL。 */
+            defaultFilters?: string;
+            /** @description 字段聚合口径提示，如 sum/count/distinct/单位换算；不替代指标平台。 */
+            aggregationHints?: string;
+            /** @description 字段在特定场景下的替代字段或迁移指导，与生命周期替代说明互补。 */
+            replacementGuidance?: string;
+            /** @description 字段常见误用或反例说明，用于 AI 低置信提示；不得包含真实业务数据行或凭据。 */
+            misuseExamples?: string;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -2791,6 +3092,303 @@ export interface components {
             warnings?: string[];
             /** Format: date-time */
             appliedAt?: string;
+        };
+        /** @description 从源项目创建标准复用包的请求。 */
+        StandardReusePackCreateReq: {
+            /**
+             * Format: int64
+             * @description 源项目 ID。
+             */
+            projectId: number;
+            /** @description 项目内稳定包 key，如 shared_core。 */
+            packKey: string;
+            /** @description 用户可读复用包名称。 */
+            packName: string;
+            /** @description 用户定义共享包版本。 */
+            basePackVersion: string;
+            /** @description 复用包说明，可为空。 */
+            description?: string;
+        };
+        RStandardReusePackDetail: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardReusePackDetail"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 标准复用包内字段、枚举、规则和模板的数量摘要。 */
+        StandardReusePackAssetCounts: {
+            /**
+             * Format: int32
+             * @description 数据域数量。
+             */
+            domains?: number;
+            /**
+             * Format: int32
+             * @description 标准字段数量。
+             */
+            fields?: number;
+            /**
+             * Format: int32
+             * @description 枚举字典数量。
+             */
+            enums?: number;
+            /**
+             * Format: int32
+             * @description 枚举值数量。
+             */
+            enumValues?: number;
+            /**
+             * Format: int32
+             * @description 规则配置数量。
+             */
+            rules?: number;
+            /**
+             * Format: int32
+             * @description 表模板数量。
+             */
+            templates?: number;
+            /**
+             * Format: int32
+             * @description 模板字段数量。
+             */
+            templateFields?: number;
+        };
+        /** @description 标准复用包详情，包含摘要和确定性 payload JSON。 */
+        StandardReusePackDetail: {
+            info?: components["schemas"]["StandardReusePackInfo"];
+            /** @description 确定性 payload JSON，不包含数据库 ID 或源库行值。 */
+            payloadJson?: string;
+        };
+        /** @description 标准复用包列表和详情的基础摘要。 */
+        StandardReusePackInfo: {
+            /**
+             * Format: int64
+             * @description 标准复用包 ID。
+             */
+            packId?: number;
+            /**
+             * Format: int64
+             * @description 源项目 ID。
+             */
+            projectId?: number;
+            /** @description 源项目名称快照。 */
+            sourceProjectName?: string;
+            /** @description 项目内稳定包 key。 */
+            packKey?: string;
+            /** @description 用户可读包名称。 */
+            packName?: string;
+            /** @description 用户定义共享包版本。 */
+            basePackVersion?: string;
+            /** @description 包说明。 */
+            description?: string;
+            /** @description 复用包 payload 的 SHA-256 hash。 */
+            packageHash?: string;
+            assetCounts?: components["schemas"]["StandardReusePackAssetCounts"];
+            /**
+             * Format: date-time
+             * @description 创建时间。
+             */
+            createdAt?: string;
+        };
+        /** @description 将标准复用包 dry-run 或确认应用到目标项目的请求。 */
+        StandardReusePackApplyReq: {
+            /**
+             * Format: int64
+             * @description 标准复用包 ID。
+             */
+            packId: number;
+            /**
+             * Format: int64
+             * @description 目标项目 ID。
+             */
+            targetProjectId: number;
+            /** @description 是否允许覆盖。第一版不执行破坏性覆盖，仅用于报告本地覆盖项。 */
+            overwrite?: boolean;
+        };
+        RStandardReusePackApplyResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardReusePackApplyResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 目标项目应用标准复用包后的历史摘要。 */
+        StandardReusePackApplicationInfo: {
+            /**
+             * Format: int64
+             * @description 应用记录 ID。
+             */
+            applicationId?: number;
+            /**
+             * Format: int64
+             * @description 目标项目 ID。
+             */
+            projectId?: number;
+            /**
+             * Format: int64
+             * @description 标准复用包 ID。
+             */
+            packId?: number;
+            /** @description 复用包 key 快照。 */
+            packKey?: string;
+            /** @description 复用包名称快照。 */
+            packName?: string;
+            /** @description 复用包版本快照。 */
+            basePackVersion?: string;
+            /** @description 复用包 hash 快照。 */
+            packageHash?: string;
+            /**
+             * Format: int64
+             * @description 源项目 ID 快照。
+             */
+            sourceProjectId?: number;
+            /** @description 源项目名称快照。 */
+            sourceProjectName?: string;
+            createdCounts?: components["schemas"]["StandardReusePackAssetCounts"];
+            skippedCounts?: components["schemas"]["StandardReusePackAssetCounts"];
+            driftCounts?: components["schemas"]["StandardReusePackDriftCounts"];
+            /**
+             * Format: date-time
+             * @description 应用时间。
+             */
+            appliedAt?: string;
+        };
+        /** @description 标准复用包确认应用后的计划和应用记录。 */
+        StandardReusePackApplyResult: {
+            plan?: components["schemas"]["StandardReusePackPlan"];
+            application?: components["schemas"]["StandardReusePackApplicationInfo"];
+        };
+        /** @description 目标项目相对标准复用包的匹配、缺失、覆盖和漂移计数。 */
+        StandardReusePackDriftCounts: {
+            /**
+             * Format: int32
+             * @description 目标项目与包内容一致的资产数量。
+             */
+            matched?: number;
+            /**
+             * Format: int32
+             * @description 目标项目缺失但包中存在的资产数量。
+             */
+            missing?: number;
+            /**
+             * Format: int32
+             * @description 目标项目存在同自然键资产且被视为本地覆盖的数量。
+             */
+            overridden?: number;
+            /**
+             * Format: int32
+             * @description 目标项目存在同自然键资产但关键内容不同的数量。
+             */
+            drifted?: number;
+        };
+        /** @description 目标项目相对标准复用包的轻量漂移报告。 */
+        StandardReusePackDriftReport: {
+            /**
+             * Format: int32
+             * @description 漂移报告 schema 版本。
+             */
+            schemaVersion?: number;
+            /**
+             * Format: int64
+             * @description 标准复用包 ID。
+             */
+            packId?: number;
+            /**
+             * Format: int64
+             * @description 目标项目 ID。
+             */
+            targetProjectId?: number;
+            /** @description 复用包 key。 */
+            packKey?: string;
+            /** @description 复用包版本。 */
+            basePackVersion?: string;
+            counts?: components["schemas"]["StandardReusePackDriftCounts"];
+            /** @description 漂移明细。 */
+            items?: components["schemas"]["StandardReusePackPlanItem"][];
+        };
+        /** @description 标准复用包应用 dry-run 计划。 */
+        StandardReusePackPlan: {
+            /** @description 响应类型标识。 */
+            kind?: string;
+            /**
+             * Format: int32
+             * @description 响应 schema 版本。
+             */
+            schemaVersion?: number;
+            /**
+             * Format: int64
+             * @description 标准复用包 ID。
+             */
+            packId?: number;
+            /**
+             * Format: int64
+             * @description 目标项目 ID。
+             */
+            targetProjectId?: number;
+            /** @description 复用包 key。 */
+            packKey?: string;
+            /** @description 复用包版本。 */
+            basePackVersion?: string;
+            /** @description 是否可确认应用。 */
+            canApply?: boolean;
+            counts?: components["schemas"]["StandardReusePackPlanCounts"];
+            /** @description 应用计划明细。 */
+            items?: components["schemas"]["StandardReusePackPlanItem"][];
+            /** @description 非阻断警告。 */
+            warnings?: string[];
+            driftReport?: components["schemas"]["StandardReusePackDriftReport"];
+        };
+        /** @description 标准复用包应用预览中的动作计数。 */
+        StandardReusePackPlanCounts: {
+            /**
+             * Format: int32
+             * @description 将创建的顶层资产数量。
+             */
+            created?: number;
+            /**
+             * Format: int32
+             * @description 内容一致并跳过的顶层资产数量。
+             */
+            skipped?: number;
+            /**
+             * Format: int32
+             * @description 目标项目存在本地覆盖的顶层资产数量。
+             */
+            overridden?: number;
+            /**
+             * Format: int32
+             * @description 目标项目与包内容不同的顶层资产数量。
+             */
+            drifted?: number;
+            /**
+             * Format: int32
+             * @description 因缺少自然键或包异常而阻塞的顶层资产数量。
+             */
+            blocked?: number;
+            /**
+             * Format: int32
+             * @description 非阻断警告数量。
+             */
+            warnings?: number;
+        };
+        /** @description 标准复用包应用计划或漂移报告中的单项动作。 */
+        StandardReusePackPlanItem: {
+            /** @description 资产类型，如 domain、field、enum_dict、rule、template。 */
+            assetType?: string;
+            /** @description 项目内自然键，如字段名、枚举编码或模板名。 */
+            key?: string;
+            /** @description 动作：CREATE、SKIP、OVERRIDDEN、DRIFTED、BLOCKED、MATCHED、MISSING。 */
+            action?: string;
+            /** @description 动作原因或人工处理提示。 */
+            reason?: string;
+        };
+        RStandardReusePackPlan: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardReusePackPlan"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         StandardHealthCoverageInput: {
             /** Format: double */
@@ -3134,6 +3732,47 @@ export interface components {
             defaultValue?: string;
             comment?: string;
         };
+        DatabaseMetadataCacheInfo: {
+            metadataFingerprint?: string;
+            cacheHit?: boolean;
+            stale?: boolean;
+            refreshMode?: string;
+            lastSeenAt?: string;
+            expiresAt?: string;
+            sourceDatabaseVersion?: string;
+            changeSummary?: components["schemas"]["DatabaseMetadataChangeSummary"];
+            nextActions?: string[];
+        };
+        DatabaseMetadataChangeSummary: {
+            changed?: boolean;
+            /** Format: int32 */
+            addedTableCount?: number;
+            /** Format: int32 */
+            removedTableCount?: number;
+            /** Format: int32 */
+            changedTableCount?: number;
+            /** Format: int32 */
+            addedColumnCount?: number;
+            /** Format: int32 */
+            removedColumnCount?: number;
+            /** Format: int32 */
+            changedColumnCount?: number;
+            tables?: components["schemas"]["DatabaseMetadataTableChange"][];
+        };
+        DatabaseMetadataColumnChange: {
+            columnName?: string;
+            changes?: components["schemas"]["ReverseImportFieldChange"][];
+        };
+        DatabaseMetadataTableChange: {
+            schemaName?: string;
+            tableName?: string;
+            changeType?: string;
+            oldFingerprint?: string;
+            newFingerprint?: string;
+            addedColumns?: string[];
+            removedColumns?: string[];
+            changedColumns?: components["schemas"]["DatabaseMetadataColumnChange"][];
+        };
         DialectDiagnostic: {
             dialect?: string;
             /** @enum {string} */
@@ -3160,6 +3799,7 @@ export interface components {
             confidence?: number;
             ignoreReason?: string;
             confirmReason?: string;
+            /** @description 字段候选所属预览批次的 dry-run evidence；确认导入或忽略时必须与请求 dryRunToken 一致。 */
             dryRunToken?: string;
         };
         MissingCommentIssue: {
@@ -3205,16 +3845,22 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
+        ReverseImportFieldChange: {
+            property?: string;
+            currentValue?: string;
+            standardValue?: string;
+        };
         ReverseImportPreview: {
             summary?: components["schemas"]["ReverseImportSummary"];
+            /** @description 本次预览生成的 dry-run evidence；确认导入字段候选时必须随请求带回。 */
             dryRunToken?: string;
-            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
             tables?: components["schemas"]["TableDef"][];
             fieldCandidates?: components["schemas"]["FieldCandidate"][];
             mappingDecisions?: components["schemas"]["ReverseImportDecision"][];
             missingComments?: components["schemas"]["MissingCommentIssue"][];
             nonStandardFields?: components["schemas"]["NonStandardField"][];
             dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
         };
         ReverseImportSummary: {
             /** Format: int32 */
@@ -3242,15 +3888,6 @@ export interface components {
             /** Format: int32 */
             ordinalPosition?: number;
         };
-        DatabaseSchemaIndex: {
-            schemaName?: string;
-            tableName?: string;
-            indexName?: string;
-            columnName?: string;
-            nonUnique?: boolean;
-            /** Format: int32 */
-            ordinalPosition?: number;
-        };
         DatabaseSchemaDump: {
             kind?: string;
             /** Format: int32 */
@@ -3271,6 +3908,15 @@ export interface components {
             projectId: number;
             dump: components["schemas"]["DatabaseSchemaDump"];
         };
+        DatabaseSchemaIndex: {
+            schemaName?: string;
+            tableName?: string;
+            indexName?: string;
+            columnName?: string;
+            nonUnique?: boolean;
+            /** Format: int32 */
+            ordinalPosition?: number;
+        };
         DatabaseSchemaSource: {
             sourceType?: string;
             databaseProductName?: string;
@@ -3290,276 +3936,6 @@ export interface components {
             indexes?: components["schemas"]["DatabaseSchemaIndex"][];
             warnings?: string[];
         };
-        /** @description schema change plan 的单个字段级变更项；用于 API、CLI 和前端 dry-run 审计。 */
-        DatabaseSchemaChangeItem: {
-            /** @description 来源数据库表名；来自 schema metadata，不包含连接串或业务数据行。 */
-            tableName?: string;
-            /** @description 来源数据库字段名；来自 schema metadata，不包含业务数据值。 */
-            columnName?: string;
-            /** @description 命中的 DataSpec 标准字段名；未命中标准或删除候选时为空。 */
-            standardFieldName?: string;
-            /** @description 本变更的预览动作；第一版仅用于 dry-run 计划，不代表自动执行。 */
-            /** @enum {string} */
-            action?: "ALTER_COMMENT" | "ALTER_COLUMN" | "DROP_CANDIDATE";
-            /** @description 发生变化的属性，如 dataType、nullable、defaultValue、comment 或 column。 */
-            property?: string;
-            /** @description 当前数据库 metadata 值；已脱敏，不包含业务数据行。 */
-            currentValue?: string;
-            /** @description 目标 DataSpec 标准值；已脱敏，结构属性不会直接拼入可执行 SQL。 */
-            targetValue?: string;
-            /** @description 字段级风险：LOW、MEDIUM 或 HIGH；客户端用于突出人工确认优先级。 */
-            /** @enum {string} */
-            riskLevel?: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "BLOCKED";
-            /** @description dry-run SQL 草案；结构变更和高风险删除候选只输出 REVIEW/BLOCKED 注释，不输出可执行 DROP。 */
-            migrationSql?: string;
-            /** @description 回滚或撤销提示；用于 AI/用户生成正式迁移文件前检查。 */
-            rollbackHint?: string;
-            /** @description 需要人工确认的检查点；正式迁移前必须逐项确认。 */
-            manualChecks?: string[];
-            /** @description 阻止自动执行的原因；存在值时客户端不得把该项当作可自动应用。 */
-            blockedReasons?: string[];
-            /** @description 对本项的可读解释，说明为什么生成该计划项。 */
-            reason?: string;
-        };
-        /** @description schema change plan 的聚合统计；用于前端和 AI 快速判断风险范围。 */
-        DatabaseSchemaChangeSummary: {
-            /** @description 本次计划覆盖的表数量。 */
-            /** Format: int32 */
-            tableCount?: number;
-            /** @description 本次计划读取的字段数量。 */
-            /** Format: int32 */
-            columnCount?: number;
-            /** @description 变更项数量。 */
-            /** Format: int32 */
-            changeCount?: number;
-            /** @description LOW 风险变更项数量。 */
-            /** Format: int32 */
-            lowRiskCount?: number;
-            /** @description MEDIUM 风险变更项数量。 */
-            /** Format: int32 */
-            mediumRiskCount?: number;
-            /** @description HIGH 风险变更项数量。 */
-            /** Format: int32 */
-            highRiskCount?: number;
-            /** @description 带阻塞原因、不得自动执行的变更项数量。 */
-            /** Format: int32 */
-            blockedCount?: number;
-        };
-        /** @description 数据库 schema 变更计划预览；只用于 dry-run 审计，不执行数据库迁移、不保存连接凭据。 */
-        DatabaseSchemaChangePlan: {
-            /** @description 响应类型标识，供 AI/CLI 判断 JSON 语义。 */
-            kind?: string;
-            /** @description 响应 schema 版本；新增可选字段时保持兼容递增策略。 */
-            /** Format: int32 */
-            schemaVersion?: number;
-            /** @description DataSpec 项目 ID。 */
-            /** Format: int64 */
-            projectId?: number;
-            /** @description 数据库类型，如 POSTGRESQL 或 MYSQL。 */
-            databaseType?: string;
-            /** @description 数据库名；已脱敏，不包含 JDBC URL。 */
-            databaseName?: string;
-            /** @description schema 名；PostgreSQL 用于限定对象，MySQL 场景可能为空或仅作为兼容输入。 */
-            schemaName?: string;
-            /** @description 当前源库 schema-only metadata hash，不包含密码、连接串或业务数据行。 */
-            currentSchemaHash?: string;
-            /** @description 目标 DataSpec 标准摘要 hash，不包含连接凭据。 */
-            targetSpecHash?: string;
-            /** @description 整体风险：SAFE、LOW、MEDIUM、HIGH 或 BLOCKED。 */
-            /** @enum {string} */
-            riskLevel?: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "BLOCKED";
-            /** @description 计划聚合统计，覆盖表、字段、风险和阻塞计数。 */
-            summary?: components["schemas"]["DatabaseSchemaChangeSummary"];
-            /** @description 字段级变更项列表；每项描述一个 dry-run schema 差异处理建议。 */
-            changeSet?: components["schemas"]["DatabaseSchemaChangeItem"][];
-            /** @description 合并后的 dry-run SQL 草案；不得直接视为已审批迁移脚本。 */
-            migrationSql?: string;
-            /** @description 整体回滚提示；正式迁移前需要据此准备反向脚本或恢复方案。 */
-            rollbackHint?: string;
-            /** @description 全局人工检查点；正式迁移前必须逐项确认。 */
-            manualChecks?: string[];
-            /** @description 全局阻塞原因；非空时客户端不得自动执行迁移。 */
-            blockedReasons?: string[];
-            /** @description 面向用户和 AI 的后续动作建议。 */
-            nextActions?: string[];
-            /** @description metadata cache 证据；只描述 schema-only 缓存状态，不包含凭据。 */
-            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
-        };
-        DatabaseMetadataBrowser: {
-            kind?: string;
-            /** Format: int32 */
-            schemaVersion?: number;
-            /** Format: int64 */
-            projectId?: number;
-            databaseType?: string;
-            databaseName?: string;
-            schemaName?: string;
-            selectedTableNames?: string[];
-            summary?: components["schemas"]["DatabaseMetadataBrowserSummary"];
-            tables?: components["schemas"]["DatabaseMetadataBrowserTable"][];
-            aiReadableSummary?: string;
-            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
-            nextActions?: string[];
-            preview?: components["schemas"]["ReverseImportPreview"];
-            compare?: components["schemas"]["ReverseImportCompareResult"];
-            coverage?: components["schemas"]["FieldCoverageReport"];
-        };
-        DatabaseMetadataBrowserColumn: {
-            schemaName?: string;
-            tableName?: string;
-            columnName?: string;
-            dataType?: string;
-            nullable?: boolean;
-            defaultValue?: string;
-            comment?: string;
-            standardFieldName?: string;
-            standardDisplayName?: string;
-            matchStatus?: string;
-            matchReason?: string;
-            candidateKey?: string;
-            importCandidate?: boolean;
-            selectedByDefault?: boolean;
-            missingComment?: boolean;
-            typeChanged?: boolean;
-            unmanaged?: boolean;
-            indexNames?: string[];
-            changes?: components["schemas"]["ReverseImportFieldChange"][];
-        };
-        DatabaseMetadataBrowserSummary: {
-            /** Format: int32 */
-            tableCount?: number;
-            /** Format: int32 */
-            columnCount?: number;
-            /** Format: int32 */
-            indexCount?: number;
-            /** Format: int32 */
-            candidateCount?: number;
-            /** Format: int32 */
-            missingCommentCount?: number;
-            /** Format: int32 */
-            changedCount?: number;
-            /** Format: int32 */
-            unmanagedCount?: number;
-        };
-        DatabaseMetadataBrowserTable: {
-            schemaName?: string;
-            tableName?: string;
-            tableType?: string;
-            comment?: string;
-            /** Format: int32 */
-            columnCount?: number;
-            /** Format: int32 */
-            indexCount?: number;
-            /** Format: int32 */
-            candidateCount?: number;
-            /** Format: int32 */
-            missingCommentCount?: number;
-            /** Format: int32 */
-            changedCount?: number;
-            /** Format: int32 */
-            unmanagedCount?: number;
-            indexes?: components["schemas"]["DatabaseSchemaIndex"][];
-            columns?: components["schemas"]["DatabaseMetadataBrowserColumn"][];
-            warnings?: string[];
-        };
-        DatabaseMetadataScanReq: {
-            /** Format: int64 */
-            projectId: number;
-            databaseType: string;
-            host: string;
-            /** Format: int32 */
-            port?: number;
-            databaseName: string;
-            schemaName?: string;
-            username: string;
-            password?: string;
-            tableNames?: string[];
-            metadataCacheMode?: string;
-            scanId?: string;
-            cursor?: string;
-            /** Format: int32 */
-            pageSize?: number;
-            cancel?: boolean;
-        };
-        DatabaseMetadataScanProgress: {
-            /** Format: int32 */
-            processedTableCount?: number;
-            /** Format: int32 */
-            remainingTableEstimate?: number;
-            /** Format: int32 */
-            pageSize?: number;
-            hasMore?: boolean;
-        };
-        DatabaseMetadataScanSummary: {
-            /** Format: int32 */
-            pageTableCount?: number;
-            /** Format: int32 */
-            selectedTableCount?: number;
-            /** Format: int32 */
-            estimatedTableCount?: number;
-        };
-        DatabaseMetadataScanResult: {
-            kind?: string;
-            /** Format: int32 */
-            schemaVersion?: number;
-            /** Format: int64 */
-            projectId?: number;
-            databaseType?: string;
-            databaseName?: string;
-            schemaName?: string;
-            scanId?: string;
-            /** Format: int32 */
-            estimatedTableCount?: number;
-            cursor?: string;
-            tables?: components["schemas"]["DatabaseTableInfo"][];
-            progress?: components["schemas"]["DatabaseMetadataScanProgress"];
-            partialSummary?: components["schemas"]["DatabaseMetadataScanSummary"];
-            resumeCommand?: string;
-            cancelled?: boolean;
-            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
-            nextActions?: string[];
-        };
-        DatabaseMetadataCacheInfo: {
-            metadataFingerprint?: string;
-            cacheHit?: boolean;
-            stale?: boolean;
-            refreshMode?: string;
-            lastSeenAt?: string;
-            expiresAt?: string;
-            sourceDatabaseVersion?: string;
-            changeSummary?: components["schemas"]["DatabaseMetadataChangeSummary"];
-            nextActions?: string[];
-        };
-        DatabaseMetadataChangeSummary: {
-            changed?: boolean;
-            /** Format: int32 */
-            addedTableCount?: number;
-            /** Format: int32 */
-            removedTableCount?: number;
-            /** Format: int32 */
-            changedTableCount?: number;
-            /** Format: int32 */
-            addedColumnCount?: number;
-            /** Format: int32 */
-            removedColumnCount?: number;
-            /** Format: int32 */
-            changedColumnCount?: number;
-            tables?: components["schemas"]["DatabaseMetadataTableChange"][];
-        };
-        DatabaseMetadataTableChange: {
-            schemaName?: string;
-            tableName?: string;
-            changeType?: string;
-            oldFingerprint?: string;
-            newFingerprint?: string;
-            addedColumns?: string[];
-            removedColumns?: string[];
-            changedColumns?: components["schemas"]["DatabaseMetadataColumnChange"][];
-        };
-        DatabaseMetadataColumnChange: {
-            columnName?: string;
-            changes?: components["schemas"]["ReverseImportFieldChange"][];
-        };
         RReverseImportCompareResult: {
             /** Format: int32 */
             code?: number;
@@ -3567,17 +3943,10 @@ export interface components {
             data?: components["schemas"]["ReverseImportCompareResult"];
             error?: components["schemas"]["ErrorDetail"];
         };
-        RDatabaseSchemaChangePlan: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["DatabaseSchemaChangePlan"];
-            error?: components["schemas"]["ErrorDetail"];
-        };
         ReverseImportCompareResult: {
             summary?: components["schemas"]["ReverseImportCompareSummary"];
-            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
             tableDiffs?: components["schemas"]["ReverseImportTableDiff"][];
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
         };
         ReverseImportCompareSummary: {
             /** Format: int32 */
@@ -3594,11 +3963,6 @@ export interface components {
             missingCommentCount?: number;
             /** Format: int32 */
             nonStandardCount?: number;
-        };
-        ReverseImportFieldChange: {
-            property?: string;
-            currentValue?: string;
-            standardValue?: string;
         };
         ReverseImportFieldDiff: {
             tableName?: string;
@@ -3633,8 +3997,8 @@ export interface components {
             schemaName?: string;
             username: string;
             password?: string;
-            tableNames?: string[];
             metadataCacheMode?: string;
+            tableNames?: string[];
         };
         DatabaseConnectionHealthDiagnostic: {
             connectionStatus?: string;
@@ -3700,11 +4064,196 @@ export interface components {
             data?: components["schemas"]["DatabaseTableInfo"][];
             error?: components["schemas"]["ErrorDetail"];
         };
+        /** @description schema change plan 的单个字段级变更项；用于 API、CLI 和前端 dry-run 审计。 */
+        DatabaseSchemaChangeItem: {
+            /** @description 来源数据库表名；来自 schema metadata，不包含连接串或业务数据行。 */
+            tableName?: string;
+            /** @description 来源数据库字段名；来自 schema metadata，不包含业务数据值。 */
+            columnName?: string;
+            /** @description 命中的 DataSpec 标准字段名；未命中标准或删除候选时为空。 */
+            standardFieldName?: string;
+            /**
+             * @description 数据库 schema plan 中的字段级变更动作；仅描述 dry-run 预览，不代表 DataSpec 会执行数据库迁移。
+             * @enum {string}
+             */
+            action?: "ALTER_COMMENT" | "ALTER_COLUMN" | "DROP_CANDIDATE";
+            /** @description 发生变化的属性，如 dataType、nullable、defaultValue、comment 或 column。 */
+            property?: string;
+            /** @description 当前数据库 metadata 值；已脱敏，不包含业务数据行。 */
+            currentValue?: string;
+            /** @description 目标 DataSpec 标准值；已脱敏，结构属性不会直接拼入可执行 SQL。 */
+            targetValue?: string;
+            /** @description 字段级风险：LOW、MEDIUM 或 HIGH；客户端用于突出人工确认优先级。 */
+            riskLevel?: string;
+            /** @description dry-run SQL 草案；结构变更和高风险删除候选只输出 REVIEW/BLOCKED 注释，不输出可执行 DROP。 */
+            migrationSql?: string;
+            /** @description 回滚或撤销提示；用于 AI/用户生成正式迁移文件前检查。 */
+            rollbackHint?: string;
+            /** @description 需要人工确认的检查点；正式迁移前必须逐项确认。 */
+            manualChecks?: string[];
+            /** @description 阻止自动执行的原因；存在值时客户端不得把该项当作可自动应用。 */
+            blockedReasons?: string[];
+            /** @description 对本项的可读解释，说明为什么生成该计划项。 */
+            reason?: string;
+        };
+        /** @description 数据库 schema 变更计划预览；只用于 dry-run 审计，不执行数据库迁移、不保存连接凭据。 */
+        DatabaseSchemaChangePlan: {
+            /** @description 响应类型标识，供 AI/CLI 判断 JSON 语义。 */
+            kind?: string;
+            /**
+             * Format: int32
+             * @description 响应 schema 版本；新增可选字段时保持兼容递增策略。
+             */
+            schemaVersion?: number;
+            /**
+             * Format: int64
+             * @description DataSpec 项目 ID。
+             */
+            projectId?: number;
+            /** @description 数据库类型，如 POSTGRESQL 或 MYSQL。 */
+            databaseType?: string;
+            /** @description 数据库名；已脱敏，不包含 JDBC URL。 */
+            databaseName?: string;
+            /** @description schema 名；PostgreSQL 用于限定对象，MySQL 场景可能为空或仅作为兼容输入。 */
+            schemaName?: string;
+            /** @description 当前源库 schema-only metadata hash，不包含密码、连接串或业务数据行。 */
+            currentSchemaHash?: string;
+            /** @description 目标 DataSpec 标准摘要 hash，不包含连接凭据。 */
+            targetSpecHash?: string;
+            /** @description 整体风险：SAFE、LOW、MEDIUM、HIGH 或 BLOCKED。 */
+            riskLevel?: string;
+            summary?: components["schemas"]["DatabaseSchemaChangeSummary"];
+            /** @description 字段级变更项列表；每项描述一个 dry-run schema 差异处理建议。 */
+            changeSet?: components["schemas"]["DatabaseSchemaChangeItem"][];
+            /** @description 合并后的 dry-run SQL 草案；不得直接视为已审批迁移脚本。 */
+            migrationSql?: string;
+            /** @description 整体回滚提示；正式迁移前需要据此准备反向脚本或恢复方案。 */
+            rollbackHint?: string;
+            /** @description 全局人工检查点；正式迁移前必须逐项确认。 */
+            manualChecks?: string[];
+            /** @description 全局阻塞原因；非空时客户端不得自动执行迁移。 */
+            blockedReasons?: string[];
+            /** @description 面向用户和 AI 的后续动作建议。 */
+            nextActions?: string[];
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
+        };
+        /** @description schema change plan 的聚合统计；用于前端和 AI 快速判断风险范围。 */
+        DatabaseSchemaChangeSummary: {
+            /**
+             * Format: int32
+             * @description 本次计划覆盖的表数量。
+             */
+            tableCount?: number;
+            /**
+             * Format: int32
+             * @description 本次计划读取的字段数量。
+             */
+            columnCount?: number;
+            /**
+             * Format: int32
+             * @description 变更项数量。
+             */
+            changeCount?: number;
+            /**
+             * Format: int32
+             * @description LOW 风险变更项数量。
+             */
+            lowRiskCount?: number;
+            /**
+             * Format: int32
+             * @description MEDIUM 风险变更项数量。
+             */
+            mediumRiskCount?: number;
+            /**
+             * Format: int32
+             * @description HIGH 风险变更项数量。
+             */
+            highRiskCount?: number;
+            /**
+             * Format: int32
+             * @description 带阻塞原因、不得自动执行的变更项数量。
+             */
+            blockedCount?: number;
+        };
+        RDatabaseSchemaChangePlan: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseSchemaChangePlan"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        DatabaseMetadataScanReq: {
+            /** Format: int64 */
+            projectId: number;
+            /** Format: int64 */
+            presetId?: number;
+            databaseType: string;
+            host: string;
+            /** Format: int32 */
+            port?: number;
+            databaseName: string;
+            schemaName?: string;
+            username: string;
+            password?: string;
+            metadataCacheMode?: string;
+            tableNames?: string[];
+            scanId?: string;
+            cursor?: string;
+            /** Format: int32 */
+            pageSize?: number;
+            cancel?: boolean;
+        };
+        DatabaseMetadataScanProgress: {
+            /** Format: int32 */
+            processedTableCount?: number;
+            /** Format: int32 */
+            remainingTableEstimate?: number;
+            /** Format: int32 */
+            pageSize?: number;
+            hasMore?: boolean;
+        };
+        DatabaseMetadataScanResult: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: int64 */
+            projectId?: number;
+            databaseType?: string;
+            databaseName?: string;
+            schemaName?: string;
+            scanId?: string;
+            /** Format: int32 */
+            estimatedTableCount?: number;
+            cursor?: string;
+            tables?: components["schemas"]["DatabaseTableInfo"][];
+            progress?: components["schemas"]["DatabaseMetadataScanProgress"];
+            partialSummary?: components["schemas"]["DatabaseMetadataScanSummary"];
+            resumeCommand?: string;
+            cancelled?: boolean;
+            nextActions?: string[];
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
+        };
+        DatabaseMetadataScanSummary: {
+            /** Format: int32 */
+            pageTableCount?: number;
+            /** Format: int32 */
+            selectedTableCount?: number;
+            /** Format: int32 */
+            estimatedTableCount?: number;
+        };
+        RDatabaseMetadataScanResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseMetadataScanResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
         DatabaseImportReq: {
             /** Format: int64 */
             projectId: number;
             candidates?: components["schemas"]["FieldCandidate"][];
             ignoredCandidates?: components["schemas"]["FieldCandidate"][];
+            /** @description 反向导入预览返回的 dry-run evidence；确认写入标准字段前必须带回。 */
             dryRunToken?: string;
             databaseType?: string;
             databaseName?: string;
@@ -3736,6 +4285,136 @@ export interface components {
             data?: components["schemas"]["DatabaseSchemaDump"];
             error?: components["schemas"]["ErrorDetail"];
         };
+        DatabaseMetadataBrowser: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: int64 */
+            projectId?: number;
+            databaseType?: string;
+            databaseName?: string;
+            schemaName?: string;
+            selectedTableNames?: string[];
+            summary?: components["schemas"]["DatabaseMetadataBrowserSummary"];
+            tables?: components["schemas"]["DatabaseMetadataBrowserTable"][];
+            aiReadableSummary?: string;
+            nextActions?: string[];
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
+            preview?: components["schemas"]["ReverseImportPreview"];
+            compare?: components["schemas"]["ReverseImportCompareResult"];
+            coverage?: components["schemas"]["FieldCoverageReport"];
+        };
+        DatabaseMetadataBrowserColumn: {
+            schemaName?: string;
+            tableName?: string;
+            columnName?: string;
+            dataType?: string;
+            nullable?: boolean;
+            defaultValue?: string;
+            comment?: string;
+            standardFieldName?: string;
+            standardDisplayName?: string;
+            matchStatus?: string;
+            matchReason?: string;
+            candidateKey?: string;
+            importCandidate?: boolean;
+            selectedByDefault?: boolean;
+            missingComment?: boolean;
+            typeChanged?: boolean;
+            unmanaged?: boolean;
+            indexNames?: string[];
+            changes?: components["schemas"]["ReverseImportFieldChange"][];
+        };
+        DatabaseMetadataBrowserSummary: {
+            /** Format: int32 */
+            tableCount?: number;
+            /** Format: int32 */
+            columnCount?: number;
+            /** Format: int32 */
+            indexCount?: number;
+            /** Format: int32 */
+            candidateCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            changedCount?: number;
+            /** Format: int32 */
+            unmanagedCount?: number;
+        };
+        DatabaseMetadataBrowserTable: {
+            schemaName?: string;
+            tableName?: string;
+            tableType?: string;
+            comment?: string;
+            /** Format: int32 */
+            columnCount?: number;
+            /** Format: int32 */
+            indexCount?: number;
+            /** Format: int32 */
+            candidateCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            changedCount?: number;
+            /** Format: int32 */
+            unmanagedCount?: number;
+            indexes?: components["schemas"]["DatabaseSchemaIndex"][];
+            columns?: components["schemas"]["DatabaseMetadataBrowserColumn"][];
+            warnings?: string[];
+        };
+        FieldCoverageItem: {
+            tableName?: string;
+            columnName?: string;
+            dataType?: string;
+            comment?: string;
+            /** @enum {string} */
+            status?: "STANDARD_MATCH" | "ALIAS_MATCH" | "MISSING_COMMENT" | "POSSIBLE_DUPLICATE" | "UNMANAGED";
+            covered?: boolean;
+            standardFieldName?: string;
+            standardDisplayName?: string;
+            matchType?: string;
+            recommendedFieldName?: string;
+            reason?: string;
+        };
+        FieldCoverageReport: {
+            summary?: components["schemas"]["FieldCoverageSummary"];
+            tables?: components["schemas"]["FieldCoverageTable"][];
+            unmanagedRankings?: components["schemas"]["UnmanagedFieldRanking"][];
+            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
+        };
+        FieldCoverageSummary: {
+            /** Format: int32 */
+            tableCount?: number;
+            /** Format: int32 */
+            columnCount?: number;
+            /** Format: int32 */
+            coveredCount?: number;
+            /** Format: int32 */
+            unmanagedCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            possibleDuplicateCount?: number;
+            /** Format: double */
+            coverageRate?: number;
+        };
+        FieldCoverageTable: {
+            tableName?: string;
+            comment?: string;
+            /** Format: int32 */
+            columnCount?: number;
+            /** Format: int32 */
+            coveredCount?: number;
+            /** Format: int32 */
+            unmanagedCount?: number;
+            /** Format: int32 */
+            missingCommentCount?: number;
+            /** Format: int32 */
+            possibleDuplicateCount?: number;
+            /** Format: double */
+            coverageRate?: number;
+            fields?: components["schemas"]["FieldCoverageItem"][];
+        };
         RDatabaseMetadataBrowser: {
             /** Format: int32 */
             code?: number;
@@ -3743,12 +4422,13 @@ export interface components {
             data?: components["schemas"]["DatabaseMetadataBrowser"];
             error?: components["schemas"]["ErrorDetail"];
         };
-        RDatabaseMetadataScanResult: {
+        UnmanagedFieldRanking: {
+            columnName?: string;
             /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["DatabaseMetadataScanResult"];
-            error?: components["schemas"]["ErrorDetail"];
+            count?: number;
+            tables?: string[];
+            recommendedFieldName?: string;
+            reason?: string;
         };
         RequirementDraftReq: {
             /** Format: int64 */
@@ -4017,6 +4697,7 @@ export interface components {
             /** Format: int32 */
             changeLogs?: number;
         };
+        /** @description 前序导出的脱敏备份包，不包含 token、数据库密码或源库业务数据行。 */
         ProjectBackupPackage: {
             /** Format: int32 */
             schemaVersion?: number;
@@ -4035,10 +4716,15 @@ export interface components {
             warnings?: string[];
         };
         ProjectRestoreReq: {
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description 目标项目 ID；为空时恢复到新项目。
+             */
             targetProjectId?: number;
+            /** @description 是否允许覆盖同 key 资产；默认为 false。 */
             overwrite?: boolean;
             backupPackage: components["schemas"]["ProjectBackupPackage"];
+            /** @description 预览恢复返回的 dry-run evidence；确认应用时必须原样带回。 */
             dryRunToken?: string;
         };
         ReverseImportBatch: {
@@ -4094,6 +4780,7 @@ export interface components {
             template?: components["schemas"]["Template"];
             fields?: components["schemas"]["TemplateField"][];
         };
+        /** @description 本次计划的资产数量摘要。 */
         ProjectRestoreCounts: {
             /** Format: int32 */
             created?: number;
@@ -4108,6 +4795,7 @@ export interface components {
             /** Format: int32 */
             warnings?: number;
         };
+        /** @description 逐项恢复动作。 */
         ProjectRestoreItem: {
             assetType?: string;
             key?: string;
@@ -4115,16 +4803,27 @@ export interface components {
             reason?: string;
         };
         ProjectRestorePlan: {
+            /** @description true 表示只读预览，false 表示已经应用。 */
             dryRun?: boolean;
+            /** @description 预览计划对应的 evidence token，确认应用时必须带回；应用结果和恢复记录中为空，避免持久化写入证据。 */
             dryRunToken?: string;
+            /** @description 是否允许覆盖同 key 资产。 */
             overwrite?: boolean;
+            /** @description 当前计划是否可应用。 */
             canApply?: boolean;
+            /** @description 备份包兼容状态。 */
             compatibilityStatus?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description 目标项目 ID；恢复到新项目的预览阶段可能为空。
+             */
             targetProjectId?: number;
+            /** @description 目标项目名称。 */
             targetProjectName?: string;
             counts?: components["schemas"]["ProjectRestoreCounts"];
+            /** @description 逐项恢复动作。 */
             items?: components["schemas"]["ProjectRestoreItem"][];
+            /** @description 需要用户或 AI 复核的风险提示。 */
             warnings?: string[];
         };
         RProjectRestorePlan: {
@@ -4285,123 +4984,6 @@ export interface components {
             fixNextActions?: string[];
             dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
         };
-        /** @description SQL 规则调试中指向源 SQL 文本的范围。 */
-        SqlRuleSourceRange: {
-            /** @description 1-based 起始行号；无法定位时为空。 */
-            /** Format: int32 */
-            line?: number;
-            /** @description 1-based 起始列号；无法定位时为空。 */
-            /** Format: int32 */
-            column?: number;
-            /** @description 1-based 结束行号；无法定位时为空。 */
-            /** Format: int32 */
-            lineEnd?: number;
-            /** @description 1-based 结束列号(不含)；无法定位时为空。 */
-            /** Format: int32 */
-            columnEnd?: number;
-            /** @description 0-based 起始偏移；无法定位时为空。 */
-            /** Format: int32 */
-            sourceStart?: number;
-            /** @description 0-based 结束偏移(不含)；无法定位时为空。 */
-            /** Format: int32 */
-            sourceEnd?: number;
-            /** @description 定位类型，例如 table、column、comment_column；无法定位时为空。 */
-            locationKind?: string;
-            /** @description source range 对应的表名；无法定位到具体表时为空。 */
-            tableName?: string;
-            /** @description source range 对应的字段名；表级问题或无法定位时为空。 */
-            columnName?: string;
-        };
-        /** @description 单条 SQL 规则调试事件，描述规则为什么命中、未命中或被跳过。 */
-        SqlRuleMatchTrace: {
-            /** @description 稳定状态，供 AI 和前端按状态分组展示。 */
-            /** @enum {string} */
-            status?: "MATCHED" | "NO_MATCH" | "DISABLED" | "UNPARSED" | "ERROR";
-            /** @description 人类可读解释，说明命中、未命中、禁用或异常原因。 */
-            message?: string;
-            /** @description 命中 issue 的严重级别；未命中或禁用时可为空。 */
-            /** @enum {string} */
-            severity?: "ERROR" | "WARNING" | "SUGGESTION";
-            /** @description 命中 issue 的原始问题描述；未命中或禁用时为空。 */
-            issueMessage?: string;
-            /** @description 本次 trace 对应的表名；没有具体表时为空。 */
-            tableName?: string;
-            /** @description 本次 trace 对应的字段名；表级问题或无具体字段时为空。 */
-            columnName?: string;
-            /** @description 本次 trace 对应的源 SQL 范围；无法定位时为空。 */
-            sourceRange?: components["schemas"]["SqlRuleSourceRange"];
-            /** @description 当前 fixedSql 策略下的修复状态；未参与修复策略时为空。 */
-            /** @enum {string} */
-            fixStatus?: "APPLIED" | "PLANNED" | "SKIPPED";
-            /** @description fixedSql 跳过原因编码；未跳过时为空。 */
-            fixReasonCode?: string;
-            /** @description 命中规则豁免 ID；未被豁免时为空。 */
-            /** Format: int64 */
-            suppressionId?: number;
-        };
-        /** @description 单条规则在当前 SQL 中的豁免统计与命中说明。 */
-        SqlRuleSuppressionStatus: {
-            /** @description 未被豁免、仍计入 lint 统计的 issue 数量。 */
-            /** Format: int32 */
-            activeIssueCount?: number;
-            /** @description 被项目规则豁免抑制的 issue 数量。 */
-            /** Format: int32 */
-            suppressedIssueCount?: number;
-            /** @description 命中的规则豁免 ID 列表；没有豁免时为空列表。 */
-            suppressionIds?: number[];
-            /** @description 命中的规则豁免原因列表；没有豁免时为空列表。 */
-            suppressionReasons?: string[];
-            /** @description 适合前端和 AI 直接展示的豁免状态摘要。 */
-            summary?: string;
-        };
-        /** @description 单条规则在当前 fixedSql 策略下的修复计划快照。 */
-        SqlRuleFixStrategy: {
-            /** @description 本次调试沿用的 fixedSql 策略；为空表示使用系统默认策略。 */
-            fixPolicy?: components["schemas"]["FixPolicy"];
-            /** @description 是否为 dry-run 修复预览。 */
-            fixDryRun?: boolean;
-            /** @description 该规则产生的修复变更汇总。 */
-            fixSummary?: components["schemas"]["FixPlanSummary"];
-            /** @description 该规则产生的修复变更列表；没有确定性修复时为空列表。 */
-            changes?: components["schemas"]["FixChange"][];
-            /** @description 针对该规则修复结果的后续建议动作。 */
-            nextActions?: string[];
-        };
-        /** @description 单条 SQL lint 规则的调试快照。 */
-        SqlRuleDebugTrace: {
-            /** @description 规则编码，对应 LintRule.getCode() 和 RuleConfig.ruleCode。 */
-            ruleCode?: string;
-            /** @description 规则名称，供用户在调试面板中识别规则。 */
-            ruleName?: string;
-            /** @description 该规则在当前项目配置下是否会执行。 */
-            enabled?: boolean;
-            /** @description 当前配置或命中 issue 推导出的严重级别；没有配置且未命中时为空。 */
-            /** @enum {string} */
-            severity?: "ERROR" | "WARNING" | "SUGGESTION";
-            /** @description 规则参数快照；敏感键和值会被脱敏。 */
-            paramsSnapshot?: Record<string, unknown>;
-            /** @description 规则命中、未命中、禁用或异常的结构化解释。 */
-            matchTrace?: components["schemas"]["SqlRuleMatchTrace"][];
-            /** @description 该规则首个可定位命中的源 SQL 范围；没有命中或无法定位时为空。 */
-            sourceRange?: components["schemas"]["SqlRuleSourceRange"];
-            /** @description 该规则在当前 fixedSql 策略下的修复计划快照。 */
-            fixStrategy?: components["schemas"]["SqlRuleFixStrategy"];
-            /** @description 该规则命中的豁免状态与计数。 */
-            suppressionStatus?: components["schemas"]["SqlRuleSuppressionStatus"];
-            /** @description 补充说明，解释通用 trace 或兼容降级原因。 */
-            debugNotes?: string[];
-        };
-        /** @description SQL 规则调试接口响应。 */
-        SqlLintDebugResult: {
-            /** @description 调试响应版本，用于 AI 和 CLI 判断字段兼容性。 */
-            debugVersion?: string;
-            /** @description 常规 lint 结果快照；字段与 /api/lint 保持兼容。 */
-            lintResult?: components["schemas"]["LintResult"];
-            /** @description 每条已知 lint 规则的执行或跳过 trace。 */
-            rules?: components["schemas"]["SqlRuleDebugTrace"][];
-            /** @description 本次调试的全局说明，例如只读、不保存记录或 SQL 未解析。 */
-            debugNotes?: string[];
-        };
         RLintResult: {
             /** Format: int32 */
             code?: number;
@@ -4415,6 +4997,76 @@ export interface components {
             message?: string;
             data?: components["schemas"]["SqlLintDebugResult"];
             error?: components["schemas"]["ErrorDetail"];
+        };
+        SqlLintDebugResult: {
+            debugVersion?: string;
+            lintResult?: components["schemas"]["LintResult"];
+            rules?: components["schemas"]["SqlRuleDebugTrace"][];
+            debugNotes?: string[];
+        };
+        SqlRuleDebugTrace: {
+            ruleCode?: string;
+            ruleName?: string;
+            enabled?: boolean;
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING" | "SUGGESTION";
+            paramsSnapshot?: {
+                [key: string]: Record<string, never>;
+            };
+            matchTrace?: components["schemas"]["SqlRuleMatchTrace"][];
+            sourceRange?: components["schemas"]["SqlRuleSourceRange"];
+            fixStrategy?: components["schemas"]["SqlRuleFixStrategy"];
+            suppressionStatus?: components["schemas"]["SqlRuleSuppressionStatus"];
+            debugNotes?: string[];
+        };
+        SqlRuleFixStrategy: {
+            fixPolicy?: components["schemas"]["FixPolicy"];
+            fixDryRun?: boolean;
+            fixSummary?: components["schemas"]["FixPlanSummary"];
+            changes?: components["schemas"]["FixChange"][];
+            nextActions?: string[];
+        };
+        SqlRuleMatchTrace: {
+            /** @enum {string} */
+            status?: "MATCHED" | "NO_MATCH" | "DISABLED" | "UNPARSED" | "ERROR";
+            message?: string;
+            /** @enum {string} */
+            severity?: "ERROR" | "WARNING" | "SUGGESTION";
+            issueMessage?: string;
+            tableName?: string;
+            columnName?: string;
+            sourceRange?: components["schemas"]["SqlRuleSourceRange"];
+            /** @enum {string} */
+            fixStatus?: "APPLIED" | "PLANNED" | "SKIPPED";
+            fixReasonCode?: string;
+            /** Format: int64 */
+            suppressionId?: number;
+        };
+        SqlRuleSourceRange: {
+            /** Format: int32 */
+            line?: number;
+            /** Format: int32 */
+            column?: number;
+            /** Format: int32 */
+            lineEnd?: number;
+            /** Format: int32 */
+            columnEnd?: number;
+            /** Format: int32 */
+            sourceStart?: number;
+            /** Format: int32 */
+            sourceEnd?: number;
+            locationKind?: string;
+            tableName?: string;
+            columnName?: string;
+        };
+        SqlRuleSuppressionStatus: {
+            /** Format: int32 */
+            activeIssueCount?: number;
+            /** Format: int32 */
+            suppressedIssueCount?: number;
+            suppressionIds?: number[];
+            suppressionReasons?: string[];
+            summary?: string;
         };
         RInteger: {
             /** Format: int32 */
@@ -4502,6 +5154,118 @@ export interface components {
             message?: string;
             data?: components["schemas"]["FieldChangeUndoResult"];
             error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardFieldMergePreviewReq: {
+            /** Format: int64 */
+            projectId: number;
+            /** Format: int64 */
+            targetFieldId: number;
+            /** Format: int64 */
+            sourceFieldId: number;
+        };
+        RStandardFieldMergePreview: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardFieldMergePreview"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardFieldMergeChange: {
+            attribute?: string;
+            beforeValue?: Record<string, never>;
+            afterValue?: Record<string, never>;
+            migrationMode?: string;
+            description?: string;
+        };
+        StandardFieldMergeFieldSummary: {
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            displayName?: string;
+            dataType?: string;
+            nullable?: boolean;
+            /** Format: int64 */
+            codeSetId?: number;
+            sensitive?: boolean;
+            status?: string;
+            /** Format: int64 */
+            replacementFieldId?: number;
+            replacementReason?: string;
+            aliases?: string[];
+            tags?: string[];
+            exampleValue?: string;
+            formatNotes?: string[];
+            sourceSummaries?: string[];
+        };
+        StandardFieldMergeImpact: {
+            impactType?: string;
+            /** Format: int64 */
+            sourceId?: number;
+            title?: string;
+            /** Format: int32 */
+            count?: number;
+            description?: string;
+            metadata?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        StandardFieldMergePreview: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int64 */
+            recommendedTargetFieldId?: number;
+            target?: components["schemas"]["StandardFieldMergeFieldSummary"];
+            source?: components["schemas"]["StandardFieldMergeFieldSummary"];
+            targetAfter?: components["schemas"]["StandardFieldMergeFieldSummary"];
+            sourceAfter?: components["schemas"]["StandardFieldMergeFieldSummary"];
+            changes?: components["schemas"]["StandardFieldMergeChange"][];
+            risks?: components["schemas"]["StandardFieldMergeRisk"][];
+            impactItems?: components["schemas"]["StandardFieldMergeImpact"][];
+            rollbackHints?: components["schemas"]["StandardFieldMergeRollbackHint"][];
+            nextActions?: string[];
+        };
+        StandardFieldMergeRisk: {
+            severity?: string;
+            code?: string;
+            message?: string;
+            blocking?: boolean;
+            manualAction?: string;
+        };
+        StandardFieldMergeRollbackHint: {
+            type?: string;
+            action?: string;
+            description?: string;
+            targetPath?: string;
+        };
+        StandardFieldMergeApplyReq: {
+            /** Format: int64 */
+            projectId: number;
+            /** Format: int64 */
+            targetFieldId: number;
+            /** Format: int64 */
+            sourceFieldId: number;
+            reason: string;
+        };
+        RStandardFieldMergeResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardFieldMergeResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardFieldMergeResult: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: int64 */
+            projectId?: number;
+            applied?: boolean;
+            preview?: components["schemas"]["StandardFieldMergePreview"];
+            rollbackHints?: components["schemas"]["StandardFieldMergeRollbackHint"][];
+            nextActions?: string[];
         };
         FieldGroupingBatchUpdateReq: {
             /** Format: int64 */
@@ -4602,67 +5366,6 @@ export interface components {
             specHash?: string;
             versioned?: boolean;
         };
-        FieldCoverageItem: {
-            tableName?: string;
-            columnName?: string;
-            dataType?: string;
-            comment?: string;
-            /** @enum {string} */
-            status?: "STANDARD_MATCH" | "ALIAS_MATCH" | "MISSING_COMMENT" | "POSSIBLE_DUPLICATE" | "UNMANAGED";
-            covered?: boolean;
-            standardFieldName?: string;
-            standardDisplayName?: string;
-            matchType?: string;
-            recommendedFieldName?: string;
-            reason?: string;
-        };
-        FieldCoverageReport: {
-            summary?: components["schemas"]["FieldCoverageSummary"];
-            metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
-            tables?: components["schemas"]["FieldCoverageTable"][];
-            unmanagedRankings?: components["schemas"]["UnmanagedFieldRanking"][];
-        };
-        FieldCoverageSummary: {
-            /** Format: int32 */
-            tableCount?: number;
-            /** Format: int32 */
-            columnCount?: number;
-            /** Format: int32 */
-            coveredCount?: number;
-            /** Format: int32 */
-            unmanagedCount?: number;
-            /** Format: int32 */
-            missingCommentCount?: number;
-            /** Format: int32 */
-            possibleDuplicateCount?: number;
-            /** Format: double */
-            coverageRate?: number;
-        };
-        FieldCoverageTable: {
-            tableName?: string;
-            comment?: string;
-            /** Format: int32 */
-            columnCount?: number;
-            /** Format: int32 */
-            coveredCount?: number;
-            /** Format: int32 */
-            unmanagedCount?: number;
-            /** Format: int32 */
-            missingCommentCount?: number;
-            /** Format: int32 */
-            possibleDuplicateCount?: number;
-            /** Format: double */
-            coverageRate?: number;
-            fields?: components["schemas"]["FieldCoverageItem"][];
-        };
-        UnmanagedFieldRanking: {
-            columnName?: string;
-            /** Format: int32 */
-            count?: number;
-            tables?: string[];
-            recommendedFieldName?: string;
-            reason?: string;
-        };
         AiEvidenceArtifact: {
             artifactType?: string;
             title?: string;
@@ -4729,6 +5432,151 @@ export interface components {
             data?: components["schemas"]["FieldCoverageReport"];
             error?: components["schemas"]["ErrorDetail"];
         };
+        /** @description 契约候选导入预览请求；只读解析本地提交的契约文本，不访问外部 URL 或写入候选库。 */
+        ContractCandidatePreviewReq: {
+            /**
+             * Format: int64
+             * @description DataSpec 项目 ID，用于限定已有标准字段匹配范围。
+             */
+            projectId: number;
+            /** @description 契约来源类型，允许 openapi、json-schema、protobuf。 */
+            sourceKind: string;
+            /** @description 契约来源路径或人读标识；仅作为证据展示和 hash 输入，输出前会脱敏且不会被服务端当作外部 URL 读取。 */
+            sourcePath: string;
+            /** @description 契约文件文本内容；服务端只在内存中解析，并用完整脱敏文本参与 contractHash 计算。 */
+            contractContent: string;
+            /**
+             * Format: int32
+             * @description 本次最多返回的候选数量；为空时使用服务默认上限，服务端会限制在 1 到 500。
+             */
+            maxCandidates?: number;
+        };
+        /** @description 契约解析诊断项，描述降级、复杂 schema、截断或输入问题；内容已脱敏。 */
+        ContractCandidateDiagnostic: {
+            /** @description 稳定诊断码，供测试、CLI 和 AI fixture 断言。 */
+            code?: string;
+            /** @description 诊断级别，例如 INFO、WARN、ERROR。 */
+            severity?: string;
+            /** @description 面向用户和 AI 的脱敏说明，不包含 raw secret。 */
+            message?: string;
+            /** @description 诊断对应的脱敏契约来源路径。 */
+            sourcePath?: string;
+        };
+        /** @description 单个契约字段候选；保留脱敏来源证据和建议动作，但不触发持久化写入。 */
+        ContractCandidateField: {
+            /** @description 稳定候选 key，由来源类型和规范化字段名组成。 */
+            candidateKey?: string;
+            /** @description 规范化后的标准候选字段名，优先使用 snake_case。 */
+            candidateName?: string;
+            /** @description 候选人读名称，来自契约 description、comment 或原字段名，输出前已脱敏。 */
+            displayName?: string;
+            /** @description DataSpec 可理解的数据类型摘要，例如 bigint、decimal、timestamp 或 json。 */
+            dataType?: string;
+            /** @description 契约是否声明该字段必填。 */
+            required?: boolean;
+            /** @description 脱敏枚举值摘要；为空表示契约未声明枚举或枚举被截断。 */
+            enumValues?: string[];
+            /** @description 脱敏示例值摘要；最多保留少量示例用于人工复核。 */
+            exampleValues?: string[];
+            /** @description 字段在契约中的脱敏稳定来源路径。 */
+            sourcePath?: string;
+            /**
+             * Format: int32
+             * @description 候选字段输出 schema 版本。
+             */
+            schemaVersion?: number;
+            /**
+             * Format: int32
+             * @description 候选置信度；复杂 schema 或需要人工复核时会降低。
+             */
+            confidence?: number;
+            /** @description 匹配已有标准、重复来源或复杂 schema 的脱敏原因。 */
+            conflictReasons?: string[];
+            /** @description 建议动作：CREATE_CANDIDATE、MERGE_EXISTING 或 REVIEW_REQUIRED。 */
+            recommendedAction?: string;
+            inboxPayload?: components["schemas"]["StandardCandidateCreateReq"];
+        };
+        /** @description 契约候选导入预览包；API、CLI 和 AI fixture 共享的只读稳定 JSON 契约。 */
+        ContractCandidatePreviewPackage: {
+            /** @description 契约类型，固定为 dataspec.contract-candidate-preview。 */
+            kind?: string;
+            /**
+             * Format: int32
+             * @description 输出 schema 版本，兼容性新增字段时递增。
+             */
+            schemaVersion?: number;
+            /**
+             * Format: int64
+             * @description DataSpec 项目 ID。
+             */
+            projectId?: number;
+            /** @description 契约来源类型：openapi、json-schema 或 protobuf。 */
+            sourceKind?: string;
+            /** @description 脱敏后的契约来源路径或人读标识。 */
+            sourcePath?: string;
+            /** @description 基于完整脱敏契约内容、来源路径、解析参数和候选摘要生成的稳定 SHA-256。 */
+            contractHash?: string;
+            summary?: components["schemas"]["ContractCandidateSummary"];
+            /** @description 可审核的字段候选集合；预览不会自动写入候选库或正式字段。 */
+            candidateFields?: components["schemas"]["ContractCandidateField"][];
+            /** @description 解析降级、复杂 schema 和截断等脱敏诊断。 */
+            diagnostics?: components["schemas"]["ContractCandidateDiagnostic"][];
+            safety?: components["schemas"]["ContractCandidateSafety"];
+            /** @description 后续人工审核和候选入箱建议；不会包含 raw secret。 */
+            nextActions?: string[];
+        };
+        /** @description 契约候选导入预览的安全边界声明；用于 AI/CLI 判断只读和敏感输入边界。 */
+        ContractCandidateSafety: {
+            /** @description 是否只读；契约预览固定为 true。 */
+            readOnly?: boolean;
+            /** @description 是否写入项目记录；契约预览固定为 false。 */
+            writesProject?: boolean;
+            /** @description 是否访问外部网络；第一版固定为 false。 */
+            externalNetworkUsed?: boolean;
+            /** @description 是否调用外部 LLM；第一版固定为 false。 */
+            externalLlmUsed?: boolean;
+            /** @description 是否包含真实业务行数据；预览只输出字段摘要，固定为 false。 */
+            containsRealBusinessRows?: boolean;
+            /** @description 输入中检测到并已脱敏的敏感来源类型，例如 sourcePath 或 contractContent。 */
+            sensitiveInputs?: string[];
+        };
+        /** @description 契约候选预览摘要，用于 CLI 文本输出和 AI 快速判断结果规模。 */
+        ContractCandidateSummary: {
+            /**
+             * Format: int32
+             * @description 从契约中识别到的原始字段数量，去重前计数。
+             */
+            sourceFieldCount?: number;
+            /**
+             * Format: int32
+             * @description 去重和 maxCandidates 截断后返回的候选数量。
+             */
+            candidateCount?: number;
+            /**
+             * Format: int32
+             * @description 同一契约内被合并的重复字段数量。
+             */
+            duplicateCount?: number;
+            /**
+             * Format: int32
+             * @description 与已有标准字段命中的候选数量。
+             */
+            existingMatchCount?: number;
+            /**
+             * Format: int32
+             * @description 解析、复杂 schema 或截断诊断数量。
+             */
+            diagnosticCount?: number;
+            /** @description 是否因为 maxCandidates 上限发生截断。 */
+            truncated?: boolean;
+        };
+        RContractCandidatePreviewPackage: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["ContractCandidatePreviewPackage"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
         FixSqlPromptReq: {
             /** Format: int64 */
             projectId: number;
@@ -4745,6 +5593,93 @@ export interface components {
             /** Format: int64 */
             projectId: number;
             businessDescription?: string;
+        };
+        AiContextBudgetPlanRequest: {
+            /** Format: int64 */
+            projectId: number;
+            /** Format: int32 */
+            tokenBudget: number;
+            taskType?: string;
+            profileId?: string;
+            scope?: string;
+            query?: string;
+            status?: string;
+            /** Format: int32 */
+            limit?: number;
+            targetTable?: string;
+            targetFile?: string;
+        };
+        AiContextBudgetArtifact: {
+            artifact?: string;
+            /** Format: int32 */
+            estimatedTokens?: number;
+            reason?: string;
+            riskImpact?: string;
+            appliedScope?: components["schemas"]["AiContextRecommendedExportParams"];
+        };
+        AiContextBudgetEstimation: {
+            /** Format: int32 */
+            tokenBudget?: number;
+            /** Format: int32 */
+            selectedEstimatedTokens?: number;
+            /** Format: int32 */
+            totalEstimatedTokens?: number;
+            estimationMethod?: string;
+            confidence?: string;
+        };
+        AiContextBudgetPlan: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: int64 */
+            projectId?: number;
+            request?: components["schemas"]["AiContextBudgetRequestEcho"];
+            estimation?: components["schemas"]["AiContextBudgetEstimation"];
+            selectedArtifacts?: components["schemas"]["AiContextBudgetArtifact"][];
+            droppedArtifacts?: components["schemas"]["AiContextBudgetArtifact"][];
+            /** @enum {string} */
+            qualityRisk?: "LOW" | "MEDIUM" | "HIGH";
+            fallbackSteps?: string[];
+            recommendedExportParams?: components["schemas"]["AiContextRecommendedExportParams"];
+            diagnostics?: string[];
+            recommendedNextActions?: string[];
+        };
+        AiContextBudgetRequestEcho: {
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int32 */
+            tokenBudget?: number;
+            taskType?: string;
+            profileId?: string;
+            scope?: string;
+            query?: string;
+            status?: string;
+            /** Format: int32 */
+            limit?: number;
+            targetTable?: string;
+            targetFile?: string;
+            /** Format: int32 */
+            totalFieldCount?: number;
+            /** Format: int32 */
+            matchedFieldCount?: number;
+            /** Format: int32 */
+            returnedFieldCount?: number;
+        };
+        AiContextRecommendedExportParams: {
+            scope?: string;
+            query?: string;
+            status?: string;
+            /** Format: int32 */
+            limit?: number;
+            profileId?: string;
+            taskType?: string;
+        };
+        RAiContextBudgetPlan: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiContextBudgetPlan"];
+            error?: components["schemas"]["ErrorDetail"];
         };
         AiBatchSqlLintItemReq: {
             itemName?: string;
@@ -4908,6 +5843,92 @@ export interface components {
             data?: components["schemas"]["TemplateField"][];
             error?: components["schemas"]["ErrorDetail"];
         };
+        RSyntheticStandardExamplePackage: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["SyntheticStandardExamplePackage"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        SyntheticDdlPreviewInput: {
+            id?: string;
+            tableName?: string;
+            businessObject?: string;
+            expectedFieldNames?: string[];
+            generationParams?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        SyntheticExampleDiagnostic: {
+            id?: string;
+            severity?: string;
+            message?: string;
+        };
+        SyntheticExampleSafety: {
+            readOnly?: boolean;
+            writesProject?: boolean;
+            containsRealBusinessRows?: boolean;
+            externalLlmUsed?: boolean;
+            sensitiveInputs?: string[];
+        };
+        SyntheticExampleSourceSummary: {
+            /** Format: int32 */
+            standardFieldCount?: number;
+            /** Format: int32 */
+            templateCount?: number;
+            /** Format: int32 */
+            codeSetReferenceCount?: number;
+            fallbackUsed?: boolean;
+            selectedFieldNames?: string[];
+        };
+        SyntheticFieldSuggestionQuestion: {
+            id?: string;
+            question?: string;
+            expectedFieldNames?: string[];
+            reviewHint?: string;
+        };
+        SyntheticSqlCase: {
+            id?: string;
+            title?: string;
+            scenario?: string;
+            sql?: string;
+            usedFieldNames?: string[];
+            expectedDiagnosticIds?: string[];
+            description?: string;
+            source?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        SyntheticStandardExamplePackage: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: int64 */
+            projectId?: number;
+            scenario?: string;
+            specHash?: string;
+            generationParams?: {
+                [key: string]: Record<string, never>;
+            };
+            sourceSummary?: components["schemas"]["SyntheticExampleSourceSummary"];
+            goodSql?: components["schemas"]["SyntheticSqlCase"][];
+            badSql?: components["schemas"]["SyntheticSqlCase"][];
+            ddlPreviewInputs?: components["schemas"]["SyntheticDdlPreviewInput"][];
+            fieldSuggestionQuestions?: components["schemas"]["SyntheticFieldSuggestionQuestion"][];
+            standardQaCases?: components["schemas"]["SyntheticStandardQaCase"][];
+            expectedDiagnostics?: components["schemas"]["SyntheticExampleDiagnostic"][];
+            diagnostics?: components["schemas"]["SyntheticExampleDiagnostic"][];
+            safety?: components["schemas"]["SyntheticExampleSafety"];
+            nextActions?: string[];
+        };
+        SyntheticStandardQaCase: {
+            id?: string;
+            question?: string;
+            expectedAnswerOutline?: string;
+            referencedFieldNames?: string[];
+            confidence?: string;
+            reviewHint?: string;
+        };
         RListStarterKitDefinition: {
             /** Format: int32 */
             code?: number;
@@ -5012,6 +6033,80 @@ export interface components {
             /** Format: date-time */
             appliedAt?: string;
         };
+        RStandardUsageHeatmapReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardUsageHeatmapReport"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardUsageHeatmapItem: {
+            /** Format: int64 */
+            fieldId?: number;
+            name?: string;
+            displayName?: string;
+            status?: string;
+            sourceKinds?: string[];
+            /** Format: int32 */
+            qualityScore?: number;
+            qualityLevel?: string;
+            /** Format: int32 */
+            conflictCount?: number;
+            /** Format: int32 */
+            sourceEvidenceCount?: number;
+            /** Format: int32 */
+            lintHits?: number;
+            /** Format: int32 */
+            aiJobHits?: number;
+            /** Format: date-time */
+            lastReferencedAt?: string;
+            /** Format: int32 */
+            usageScore?: number;
+            /** Format: int32 */
+            cleanupPriority?: number;
+            suggestedNextAction?: string;
+        };
+        StandardUsageHeatmapReport: {
+            /** Format: int64 */
+            projectId?: number;
+            summary?: components["schemas"]["StandardUsageHeatmapSummary"];
+            items?: components["schemas"]["StandardUsageHeatmapItem"][];
+        };
+        StandardUsageHeatmapSummary: {
+            /** Format: int32 */
+            totalFieldCount?: number;
+            /** Format: int32 */
+            hotFieldCount?: number;
+            /** Format: int32 */
+            riskyFieldCount?: number;
+            /** Format: int32 */
+            cleanupCandidateCount?: number;
+            /** Format: int32 */
+            fieldsWithoutSource?: number;
+            /** Format: int32 */
+            averageCleanupPriority?: number;
+        };
+        RListStandardReusePackInfo: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardReusePackInfo"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RStandardReusePackDriftReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardReusePackDriftReport"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RListStandardReusePackApplicationInfo: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardReusePackApplicationInfo"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
         RStandardHealthTrend: {
             /** Format: int32 */
             code?: number;
@@ -5058,6 +6153,64 @@ export interface components {
             markdown?: string;
             topActions?: components["schemas"]["StandardHealthAction"][];
             nextActions?: string[];
+        };
+        RStandardEvidenceReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardEvidenceReport"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        StandardEvidenceItem: {
+            evidenceType?: string;
+            evidenceId?: string;
+            title?: string;
+            summary?: string;
+            sourceType?: string;
+            status?: string;
+            /** Format: int32 */
+            confidence?: number;
+            /** Format: date-time */
+            occurredAt?: string;
+            refs?: string[];
+        };
+        StandardEvidenceReport: {
+            /** Format: int64 */
+            projectId?: number;
+            subject?: components["schemas"]["StandardEvidenceSubject"];
+            summary?: components["schemas"]["StandardEvidenceSummary"];
+            items?: components["schemas"]["StandardEvidenceItem"][];
+            aiEvidenceSummary?: string;
+            coverageNotes?: string[];
+        };
+        StandardEvidenceSubject: {
+            subjectType?: string;
+            /** Format: int64 */
+            subjectId?: number;
+            name?: string;
+            displayName?: string;
+            dataType?: string;
+            status?: string;
+        };
+        StandardEvidenceSummary: {
+            /** Format: int32 */
+            totalEvidenceCount?: number;
+            confidenceLevel?: string;
+            /** Format: int32 */
+            aiConfidence?: number;
+            /** Format: int32 */
+            usageScore?: number;
+            /** Format: int32 */
+            lintHitCount?: number;
+            /** Format: int32 */
+            aiJobHitCount?: number;
+            /** Format: int32 */
+            candidateDecisionCount?: number;
+            /** Format: int32 */
+            changeLogCount?: number;
+            /** Format: date-time */
+            lastEvidenceAt?: string;
+            reviewRequired?: boolean;
         };
         PageResultStandardCandidate: {
             records?: components["schemas"]["StandardCandidate"][];
@@ -5471,6 +6624,8 @@ export interface components {
             score?: number;
             matchReasons?: string[];
             recommendedUse?: string;
+            /** @description 字段使用契约摘要，包含推荐使用、禁用场景、Join、默认过滤、聚合、替代指导和误用样例。 */
+            usageContractSummary?: string[];
             nextActions?: string[];
             evidence?: components["schemas"]["ExplainTrace"][];
         };
@@ -5557,6 +6712,61 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["FieldQualityReport"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        FieldProvenanceConfidenceItem: {
+            /** Format: int64 */
+            fieldId?: number;
+            name?: string;
+            displayName?: string;
+            status?: string;
+            primarySourceType?: string;
+            sourceRefs?: string[];
+            /** Format: int32 */
+            sourceEvidenceCount?: number;
+            /** Format: int32 */
+            candidateEvidenceCount?: number;
+            /** Format: int32 */
+            evidenceCount?: number;
+            /** Format: int32 */
+            qualityScore?: number;
+            qualityLevel?: string;
+            /** Format: int32 */
+            aiConfidence?: number;
+            /** @enum {string} */
+            confidenceLevel?: "VERIFIED" | "REVIEW" | "LOW" | "UNKNOWN";
+            recommendedUse?: string;
+            warnings?: string[];
+        };
+        FieldProvenanceConfidenceReport: {
+            /** Format: int64 */
+            projectId?: number;
+            summary?: components["schemas"]["FieldProvenanceConfidenceSummary"];
+            fields?: components["schemas"]["FieldProvenanceConfidenceItem"][];
+        };
+        FieldProvenanceConfidenceSummary: {
+            /** Format: int32 */
+            totalFieldCount?: number;
+            /** Format: int32 */
+            verifiedCount?: number;
+            /** Format: int32 */
+            reviewCount?: number;
+            /** Format: int32 */
+            lowCount?: number;
+            /** Format: int32 */
+            unknownCount?: number;
+            /** Format: int32 */
+            fieldsWithSourceEvidence?: number;
+            /** Format: int32 */
+            fieldsWithCandidateEvidence?: number;
+            /** Format: int32 */
+            fieldsWithWarnings?: number;
+        };
+        RFieldProvenanceConfidenceReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldProvenanceConfidenceReport"];
             error?: components["schemas"]["ErrorDetail"];
         };
         FieldGroupItem: {
@@ -5855,6 +7065,7 @@ export interface components {
             examples?: components["schemas"]["AiCapabilityExample"][];
             preflightChecks?: string[];
             nextActions?: string[];
+            safety?: components["schemas"]["AiWriteSafetyMetadata"];
             docsRef?: string;
         };
         AiCapabilityExample: {
@@ -5863,6 +7074,23 @@ export interface components {
             command?: string;
             request?: string;
             description?: string;
+        };
+        /** @description AI/CLI/MCP/前端共享的写入安全元数据；只描述约束，不包含敏感明文。 */
+        AiWriteSafetyMetadata: {
+            /** @description 该能力是否只读；true 表示不写 DataSpec 状态，也不写外部系统。 */
+            readOnly?: boolean;
+            /** @description 该能力是否会写入当前 DataSpec project 范围内的记录、标准资产或可见结果。 */
+            writesProject?: boolean;
+            /** @description 确认 apply 前是否必须先产生 dry-run、preview、compare 或 plan 摘要。 */
+            requiresDryRun?: boolean;
+            /** @description 是否存在明确的回滚、跳过、恢复、证据包或可复核操作路径。 */
+            supportsUndo?: boolean;
+            /** @description 写入调用是否必须携带 Idempotency-Key 或等价幂等参数。 */
+            requiresIdempotencyKey?: boolean;
+            /** @description 可能包含敏感内容的输入参数名或类别；只列名称，不返回 raw value。 */
+            sensitiveInputs?: string[];
+            /** @description AI 在执行或恢复该能力前后应遵循的安全下一步。 */
+            nextActions?: string[];
         };
         RAiCapabilityCatalog: {
             /** Format: int32 */
@@ -5877,6 +7105,78 @@ export interface components {
             message?: string;
             data?: components["schemas"]["AiCapabilityEntry"];
             error?: components["schemas"]["ErrorDetail"];
+        };
+        RVersionCompatibilityResponse: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["VersionCompatibilityResponse"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description DataSpec 版本兼容握手响应；只读、可机器解析、不包含敏感明文。 */
+        VersionCompatibilityResponse: {
+            /** @description 响应类型，固定为 dataspec-version-compatibility。 */
+            kind?: string;
+            /**
+             * Format: int32
+             * @description 握手响应 schema 版本；字段向后兼容新增时递增。
+             */
+            schemaVersion?: number;
+            /** @description 当前 DataSpec 服务端版本。 */
+            serverVersion?: string;
+            /** @description 当前公开 API/AI capability 契约摘要 hash，用于发现契约漂移。 */
+            apiSchemaHash?: string;
+            /** @description 当前服务端推荐的最小 CLI 版本。 */
+            minCliVersion?: string;
+            /** @description 服务端声明支持的能力摘要；只描述能力，不执行能力。 */
+            supportedCapabilities?: components["schemas"]["VersionSupportedCapability"][];
+            /** @description 仍可返回但已废弃的字段说明；第一版可能为空。 */
+            deprecatedFields?: components["schemas"]["VersionDeprecatedField"][];
+            compatibility?: components["schemas"]["VersionCompatibilityStatus"];
+            /** @description 面向用户和 AI 的升级、降级、诊断或停止建议。 */
+            upgradeHints?: string[];
+            /**
+             * Format: date-time
+             * @description 响应生成时间，本地服务端时间。
+             */
+            generatedAt?: string;
+        };
+        /** @description 客户端版本兼容判断结果，供 AI 决定继续、升级、降级或停止。 */
+        VersionCompatibilityStatus: {
+            /** @description 兼容状态：COMPATIBLE、INCOMPATIBLE 或 UNKNOWN。 */
+            status?: string;
+            /** @description 调用方传入的客户端版本；缺失时为空。 */
+            clientVersion?: string;
+            /** @description 是否允许继续执行。UNKNOWN 状态下第一版保持非阻塞，避免误杀无法比较的客户端。 */
+            compatible?: boolean;
+            /** @description 状态原因，必须可读且不包含 token、密码、连接串或业务数据。 */
+            reasons?: string[];
+            /** @description 建议下一步，例如升级 CLI、运行 doctor、读取 capability catalog 或停止自动化。 */
+            nextActions?: string[];
+        };
+        /** @description 版本兼容握手中的废弃字段说明，用于 AI/CLI/MCP 迁移提示。 */
+        VersionDeprecatedField: {
+            /** @description 发生废弃的契约或 capability ID。 */
+            contractId?: string;
+            /** @description 废弃字段名或路径。 */
+            field?: string;
+            /** @description 字段开始废弃的 DataSpec 版本或日期。 */
+            deprecatedSince?: string;
+            /** @description 推荐替代字段；没有直接替代时为空。 */
+            replacement?: string;
+            /** @description 计划移除版本；未知时为空，调用方不得据此假设字段已移除。 */
+            removeAfter?: string;
+            /** @description 面向人和 AI 的迁移说明，不包含敏感值。 */
+            note?: string;
+        };
+        /** @description 版本兼容握手中的能力摘要；只用于兼容判断和 AI 工具选择，不执行能力。 */
+        VersionSupportedCapability: {
+            /** @description 稳定能力 ID，与 capability catalog 中的 id 保持一致。 */
+            id?: string;
+            /** @description 能力状态，例如 AVAILABLE；调用方仍需根据具体 API/CLI/MCP 返回判断实际可用性。 */
+            status?: string;
+            /** @description 推荐的最小客户端版本；为空表示该能力不需要额外的客户端版本约束。 */
+            minClientVersion?: string;
         };
         AiSessionBootstrap: {
             kind?: string;
@@ -6053,6 +7353,41 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["AiTaskRunListItem"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        AiTaskRecommendationItem: {
+            taskType?: string;
+            priority?: string;
+            title?: string;
+            reason?: string;
+            targetRoute?: string;
+            recommendedCommand?: string;
+            evidenceRefs?: string[];
+            completionCheck?: string;
+        };
+        AiTaskRecommendationReport: {
+            /** Format: int64 */
+            projectId?: number;
+            summary?: components["schemas"]["AiTaskRecommendationSummary"];
+            items?: components["schemas"]["AiTaskRecommendationItem"][];
+        };
+        AiTaskRecommendationSummary: {
+            /** Format: int32 */
+            totalTaskCount?: number;
+            /** Format: int32 */
+            highPriorityCount?: number;
+            /** Format: int32 */
+            mediumPriorityCount?: number;
+            /** Format: int32 */
+            lowPriorityCount?: number;
+            /** Format: int32 */
+            evidenceSourceCount?: number;
+        };
+        RAiTaskRecommendationReport: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiTaskRecommendationReport"];
             error?: components["schemas"]["ErrorDetail"];
         };
         AiProfileDiagnostic: {
@@ -7313,6 +8648,100 @@ export interface operations {
             };
         };
     };
+    listPacks: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListStandardReusePackInfo"];
+                };
+            };
+        };
+    };
+    createPack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardReusePackCreateReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardReusePackDetail"];
+                };
+            };
+        };
+    };
+    applyPack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardReusePackApplyReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardReusePackApplyResult"];
+                };
+            };
+        };
+    };
+    previewApply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardReusePackApplyReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardReusePackPlan"];
+                };
+            };
+        };
+    };
     createSnapshot: {
         parameters: {
             query?: never;
@@ -7829,7 +9258,7 @@ export interface operations {
             };
         };
     };
-    browseDatabaseMetadata: {
+    planDatabaseSchemaChange: {
         parameters: {
             query?: never;
             header?: never;
@@ -7848,7 +9277,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RDatabaseMetadataBrowser"];
+                    "*/*": components["schemas"]["RDatabaseSchemaChangePlan"];
                 };
             };
         };
@@ -7975,7 +9404,7 @@ export interface operations {
             };
         };
     };
-    planDatabaseSchemaChange: {
+    browseDatabaseMetadata: {
         parameters: {
             query?: never;
             header?: never;
@@ -7994,7 +9423,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RDatabaseSchemaChangePlan"];
+                    "*/*": components["schemas"]["RDatabaseMetadataBrowser"];
                 };
             };
         };
@@ -8259,7 +9688,7 @@ export interface operations {
             };
         };
     };
-    lintDebug: {
+    debug: {
         parameters: {
             query?: never;
             header?: never;
@@ -8488,6 +9917,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RFieldChangeUndoResult"];
+                };
+            };
+        };
+    };
+    preview_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardFieldMergePreviewReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardFieldMergePreview"];
+                };
+            };
+        };
+    };
+    apply_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardFieldMergeApplyReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardFieldMergeResult"];
                 };
             };
         };
@@ -8870,6 +10347,30 @@ export interface operations {
             };
         };
     };
+    preview_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContractCandidatePreviewReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RContractCandidatePreviewPackage"];
+                };
+            };
+        };
+    };
     generateFixSqlPrompt: {
         parameters: {
             query?: never;
@@ -8914,6 +10415,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RString"];
+                };
+            };
+        };
+    };
+    planBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiContextBudgetPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiContextBudgetPlan"];
                 };
             };
         };
@@ -9012,6 +10537,30 @@ export interface operations {
             };
         };
     };
+    generate_1: {
+        parameters: {
+            query: {
+                projectId: number;
+                scenario: string;
+                maxCases?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RSyntheticStandardExamplePackage"];
+                };
+            };
+        };
+    };
     listKits: {
         parameters: {
             query?: never;
@@ -9050,6 +10599,96 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RListStarterKitInstallationInfo"];
+                };
+            };
+        };
+    };
+    report: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardUsageHeatmapReport"];
+                };
+            };
+        };
+    };
+    getPack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                packId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardReusePackDetail"];
+                };
+            };
+        };
+    };
+    driftReport: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path: {
+                packId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardReusePackDriftReport"];
+                };
+            };
+        };
+    };
+    listApplications: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListStandardReusePackApplicationInfo"];
                 };
             };
         };
@@ -9095,6 +10734,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RStandardHealthPlan"];
+                };
+            };
+        };
+    };
+    report_1: {
+        parameters: {
+            query: {
+                projectId: number;
+                subjectType: string;
+                subjectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardEvidenceReport"];
                 };
             };
         };
@@ -9695,7 +11358,7 @@ export interface operations {
             };
         };
     };
-    report: {
+    report_2: {
         parameters: {
             query: {
                 projectId: number;
@@ -9772,7 +11435,7 @@ export interface operations {
             };
         };
     };
-    report_1: {
+    report_3: {
         parameters: {
             query: {
                 projectId: number;
@@ -9790,6 +11453,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RFieldQualityReport"];
+                };
+            };
+        };
+    };
+    report_4: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldProvenanceConfidenceReport"];
                 };
             };
         };
@@ -9816,7 +11501,7 @@ export interface operations {
             };
         };
     };
-    report_2: {
+    report_5: {
         parameters: {
             query: {
                 projectId: number;
@@ -9996,6 +11681,29 @@ export interface operations {
             };
         };
     };
+    versionCompatibility: {
+        parameters: {
+            query?: {
+                client?: string;
+                clientVersion?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVersionCompatibilityResponse"];
+                };
+            };
+        };
+    };
     session: {
         parameters: {
             query?: {
@@ -10112,6 +11820,28 @@ export interface operations {
             };
         };
     };
+    report_6: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiTaskRecommendationReport"];
+                };
+            };
+        };
+    };
     listProfiles: {
         parameters: {
             query?: {
@@ -10206,7 +11936,7 @@ export interface operations {
             };
         };
     };
-    report_3: {
+    report_7: {
         parameters: {
             query: {
                 projectId: number;

@@ -193,6 +193,7 @@ public class AiContextExportService {
                 }
             }
             md.append("\n");
+            appendUsageContractMarkdown(md, fields.stream().map(FieldMatch::field).toList());
         }
 
         return md.toString();
@@ -236,6 +237,92 @@ public class AiContextExportService {
                 || FieldConflictType.DANGEROUS_SQL_NAME.equals(type)
                 || FieldConflictType.CASE_COLLISION.equals(type)
                 || FieldConflictType.AMBIGUOUS_ALIAS.equals(type);
+    }
+
+    private void appendUsageContractMarkdown(StringBuilder md, List<Field> fields) {
+        List<UsageContractExport> exports = fields.stream()
+                .map(field -> new UsageContractExport(field.getName(), usageContractMarkdownItems(field)))
+                .filter(export -> !export.items().isEmpty())
+                .toList();
+        appendUsageContractMarkdownItems(md, exports);
+    }
+
+    private void appendUsageContractMarkdownFromSnapshot(StringBuilder md, JsonNode fields) {
+        if (!fields.isArray()) {
+            return;
+        }
+        List<UsageContractExport> exports = new ArrayList<>();
+        for (JsonNode field : fields) {
+            List<String> items = usageContractMarkdownItems(field);
+            if (!items.isEmpty()) {
+                exports.add(new UsageContractExport(field.path("name").asText(""), items));
+            }
+        }
+        appendUsageContractMarkdownItems(md, exports);
+    }
+
+    private void appendUsageContractMarkdownItems(StringBuilder md, List<UsageContractExport> exports) {
+        if (exports.isEmpty()) {
+            return;
+        }
+        md.append("## 字段使用边界\n\n");
+        md.append("AI clients must respect avoid conditions before generating SQL or DDL; 命中 avoidWhen、misuseExamples 或禁用场景时，必须先要求人工确认，不得直接采用字段。\n\n");
+        for (UsageContractExport export : exports) {
+            md.append("- `").append(export.fieldName()).append("`\n");
+            for (String item : export.items()) {
+                md.append("  - ").append(item).append("\n");
+            }
+        }
+        md.append("\n");
+    }
+
+    private List<String> usageContractMarkdownItems(Field field) {
+        return usageContractMarkdownItems(
+                field.getPreferredUseCases(),
+                field.getAvoidWhen(),
+                field.getJoinHints(),
+                field.getDefaultFilters(),
+                field.getAggregationHints(),
+                field.getReplacementGuidance(),
+                field.getMisuseExamples());
+    }
+
+    private List<String> usageContractMarkdownItems(JsonNode field) {
+        return usageContractMarkdownItems(
+                field.path("preferredUseCases").asText(null),
+                field.path("avoidWhen").asText(null),
+                field.path("joinHints").asText(null),
+                field.path("defaultFilters").asText(null),
+                field.path("aggregationHints").asText(null),
+                field.path("replacementGuidance").asText(null),
+                field.path("misuseExamples").asText(null));
+    }
+
+    private List<String> usageContractMarkdownItems(
+            String preferredUseCases,
+            String avoidWhen,
+            String joinHints,
+            String defaultFilters,
+            String aggregationHints,
+            String replacementGuidance,
+            String misuseExamples
+    ) {
+        List<String> items = new ArrayList<>();
+        addUsageContractMarkdownItem(items, "推荐使用", preferredUseCases);
+        addUsageContractMarkdownItem(items, "禁用场景", avoidWhen);
+        addUsageContractMarkdownItem(items, "Join 提示", joinHints);
+        addUsageContractMarkdownItem(items, "默认过滤", defaultFilters);
+        addUsageContractMarkdownItem(items, "聚合提示", aggregationHints);
+        addUsageContractMarkdownItem(items, "替代指导", replacementGuidance);
+        addUsageContractMarkdownItem(items, "误用样例", misuseExamples);
+        return List.copyOf(items);
+    }
+
+    private void addUsageContractMarkdownItem(List<String> items, String label, String value) {
+        List<String> values = splitUsageContractText(value);
+        if (!values.isEmpty()) {
+            items.add(label + ": " + String.join("；", values));
+        }
     }
 
     /**
@@ -302,6 +389,8 @@ public class AiContextExportService {
                 if (f.getReplacementReason() != null) fn.put("replacementReason", f.getReplacementReason());
                 ObjectNode formatNode = formatNode(mapper, f);
                 if (formatNode.size() > 0) fn.set("format", formatNode);
+                ObjectNode usageContractNode = usageContractNode(mapper, f);
+                if (usageContractNode.size() > 0) fn.set("usageContract", usageContractNode);
                 ArrayNode aliasesNode = aliasesToArrayNode(mapper, f.getAliases());
                 if (!aliasesNode.isEmpty()) fn.set("aliases", aliasesNode);
                 if (scopedFields.summary().includeMetadata() && !match.reasons().isEmpty()) {
@@ -384,6 +473,10 @@ public class AiContextExportService {
                 ObjectNode formatNode = formatNode(mapper, field);
                 if (formatNode.size() > 0) {
                     fn.set("format", formatNode);
+                }
+                ObjectNode usageContractNode = usageContractNode(mapper, field);
+                if (usageContractNode.size() > 0) {
+                    fn.set("usageContract", usageContractNode);
                 }
                 ArrayNode aliasesNode = aliasesToArrayNode(mapper, field.path("aliases").asText(null));
                 if (!aliasesNode.isEmpty()) {
@@ -533,6 +626,7 @@ public class AiContextExportService {
                 ## 输出要求
 
                 - 优先复用 field-catalog.json 中已有标准字段，包含别名、敏感标记、代码集和示例值。
+                - 读取 field-catalog.json 的 usageContract 和 DATABASE_RULES.md 的字段使用边界；不要在命中 avoidWhen、misuseExamples 或禁用场景时直接采用字段。
                 - 表名、字段名必须遵守 rules.yaml 中的 naming 规则。
                 - 输出 PostgreSQL CREATE TABLE，并补全 COMMENT ON TABLE / COMMENT ON COLUMN。
                 - 必须包含必含列；新增非标准字段时说明命名理由和建议是否加入标准字段库。
@@ -612,6 +706,7 @@ public class AiContextExportService {
                 ## 输出要求
 
                 - 先列出每个问题的修正理由。
+                - 读取 field-catalog.json 的 usageContract；字段命中 avoidWhen 或 misuseExamples 时只给人工确认建议，不自动重写为可执行迁移。
                 - 输出一份修正后的 SQL，包含 CREATE TABLE 和 COMMENT ON 语句。
                 - 优先复用标准字段；无法复用时说明新增字段建议。
                 """.formatted(
@@ -1900,6 +1995,48 @@ public class AiContextExportService {
                               },
                               "notes": { "type": "string" }
                             }
+                          },
+                          "usageContract": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "description": "字段级使用契约，说明推荐使用、禁用场景、Join、过滤、聚合、替代和误用边界；AI 应在命中禁用场景时要求人工确认。",
+                            "properties": {
+                              "preferredUseCases": {
+                                "type": "array",
+                                "description": "推荐使用场景，如适合的 SQL、指标、写入或 DDL 场景。",
+                                "items": { "type": "string" }
+                              },
+                              "avoidWhen": {
+                                "type": "array",
+                                "description": "禁用或需确认场景，AI 命中时不得直接采用该字段。",
+                                "items": { "type": "string" }
+                              },
+                              "joinHints": {
+                                "type": "array",
+                                "description": "Join 使用提示、推荐关联键或不适合 Join 的边界。",
+                                "items": { "type": "string" }
+                              },
+                              "defaultFilters": {
+                                "type": "array",
+                                "description": "默认过滤条件或统计口径提示，不会自动改写 SQL。",
+                                "items": { "type": "string" }
+                              },
+                              "aggregationHints": {
+                                "type": "array",
+                                "description": "聚合口径提示，如 sum/count/distinct 或单位换算。",
+                                "items": { "type": "string" }
+                              },
+                              "replacementGuidance": {
+                                "type": "array",
+                                "description": "特定场景下的替代字段或迁移指导。",
+                                "items": { "type": "string" }
+                              },
+                              "misuseExamples": {
+                                "type": "array",
+                                "description": "常见误用或反例，AI 命中时应降低置信并要求确认。",
+                                "items": { "type": "string" }
+                              }
+                            }
                           }
                         }
                       }
@@ -2007,6 +2144,51 @@ public class AiContextExportService {
         putExamples(node, "validExamples", field.path("validExamplesJson").asText(null));
         putExamples(node, "invalidExamples", field.path("invalidExamplesJson").asText(null));
         return node;
+    }
+
+    private ObjectNode usageContractNode(ObjectMapper mapper, Field field) {
+        ObjectNode node = mapper.createObjectNode();
+        putUsageContractList(mapper, node, "preferredUseCases", field.getPreferredUseCases());
+        putUsageContractList(mapper, node, "avoidWhen", field.getAvoidWhen());
+        putUsageContractList(mapper, node, "joinHints", field.getJoinHints());
+        putUsageContractList(mapper, node, "defaultFilters", field.getDefaultFilters());
+        putUsageContractList(mapper, node, "aggregationHints", field.getAggregationHints());
+        putUsageContractList(mapper, node, "replacementGuidance", field.getReplacementGuidance());
+        putUsageContractList(mapper, node, "misuseExamples", field.getMisuseExamples());
+        return node;
+    }
+
+    private ObjectNode usageContractNode(ObjectMapper mapper, JsonNode field) {
+        ObjectNode node = mapper.createObjectNode();
+        putUsageContractList(mapper, node, "preferredUseCases", field.path("preferredUseCases").asText(null));
+        putUsageContractList(mapper, node, "avoidWhen", field.path("avoidWhen").asText(null));
+        putUsageContractList(mapper, node, "joinHints", field.path("joinHints").asText(null));
+        putUsageContractList(mapper, node, "defaultFilters", field.path("defaultFilters").asText(null));
+        putUsageContractList(mapper, node, "aggregationHints", field.path("aggregationHints").asText(null));
+        putUsageContractList(mapper, node, "replacementGuidance", field.path("replacementGuidance").asText(null));
+        putUsageContractList(mapper, node, "misuseExamples", field.path("misuseExamples").asText(null));
+        return node;
+    }
+
+    private void putUsageContractList(ObjectMapper mapper, ObjectNode node, String fieldName, String value) {
+        List<String> values = splitUsageContractText(value);
+        if (values.isEmpty()) {
+            return;
+        }
+        ArrayNode items = mapper.createArrayNode();
+        values.forEach(items::add);
+        node.set(fieldName, items);
+    }
+
+    private List<String> splitUsageContractText(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(value.split("[\\r\\n,，;；]+"))
+                .map(String::trim)
+                .filter(item -> !item.isBlank())
+                .distinct()
+                .toList();
     }
 
     private void putText(ObjectNode node, String fieldName, String value) {
@@ -2443,6 +2625,7 @@ public class AiContextExportService {
                 }
             }
             md.append("\n");
+            appendUsageContractMarkdownFromSnapshot(md, fields);
         }
         return md.toString();
     }
@@ -2472,6 +2655,9 @@ public class AiContextExportService {
     }
 
     private record FieldMatch(Field field, List<String> reasons) {
+    }
+
+    private record UsageContractExport(String fieldName, List<String> items) {
     }
 
     private record ScopeSummary(

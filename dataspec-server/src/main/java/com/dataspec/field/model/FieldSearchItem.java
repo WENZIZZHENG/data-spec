@@ -2,6 +2,7 @@ package com.dataspec.field.model;
 
 import com.dataspec.explaintrace.model.ExplainTrace;
 import com.dataspec.field.entity.Field;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 
@@ -13,10 +14,23 @@ public record FieldSearchItem(
         int score,
         List<String> matchReasons,
         String recommendedUse,
+        @Schema(description = "字段使用契约摘要，包含推荐使用、禁用场景、Join、默认过滤、聚合、替代指导和误用样例。")
+        List<String> usageContractSummary,
         List<String> nextActions,
         List<ExplainTrace> evidence
 ) {
     public FieldSearchItem(Field field, int score, List<String> matchReasons, String recommendedUse, List<String> nextActions) {
-        this(field, score, matchReasons, recommendedUse, nextActions, List.of());
+        this(field, score, matchReasons, recommendedUse, List.of(), nextActions, List.of());
+    }
+
+    public FieldSearchItem(
+            Field field,
+            int score,
+            List<String> matchReasons,
+            String recommendedUse,
+            List<String> usageContractSummary,
+            List<String> nextActions
+    ) {
+        this(field, score, matchReasons, recommendedUse, usageContractSummary, nextActions, List.of());
     }
 }

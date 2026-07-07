@@ -74,6 +74,8 @@ class StandardReusePackServiceImplTest {
         assertEquals(1, detail.info().assetCounts().templates());
         assertFalse(saved.getPayloadJson().contains("\"id\""));
         assertTrue(saved.getPayloadJson().contains("order_no"));
+        assertTrue(saved.getPayloadJson().contains("统计订单实付金额"));
+        assertTrue(saved.getPayloadJson().contains("展示金额时不要直接输出分单位"));
         assertTrue(saved.getAssetCountsJson().contains("\"fields\":1"));
     }
 
@@ -171,7 +173,15 @@ class StandardReusePackServiceImplTest {
         assertEquals(5, result.plan().counts().created());
         ArgumentCaptor<Field> fieldCaptor = ArgumentCaptor.forClass(Field.class);
         verify(fixture.fieldRepository).insert(fieldCaptor.capture());
-        assertTrue(fieldCaptor.getValue().getTags().contains("pack:shared_core@2026.07"));
+        Field createdField = fieldCaptor.getValue();
+        assertTrue(createdField.getTags().contains("pack:shared_core@2026.07"));
+        assertEquals("统计订单实付金额", createdField.getPreferredUseCases());
+        assertEquals("展示金额时不要直接输出分单位", createdField.getAvoidWhen());
+        assertEquals("orders.id = payments.order_id", createdField.getJoinHints());
+        assertEquals("payment_status = 'PAID'", createdField.getDefaultFilters());
+        assertEquals("sum(amount_cent) / 100", createdField.getAggregationHints());
+        assertEquals("展示层改用 amount_yuan", createdField.getReplacementGuidance());
+        assertEquals("把 amount_cent 当元展示", createdField.getMisuseExamples());
         ArgumentCaptor<StandardReusePackApplication> applicationCaptor =
                 ArgumentCaptor.forClass(StandardReusePackApplication.class);
         verify(fixture.applicationRepository).insert(applicationCaptor.capture());
@@ -247,6 +257,13 @@ class StandardReusePackServiceImplTest {
         field.setNullable(false);
         field.setComment("来源项目订单号");
         field.setTags("order");
+        field.setPreferredUseCases("统计订单实付金额");
+        field.setAvoidWhen("展示金额时不要直接输出分单位");
+        field.setJoinHints("orders.id = payments.order_id");
+        field.setDefaultFilters("payment_status = 'PAID'");
+        field.setAggregationHints("sum(amount_cent) / 100");
+        field.setReplacementGuidance("展示层改用 amount_yuan");
+        field.setMisuseExamples("把 amount_cent 当元展示");
         return field;
     }
 

@@ -220,6 +220,64 @@ class AiContextExportServiceTest {
     }
 
     @Test
+    void generateAiContextPackage_exportsUsageContractAndPromptGuidance() throws Exception {
+        Field amount = sampleField("amount_cent", "订单金额", "money", "finance", "amount");
+        amount.setSensitive(false);
+        amount.setDataType("bigint");
+        amount.setPreferredUseCases("统计订单实付金额\n支付成功口径");
+        amount.setAvoidWhen("展示金额时不要直接输出分单位");
+        amount.setJoinHints("orders.id = payments.order_id");
+        amount.setDefaultFilters("payment_status = 'PAID'");
+        amount.setAggregationHints("sum(amount_cent) / 100");
+        amount.setReplacementGuidance("展示层改用 amount_yuan");
+        amount.setMisuseExamples("把 amount_cent 当元展示");
+        AiContextExportService service = createService(List.of(amount));
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(PROJECT_ID));
+
+        var mapper = new ObjectMapper();
+        var catalog = mapper.readTree(entries.get(".dataspec/field-catalog.json"));
+        var usageContract = catalog.path("fields").get(0).path("usageContract");
+        assertEquals("统计订单实付金额", usageContract.path("preferredUseCases").get(0).asText());
+        assertEquals("支付成功口径", usageContract.path("preferredUseCases").get(1).asText());
+        assertEquals("展示金额时不要直接输出分单位", usageContract.path("avoidWhen").get(0).asText());
+        assertEquals("orders.id = payments.order_id", usageContract.path("joinHints").get(0).asText());
+        assertEquals("payment_status = 'PAID'", usageContract.path("defaultFilters").get(0).asText());
+        assertEquals("sum(amount_cent) / 100", usageContract.path("aggregationHints").get(0).asText());
+        assertEquals("展示层改用 amount_yuan", usageContract.path("replacementGuidance").get(0).asText());
+        assertEquals("把 amount_cent 当元展示", usageContract.path("misuseExamples").get(0).asText());
+
+        var schema = mapper.readTree(entries.get(".dataspec/field-catalog.schema.json"));
+        var usageSchema = schema.path("properties").path("fields").path("items")
+                .path("properties").path("usageContract").path("properties");
+        assertTrue(usageSchema.has("preferredUseCases"));
+        assertTrue(usageSchema.path("avoidWhen").path("description").asText().contains("禁用"));
+        assertTrue(usageSchema.has("misuseExamples"));
+
+        String databaseRules = entries.get(".dataspec/DATABASE_RULES.md");
+        assertTrue(databaseRules.contains("## 字段使用边界"));
+        assertTrue(databaseRules.contains("respect avoid conditions"));
+        assertTrue(databaseRules.contains("amount_cent"));
+        assertTrue(databaseRules.contains("展示金额时不要直接输出分单位"));
+
+        String prompt = service.generateCreateTablePrompt(PROJECT_ID, "订单统计表");
+        assertTrue(prompt.contains("usageContract"));
+        assertTrue(prompt.contains("字段使用边界"));
+        assertTrue(prompt.contains("不要在命中 avoidWhen"));
+    }
+
+    @Test
+    void generateAiContextPackage_omitsUsageContractNoiseWhenEmpty() throws Exception {
+        AiContextExportService service = createService(List.of(sampleField()));
+
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(PROJECT_ID));
+
+        var catalog = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.json"));
+        assertFalse(catalog.path("fields").get(0).has("usageContract"));
+        assertFalse(entries.get(".dataspec/DATABASE_RULES.md").contains("## 字段使用边界"));
+    }
+
+    @Test
     void generateAiContextPackage_exportsUsageExamplesAndAntiExamples() throws Exception {
         Field mobile = sampleField();
         mobile.setId(10L);

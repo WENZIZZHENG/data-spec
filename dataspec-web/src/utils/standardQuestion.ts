@@ -1,5 +1,8 @@
 import type { BusinessGlossary, Field, FieldSearchItem, FieldSearchResult, RuleConfig } from '@/types'
 
+// 中文场景词很短，至少两个连续片段重叠才视为契约禁用命中，避免只因“金额”等通用词误降级。
+const USAGE_CONTRACT_HAN_BIGRAM_MATCH_THRESHOLD = 2
+
 export type StandardQuestionConfidence = 'HIGH' | 'MEDIUM' | 'LOW'
 export type StandardQuestionEvidenceType = 'field' | 'glossary' | 'rule' | 'search'
 export type StandardQuestionAnswerability = 'DIRECT' | 'PARTIAL' | 'NONE'
@@ -35,6 +38,22 @@ export interface StandardQuestionMatchedField {
   matchReasons: string[]
   /** 后端推荐使用说明。 */
   recommendedUse?: string
+  /** 字段使用契约摘要，来自检索结果或字段自身元数据。 */
+  usageContractSummary: string[]
+  /** 推荐使用场景。 */
+  preferredUseCases?: string
+  /** 禁用或需确认场景。 */
+  avoidWhen?: string
+  /** Join 使用提示。 */
+  joinHints?: string
+  /** 默认过滤提示。 */
+  defaultFilters?: string
+  /** 聚合口径提示。 */
+  aggregationHints?: string
+  /** 替代字段或迁移指导。 */
+  replacementGuidance?: string
+  /** 常见误用或反例。 */
+  misuseExamples?: string
   /** 格式、单位、精度等约束摘要。 */
   formatSummary?: string
   /** 生命周期或替代字段提示。 */
@@ -161,13 +180,14 @@ export function buildStandardQuestionAnswer(input: StandardQuestionInput): Stand
 
   const baseConfidence = resolveConfidence(topField)
   const conflicts = detectConflictingStandards(matchedFields)
+  const usageContractConflict = usageContractContradictsQuestion(question, topField)
   const missingFacts = buildMissingFacts(question, topField)
-  const missingEvidence = buildMissingEvidence(topField, missingFacts, conflicts)
+  const missingEvidence = buildMissingEvidence(topField, missingFacts, conflicts, usageContractConflict)
   const candidateOnly = topField?.status === 'draft'
   const answerStatus = resolveAnswerStatus(topField, baseConfidence, missingEvidence, conflicts)
   const answerability = resolveAnswerability(answerStatus)
   const confidence = resolveAnswerConfidence(baseConfidence, answerStatus, missingEvidence, conflicts)
-  const confidenceReason = buildConfidenceReason(answerStatus, confidence, topField, missingEvidence, conflicts)
+  const confidenceReason = buildConfidenceReason(answerStatus, confidence, topField, missingEvidence, conflicts, usageContractConflict)
   const evidence = buildEvidence(input.fieldSearch, matchedFields, glossaryEvidence, relatedRules)
   const evidenceRefs = buildEvidenceRefs(evidence)
   const unresolvedQuestions = buildUnresolvedQuestions(confidence, topField)
@@ -183,7 +203,7 @@ export function buildStandardQuestionAnswer(input: StandardQuestionInput): Stand
   const escalateToInbox = answerStatus !== 'ADOPTABLE'
 
   return {
-    answer: buildAnswerText(confidence, question, topField, glossaryEvidence),
+    answer: buildAnswerText(confidence, question, topField, glossaryEvidence, usageContractConflict),
     answerStatus,
     answerability,
     confidence,
@@ -283,6 +303,14 @@ function normalizeMatchedFields(items: FieldSearchItem[]): StandardQuestionMatch
         score: item.score,
         matchReasons: item.matchReasons ?? [],
         recommendedUse: item.recommendedUse,
+        usageContractSummary: usageContractSummary(item, field),
+        preferredUseCases: field.preferredUseCases,
+        avoidWhen: field.avoidWhen,
+        joinHints: field.joinHints,
+        defaultFilters: field.defaultFilters,
+        aggregationHints: field.aggregationHints,
+        replacementGuidance: field.replacementGuidance,
+        misuseExamples: field.misuseExamples,
         formatSummary: formatConstraintSummary(field),
         lifecycleSummary: formatLifecycleSummary(field),
         replacementFieldId: field.replacementFieldId,
@@ -301,7 +329,8 @@ function buildAnswerText(
   confidence: StandardQuestionConfidence,
   question: string,
   topField: StandardQuestionMatchedField | undefined,
-  glossaryEvidence: BusinessGlossary[]
+  glossaryEvidence: BusinessGlossary[],
+  usageContractConflict: boolean
 ) {
   if (!topField) {
     return `没有找到可直接确认的标准字段。当前问题“${question}”需要进入标准候选 Inbox 或先补业务术语后再确认。`
@@ -321,6 +350,9 @@ function buildAnswerText(
   }
   if (topField.status === 'draft') {
     return `匹配到草稿字段 ${fieldLabel}。可以作为参考，但需要人工确认后再作为正式标准使用。${glossaryText}`
+  }
+  if (usageContractConflict) {
+    return `匹配到 ${fieldLabel}，但字段使用契约提示当前场景存在禁用场景或常见误用。请先人工确认或改用契约中的替代指导。${glossaryText}`
   }
 
   const confidenceHint = confidence === 'HIGH' ? '建议使用' : '优先参考'
@@ -382,7 +414,8 @@ function buildConfidenceReason(
   confidence: StandardQuestionConfidence,
   field: StandardQuestionMatchedField | undefined,
   missingEvidence: string[],
-  conflicts: StandardQuestionConflict[]
+  conflicts: StandardQuestionConflict[],
+  usageContractConflict: boolean
 ) {
   if (!field) {
     return '未命中可引用的字段标准证据。'
@@ -392,6 +425,9 @@ function buildConfidenceReason(
   }
   if (field.status === 'deprecated' || field.status === 'disabled' || field.status === 'draft') {
     return `字段生命周期状态为${statusText(field.status)}，需要人工确认是否可用于当前问题。`
+  }
+  if (usageContractConflict) {
+    return '命中字段使用契约的禁用场景或误用样例，需要人工确认后再采纳。'
   }
   if (missingEvidence.length > 0) {
     return `已命中字段，但缺少${missingEvidence.join('、')}。`
@@ -439,7 +475,8 @@ function buildMissingFacts(question: string, field: StandardQuestionMatchedField
 function buildMissingEvidence(
   field: StandardQuestionMatchedField | undefined,
   missingFacts: string[],
-  conflicts: StandardQuestionConflict[]
+  conflicts: StandardQuestionConflict[],
+  usageContractConflict: boolean
 ) {
   if (!field) {
     return ['字段标准证据']
@@ -468,6 +505,9 @@ function buildMissingEvidence(
   }
   if (conflicts.length > 0) {
     missing.push('冲突裁决证据')
+  }
+  if (usageContractConflict) {
+    missing.push('使用契约禁用场景确认')
   }
   return uniqueText(missing)
 }
@@ -552,7 +592,8 @@ function buildEvidence(
         statusText(field.status),
         field.sensitive ? '敏感字段' : '',
         field.matchReasons.join('；'),
-        field.recommendedUse
+        field.recommendedUse,
+        field.usageContractSummary.join('；')
       ]).join('；'),
       ref: field.detailRoute
     })),
@@ -688,6 +729,63 @@ function formatLifecycleSummary(field: Field) {
     return '草稿字段，需要人工确认后再作为正式标准。'
   }
   return ''
+}
+
+function usageContractSummary(item: FieldSearchItem, field: Field) {
+  const summary = item.usageContractSummary?.filter(Boolean) ?? []
+  if (summary.length > 0) {
+    return summary
+  }
+  return uniqueText([
+    field.preferredUseCases ? `推荐使用：${field.preferredUseCases}` : '',
+    field.avoidWhen ? `禁用场景：${field.avoidWhen}` : '',
+    field.joinHints ? `Join 提示：${field.joinHints}` : '',
+    field.defaultFilters ? `默认过滤：${field.defaultFilters}` : '',
+    field.aggregationHints ? `聚合提示：${field.aggregationHints}` : '',
+    field.replacementGuidance ? `替代指导：${field.replacementGuidance}` : '',
+    field.misuseExamples ? `误用样例：${field.misuseExamples}` : ''
+  ])
+}
+
+function usageContractContradictsQuestion(question: string, field: StandardQuestionMatchedField | undefined) {
+  if (!field) {
+    return false
+  }
+  return usageContractTextMatches(question, field.avoidWhen)
+    || usageContractTextMatches(question, field.misuseExamples)
+    || field.usageContractSummary.some((item) => {
+      if (!/^禁用场景|^误用样例/.test(item)) {
+        return false
+      }
+      return usageContractTextMatches(question, item)
+    })
+}
+
+function usageContractTextMatches(question: string, value?: string | null) {
+  const left = compactMatchText(question)
+  const right = compactMatchText(value)
+  if (!left || !right) {
+    return false
+  }
+  if (left.includes(right) || right.includes(left)) {
+    return true
+  }
+  return hanBigramOverlap(left, right) >= USAGE_CONTRACT_HAN_BIGRAM_MATCH_THRESHOLD
+}
+
+function compactMatchText(value?: string | null) {
+  return (value ?? '').toLowerCase().replace(/[^\p{Script=Han}a-z0-9]+/gu, '')
+}
+
+function hanBigramOverlap(left: string, right: string) {
+  let count = 0
+  for (let index = 0; index < left.length - 1; index += 1) {
+    const part = left.slice(index, index + 2)
+    if (/\p{Script=Han}/u.test(part) && right.includes(part)) {
+      count += 1
+    }
+  }
+  return count
 }
 
 function formatDataType(field: Field) {

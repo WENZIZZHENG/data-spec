@@ -17,6 +17,7 @@ import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.reverseimport.model.FieldSourceDetail;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -162,6 +163,13 @@ public class FieldController {
         field.setValidExamplesJson(req.validExamplesJson());
         field.setInvalidExamplesJson(req.invalidExamplesJson());
         field.setFormatNotes(req.formatNotes());
+        field.setPreferredUseCases(req.preferredUseCases());
+        field.setAvoidWhen(req.avoidWhen());
+        field.setJoinHints(req.joinHints());
+        field.setDefaultFilters(req.defaultFilters());
+        field.setAggregationHints(req.aggregationHints());
+        field.setReplacementGuidance(req.replacementGuidance());
+        field.setMisuseExamples(req.misuseExamples());
         return R.ok(fieldService.create(field));
     }
 
@@ -198,6 +206,13 @@ public class FieldController {
         field.setValidExamplesJson(req.validExamplesJson());
         field.setInvalidExamplesJson(req.invalidExamplesJson());
         field.setFormatNotes(req.formatNotes());
+        field.setPreferredUseCases(req.preferredUseCases());
+        field.setAvoidWhen(req.avoidWhen());
+        field.setJoinHints(req.joinHints());
+        field.setDefaultFilters(req.defaultFilters());
+        field.setAggregationHints(req.aggregationHints());
+        field.setReplacementGuidance(req.replacementGuidance());
+        field.setMisuseExamples(req.misuseExamples());
         return R.ok(fieldService.update(id, field));
     }
 
@@ -238,6 +253,20 @@ public class FieldController {
             String formatNullPolicy,
             String validExamplesJson,
             String invalidExamplesJson,
-            String formatNotes
+            String formatNotes,
+            @Schema(description = "字段推荐使用场景，说明字段适合用于哪些 SQL、指标、写入或 DDL 场景；不得包含凭据或业务数据行。")
+            String preferredUseCases,
+            @Schema(description = "字段禁用或需确认场景，AI 命中这些场景时不得直接采纳；不得包含密码、token、完整 JDBC URL、DSN 或私钥。")
+            String avoidWhen,
+            @Schema(description = "字段 Join 使用提示，如推荐关联键、关联方向或不适合 Join 的边界；只做只读指导。")
+            String joinHints,
+            @Schema(description = "字段默认过滤条件或统计口径提示，如状态、时间范围或软删除条件；不自动改写 SQL。")
+            String defaultFilters,
+            @Schema(description = "字段聚合口径提示，如 sum/count/distinct/单位换算；不替代指标平台。")
+            String aggregationHints,
+            @Schema(description = "字段在特定场景下的替代字段或迁移指导，与生命周期替代说明互补。")
+            String replacementGuidance,
+            @Schema(description = "字段常见误用或反例说明，用于 AI 低置信提示；不得包含真实业务数据行或凭据。")
+            String misuseExamples
     ) {}
 }

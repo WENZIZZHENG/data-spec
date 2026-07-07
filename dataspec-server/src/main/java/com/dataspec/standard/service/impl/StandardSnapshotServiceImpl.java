@@ -188,6 +188,13 @@ public class StandardSnapshotServiceImpl implements StandardSnapshotService {
         item.put("validExamplesJson", field.getValidExamplesJson());
         item.put("invalidExamplesJson", field.getInvalidExamplesJson());
         item.put("formatNotes", field.getFormatNotes());
+        item.put("preferredUseCases", field.getPreferredUseCases());
+        item.put("avoidWhen", field.getAvoidWhen());
+        item.put("joinHints", field.getJoinHints());
+        item.put("defaultFilters", field.getDefaultFilters());
+        item.put("aggregationHints", field.getAggregationHints());
+        item.put("replacementGuidance", field.getReplacementGuidance());
+        item.put("misuseExamples", field.getMisuseExamples());
         return item;
     }
 

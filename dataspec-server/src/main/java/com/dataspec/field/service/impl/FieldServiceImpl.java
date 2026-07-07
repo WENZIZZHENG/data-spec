@@ -7,6 +7,7 @@ import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.common.perf.PerformanceProbe;
+import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.explaintrace.model.ExplainTrace;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldBulkUpdateChange;
@@ -43,6 +44,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 标准字段服务实现
@@ -71,7 +73,11 @@ public class FieldServiceImpl implements FieldService {
     private static final Map<String, SemanticGroup> SEMANTIC_GROUPS = semanticGroups();
     private static final int SPECIFIC_SEMANTIC_SCORE = 88;
     private static final int GENERIC_SEMANTIC_SCORE = 24;
+    /** 中文场景词很短，至少两个连续片段重叠才视为契约禁用命中，避免只因“金额”等通用词误降级。 */
+    private static final int USAGE_CONTRACT_HAN_BIGRAM_MATCH_THRESHOLD = 2;
     private static final String FIELD_RECOMMENDATION_DOCS = "README.md#字段推荐与字段标准检索";
+    private static final Pattern PRIVATE_KEY_PATTERN = Pattern.compile(
+            "(?i)-----BEGIN [A-Z ]*PRIVATE KEY-----|\\bprivate[_-]?key\\s*[:=]");
 
     private final FieldRepository fieldRepository;
     private final FieldSourceRepository fieldSourceRepository;
@@ -169,6 +175,7 @@ public class FieldServiceImpl implements FieldService {
         }
         field.setNullable(field.getNullable() != null ? field.getNullable() : true);
         applyPersonalMetadataDefaults(field);
+        applyUsageContractDefaults(field);
         validateLifecycleReplacement(field, null);
         fieldRepository.insert(field);
         changeLogService.recordChange(
@@ -209,6 +216,8 @@ public class FieldServiceImpl implements FieldService {
         existing.setExampleValue(field.getExampleValue());
         copyFormatConstraints(field, existing);
         applyFieldFormatDefaults(existing);
+        copyUsageContract(field, existing);
+        applyUsageContractDefaults(existing);
         validateLifecycleReplacement(existing, id);
         fieldRepository.update(existing);
         changeLogService.recordChange(
@@ -373,6 +382,8 @@ public class FieldServiceImpl implements FieldService {
         }
         List<GlossaryMatch> glossaryMatches = businessGlossaryService.match(projectId, query);
         List<FieldSuggestion> suggestions = new ArrayList<>();
+        FieldSuggestion blockedByUsageContract = null;
+        int blockedScore = -1;
 
         for (Field field : fieldRepository.findAllByProjectId(projectId)) {
             if (!isEnabledStatus(field.getStatus())) {
@@ -384,6 +395,13 @@ public class FieldServiceImpl implements FieldService {
             }
             int score = match.score();
             String reason = appendReason(match.reason(), Boolean.TRUE.equals(field.getSensitive()) ? "敏感字段" : "");
+            if (usageContractContradictsScenario(field, query)) {
+                if (score > blockedScore) {
+                    blockedScore = score;
+                    blockedByUsageContract = usageContractBlockedSuggestion(field, score, reason, query);
+                }
+                continue;
+            }
             suggestions.add(new FieldSuggestion(
                     field,
                     score,
@@ -400,6 +418,9 @@ public class FieldServiceImpl implements FieldService {
         if (!suggestions.isEmpty()) {
             return suggestions.stream().limit(safeLimit).toList();
         }
+        if (blockedByUsageContract != null) {
+            return List.of(blockedByUsageContract);
+        }
 
         return List.of(new FieldSuggestion(
                 null,
@@ -415,6 +436,17 @@ public class FieldServiceImpl implements FieldService {
                         0,
                         "fallback_name",
                         FIELD_RECOMMENDATION_DOCS))));
+    }
+
+    private FieldSuggestion usageContractBlockedSuggestion(Field field, int score, String reason, String query) {
+        String matchReason = "命中已有字段，但字段使用契约提示当前场景需人工确认，按描述生成候选名";
+        return new FieldSuggestion(
+                null,
+                0,
+                matchReason,
+                generateFallbackName(query),
+                false,
+                List.of(fieldEvidence(field, score, appendReason(reason, "字段使用契约禁用场景需人工确认"))));
     }
 
     private SearchCriteria searchCriteria(FieldSearchReq req) {
@@ -489,12 +521,14 @@ public class FieldServiceImpl implements FieldService {
         if (Boolean.TRUE.equals(field.getSensitive())) {
             reasons.add("敏感字段");
         }
+        boolean contractContradiction = usageContractContradictsScenario(field, criteria.query());
         return new FieldSearchItem(
                 field,
                 score,
                 List.copyOf(reasons),
-                recommendedUse(field),
-                itemNextActions(field),
+                recommendedUse(field, contractContradiction),
+                usageContractSummary(field),
+                itemNextActions(field, contractContradiction),
                 List.of(fieldEvidence(field, score, String.join("；", reasons))));
     }
 
@@ -529,7 +563,10 @@ public class FieldServiceImpl implements FieldService {
         return reasons.isEmpty() ? List.of("过滤条件命中") : reasons;
     }
 
-    private String recommendedUse(Field field) {
+    private String recommendedUse(Field field, boolean contractContradiction) {
+        if (contractContradiction) {
+            return "需要确认：当前问题命中字段使用契约的禁用场景或误用样例，不能作为直接可采纳字段。";
+        }
         String status = normalizeStatus(field.getStatus());
         if (!STATUS_ENABLED.equals(status)) {
             return "谨慎使用：字段状态为 " + status + "，" + replacementGuidance(field);
@@ -559,10 +596,12 @@ public class FieldServiceImpl implements FieldService {
         return "尚未配置替代字段或替代说明，先确认历史兼容原因。";
     }
 
-    private List<String> itemNextActions(Field field) {
+    private List<String> itemNextActions(Field field, boolean contractContradiction) {
         List<String> actions = new ArrayList<>();
         String status = normalizeStatus(field.getStatus());
-        if (STATUS_ENABLED.equals(status)) {
+        if (contractContradiction) {
+            actions.add("当前问题命中字段使用契约的禁用场景或误用样例，人工确认后再使用或改用替代字段。");
+        } else if (STATUS_ENABLED.equals(status)) {
             actions.add("优先采用标准字段名 `" + field.getName() + "`，并沿用其数据类型与注释。");
         } else {
             actions.add("该字段状态为 `" + status + "`，新建表默认不要采用；" + replacementGuidance(field));
@@ -622,6 +661,41 @@ public class FieldServiceImpl implements FieldService {
         field.setStatus(normalizeStatus(field.getStatus()));
         field.setReplacementReason(FieldGroupingSummaries.normalizeText(field.getReplacementReason()));
         applyFieldFormatDefaults(field);
+    }
+
+    private void copyUsageContract(Field source, Field target) {
+        target.setPreferredUseCases(source.getPreferredUseCases());
+        target.setAvoidWhen(source.getAvoidWhen());
+        target.setJoinHints(source.getJoinHints());
+        target.setDefaultFilters(source.getDefaultFilters());
+        target.setAggregationHints(source.getAggregationHints());
+        target.setReplacementGuidance(source.getReplacementGuidance());
+        target.setMisuseExamples(source.getMisuseExamples());
+    }
+
+    private void applyUsageContractDefaults(Field field) {
+        field.setPreferredUseCases(normalizeUsageContractValue(field.getPreferredUseCases()));
+        field.setAvoidWhen(normalizeUsageContractValue(field.getAvoidWhen()));
+        field.setJoinHints(normalizeUsageContractValue(field.getJoinHints()));
+        field.setDefaultFilters(normalizeUsageContractValue(field.getDefaultFilters()));
+        field.setAggregationHints(normalizeUsageContractValue(field.getAggregationHints()));
+        field.setReplacementGuidance(normalizeUsageContractValue(field.getReplacementGuidance()));
+        field.setMisuseExamples(normalizeUsageContractValue(field.getMisuseExamples()));
+    }
+
+    private String normalizeUsageContractValue(String value) {
+        String normalized = FieldGroupingSummaries.normalizeText(value);
+        if (normalized == null) {
+            return null;
+        }
+        validateUsageContractSafe(normalized);
+        return normalized;
+    }
+
+    private void validateUsageContractSafe(String value) {
+        if (SensitiveDataSanitizer.containsSensitiveText(value) || PRIVATE_KEY_PATTERN.matcher(value).find()) {
+            throw new BizException("字段使用契约包含敏感连接或凭据信息，请改用脱敏说明");
+        }
     }
 
     private void copyFormatConstraints(Field source, Field target) {
@@ -886,6 +960,8 @@ public class FieldServiceImpl implements FieldService {
         target.setExampleValue(snapshot.getExampleValue());
         copyFormatConstraints(snapshot, target);
         applyFieldFormatDefaults(target);
+        copyUsageContract(snapshot, target);
+        applyUsageContractDefaults(target);
     }
 
     private Long parseOptionalLong(Object value, String label) {
@@ -970,11 +1046,25 @@ public class FieldServiceImpl implements FieldService {
         best = best.max(scoreText("注释", field.getComment(), queryCompact, queryTokens, 60, 48, 18));
         best = best.max(scoreText("分类", field.getCategory(), queryCompact, queryTokens, 55, 42, 18));
         best = best.max(scoreText("标签", field.getTags(), queryCompact, queryTokens, 50, 38, 16));
+        best = best.max(scoreUsageContract(field, queryCompact));
         for (String alias : splitCsv(field.getAliases())) {
             best = best.max(scoreText("别名", alias, queryCompact, queryTokens, 98, 82, 32));
         }
         best = best.max(scoreSemanticGroups(querySemanticGroups, semanticGroupsForField(field)));
         return best;
+    }
+
+    private ScoredMatch scoreUsageContract(Field field, String queryCompact) {
+        if (queryCompact == null || queryCompact.isBlank()) {
+            return ScoredMatch.none();
+        }
+        for (UsageContractPart part : usageContractParts(field)) {
+            if (usageContractMatchesCompact(queryCompact, part.value())) {
+                int score = ("禁用场景".equals(part.label()) || "误用样例".equals(part.label())) ? 58 : 46;
+                return new ScoredMatch(score, "字段使用契约命中: " + part.label());
+            }
+        }
+        return ScoredMatch.none();
     }
 
     private ScoredMatch scoreFieldWithGlossary(Field field, String queryCompact, Set<String> queryTokens,
@@ -1088,8 +1178,74 @@ public class FieldServiceImpl implements FieldService {
         values.add(field.getComment());
         values.add(field.getCategory());
         values.add(field.getTags());
+        values.add(field.getPreferredUseCases());
+        values.add(field.getAvoidWhen());
+        values.add(field.getJoinHints());
+        values.add(field.getDefaultFilters());
+        values.add(field.getAggregationHints());
+        values.add(field.getReplacementGuidance());
+        values.add(field.getMisuseExamples());
         values.addAll(splitCsv(field.getAliases()));
         return semanticGroupsForTexts(values);
+    }
+
+    private List<String> usageContractSummary(Field field) {
+        List<String> summary = new ArrayList<>();
+        for (UsageContractPart part : usageContractParts(field)) {
+            summary.add(part.label() + "：" + part.value());
+        }
+        return List.copyOf(summary);
+    }
+
+    private List<UsageContractPart> usageContractParts(Field field) {
+        return List.of(
+                new UsageContractPart("推荐使用", field.getPreferredUseCases()),
+                new UsageContractPart("禁用场景", field.getAvoidWhen()),
+                new UsageContractPart("Join 提示", field.getJoinHints()),
+                new UsageContractPart("默认过滤", field.getDefaultFilters()),
+                new UsageContractPart("聚合", field.getAggregationHints()),
+                new UsageContractPart("替代指导", field.getReplacementGuidance()),
+                new UsageContractPart("误用样例", field.getMisuseExamples())
+        ).stream()
+                .filter(part -> FieldGroupingSummaries.normalizeText(part.value()) != null)
+                .toList();
+    }
+
+    private boolean usageContractContradictsScenario(Field field, String scenario) {
+        return usageContractMatchesText(scenario, field.getAvoidWhen())
+                || usageContractMatchesText(scenario, field.getMisuseExamples());
+    }
+
+    private boolean usageContractMatchesText(String scenario, String contractText) {
+        String scenarioCompact = compact(scenario);
+        return !scenarioCompact.isBlank() && usageContractMatchesCompact(scenarioCompact, contractText);
+    }
+
+    private boolean usageContractMatchesCompact(String scenarioCompact, String contractText) {
+        String contractCompact = compact(contractText);
+        if (contractCompact.isBlank()) {
+            return false;
+        }
+        if (contractCompact.contains(scenarioCompact) || scenarioCompact.contains(contractCompact)) {
+            return true;
+        }
+        for (String token : tokens(contractText)) {
+            if (!containsHan(token) && token.length() >= 3 && scenarioCompact.contains(token)) {
+                return true;
+            }
+        }
+        return hanBigramOverlap(scenarioCompact, contractCompact) >= USAGE_CONTRACT_HAN_BIGRAM_MATCH_THRESHOLD;
+    }
+
+    private int hanBigramOverlap(String left, String right) {
+        int count = 0;
+        for (int i = 0; i < left.length() - 1; i++) {
+            String part = left.substring(i, i + 2);
+            if (containsHan(part) && right.contains(part)) {
+                count += 1;
+            }
+        }
+        return count;
     }
 
     private static Set<String> semanticGroupsForTexts(Iterable<String> values) {
@@ -1262,6 +1418,9 @@ public class FieldServiceImpl implements FieldService {
     }
 
     private record SemanticGroup(String canonical, Set<String> keywords, boolean generic) {
+    }
+
+    private record UsageContractPart(String label, String value) {
     }
 
     private record SearchCriteria(

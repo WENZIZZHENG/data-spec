@@ -1,10 +1,12 @@
 package com.dataspec.field;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.dataspec.businessglossary.model.GlossaryMatch;
 import com.dataspec.businessglossary.service.BusinessGlossaryService;
-import com.dataspec.common.exception.BizException;
 import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.service.StandardChangeLogService;
+import com.dataspec.common.exception.BizException;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldBulkUpdatePreview;
 import com.dataspec.field.model.FieldBulkUpdateReq;
@@ -14,6 +16,7 @@ import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
 import com.dataspec.field.model.FieldSearchReq;
+import com.dataspec.field.model.FieldSearchItem;
 import com.dataspec.field.model.FieldSearchResult;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
@@ -130,6 +133,56 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void create_preservesAndNormalizesUsageContractText() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.existsByNameInProject("amount_cent", 1L)).thenReturn(false);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        Field field = new Field();
+        field.setProjectId(1L);
+        field.setName("amount_cent");
+        field.setDataType("bigint");
+        field.setPreferredUseCases("  统计订单实付金额  ");
+        field.setAvoidWhen("  展示金额时不要直接输出分单位  ");
+        field.setJoinHints("  orders.id = payments.order_id  ");
+        field.setDefaultFilters("  status = 'PAID'  ");
+        field.setAggregationHints("  sum(amount_cent) / 100  ");
+        field.setReplacementGuidance("  展示层改用 amount_yuan  ");
+        field.setMisuseExamples("  把 amount_cent 当元展示  ");
+
+        Field created = service.create(field);
+
+        assertEquals("统计订单实付金额", created.getPreferredUseCases());
+        assertEquals("展示金额时不要直接输出分单位", created.getAvoidWhen());
+        assertEquals("orders.id = payments.order_id", created.getJoinHints());
+        assertEquals("status = 'PAID'", created.getDefaultFilters());
+        assertEquals("sum(amount_cent) / 100", created.getAggregationHints());
+        assertEquals("展示层改用 amount_yuan", created.getReplacementGuidance());
+        assertEquals("把 amount_cent 当元展示", created.getMisuseExamples());
+        verify(repository).insert(created);
+    }
+
+    @Test
+    void create_rejectsSensitiveUsageContractText() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.existsByNameInProject("debug_note", 1L)).thenReturn(false);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        Field field = new Field();
+        field.setProjectId(1L);
+        field.setName("debug_note");
+        field.setDataType("text");
+        field.setAvoidWhen("不要在契约里记录 Authorization: Bearer raw.jwt 或 jdbc:postgresql://localhost/app");
+
+        BizException ex = assertThrows(BizException.class, () -> service.create(field));
+
+        assertTrue(ex.getMessage().contains("字段使用契约"));
+        assertFalse(ex.getMessage().contains("raw.jwt"));
+        assertFalse(ex.getMessage().contains("jdbc:postgresql://localhost/app"));
+        verify(repository, never()).insert(any());
+    }
+
+    @Test
     void create_rejectsNonStringFormatExamples() {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.existsByNameInProject("mobile_no", 1L)).thenReturn(false);
@@ -226,6 +279,61 @@ class FieldServiceImplTest {
         assertEquals("[\"12345\"]", updated.getInvalidExamplesJson());
         assertEquals("中国大陆手机号", updated.getFormatNotes());
         verify(repository).update(updated);
+    }
+
+    @Test
+    void update_copiesUsageContractMetadata() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field existing = new Field();
+        existing.setId(9L);
+        existing.setProjectId(1L);
+        existing.setName("amount_cent");
+        when(repository.findById(9L)).thenReturn(Optional.of(existing));
+        when(repository.existsByNameInProjectExcludeId("amount_cent", 1L, 9L)).thenReturn(false);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        Field incoming = new Field();
+        incoming.setName("amount_cent");
+        incoming.setDataType("bigint");
+        incoming.setNullable(false);
+        incoming.setPreferredUseCases("统计订单实付金额");
+        incoming.setAvoidWhen("展示金额时不要直接输出分单位");
+        incoming.setJoinHints("orders.id = payments.order_id");
+        incoming.setDefaultFilters("status = 'PAID'");
+        incoming.setAggregationHints("sum(amount_cent) / 100");
+        incoming.setReplacementGuidance("展示层改用 amount_yuan");
+        incoming.setMisuseExamples("把 amount_cent 当元展示");
+
+        Field updated = service.update(9L, incoming);
+
+        assertEquals("统计订单实付金额", updated.getPreferredUseCases());
+        assertEquals("展示金额时不要直接输出分单位", updated.getAvoidWhen());
+        assertEquals("orders.id = payments.order_id", updated.getJoinHints());
+        assertEquals("status = 'PAID'", updated.getDefaultFilters());
+        assertEquals("sum(amount_cent) / 100", updated.getAggregationHints());
+        assertEquals("展示层改用 amount_yuan", updated.getReplacementGuidance());
+        assertEquals("把 amount_cent 当元展示", updated.getMisuseExamples());
+        verify(repository).update(updated);
+    }
+
+    @Test
+    void usageContractFields_allowNullUpdatesForClearingSavedContract() throws Exception {
+        for (String fieldName : List.of(
+                "preferredUseCases",
+                "avoidWhen",
+                "joinHints",
+                "defaultFilters",
+                "aggregationHints",
+                "replacementGuidance",
+                "misuseExamples")) {
+            TableField tableField = Field.class.getDeclaredField(fieldName).getAnnotation(TableField.class);
+
+            assertNotNull(tableField, fieldName + " 应显式映射数据库列");
+            assertEquals(
+                    FieldStrategy.ALWAYS,
+                    tableField.updateStrategy(),
+                    fieldName + " 必须允许把已有契约清空为 NULL，否则 MyBatis-Plus updateById 会跳过 null");
+        }
     }
 
     @Test
@@ -781,6 +889,29 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void search_returnsUsageContractSummaryAndConfirmationActionForAvoidMatch() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field amount = field("amount_cent", "订单金额", "bigint", "订单金额以分存储", "amount", "enabled");
+        amount.setId(20L);
+        amount.setPreferredUseCases("统计订单实付金额");
+        amount.setAvoidWhen("展示金额时不要直接输出分单位");
+        amount.setAggregationHints("sum(amount_cent) / 100");
+        amount.setMisuseExamples("把 amount_cent 当元展示");
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(amount));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "展示订单金额", null, null, null, null, null, 10));
+
+        assertEquals(1, result.items().size());
+        FieldSearchItem item = result.items().getFirst();
+        assertTrue(item.usageContractSummary().stream().anyMatch(text -> text.contains("统计订单实付金额")));
+        assertTrue(item.usageContractSummary().stream().anyMatch(text -> text.contains("不要直接输出分单位")));
+        assertTrue(item.nextActions().stream().anyMatch(text -> text.contains("字段使用契约") && text.contains("人工确认")));
+        assertFalse(item.recommendedUse().contains("直接安全"));
+    }
+
+    @Test
     void suggest_usesBusinessGlossaryCanonicalFieldAndReason() {
         FieldRepository repository = mock(FieldRepository.class);
         BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
@@ -998,6 +1129,39 @@ class FieldServiceImplTest {
         assertFalse(suggestions.isEmpty());
         assertFalse(suggestions.getFirst().existing());
         assertNull(suggestions.getFirst().field());
+    }
+
+    @Test
+    void suggest_doesNotDirectlyAdoptFieldWhenUsageContractAvoidsScenario() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field displayMobile = field("display_mobile", "展示手机号", "varchar(20)", "脱敏展示手机号", "mobile", "enabled");
+        displayMobile.setId(30L);
+        displayMobile.setAvoidWhen("写入数据库或作为 join key");
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(displayMobile));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSuggestion suggestion = service.suggest(1L, "手机号写入数据库字段", 5).getFirst();
+
+        assertFalse(suggestion.existing());
+        assertNull(suggestion.field());
+        assertTrue(suggestion.matchReason().contains("字段使用契约"));
+        assertTrue(suggestion.evidence().stream().anyMatch(evidence -> evidence.sourceId().equals(displayMobile.getId())));
+    }
+
+    @Test
+    void suggest_doesNotDowngradeWhenAvoidScenarioOnlySharesOneChineseBigram() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field amount = field("amount_cent", "订单金额", "bigint", "订单金额以分存储", "amount", "enabled");
+        amount.setId(20L);
+        amount.setAvoidWhen("展示金额时不要直接输出分单位");
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(amount));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSuggestion suggestion = service.suggest(1L, "统计订单金额", 5).getFirst();
+
+        assertTrue(suggestion.existing());
+        assertEquals("amount_cent", suggestion.recommendedName());
+        assertSame(amount, suggestion.field());
     }
 
     @Test

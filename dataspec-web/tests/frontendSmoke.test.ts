@@ -63,6 +63,39 @@ test('keeps standard question glossary lookup aligned with enabled status contra
   assert.ok(!view.includes("listAllBusinessGlossary(projectId, 'ACTIVE')"))
 })
 
+test('keeps field usage contract editing and evidence display wired', () => {
+  const fieldView = readSource('src/views/FieldLibrary.vue')
+  const questionUtil = readSource('src/utils/standardQuestion.ts')
+  const schema = readSource('src/api/schema.ts')
+
+  assertContains(fieldView, [
+    '使用契约',
+    '推荐使用',
+    '禁用场景',
+    'Join 提示',
+    '默认过滤',
+    '聚合提示',
+    '替代指导',
+    '误用样例',
+    'preferredUseCases',
+    'avoidWhen',
+    'usageContractSummary'
+  ], 'FieldLibrary usage contract')
+
+  assertContains(questionUtil, [
+    'usageContractSummary',
+    'avoidWhen',
+    '使用契约',
+    '禁用场景'
+  ], 'standard question usage contract')
+
+  assertContains(schema, [
+    'preferredUseCases?: string',
+    'avoidWhen?: string',
+    'usageContractSummary?: string[]'
+  ], 'OpenAPI schema usage contract types')
+})
+
 test('keeps field conflict naming risk view wired', () => {
   const view = readSource('src/views/FieldConflicts.vue')
   const utils = readSource('src/utils/fieldConflictDisplay.ts')
@@ -938,7 +971,7 @@ test('keeps SQL lint fixed SQL and record history flow wired', () => {
     'SqlRuleDebugTrace',
     'SqlRuleMatchTrace',
     'RSqlLintDebugResult',
-    'post: operations["lintDebug"]'
+    'post: operations["debug"]'
   ], 'lint schema fixedSql policy')
 })
 

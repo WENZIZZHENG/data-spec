@@ -104,6 +104,9 @@
               <div v-if="fieldSearchRecommendedUse(row)" class="search-reason">
                 {{ fieldSearchRecommendedUse(row) }}
               </div>
+              <div v-if="fieldSearchUsageContractSummary(row).length" class="usage-contract-summary">
+                使用契约：{{ fieldSearchUsageContractSummary(row).join('；') }}
+              </div>
             </template>
           </el-table-column>
           <el-table-column prop="displayName" label="显示名" min-width="120" />
@@ -406,6 +409,62 @@
             type="textarea"
             :rows="2"
             placeholder="例如：金额以分为单位存储，展示时除以 100"
+          />
+        </el-form-item>
+
+        <div class="format-section-title">使用契约</div>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="推荐使用">
+              <el-input
+                v-model="form.preferredUseCases"
+                type="textarea"
+                :rows="2"
+                placeholder="例如：统计订单实付金额；支付成功口径"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="禁用场景">
+              <el-input
+                v-model="form.avoidWhen"
+                type="textarea"
+                :rows="2"
+                placeholder="例如：展示金额时不要直接输出分单位"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="Join 提示">
+              <el-input v-model="form.joinHints" placeholder="例如：orders.id = payments.order_id" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="默认过滤">
+              <el-input v-model="form.defaultFilters" placeholder="例如：payment_status = 'PAID'" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="聚合提示">
+              <el-input v-model="form.aggregationHints" placeholder="例如：sum(amount_cent) / 100" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="替代指导">
+              <el-input v-model="form.replacementGuidance" placeholder="例如：展示层改用 amount_yuan" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="误用样例">
+          <el-input
+            v-model="form.misuseExamples"
+            type="textarea"
+            :rows="2"
+            placeholder="例如：把 amount_cent 当元展示"
           />
         </el-form-item>
       </el-form>
@@ -913,7 +972,14 @@ const form = reactive<FieldReq>({
   formatNullPolicy: '',
   validExamplesJson: '',
   invalidExamplesJson: '',
-  formatNotes: ''
+  formatNotes: '',
+  preferredUseCases: '',
+  avoidWhen: '',
+  joinHints: '',
+  defaultFilters: '',
+  aggregationHints: '',
+  replacementGuidance: '',
+  misuseExamples: ''
 })
 
 const rules: FormRules<FieldReq> = {
@@ -1375,6 +1441,13 @@ function resetForm(field?: Field) {
   form.validExamplesJson = field?.validExamplesJson ?? ''
   form.invalidExamplesJson = field?.invalidExamplesJson ?? ''
   form.formatNotes = field?.formatNotes ?? ''
+  form.preferredUseCases = field?.preferredUseCases ?? ''
+  form.avoidWhen = field?.avoidWhen ?? ''
+  form.joinHints = field?.joinHints ?? ''
+  form.defaultFilters = field?.defaultFilters ?? ''
+  form.aggregationHints = field?.aggregationHints ?? ''
+  form.replacementGuidance = field?.replacementGuidance ?? ''
+  form.misuseExamples = field?.misuseExamples ?? ''
   formatExamplesForm.validExamplesText = examplesJsonToLines(field?.validExamplesJson)
   formatExamplesForm.invalidExamplesText = examplesJsonToLines(field?.invalidExamplesJson)
   formRef.value?.clearValidate()
@@ -1706,6 +1779,17 @@ function fieldSearchRecommendedUse(field: Field) {
   return fieldSearchItemByFieldId.value.get(id)?.recommendedUse ?? ''
 }
 
+function fieldSearchUsageContractSummary(field: Field) {
+  const id = field.id
+  if (typeof id === 'number') {
+    const summary = fieldSearchItemByFieldId.value.get(id)?.usageContractSummary?.filter(Boolean)
+    if (summary?.length) {
+      return summary.slice(0, 3)
+    }
+  }
+  return fieldUsageContractSummary(field).slice(0, 3)
+}
+
 function fieldGroupLabel(field: Field) {
   const parts = []
   if (field.domainId) {
@@ -1741,6 +1825,18 @@ function fieldFormatSummary(field: Field) {
     parts.push(field.formatNotes)
   }
   return parts.join(' / ')
+}
+
+function fieldUsageContractSummary(field: Field) {
+  return [
+    formatPart('推荐使用', field.preferredUseCases),
+    formatPart('禁用场景', field.avoidWhen),
+    formatPart('Join 提示', field.joinHints),
+    formatPart('默认过滤', field.defaultFilters),
+    formatPart('聚合提示', field.aggregationHints),
+    formatPart('替代指导', field.replacementGuidance),
+    formatPart('误用样例', field.misuseExamples)
+  ].filter(Boolean)
 }
 
 function formatPart(label: string, value?: string | null) {
@@ -1898,7 +1994,14 @@ function bulkAttributeText(attribute?: string) {
     formatNullPolicy: '空值策略',
     validExamplesJson: '正例',
     invalidExamplesJson: '反例',
-    formatNotes: '格式备注'
+    formatNotes: '格式备注',
+    preferredUseCases: '推荐使用',
+    avoidWhen: '禁用场景',
+    joinHints: 'Join 提示',
+    defaultFilters: '默认过滤',
+    aggregationHints: '聚合提示',
+    replacementGuidance: '替代指导',
+    misuseExamples: '误用样例'
   }
   return attribute ? labels[attribute] ?? attribute : '-'
 }
@@ -1982,7 +2085,14 @@ function changeLogSummary(log: StandardChangeLog) {
     'formatNullPolicy',
     'validExamplesJson',
     'invalidExamplesJson',
-    'formatNotes'
+    'formatNotes',
+    'preferredUseCases',
+    'avoidWhen',
+    'joinHints',
+    'defaultFilters',
+    'aggregationHints',
+    'replacementGuidance',
+    'misuseExamples'
   ]
   const changedLabels = keys
     .filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
@@ -2090,6 +2200,14 @@ function routeFieldId() {
 .search-reason {
   margin-top: 3px;
   color: #6b7280;
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.usage-contract-summary {
+  margin-top: 3px;
+  color: #8a5a00;
   font-size: 12px;
   line-height: 1.45;
   word-break: break-word;

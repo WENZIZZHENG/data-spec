@@ -259,6 +259,13 @@ class ProjectBackupServiceImplTest {
         fixture.withSourceProject();
         Field sourceField = field("order_no", 1L);
         sourceField.setComment("来源字段注释");
+        sourceField.setPreferredUseCases("统计订单实付金额");
+        sourceField.setAvoidWhen("展示金额时不要直接输出分单位");
+        sourceField.setJoinHints("orders.id = payments.order_id");
+        sourceField.setDefaultFilters("payment_status = 'PAID'");
+        sourceField.setAggregationHints("sum(amount_cent) / 100");
+        sourceField.setReplacementGuidance("展示层改用 amount_yuan");
+        sourceField.setMisuseExamples("把 amount_cent 当元展示");
         when(fixture.domainRepository.findByProjectId(1L)).thenReturn(List.of());
         when(fixture.fieldRepository.findAllByProjectId(1L)).thenReturn(List.of(sourceField));
         fixture.withEmptyRemainingAssets();
@@ -280,6 +287,13 @@ class ProjectBackupServiceImplTest {
 
         verify(fixture.fieldRepository).update(existing);
         assertEquals("来源字段注释", existing.getComment());
+        assertEquals("统计订单实付金额", existing.getPreferredUseCases());
+        assertEquals("展示金额时不要直接输出分单位", existing.getAvoidWhen());
+        assertEquals("orders.id = payments.order_id", existing.getJoinHints());
+        assertEquals("payment_status = 'PAID'", existing.getDefaultFilters());
+        assertEquals("sum(amount_cent) / 100", existing.getAggregationHints());
+        assertEquals("展示层改用 amount_yuan", existing.getReplacementGuidance());
+        assertEquals("把 amount_cent 当元展示", existing.getMisuseExamples());
         verify(fixture.restoreRecordRepository).insert(any());
     }
 

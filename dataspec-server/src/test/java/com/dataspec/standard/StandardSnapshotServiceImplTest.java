@@ -111,6 +111,46 @@ class StandardSnapshotServiceImplTest {
     }
 
     @Test
+    void createSnapshot_storesFieldUsageContract() throws Exception {
+        DataSpecSecurityContext.set(ApiTokenPrincipal.local());
+        StandardSnapshotRepository repository = mock(StandardSnapshotRepository.class);
+        FieldService fieldService = mock(FieldService.class);
+        EnumDictService enumDictService = mock(EnumDictService.class);
+        RuleConfigService ruleConfigService = mock(RuleConfigService.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        StandardSnapshotServiceImpl service = new StandardSnapshotServiceImpl(
+                repository,
+                fieldService,
+                enumDictService,
+                ruleConfigService,
+                objectMapper);
+        Field amount = field(1L, "amount_cent");
+        amount.setPreferredUseCases("统计订单实付金额");
+        amount.setAvoidWhen("展示金额时不要直接输出分单位");
+        amount.setJoinHints("orders.id = payments.order_id");
+        amount.setDefaultFilters("payment_status = 'PAID'");
+        amount.setAggregationHints("sum(amount_cent) / 100");
+        amount.setReplacementGuidance("展示层改用 amount_yuan");
+        amount.setMisuseExamples("把 amount_cent 当元展示");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(amount));
+        when(enumDictService.listByProject(1L)).thenReturn(List.of());
+        when(ruleConfigService.listByProject(1L)).thenReturn(List.of());
+
+        service.createSnapshot(1L, new StandardSnapshotCreateReq("v-usage-contract", null, null));
+
+        ArgumentCaptor<StandardSnapshot> captor = ArgumentCaptor.forClass(StandardSnapshot.class);
+        verify(repository).save(captor.capture());
+        var fieldNode = objectMapper.readTree(captor.getValue().getPayloadJson()).path("fields").get(0);
+        assertEquals("统计订单实付金额", fieldNode.path("preferredUseCases").asText());
+        assertEquals("展示金额时不要直接输出分单位", fieldNode.path("avoidWhen").asText());
+        assertEquals("orders.id = payments.order_id", fieldNode.path("joinHints").asText());
+        assertEquals("payment_status = 'PAID'", fieldNode.path("defaultFilters").asText());
+        assertEquals("sum(amount_cent) / 100", fieldNode.path("aggregationHints").asText());
+        assertEquals("展示层改用 amount_yuan", fieldNode.path("replacementGuidance").asText());
+        assertEquals("把 amount_cent 当元展示", fieldNode.path("misuseExamples").asText());
+    }
+
+    @Test
     void createSnapshot_reusesResultForSameIdempotencyKey() {
         DataSpecSecurityContext.set(ApiTokenPrincipal.local());
         StandardSnapshotRepository repository = mock(StandardSnapshotRepository.class);

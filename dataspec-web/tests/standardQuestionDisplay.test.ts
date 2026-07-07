@@ -260,6 +260,84 @@ test('requires confirmation when question asks format facts that matched field l
   assert.ok(answer.suggestedNextQuery.includes('订单金额'))
 })
 
+test('requires confirmation when usage contract avoid condition matches question', () => {
+  const answer = buildStandardQuestionAnswer({
+    question: '展示订单金额字段能直接用吗',
+    fieldSearch: {
+      projectId: 7,
+      query: '展示订单金额字段能直接用吗',
+      summary: { matchedCount: 1, returnedCount: 1 },
+      items: [{
+        score: 94,
+        field: {
+          id: 73,
+          name: 'amount_cent',
+          displayName: '订单金额',
+          status: 'enabled',
+          dataType: 'bigint',
+          preferredUseCases: '统计订单实付金额',
+          avoidWhen: '展示金额时不要直接输出分单位',
+          aggregationHints: 'sum(amount_cent) / 100'
+        },
+        usageContractSummary: [
+          '推荐使用：统计订单实付金额',
+          '禁用场景：展示金额时不要直接输出分单位',
+          '聚合：sum(amount_cent) / 100'
+        ],
+        matchReasons: ['命中显示名：订单金额'],
+        nextActions: ['当前问题命中字段使用契约的禁用场景，人工确认后再使用。']
+      }]
+    },
+    glossary: [],
+    rules: []
+  })
+
+  assert.equal(answer.answerStatus, 'NEEDS_CONFIRMATION')
+  assert.equal(answer.answerability, 'PARTIAL')
+  assert.ok(answer.confidenceReason.includes('使用契约'))
+  assert.ok(answer.missingEvidence.some((item) => item.includes('使用契约')))
+  assert.ok(answer.nextActions.some((item) => item.includes('禁用场景')))
+  assert.ok(answer.evidence.some((item) => item.description.includes('禁用场景')))
+})
+
+test('does not downgrade when usage contract only shares one generic Chinese bigram', () => {
+  const answer = buildStandardQuestionAnswer({
+    question: '统计订单金额应该用哪个字段',
+    fieldSearch: {
+      projectId: 7,
+      query: '统计订单金额应该用哪个字段',
+      summary: { matchedCount: 1, returnedCount: 1 },
+      items: [{
+        score: 94,
+        field: {
+          id: 73,
+          name: 'amount_cent',
+          displayName: '订单金额',
+          status: 'enabled',
+          dataType: 'bigint',
+          formatUnit: 'cent',
+          preferredUseCases: '统计订单实付金额',
+          avoidWhen: '展示金额时不要直接输出分单位',
+          aggregationHints: 'sum(amount_cent) / 100'
+        },
+        usageContractSummary: [
+          '推荐使用：统计订单实付金额',
+          '禁用场景：展示金额时不要直接输出分单位',
+          '聚合：sum(amount_cent) / 100'
+        ],
+        matchReasons: ['命中显示名：订单金额']
+      }]
+    },
+    glossary: [],
+    rules: []
+  })
+
+  assert.equal(answer.answerStatus, 'ADOPTABLE')
+  assert.equal(answer.answerability, 'DIRECT')
+  assert.equal(answer.confidence, 'HIGH')
+  assert.ok(!answer.missingEvidence.some((item) => item.includes('使用契约')))
+})
+
 test('requires confirmation when question asks format but field only has unit evidence', () => {
   const answer = buildStandardQuestionAnswer({
     question: '订单金额格式是什么',
