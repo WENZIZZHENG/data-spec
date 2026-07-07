@@ -74,7 +74,8 @@ export function buildStatusReport(input = {}) {
       specs: [...specEntries].sort(),
       totalIssues: issues.length,
       errors,
-      warnings
+      warnings,
+      issueCodes: buildIssueCodeSummary(issues)
     },
     checks: buildChecks(issues),
     issues,
@@ -538,6 +539,26 @@ function codeBelongsToCheck(code, checkId) {
     return code === 'MARKDOWN_LINK_MISSING'
   }
   return false
+}
+
+function buildIssueCodeSummary(issues) {
+  const byCode = new Map()
+  for (const item of issues) {
+    const existing = byCode.get(item.code)
+    if (!existing) {
+      byCode.set(item.code, {
+        code: item.code,
+        count: 1,
+        severity: item.severity
+      })
+      continue
+    }
+    existing.count += 1
+    if (item.severity === 'error') {
+      existing.severity = 'error'
+    }
+  }
+  return [...byCode.values()]
 }
 
 function buildNextActions(status, issues) {

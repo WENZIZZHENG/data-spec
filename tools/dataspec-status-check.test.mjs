@@ -92,6 +92,7 @@ test('buildStatusReport passes for a self-consistent TODO/OpenSpec snapshot', ()
   assert.equal(report.summary.todoItems, 3)
   assert.deepEqual(report.summary.queueItems, ['P6-71', 'P6-72'])
   assert.equal(report.issues.length, 0)
+  assert.deepEqual(report.summary.issueCodes, [])
   assert.match(report.nextActions[0], /检查通过/)
 })
 
@@ -201,6 +202,9 @@ test('buildStatusReport reports deterministic TODO and OpenSpec drift', () => {
   assert.ok(codes.includes('MARKDOWN_LINK_MISSING'))
   assert.ok(codes.includes('OPENSPEC_ARCHIVE_MISSING'))
   assert.ok(codes.includes('OPENSPEC_MAIN_SPEC_MISSING'))
+  const queueMissingSummary = report.summary.issueCodes.find((item) => item.code === 'TODO_QUEUE_ITEM_MISSING')
+  assert.equal(queueMissingSummary.count, 1)
+  assert.equal(queueMissingSummary.severity, 'error')
   const text = formatStatusReportText(report)
   assert.match(text, /状态：fail/)
   assert.match(text, /检查项:/)
@@ -246,22 +250,32 @@ test('buildStatusReport treats active changes as warning unless TODO claims queu
       'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
       'openspec/specs/sql-rule-debugger/spec.md'
     ]),
-    openSpecChangeEntries: ['archive', 'add-working-change'],
+    openSpecChangeEntries: ['archive', 'add-working-change', 'add-second-working-change'],
     openSpecSpecEntries: ['sql-rule-debugger']
   })
 
   assert.equal(report.status, 'warn')
-  assert.deepEqual(report.issues.map((issue) => issue.code), ['OPENSPEC_ACTIVE_CHANGE_PRESENT'])
+  assert.deepEqual(report.issues.map((issue) => issue.code), [
+    'OPENSPEC_ACTIVE_CHANGE_PRESENT',
+    'OPENSPEC_ACTIVE_CHANGE_PRESENT'
+  ])
+  assert.deepEqual(report.summary.issueCodes, [
+    {
+      code: 'OPENSPEC_ACTIVE_CHANGE_PRESENT',
+      count: 2,
+      severity: 'warning'
+    }
+  ])
   assert.equal(report.issues[0].severity, 'warning')
   const openSpecCheck = report.checks.find((check) => check.id === 'openspec-state')
   assert.equal(openSpecCheck.status, 'pass')
-  assert.equal(openSpecCheck.warningCount, 1)
+  assert.equal(openSpecCheck.warningCount, 2)
   assert.equal(openSpecCheck.errorCount, 0)
   assert.doesNotMatch(report.nextActions[0], /severity=error/)
   assert.match(report.nextActions[0], /severity=warning/)
   assert.match(
     formatStatusReportText(report),
-    /- openspec-state \(OpenSpec active\/archive\/main spec 一致性\): status=pass issues=1 errors=0 warnings=1/
+    /- openspec-state \(OpenSpec active\/archive\/main spec 一致性\): status=pass issues=2 errors=0 warnings=2/
   )
 })
 
@@ -280,6 +294,9 @@ test('runStatusCheckCli supports json output and returns non-zero on errors', as
     assert.equal(code, 1)
     assert.equal(output.status, 'fail')
     assert.ok(output.issues.some((issue) => issue.code === 'TODO_QUEUE_ITEM_MISSING'))
+    const queueMissingSummary = output.summary.issueCodes.find((item) => item.code === 'TODO_QUEUE_ITEM_MISSING')
+    assert.equal(queueMissingSummary.count, 1)
+    assert.equal(queueMissingSummary.severity, 'error')
     assert.match(output.nextActions[0], /severity=error/)
     const todoQueueCheck = output.checks.find((check) => check.id === 'todo-queue')
     assert.equal(todoQueueCheck.errorCount, 2)
