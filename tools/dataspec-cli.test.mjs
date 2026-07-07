@@ -2807,6 +2807,232 @@ test('context-budget plan redacts service error diagnostics', async () => {
   assert.doesNotMatch(io.stderr, /db\.internal/)
 })
 
+test('context-quality check evaluates context directory without writing cache files', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-context-quality-dir-'))
+  try {
+    const contextDir = path.join(dir, 'context')
+    await mkdir(path.join(contextDir, 'catalog'), { recursive: true })
+    await writeFile(
+      path.join(contextDir, 'manifest.json'),
+      JSON.stringify({ kind: 'dataspec-ai-context-manifest', schemaVersion: 1 }),
+      'utf8'
+    )
+    await writeFile(
+      path.join(contextDir, 'catalog', 'FIELD_CATALOG.md'),
+      '字段目录\n- user_phone: 用户手机号\n',
+      'utf8'
+    )
+    await writeFile(
+      path.join(contextDir, 'DATABASE_RULES.md'),
+      '命名规则\n[TRUNCATED] token budget exceeded\n',
+      'utf8'
+    )
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'context-quality',
+      'check',
+      '--context-dir',
+      'context',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(io.stderr, '')
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.kind, 'dataspec-ai-context-quality-check')
+    assert.equal(output.schemaVersion, 1)
+    assert.deepEqual(output.input, { sourceType: 'context-dir', path: 'context' })
+    assert.equal(output.qualityLevel, 'MEDIUM')
+    assert.equal(output.coverageByCategory.fieldCatalog.present, true)
+    assert.equal(output.coverageByCategory.schemaRegistry.present, false)
+    assert.equal(output.missingCriticalResources.some((item) => item.category === 'schemaRegistry'), true)
+    assert.equal(output.truncatedResources.some((item) => item.path === 'DATABASE_RULES.md'), true)
+    assert.equal(output.tokenBudgetBreakdown.source, 'context-files')
+    assert.ok(output.contextQualityScore >= 50 && output.contextQualityScore < 80)
+    assert.match(output.nextContextActions.join('\n'), /schema|Schema|契约|重新导出/)
+    await assert.rejects(readFile(path.join(dir, '.dataspec', 'context', 'cache-metadata.json')), /ENOENT/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('context-quality check evaluates context zip and rejects unsafe zip entries', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-context-quality-zip-'))
+  try {
+    const zipPath = path.join(dir, 'context.zip')
+    const zip = makeZip({
+      'manifest.json': JSON.stringify({ kind: 'dataspec-ai-context-manifest', schemaVersion: 1 }),
+      'catalog/field-catalog.json': JSON.stringify({ fields: [{ name: 'user_id' }] }),
+      'DATABASE_RULES.md': '数据库规则完整说明',
+      'schema-registry.json': JSON.stringify({ contracts: [] }),
+      'prompts.md': '生成 SQL 前必须引用字段标准',
+      'examples/good.sql': 'CREATE TABLE user_profile (user_id bigint);'
+    })
+    await writeFile(zipPath, zip)
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'context-quality',
+      'check',
+      '--context-zip',
+      'context.zip',
+      '--format',
+      'json'
+    ], io)
+
+    assert.equal(code, 0)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.input.sourceType, 'context-zip')
+    assert.equal(output.qualityLevel, 'HIGH')
+    assert.equal(output.missingCriticalResources.length, 0)
+    assert.equal(output.coverageByCategory.examples.present, true)
+
+    const unsafeZipPath = path.join(dir, 'unsafe.zip')
+    await writeFile(unsafeZipPath, makeZip({ '../secret.txt': 'raw-secret' }))
+    const unsafeIo = createIo('', dir)
+    const unsafeCode = await runCli([
+      'context-quality',
+      'check',
+      '--context-zip',
+      'unsafe.zip',
+      '--format',
+      'json'
+    ], unsafeIo)
+
+    assert.equal(unsafeCode, 2)
+    assert.match(unsafeIo.stderr, /AI Context zip 包含越界路径/)
+    assert.equal(unsafeIo.stdout, '')
+    await assert.rejects(readFile(path.join(dir, 'secret.txt')), /ENOENT/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('context-quality check evaluates context budget plan and prints text summary', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-context-quality-plan-'))
+  try {
+    const planPath = path.join(dir, 'budget-plan.json')
+    await writeFile(
+      planPath,
+      JSON.stringify(budgetPlanFixture({
+        estimation: {
+          tokenBudget: 1200,
+          selectedEstimatedTokens: 960,
+          totalEstimatedTokens: 3600,
+          estimationMethod: 'deterministic-local-character-weight-v1',
+          confidence: 'conservative'
+        },
+        selectedArtifacts: [
+          { artifact: '.dataspec/DATABASE_RULES.md', estimatedTokens: 720, riskImpact: '缺失后规则风险升高。' }
+        ],
+        droppedArtifacts: [
+          { artifact: '.dataspec/field-catalog.json', estimatedTokens: 1200, riskImpact: '缺失后字段选择风险升高。' },
+          { artifact: '.dataspec/schema-registry.json', estimatedTokens: 900, riskImpact: '缺失后契约校验风险升高。' }
+        ],
+        qualityRisk: 'HIGH',
+        fallbackSteps: ['提高 tokenBudget 或收窄 query 后重新运行 context-budget plan。'],
+        recommendedNextActions: ['先补导出字段目录和 schema registry，再交给 AI 生成 SQL。']
+      }), null, 2),
+      'utf8'
+    )
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'context-quality',
+      'check',
+      '--budget-plan',
+      'budget-plan.json',
+      '--format',
+      'json'
+    ], io)
+
+    assert.equal(code, 0)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.input.sourceType, 'budget-plan')
+    assert.equal(output.qualityLevel, 'LOW')
+    assert.equal(output.tokenBudgetBreakdown.tokenBudget, 1200)
+    assert.equal(output.tokenBudgetBreakdown.droppedEstimatedTokens, 2100)
+    assert.equal(output.missingCriticalResources.some((item) => item.category === 'fieldCatalog'), true)
+    assert.equal(output.missingCriticalResources.some((item) => item.category === 'schemaRegistry'), true)
+    assert.match(output.taskFitHints.join('\n'), /HIGH|高风险|不建议/)
+    assert.match(output.nextContextActions.join('\n'), /tokenBudget|字段目录|schema registry/)
+
+    const textIo = createIo('', dir)
+    const textCode = await runCli([
+      'context-quality',
+      'check',
+      '--budget-plan',
+      'budget-plan.json',
+      '--format',
+      'text'
+    ], textIo)
+
+    assert.equal(textCode, 0)
+    assert.match(textIo.stdout, /AI Context 质量检查/)
+    assert.match(textIo.stdout, /qualityLevel: LOW/)
+    assert.match(textIo.stdout, /nextContextActions/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('context-quality check rejects degenerated budget plan json before scoring', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-context-quality-invalid-plan-'))
+  try {
+    await writeFile(path.join(dir, 'budget-plan.json'), '{}', 'utf8')
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'context-quality',
+      'check',
+      '--budget-plan',
+      'budget-plan.json',
+      '--format',
+      'json'
+    ], io)
+
+    assert.equal(code, 2)
+    assert.equal(io.stdout, '')
+    assert.match(io.stderr, /context-budget plan JSON/)
+    assert.doesNotMatch(io.stderr, /可以继续使用当前 AI Context/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('context-quality check reports unclassified context files in coverage', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-context-quality-unclassified-'))
+  try {
+    const contextDir = path.join(dir, 'context')
+    await mkdir(contextDir, { recursive: true })
+    await writeFile(path.join(contextDir, 'random-notes.md'), 'misc local context that does not match known categories\n', 'utf8')
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'context-quality',
+      'check',
+      '--context-dir',
+      'context',
+      '--format',
+      'json'
+    ], io)
+    const output = JSON.parse(io.stdout)
+
+    assert.equal(code, 0)
+    assert.equal(output.coverageByCategory.unclassified.present, true)
+    assert.equal(output.coverageByCategory.unclassified.resourceCount, 1)
+    assert.deepEqual(output.coverageByCategory.unclassified.sampleResources, ['random-notes.md'])
+    assert.equal(output.missingCriticalResources.some((item) => item.category === 'fieldCatalog'), true)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('profile list prints machine-readable profile catalog', async () => {
   const calls = []
   const fetchFn = async (url) => {

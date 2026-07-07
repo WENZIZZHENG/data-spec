@@ -4,7 +4,7 @@
 
 ## 下一步顺序
 
-1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90、P6-91、P6-92、P6-93 已完成第一版；P6-78、P6-82、P6-88、P6-90、P6-93 对应 OpenSpec change 均已归档，active change 队列为空。
+1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90、P6-91、P6-92、P6-93、P6-186 已完成第一版；P6-78、P6-82、P6-88、P6-90、P6-93 对应 OpenSpec change 均已归档；P6-186 对应 OpenSpec change `add-ai-context-quality-check` 保持 active，按项目默认暂未归档。
 2. 近期优先行动项已清空，后续开发由用户从 P6-94 以后候选池或新需求中选择，不再从 P6-71 到 P6-188 全量顺扫。
 3. 效率优先顺序：真实数据库集成测试已作为可选 Docker profile，不默认阻塞小任务；下一项开工前按任务类型重新判断快速/常规/SDD。
 4. 暂缓池：P6-94 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
@@ -30,7 +30,8 @@
 16. 本次新增工程化优化建议已补为 P6-171 到 P6-176：数据质量测试导出、标准变更事件流、IDE 提示、跨协议 Schema 导出、指标口径映射和消费端兼容套件。
 17. 本次新增优化建议已补为 P6-177 到 P6-182：OpenSpec 准备度评分、MCP 会话状态记忆、业务代码 Patch Plan、数据库采集断点续扫、维护 Inbox 可执行工作流和前端页面对象测试层。
 18. 本次继续新增优化建议已补为 P6-183 到 P6-188：数据库 COMMENT 回写计划、中英文命名映射、标准驱动测试数据包、AI Context 质量预算、字段使用契约和标准问答可采纳度。
-19. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
+19. 本次功能探索建议已合并到既有候选：P6-76 数据域与表模板设计器闭环、P6-133 规则/fixture 覆盖报告、P6-140 TaskResult/Evidence 信封、P6-166 AI 输出后置校验、P6-170/P6-181 标准维护工作流、P6-183 COMMENT 回写计划、P6-185 测试数据包、P6-186 Context 可用性评分、P6-187 字段使用契约、P6-176 消费端兼容套件和 P6-46 验证证据闭环；不新增 P6-189。
+20. P6 收束后再回看哪些能力需要从个人/小团队工具升级为团队协作能力。
 
 ## 已完成能力摘要（P0-P4）
 
@@ -516,6 +517,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 已完成能力：`tools/dataspec-verify-advisor.mjs` 支持 `--path`、`--changed`、`--format text|json`，根据后端、前端、CLI/MCP、OpenSpec、文档、Docker/local smoke 等路径推荐命令、原因、工作目录、预计耗时和下一步；`dataspec init --with-agents` 生成片段会提示该入口。
 - 落地产物：新增验证建议脚本和单测，README 验证小节已加入建议命令，AGENTS 片段保留 doctor/lint/context 指引并补充验证建议入口。
 - 验收标准：修改后端、前端、CLI、OpenSpec、README/TODO 等不同路径时能得到合理验证建议；脚本和文档被 README 与 AGENTS 片段引用；关键规则有 Node 测试覆盖。
+- 后续增强：把验证建议推进到证据包闭环，生成 validation evidence manifest，记录命令、cwd、推荐原因、预期结果、执行结果占位或结果摘要、失败 nextAction；不自动伪造通过结果。
 - 边界：不替代 CI，不强制所有改动跑全量测试，不执行破坏性命令。
 
 ### P6-47：TODO 到 OpenSpec 的实施交接助手
@@ -771,11 +773,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 
 ### P6-76：业务对象关系图与表模板依赖
 - 状态：待办。
-- 为什么做：AI 建表不仅需要字段标准，还需要知道用户、订单、支付、审计等业务对象之间的关系，否则容易生成孤立表、重复字段或错误外键。
+- 为什么做：AI 建表不仅需要字段标准，还需要知道用户、订单、支付、审计等业务对象之间的关系；同时数据域和表模板需要可视化维护闭环，否则标准字段难以稳定进入 DDL 生成、需求草案和 AI Context。
 - 已有基础：已有表模板、DDL 生成、领域 Starter Kit、字段分组、字段影响分析、AI Context 和多项目标准复用包待办。
-- 缺口：字段标准和表模板之间缺少轻量关系模型；AI 无法稳定理解“订单表依赖用户表”“支付金额来自订单金额”“审计字段应应用到所有业务表”等模式。
-- 落地产物：新增业务对象/表模板关系描述；支持 entityName、tablePattern、requiredFields、optionalFields、relations、foreignKeyHints、auditFields、commonPitfalls 和 contextExport；前端可展示简易关系图。
-- 验收标准：生成订单、支付、用户等常见 DDL 时能引用对象关系和外键建议；AI Context 能按业务对象裁剪导出；关系图不要求依赖真实数据库外键。
+- 缺口：字段标准和表模板之间缺少轻量关系模型；数据域/表模板前端入口还缺少完整 CRUD、模板字段选择、DDL 预览和自动 lint 的最小闭环；AI 无法稳定理解“订单表依赖用户表”“支付金额来自订单金额”“审计字段应应用到所有业务表”等模式。
+- 落地产物：先补齐数据域与表模板设计器：数据域 CRUD、表模板 CRUD、模板字段从标准字段选择、DDL 预览和 lint 摘要；再新增业务对象/表模板关系描述，支持 entityName、tablePattern、requiredFields、optionalFields、relations、foreignKeyHints、auditFields、commonPitfalls 和 contextExport；前端可展示简易关系图。
+- 验收标准：用户能维护数据域和表模板，并从模板预览可 lint 的 DDL；生成订单、支付、用户等常见 DDL 时能引用对象关系和外键建议；AI Context 能按业务对象或表模板裁剪导出；关系图不要求依赖真实数据库外键。
 - 边界：不做完整 ER 建模工具，不强制所有项目维护业务对象，不自动改写已有表结构。
 
 ### P6-77：派生字段、单位换算与口径规则
@@ -831,6 +833,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 已完成能力：新增基于 Testcontainers 的真实数据库集成测试矩阵，覆盖 PostgreSQL/MySQL schema-only fixture、表列表、metadata dump/browser、compare、coverage、只读连接诊断和敏感信息不外泄断言；同时补充 PostgreSQL 只读账号在 JDBC 未声明 readOnly 时的权限诊断回归测试。
 - 落地产物：新增 Testcontainers 测试 profile；启动 PostgreSQL/MySQL 容器，加载最小 schema fixture，验证表列表、metadata preview、compare、coverage 和连接诊断的关键字段。
 - 验证证据：`mvn test` 476 pass，确认默认后端测试不运行 `*IT.java` 且不依赖 Docker；`mvn test -Pdb-integration` 已进入 Testcontainers 启动阶段，但当前环境无可用 Docker，报 `Could not find a valid Docker environment`，真实容器矩阵需在 Docker 可用环境补跑。
+- 本地真实自测记录（2026-07-07）：用户提供一次性 PostgreSQL 测试库 `localhost:5432/ai_test`，用户 `postgres`；密码仅保留在当前会话上下文，不写入待办。已使用本地 PostgreSQL JDBC 42.7.11 执行只读 `select current_database(), current_user, version()`，连接成功，返回数据库 `ai_test`、用户 `postgres`、版本 PostgreSQL 17.9。用户已确认 `ai_test` 可作为可写、可丢弃的一次性测试库；后续按待办执行真实闭环自测时，可在该库内启动后端 Flyway、创建 DataSpec 测试数据并运行 smoke，授权边界仅限 `ai_test`，不得扩展到其他数据库或真实业务库。
+- 本地真实闭环执行记录（2026-07-07）：已在端口 `18090/15173` 启动后端和前端，后端显式连接用户授权的一次性 `ai_test` 测试库并启用 Flyway；`node tools/dataspec-local-smoke.mjs --server http://localhost:18090 --web http://localhost:15173 --json` 通过，创建演示项目 `projectId=1`，web、api-docs、demo-project、dashboard-summary、sql-lint 全部 pass，SQL lint 返回 22 个 active issues；随后调用 `/api/reverse-import/database/tables` 只读读取 `ai_test`，返回 32 张表，并调用 `/api/reverse-import/database/browser` 浏览 `public.ds_project`，summary 为 1 张表、7 列、1 个索引、3 个候选、7 个缺注释、4 个 changed、3 个 unmanaged，coverageRate 57.1%。本轮启动的 `18090/15173` 进程已停止。
 - 验收标准：开发者可通过专门 profile 运行真实数据库集成测试；默认 `mvn test` 不强制依赖 Docker；失败信息能定位具体方言和 metadata 字段。
 - 边界：不替代数据库供应商完整兼容认证，不把 Docker 作为所有开发环境的必需前提，不扫描业务数据行。
 
@@ -1321,10 +1325,10 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 状态：待办。
 - 为什么做：规则、豁免、模板和 fixedSql 持续增加后，需要知道哪些规则长期无命中、哪些规则只产生误报、哪些规则缺少 fixture；否则规则体系会变重，AI 也会读到低价值约束。
 - 已有基础：已有规则配置、规则调试器、规则误报豁免、SQL 规则变异回归、golden fixtures、检查记录和字段质量门禁。
-- 缺口：缺少 rule coverage/report，无法聚合 lastTriggeredAt、fixtureCoverage、falsePositiveHints、suppressionRate、fixerCoverage 和 recommendedAction。
+- 缺口：缺少 rule coverage/report，无法聚合 lastTriggeredAt、fixtureCoverage、dialectCoverage、falsePositiveHints、suppressionRate、fixerCoverage、mutationExamples 和 recommendedAction。
 - 参考项目：`eslint/eslint` 的规则测试组织、`istanbuljs/nyc` 的覆盖率报告和 `sqlfluff/sqlfluff` 的规则 fixture 体系；只借鉴覆盖率指标，不把 lint 规则变成测试覆盖率平台。
-- 落地产物：新增规则覆盖率报告 API/CLI 和前端摘要；基于历史检查记录、fixture、豁免和 fixedSql 计划统计规则活跃度、质量风险和清理建议。
-- 验收标准：能识别长期未触发规则、缺 fixture 规则、高豁免率规则和无 fixer 规则；报告给出保留、补测试、降级或停用建议；不会影响正常 lint 执行。
+- 落地产物：新增规则覆盖率报告 API/CLI 和前端摘要；基于历史检查记录、fixture、豁免、fixedSql 计划和方言样例统计规则活跃度、质量风险和清理建议；输出机器可读 JSON，方便接入本地验证入口。
+- 验收标准：能识别长期未触发规则、缺 fixture 规则、缺方言样例规则、高豁免率规则和无 fixer 规则；报告给出保留、补测试、降级或停用建议；移除关键 fixture 时相关验证能失败或明确提示覆盖缺口；不会影响正常 lint 执行。
 - 边界：不自动删除规则，不用覆盖率作为唯一质量判断，不上传 SQL 内容；第一版只统计 DataSpec 已保存的安全元数据和本地 fixture。
 
 ### P6-134：前端 mock API 演示模式与无后端体验
@@ -1387,14 +1391,14 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 验收标准：字段 `user_id` 改名或废弃时，AI 能拿到推荐替换字段、匹配模式、示例补丁和验证命令；高风险替换需要人工确认；recipe 有 fixture 防漂移。
 - 边界：不做完整 IDE 重构引擎，不自动提交业务代码，不承诺覆盖所有语言；第一版覆盖 SQL、Java/TypeScript 常见字符串和 schema 片段。
 
-### P6-140：前端/CLI/MCP 统一任务结果协议
+### P6-140：前端/CLI/MCP 统一 TaskResult / Evidence 信封
 - 状态：待办。
 - 为什么做：同一件事通过前端、CLI、MCP 或 API 执行后，现在结果展示字段、下一步建议、证据链接和失败状态容易不一致；AI 需要稳定读取“完成/部分完成/阻塞”和后续动作。
 - 已有基础：已有 AI 任务卡、AI 回放、执行证据包、全链路 Trace、前端统一状态、MCP/CLI 工具契约验收和 AI 可读错误码待办。
-- 缺口：缺少统一 `TaskResult` 协议，无法复用 status、summary、counts、artifacts、evidenceRefs、nextActions、retryable、blockedReason、traceId 和 suggestedCommands。
+- 缺口：缺少统一 `TaskResult` / Evidence envelope，无法复用 status、summary、counts、artifacts、evidenceRefs、nextActions、retryable、blockedReason、traceId、suggestedCommands 和 validationEvidence。
 - 参考项目：`github/gh` 的命令输出、GitHub Actions job summary、`modelcontextprotocol/servers` 的工具结果结构和 `getsentry/sentry-javascript` 的错误上下文；只统一结果表达，不引入任务调度平台。
-- 落地产物：新增 TaskResult JSON Schema/DTO、CLI/MCP 输出适配和前端结果卡片组件；SQL 校验、Context 导出、反向导入、doctor/preflight 逐步接入；文档列出字段语义。
-- 验收标准：AI 调用任一核心任务都能用同一方式判断是否成功、下一步做什么、证据在哪；前端失败卡片与 CLI JSON 的关键字段一致；兼容旧响应并有契约测试。
+- 落地产物：新增 TaskResult JSON Schema/DTO、Evidence envelope、CLI/MCP 输出适配和前端结果卡片组件；SQL 校验、Context 导出、反向导入、doctor/preflight 逐步接入；第一版为 `lint-files`、`evidence export`、`task show` 或等价高频入口建立 golden payload；文档列出字段语义。
+- 验收标准：AI 调用任一核心任务都能用同一方式判断是否成功、下一步做什么、证据在哪；前端失败卡片与 CLI JSON 的关键字段一致；证据引用和验证建议能进入同一信封；兼容旧响应并有契约测试。
 - 边界：不要求所有历史接口一次性迁移，不做长任务队列，不改变现有 API 的核心业务语义；第一版先包裹高频任务结果。
 
 ### P6-141：AI 输出 SQL/DDL 执行前验证沙箱
@@ -1591,10 +1595,10 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 状态：待办。
 - 为什么做：字段名、枚举、规则或可见性变更会影响 SQL、DDL、AI Context、业务仓库和文档；保存前应该让 AI 和用户看到影响范围，并生成可审查的修复清单。
 - 已有基础：已有字段影响分析、标准变更日志、标准变更迁移 recipe、fixedSql 文件补丁、业务仓库迁移交付包和执行证据包待办。
-- 缺口：缺少变更前 dry-run，无法按标准对象输出 impactedApis、impactedSql、impactedFiles、suggestedPatches、riskLevel 和 rollbackHint。
+- 缺口：缺少变更前 dry-run 和 Patch Plan，无法按标准对象输出 impactedApis、impactedSql、impactedFiles、databaseCommentPlan、aiContextImpact、suggestedPatches、verificationCommands、riskLevel 和 rollbackHint。
 - 参考项目：`openrewrite/rewrite` 的迁移 recipe、`hashicorp/terraform` 的 plan/apply 思路和 `reviewdog/reviewdog` 的 diff 诊断评论；只做本地预演和修复单，不自动改真实仓库。
-- 落地产物：新增标准变更 dry-run API/CLI；保存标准前可生成影响摘要和候选修复单；前端在字段/规则保存前展示影响预演；证据包记录本次变更的影响和取舍。
-- 验收标准：变更一个字段或规则时能看到受影响对象、建议修复和风险等级；用户确认后再保存；AI 可把修复单转成后续任务。
+- 落地产物：新增标准变更 dry-run API/CLI；保存标准前可生成影响摘要、候选修复单和可审查 Patch Plan；前端在字段/规则保存前展示影响预演；证据包记录本次变更的影响、验证命令和取舍。
+- 验收标准：变更一个字段、枚举、规则或模板时能看到 DataSpec 内部引用、数据库 COMMENT 回写草案、业务代码引用风险、建议验证命令和证据包入口；用户确认后再保存；AI 可把修复单转成后续任务。
 - 边界：不强制所有保存都阻断，不直接连接生产仓库写补丁；第一版覆盖字段、枚举和默认规则。
 
 ### P6-161：AI 可读字段知识卡片
@@ -1603,8 +1607,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 已有基础：已有字段标准、数据字典、标准问答入口、业务术语表、示例反例库、自然语言标准候选和字段推荐质量增强。
 - 缺口：缺少可直接嵌入 AI Context 的 FieldKnowledgeCard，无法稳定表达 aliases、antiPatterns、usageExamples、relatedFields、enumHints、riskNotes 和 lastVerifiedAt。
 - 参考项目：`backstage/backstage` 的 catalog 实体页面、`facebook/docusaurus` 的结构化文档组织和 `great-expectations/great_expectations` 的规则说明；只生成轻量知识卡，不做复杂知识图谱。
-- 落地产物：为字段标准生成 AI 可读知识卡；支持前端查看、CLI 导出和 MCP resource 读取；从示例反例、规则命中和用户反馈中补充卡片内容。
-- 验收标准：AI 针对单个字段能拿到完整、短小、可引用的标准说明；卡片能说明何时使用、何时不要用、如何命名和关联哪些字段；变更后有版本或更新时间。
+- 落地产物：为字段标准生成 AI 可读知识卡；支持前端查看、CLI 导出和 MCP resource 读取；聚合字段元数据、usage examples、反例、冲突、来源、问答证据、规则命中和用户反馈。
+- 验收标准：AI 针对单个字段能拿到完整、短小、可引用的标准说明；卡片能说明何时使用、何时不要用、如何命名、关联哪些字段以及有哪些常见误用；高频、敏感、金额、状态和时间字段优先覆盖；变更后有版本或更新时间。
 - 边界：不把知识卡当审批文档，不要求每个字段一次性补齐长文案；第一版优先覆盖高频字段和敏感字段。
 
 ### P6-162：规则/标准 A/B 评测与回归数据集
@@ -1653,8 +1657,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 已有基础：已有 SQL lint、fixedSql、DDL 生成、AI 回放、AI 输出契约稳定性、引用证据与 Explain Trace、规则/标准 A/B 评测和执行证据包。
 - 缺口：缺少 postGenerationCheck、unknownStandardRefs、staleRefs、unsupportedClaims 和 confidenceThreshold；AI 输出中的字段名、枚举值、规则说明和证据引用无法统一二次验证。
 - 参考项目：`promptfoo/promptfoo` 的输出断言、`great-expectations/great_expectations` 的验证结果和 `Schemathesis/schemathesis` 的契约回归；只做本地确定性检查，不依赖外部 LLM 评判。
-- 落地产物：新增 AI 产物校验 API/CLI/MCP；支持校验 SQL/DDL/Markdown/JSON 中的标准引用，输出 missingRefs、staleRefs、unsafeClaims、suggestedFixes 和 evidenceLinks；前端在复制或下载 AI 产物前显示校验摘要。
-- 验收标准：AI 输出引用不存在字段时能被拦截或明确警告；过期字段能提示替代字段；校验结果可进入执行证据包和回放记录。
+- 落地产物：新增 AI 产物校验 API/CLI/MCP；支持粘贴文本或选择 AI job 输出，校验 SQL/DDL/Markdown/JSON 中的字段、枚举、规则、快照和证据引用，输出 PASS/WARN/FAIL、missingRefs、staleRefs、unsafeClaims、suggestedFixes 和 evidenceLinks；前端在复制或下载 AI 产物前显示校验摘要。
+- 验收标准：AI 输出引用不存在字段时能被拦截或明确警告；过期字段能提示替代字段；缺少证据或引用旧快照时能给出 nextAction；校验结果可进入执行证据包和回放记录。
 - 边界：不判断自然语言内容的全部事实正确性，不自动调用外部模型改写；第一版聚焦 DataSpec 可确定验证的字段、枚举、规则和快照引用。
 
 ### P6-167：标准查询 DSL 与可组合筛选协议
@@ -1693,8 +1697,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 已有基础：已有字段质量评分、覆盖率报告、候选 Inbox、个人健康摘要、AI 任务推荐队列、TODO 到 OpenSpec 交接、执行证据包和统一任务结果协议待办。
 - 缺口：缺少 workEstimate、batchPlan、taskSlices、expectedImpact、riskLevel 和 verificationCommands；健康摘要能看到问题，但还不能按投入产出拆成可执行批次。
 - 参考项目：GitHub Actions job summary、`backstage/backstage` 的开发者任务入口和 `dagster-io/dagster` 的资产任务视图；只借鉴任务摘要和优先级表达，不做团队排期系统。
-- 落地产物：新增标准维护任务拆分 API/CLI；把低质量字段、导入候选、规则冲突和失败 SQL 聚合成 15/30/60 分钟任务包；每个任务包包含目标对象、预计收益、验证命令和回滚/跳过说明。
-- 验收标准：打开项目后能生成“本次最值得处理的 3 个维护批次”；AI 可按批次逐步执行并产出 TaskResult；完成后健康摘要和任务建议会更新。
+- 落地产物：新增标准维护任务拆分 API/CLI；把低质量字段、未纳管字段、导入候选、规则冲突、覆盖率缺口和 AI 反馈失败项聚合成 15/30/60 分钟任务包；每个任务包包含目标对象、来源证据、预计收益、验证命令和回滚/跳过说明。
+- 验收标准：打开项目后能生成“本次最值得处理的 3 个维护批次”；每个批次能跳转到候选、字段、规则或覆盖率来源；AI 可按批次逐步执行并产出 TaskResult；完成后健康摘要和任务建议会更新。
 - 边界：不做团队工时估算，不自动修改标准，不把估算当承诺；第一版按本地项目指标给出启发式建议。
 
 ### P6-171：标准规则向数据质量测试导出
@@ -1753,8 +1757,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 已有基础：已有 OpenAPI 防漂移、CLI/MCP 工具契约验收、示例契约快照、标准消费清单、标准消费端 SDK 和前端冒烟门禁。
 - 缺口：缺少 consumerCompatibilitySuite、goldenPayloads、minimumSupportedVersion、breakingChangeRules 和 adapterResults；每个消费端只能靠各自测试发现问题。
 - 参考项目：`Schemathesis/schemathesis` 的契约回归、`OpenAPITools/openapi-generator` 的生成兼容策略、`bufbuild/buf` 的 breaking change 检查和 `Redocly/redocly-cli` 的 OpenAPI lint；只借鉴兼容验收，不做公开认证体系。
-- 落地产物：新增标准消费端兼容套件目录和 CLI `compat check`；内置字段、规则、枚举、Context、MCP resource、CLI JSON、schema export 的 golden payload；输出 breaking/compatible/deprecated 结果。
-- 验收标准：修改核心 DTO、API 字段或导出格式时能一键检查主要消费端契约；失败结果包含破坏字段、影响入口和迁移建议；CI/本地验证入口可复用。
+- 落地产物：新增标准消费端兼容套件目录和 CLI `compat check`；在现有 CLI/MCP contract fixture 基础上扩展字段、规则、枚举、Context、MCP resource、CLI JSON、API schema registry 和 schema export 的 golden payload；输出 breaking/compatible/deprecated 结果。
+- 验收标准：修改核心 DTO、API 字段或导出格式时能一键检查主要消费端契约；失败结果包含破坏字段、影响入口和迁移建议；自有消费端、关键 AI 入口和示例 adapter 有 golden 覆盖；CI/本地验证入口可复用。
 - 边界：不要求所有第三方工具接入，不阻止个人本地实验性变更；第一版覆盖 DataSpec 自有消费端和示例 adapter。
 
 ### P6-177：OpenSpec Change 准备度评分与缺口检查
@@ -1803,8 +1807,8 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 已有基础：已有标准候选 Inbox、AI 任务推荐队列、可复用 AI 工作流 Recipe、标准维护工作量估算、统一任务结果协议和前端命令面板。
 - 缺口：缺少 inboxAction、recipeBinding、dryRunSteps、executionState、undoHint 和 evidenceLinks；待处理项能看见，但还不能稳定转成“预检 -> 执行 -> 验证 -> 归档”的闭环。
 - 参考项目：`backstage/backstage` 的开发者任务入口、`go-task/task` 的任务 recipe 和 `dagster-io/dagster` 的资产任务视图；只借鉴可执行步骤表达，不做团队排期系统。
-- 落地产物：新增 Inbox action 到 workflow recipe 的绑定层；前端可从候选、质量问题或覆盖率缺口发起 dry-run；CLI/MCP 可读取同一任务步骤和证据链接。
-- 验收标准：选择一个未纳管字段批次后，可生成可执行工作流，包含预检、采纳/忽略/补资料、验证命令和结果记录；失败步骤能显示可恢复位置。
+- 落地产物：新增 Inbox action 到 workflow recipe 的绑定层；聚合待处理候选、低质量字段、未纳管字段、规则冲突和 AI 反馈失败项；前端可从候选、质量问题或覆盖率缺口发起 dry-run；CLI/MCP 可读取同一任务步骤和证据链接。
+- 验收标准：选择一个未纳管字段批次或 AI 反馈失败项后，可生成“预检 -> 执行 -> 验证 -> 归档”的可执行工作流，包含采纳/忽略/补资料、验证命令、结果记录和证据包入口；失败步骤能显示可恢复位置。
 - 边界：不自动批量采纳标准，不跳过人工确认；第一版只绑定高频维护动作。
 
 ### P6-182：前端页面对象模型与稳定测试选择器
@@ -1824,7 +1828,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 缺口：缺少 commentPatchPlan、currentComment、targetComment、commentDiff、dryRunSql、dialectSupport、riskLevel 和 rollbackHint；目前只能导入注释，不能稳定输出“标准 -> 数据库注释”的只读预览。
 - 参考项目：`bytebase/bytebase` 的数据库变更预览、`ariga/atlas` 的 schema diff 和 `k1LoW/tbls` 的数据库文档化；只借鉴注释差异表达，不默认写源数据库。
 - 落地产物：新增 COMMENT 回写计划 API/CLI/前端预览；按 PostgreSQL/MySQL 方言生成 COMMENT ON 或 ALTER COMMENT 草稿，标记 no-op、missing、changed 和 unsupported；支持导出 SQL 与 JSON 证据。
-- 验收标准：连接数据库后能看到 DataSpec 标准注释与当前库注释差异；默认只 dry-run，不执行数据库写入；输出内容不包含密码、token、完整 JDBC URL 或业务数据行。
+- 验收标准：连接数据库后能看到 DataSpec 标准注释与当前库注释差异；默认只输出可审阅计划和 dry-run SQL，不执行数据库写入；计划可进入证据包或标准变更 Patch Plan；输出内容不包含密码、token、完整 JDBC URL 或业务数据行。
 - 边界：第一版只处理表/列注释，不处理表重命名、字段重命名、索引调整或数据迁移；真实执行仍交给用户或后续显式 apply 流程。
 
 ### P6-184：字段标准中英文命名与翻译辅助
@@ -1843,18 +1847,19 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 已有基础：已有字段格式约束、示例/反例库、受控脱敏样例采样、前端 mock 演示模式、数据质量测试导出和 fixture/golden 基线。
 - 缺口：缺少 testDataCase、validExamples、invalidExamples、boundaryExamples、seedProfile、mockPayload 和 coverageReport；现有样例分散在字段描述、fixture 和手写文档里。
 - 参考项目：`faker-js/faker` 的合成数据生成、`mswjs/msw` 的前端 mock、`storybookjs/storybook` 的状态样例和 `great-expectations/great_expectations` 的期望/反例组织；只生成安全样例，不采集真实数据行。
-- 落地产物：新增测试数据包生成 API/CLI；按字段标准、枚举、格式、敏感标记和业务对象生成 JSON/CSV/SQL seed/mock 草稿，同时输出有效、无效和边界样例。
-- 验收标准：手机号、金额、时间、枚举、JSON 等字段能生成可解释样例；导出包可被前端 mock、后端测试或 AI 生成单测复用；生成结果不包含原始业务数据。
+- 落地产物：新增测试数据包生成 API/CLI；按字段标准、枚举、格式、敏感标记和业务对象生成 JSON/CSV/SQL seed/mock 草稿，同时输出 valid、invalid 和 boundary cases。
+- 验收标准：手机号、金额、时间、枚举、JSON 等字段能生成可解释样例；导出包可被前端 mock、后端测试、数据质量测试或 AI 生成单测复用；生成结果不包含原始业务数据。
 - 边界：不自动写入业务数据库，不保证满足所有业务规则；第一版聚焦字段级和轻量对象级样例。
 
 ### P6-186：AI Context 质量预算与可用性评分
-- 状态：待办。
+- 状态：已完成第一版，OpenSpec change `add-ai-context-quality-check` 保持 active，暂未归档。
 - 为什么做：AI Context 已能裁剪和导出，但 AI 还需要知道“这份上下文是否够用”：字段是否缺枚举、样例是否太少、规则是否被截断、token 预算是否被低价值内容占满。
 - 已有基础：已有 AI Context zip、按需裁剪、上下文预算、字段质量评分、标准查询 DSL、AI profile、Context 增量更新包和 Prompt 评测待办。
-- 缺口：缺少 contextQualityScore、tokenBudgetBreakdown、missingCriticalFields、truncatedResources、coverageByCategory、staleContextWarnings 和 nextContextActions；现在只能看导出是否成功，不能判断是否适合某个 AI 任务。
+- 已完成能力：新增 CLI-only `context-quality check`，可本地只读读取已导出的 AI Context 目录、AI Context zip 或 `context-budget plan` JSON，输出 `contextQualityScore`、`qualityLevel`、`tokenBudgetBreakdown`、`missingCriticalResources`、`truncatedResources`、`coverageByCategory`、`taskFitHints` 和 `nextContextActions`；覆盖退化 budget plan、unsafe zip、未分类资源、fixture 三选一输入契约和敏感示例拦截。
 - 参考项目：`promptfoo/promptfoo` 的 prompt 评测、`langfuse/langfuse` 的 trace/score 和 `OpenLineage/OpenLineage` 的运行元数据；只做确定性评分，不调用外部 LLM 打分。
-- 落地产物：新增 Context 质量评分 API/CLI；导出前后输出质量摘要、token 分布、缺口、截断说明和推荐补充动作；前端 AI Context 页面展示评分与可复制 JSON。
-- 验收标准：最小 Context、标准 Context 和完整 Context 能分别给出可解释评分；缺少枚举、格式、业务术语或关键规则时有明确 nextAction；AI 可据此决定继续、补导出或停止。
+- 产物：`tools/dataspec-cli.mjs`、CLI 单测、CLI/MCP contract fixture、OpenSpec change `add-ai-context-quality-check` 和 README CLI 说明；commit `0a1dca1`。
+- 验证证据：`node --test tools/*.test.mjs` 347 pass / 2 skipped；`node tools/dataspec-cli-mcp-contract-check.mjs --format json` ok true；`openspec validate add-ai-context-quality-check --strict` valid；独立子 agent `019f3d19-63a0-7252-b194-24ddeda1d36b` 已完成只读评审并关闭，findings 已处理。
+- 后续增强：补后端评分 API、前端 AI Context 页面展示、staleContextWarnings、missingCriticalFields 深度分析和真实任务结果回放；这些不属于 CLI-only 第一版。
 - 边界：评分不替代真实任务结果，不保证 AI 一定生成正确；第一版只基于 DataSpec 元数据和导出内容做静态评估。
 
 ### P6-187：字段使用契约与禁用场景说明
@@ -1864,7 +1869,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 缺口：缺少 preferredUseCases、avoidWhen、joinHints、defaultFilters、aggregationHints、replacementGuidance 和 misuseExamples；当前 AI 只能从描述和标签推断使用边界。
 - 参考项目：`dbt-labs/dbt-core` 的模型文档、`OpenLineage/OpenLineage` 的上下游语义和 `open-metadata/OpenMetadata` 的资产说明；只借鉴使用说明结构，不建设重型血缘平台。
 - 落地产物：扩展字段标准或新增轻量使用契约模型；字段详情、AI Context、DDL/Prompt 生成、标准问答和字段推荐可读取使用建议、禁用场景和常见误用。
-- 验收标准：AI 查询“订单金额应该用哪个字段统计”时能看到单位、聚合、过滤和禁用提示；废弃或展示专用字段不会被推荐为写入字段；误用样例可进入规则或问答提示。
+- 验收标准：AI 查询“订单金额应该用哪个字段统计”时能看到单位、聚合、过滤、join hints 和禁用提示；废弃、内部状态或展示专用字段不会被推荐为写入字段；误用样例可进入规则、字段知识卡或问答提示。
 - 边界：不做完整指标平台，不要求每个字段都补齐契约；第一版优先高风险金额、状态、时间、用户和敏感字段。
 
 ### P6-188：标准问答答案可采纳度与低置信处理

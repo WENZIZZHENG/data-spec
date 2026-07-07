@@ -187,6 +187,20 @@
       "recommendedNextActions": ["Provide query or target hints for narrow tokenBudget values.", "Increase tokenBudget when qualityRisk is HIGH.", "Apply recommendedExportParams explicitly before export-context."]
     },
     {
+      "id": "context-quality-check",
+      "command": "context-quality check --context-dir <dir> --format json",
+      "description": "Evaluate exported AI Context or context-budget plan JSON locally with deterministic read-only quality scoring, critical resource gaps, truncation warnings, task fit hints, and next context actions.",
+      "requiredOptions": [],
+      "oneOfRequiredOptions": ["context-dir", "context-zip", "budget-plan"],
+      "optionalOptions": ["context-dir", "context-zip", "budget-plan", "format"],
+      "outputShape": ["kind", "schemaVersion", "input", "contextQualityScore", "qualityLevel", "tokenBudgetBreakdown", "missingCriticalResources[]", "truncatedResources[]", "coverageByCategory", "taskFitHints[]", "nextContextActions[]"],
+      "exitCodes": { "0": "quality report printed", "2": "argument, file, zip safety, or JSON parse error" },
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": ["context-dir", "context-zip", "budget-plan"], "nextActions": ["Treat LOW quality as a stop signal for high-risk AI write tasks.", "Re-export scoped context explicitly before using AI for DDL or migration work."] },
+      "successExample": { "command": "node tools/dataspec-cli.mjs context-quality check --context-dir .dataspec/context --format json", "output": { "kind": "dataspec-ai-context-quality-check", "qualityLevel": "MEDIUM", "contextQualityScore": 65, "missingCriticalResources": [{ "category": "schemaRegistry" }], "nextContextActions": ["Re-export AI Context with schema registry before asking AI to generate SQL."] } },
+      "failureExample": { "exitCode": 2, "diagnostic": { "message": "context-quality check 需要提供 --context-dir、--context-zip 或 --budget-plan" } },
+      "recommendedNextActions": ["Use context-quality check after export-context --cache.", "Use --budget-plan to inspect a context-budget plan before export.", "Do not treat HIGH quality as permission to write database or project files."]
+    },
+    {
       "id": "search-fields",
       "command": "search-fields --project <id> --query <text> --format json",
       "description": "Search standard fields with match reasons and next actions.",

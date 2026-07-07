@@ -89,6 +89,27 @@ test('bundled fixtures include context-budget plan readonly contract', async () 
   assert.ok(command.recommendedNextActions.some((item) => item.includes('tokenBudget') || item.includes('query')))
 })
 
+test('bundled fixtures include context-quality check readonly contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'context-quality-check')
+
+  assert.ok(command)
+  assert.equal(command.command, 'context-quality check --context-dir <dir> --format json')
+  assert.deepEqual(command.requiredOptions, [])
+  assert.deepEqual(command.oneOfRequiredOptions, ['context-dir', 'context-zip', 'budget-plan'])
+  assert.ok(command.optionalOptions.includes('context-dir'))
+  assert.ok(command.optionalOptions.includes('context-zip'))
+  assert.ok(command.optionalOptions.includes('budget-plan'))
+  assert.ok(command.outputShape.includes('contextQualityScore'))
+  assert.ok(command.outputShape.includes('missingCriticalResources[]'))
+  assert.ok(command.outputShape.includes('nextContextActions[]'))
+  assert.equal(command.safety.readOnly, true)
+  assert.equal(command.safety.writesProject, false)
+  assert.equal(command.safety.requiresIdempotencyKey, false)
+  assert.match(command.failureExample.diagnostic.message, /context-dir/)
+  assert.ok(command.recommendedNextActions.some((item) => item.includes('budget-plan') || item.includes('export-context')))
+})
+
 test('bundled fixtures include synthetic examples readonly contract', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'synthetic-examples-generate')
@@ -374,6 +395,17 @@ test('fixture checker rejects unsafe context-budget examples', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'context-budget-plan') ?? fixture.cliCommands[0]
   command.successExample.command = 'node tools/dataspec-cli.mjs context-budget plan --project 1 --token-budget 2400 --query "Authorization: Bearer raw-secret" --format json'
+
+  const result = await validateContractFixtures({ fixture })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'SECRET_LIKE_VALUE'))
+})
+
+test('fixture checker rejects unsafe context-quality examples', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'context-quality-check') ?? fixture.cliCommands[0]
+  command.successExample.output.nextContextActions = ['检查 Authorization: Bearer raw-secret 后重新导出。']
 
   const result = await validateContractFixtures({ fixture })
 

@@ -60,6 +60,50 @@ const SKIPPED_SCAN_DIRECTORIES = new Set([
   'node_modules',
   'target'
 ])
+const CONTEXT_QUALITY_CATEGORIES = [
+  {
+    id: 'manifest',
+    label: 'AI Context manifest',
+    weight: 15,
+    critical: true
+  },
+  {
+    id: 'fieldCatalog',
+    label: '字段目录',
+    weight: 25,
+    critical: true
+  },
+  {
+    id: 'rules',
+    label: '数据库规则',
+    weight: 20,
+    critical: true
+  },
+  {
+    id: 'schemaRegistry',
+    label: 'schema registry/契约',
+    weight: 15,
+    critical: true
+  },
+  {
+    id: 'prompts',
+    label: 'Prompt 模板',
+    weight: 10,
+    critical: false
+  },
+  {
+    id: 'businessTerms',
+    label: '业务术语',
+    weight: 5,
+    critical: false
+  },
+  {
+    id: 'examples',
+    label: '样例或证据',
+    weight: 10,
+    critical: false
+  }
+]
 
 class DataSpecCliError extends Error {
   constructor(message, diagnostic) {
@@ -110,6 +154,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'context-budget' || command === 'contextbudget') {
       return await runContextBudget(rest, io, fetchFn)
+    }
+    if (command === 'context-quality' || command === 'contextquality') {
+      return await runContextQuality(rest, io)
     }
     if (command === 'suggest-field') {
       return await runSuggestField(rest, io, fetchFn)
@@ -1262,6 +1309,455 @@ async function runContextBudget(args, io, fetchFn) {
     io.writeOut(formatContextBudgetPlanText(plan))
   }
   return 0
+}
+
+async function runContextQuality(args, io) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'check') {
+    throw new Error(`context-quality 仅支持 check 子命令: ${subcommand ?? ''}`.trim())
+  }
+  const { positional, options } = parseArgs(rest, [
+    'context-dir',
+    'contextDir',
+    'context-zip',
+    'contextZip',
+    'budget-plan',
+    'budgetPlan',
+    'format'
+  ])
+  if (positional.length > 0) {
+    throw new Error(`context-quality check 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const format = options.format ?? 'json'
+  if (!['json', 'text'].includes(format)) {
+    throw new Error('context-quality check 仅支持 --format json|text')
+  }
+  const inputOptions = [
+    ['context-dir', options.contextDir ?? options['context-dir']],
+    ['context-zip', options.contextZip ?? options['context-zip']],
+    ['budget-plan', options.budgetPlan ?? options['budget-plan']]
+  ].filter(([, value]) => value !== undefined)
+  if (inputOptions.length === 0) {
+    throw new Error('context-quality check 需要提供 --context-dir、--context-zip 或 --budget-plan')
+  }
+  if (inputOptions.length > 1) {
+    throw new Error('context-quality check 只能提供一个输入源')
+  }
+
+  const [sourceType, inputPath] = inputOptions[0]
+  const cwd = cliCwd(io)
+  const input = {
+    sourceType,
+    path: displayInputPath(inputPath, cwd)
+  }
+  let result
+  if (sourceType === 'context-dir') {
+    result = evaluateContextQualityFromEntries(input, await readContextDirectoryEntries(path.resolve(cwd, inputPath)))
+  } else if (sourceType === 'context-zip') {
+    result = evaluateContextQualityFromEntries(input, await readContextZipEntries(path.resolve(cwd, inputPath)))
+  } else {
+    result = evaluateContextQualityFromBudgetPlan(input, await readContextBudgetPlanFile(path.resolve(cwd, inputPath)))
+  }
+
+  if (format === 'json') {
+    io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  } else {
+    io.writeOut(formatContextQualityText(result))
+  }
+  return 0
+}
+
+async function readContextDirectoryEntries(rootDir) {
+  const rootStat = await lstat(rootDir)
+  if (!rootStat.isDirectory()) {
+    throw new Error(`context-quality check 的 --context-dir 不是目录: ${rootDir}`)
+  }
+  const entries = []
+  async function walk(currentDir, relativeDir = '') {
+    for (const dirent of await readdir(currentDir, { withFileTypes: true })) {
+      const fullPath = path.join(currentDir, dirent.name)
+      const relativePath = relativeDir ? path.join(relativeDir, dirent.name) : dirent.name
+      if (dirent.isDirectory()) {
+        if (!SKIPPED_SCAN_DIRECTORIES.has(dirent.name)) {
+          await walk(fullPath, relativePath)
+        }
+        continue
+      }
+      const fileStat = await lstat(fullPath)
+      if (fileStat.isSymbolicLink() || !fileStat.isFile()) {
+        continue
+      }
+      const content = await readFile(fullPath)
+      entries.push(contextQualityEntry(toPosixPath(relativePath), content))
+    }
+  }
+  await walk(rootDir)
+  return entries.sort((left, right) => left.path.localeCompare(right.path))
+}
+
+async function readContextZipEntries(zipPath) {
+  const bytes = await readFile(zipPath)
+  return normalizeZipEntries(readZipEntries(bytes))
+    .filter(({ entry, relativePath }) => relativePath && !entry.directory)
+    .map(({ entry, relativePath }) => contextQualityEntry(toPosixPath(relativePath), entry.content))
+    .sort((left, right) => left.path.localeCompare(right.path))
+}
+
+async function readContextBudgetPlanFile(planPath) {
+  const payload = JSON.parse(await readFile(planPath, 'utf8'))
+  const plan = payload?.data && payload?.code ? payload.data : payload
+  if (!plan || typeof plan !== 'object') {
+    throw new Error('context-quality check 的 --budget-plan 必须是 JSON 对象')
+  }
+  return plan
+}
+
+function contextQualityEntry(relativePath, content) {
+  const buffer = Buffer.from(content)
+  return {
+    path: relativePath,
+    sizeBytes: buffer.length,
+    textSample: buffer.toString('utf8', 0, Math.min(buffer.length, 4096))
+  }
+}
+
+function evaluateContextQualityFromEntries(input, entries) {
+  const coverageByCategory = buildContextCoverage(entries)
+  const missingCriticalResources = missingCriticalContextResources(coverageByCategory)
+  const truncatedResources = entries
+    .filter((entry) => contextEntryLooksTruncated(entry))
+    .map((entry) => ({
+      path: entry.path,
+      reason: '资源内容出现截断标记或 token budget exceeded 提示。'
+    }))
+  const score = contextQualityScoreFromCoverage(coverageByCategory, truncatedResources.length)
+  const qualityLevel = contextQualityLevel(score)
+  return {
+    kind: 'dataspec-ai-context-quality-check',
+    schemaVersion: 1,
+    input,
+    contextQualityScore: score,
+    qualityLevel,
+    tokenBudgetBreakdown: buildContextFileTokenBreakdown(entries, coverageByCategory),
+    missingCriticalResources,
+    truncatedResources,
+    coverageByCategory,
+    taskFitHints: contextTaskFitHints(qualityLevel, missingCriticalResources, truncatedResources, null),
+    nextContextActions: contextNextActions(qualityLevel, missingCriticalResources, truncatedResources, [])
+  }
+}
+
+function evaluateContextQualityFromBudgetPlan(input, plan) {
+  validateContextBudgetPlan(plan)
+  const selectedArtifacts = Array.isArray(plan.selectedArtifacts) ? plan.selectedArtifacts : []
+  const droppedArtifacts = Array.isArray(plan.droppedArtifacts) ? plan.droppedArtifacts : []
+  const coverageByCategory = emptyContextCoverage()
+  coverageByCategory.manifest.present = true
+  coverageByCategory.manifest.resourceCount = 1
+  coverageByCategory.manifest.sampleResources.push('budget-plan.json')
+  for (const item of selectedArtifacts) {
+    for (const categoryId of detectContextCategories(String(item.artifact ?? ''), `${item.reason ?? ''}\n${item.riskImpact ?? ''}`)) {
+      markBudgetPlanCoverage(coverageByCategory[categoryId], item, true)
+    }
+  }
+  for (const item of droppedArtifacts) {
+    for (const categoryId of detectContextCategories(String(item.artifact ?? ''), `${item.reason ?? ''}\n${item.riskImpact ?? ''}`)) {
+      markBudgetPlanCoverage(coverageByCategory[categoryId], item, false)
+    }
+  }
+  const missingCriticalResources = CONTEXT_QUALITY_CATEGORIES
+    .filter((category) => category.critical)
+    .filter((category) => !coverageByCategory[category.id].present)
+    .map((category) => missingCriticalResource(
+      category,
+      coverageByCategory[category.id].droppedArtifactCount > 0
+        ? '预算计划丢弃了该关键资源。'
+        : '预算计划未选择该关键资源。'
+    ))
+  const droppedEstimatedTokens = droppedArtifacts.reduce((sum, item) => sum + Number(item.estimatedTokens ?? 0), 0)
+  const tokenBudgetBreakdown = {
+    source: 'budget-plan',
+    tokenBudget: numberOrNull(plan.estimation?.tokenBudget ?? plan.request?.tokenBudget),
+    selectedEstimatedTokens: numberOrNull(plan.estimation?.selectedEstimatedTokens),
+    totalEstimatedTokens: numberOrNull(plan.estimation?.totalEstimatedTokens),
+    droppedEstimatedTokens,
+    budgetUtilization: ratioOrNull(plan.estimation?.selectedEstimatedTokens, plan.estimation?.tokenBudget ?? plan.request?.tokenBudget)
+  }
+  const score = contextBudgetPlanQualityScore(plan.qualityRisk, missingCriticalResources.length, tokenBudgetBreakdown)
+  const qualityLevel = contextQualityLevel(score)
+  const seedActions = [
+    ...(Array.isArray(plan.fallbackSteps) ? plan.fallbackSteps : []),
+    ...(Array.isArray(plan.recommendedNextActions) ? plan.recommendedNextActions : [])
+  ]
+  return {
+    kind: 'dataspec-ai-context-quality-check',
+    schemaVersion: 1,
+    input,
+    contextQualityScore: score,
+    qualityLevel,
+    tokenBudgetBreakdown,
+    missingCriticalResources,
+    truncatedResources: [],
+    coverageByCategory,
+    taskFitHints: contextTaskFitHints(qualityLevel, missingCriticalResources, [], String(plan.qualityRisk ?? '').toUpperCase()),
+    nextContextActions: contextNextActions(qualityLevel, missingCriticalResources, [], seedActions)
+  }
+}
+
+function validateContextBudgetPlan(plan) {
+  const qualityRisk = String(plan.qualityRisk ?? '').toUpperCase()
+  if (
+    plan.kind !== 'dataspec-ai-context-budget-plan' ||
+    Number(plan.schemaVersion) !== 1 ||
+    !plan.estimation ||
+    typeof plan.estimation !== 'object' ||
+    !Array.isArray(plan.selectedArtifacts) ||
+    !Array.isArray(plan.droppedArtifacts) ||
+    !['LOW', 'MEDIUM', 'HIGH'].includes(qualityRisk)
+  ) {
+    throw new Error('context-quality check 的 --budget-plan 必须是 context-budget plan JSON，且包含 kind、schemaVersion、estimation、selectedArtifacts、droppedArtifacts 和 qualityRisk。')
+  }
+}
+
+function emptyContextCoverage() {
+  return {
+    ...Object.fromEntries(CONTEXT_QUALITY_CATEGORIES.map((category) => [
+    category.id,
+    {
+      present: false,
+      resourceCount: 0,
+      estimatedBytes: 0,
+      sampleResources: [],
+      selectedArtifactCount: 0,
+      droppedArtifactCount: 0,
+      droppedEstimatedTokens: 0
+    }
+  ])),
+    unclassified: {
+      present: false,
+      resourceCount: 0,
+      estimatedBytes: 0,
+      sampleResources: [],
+      selectedArtifactCount: 0,
+      droppedArtifactCount: 0,
+      droppedEstimatedTokens: 0
+    }
+  }
+}
+
+function buildContextCoverage(entries) {
+  const coverage = emptyContextCoverage()
+  for (const entry of entries) {
+    const categoryIds = detectContextCategories(entry.path, entry.textSample)
+    if (categoryIds.length === 0) {
+      markContextEntryCoverage(coverage.unclassified, entry)
+      continue
+    }
+    for (const categoryId of categoryIds) {
+      const item = coverage[categoryId]
+      markContextEntryCoverage(item, entry)
+    }
+  }
+  return coverage
+}
+
+function markContextEntryCoverage(coverage, entry) {
+  coverage.present = true
+  coverage.resourceCount += 1
+  coverage.estimatedBytes += entry.sizeBytes
+  if (coverage.sampleResources.length < 5) {
+    coverage.sampleResources.push(entry.path)
+  }
+}
+
+function detectContextCategories(resourcePath, textSample = '') {
+  const normalizedPath = resourcePath.toLowerCase().replace(/[_\-\s./]/g, '')
+  const lowerText = textSample.toLowerCase()
+  const categories = []
+  if (resourcePath.toLowerCase().endsWith('manifest.json') || lowerText.includes('dataspec-ai-context-manifest')) {
+    categories.push('manifest')
+  }
+  if (normalizedPath.includes('fieldcatalog') || lowerText.includes('字段目录') || lowerText.includes('"fields"')) {
+    categories.push('fieldCatalog')
+  }
+  if (normalizedPath.includes('databaserules') || normalizedPath.includes('rules') || lowerText.includes('命名规则')) {
+    categories.push('rules')
+  }
+  if (normalizedPath.includes('schemaregistry') || normalizedPath.includes('contract') || normalizedPath.includes('openapi')) {
+    categories.push('schemaRegistry')
+  }
+  if (normalizedPath.includes('prompt') || lowerText.includes('提示词')) {
+    categories.push('prompts')
+  }
+  if (normalizedPath.includes('glossary') || normalizedPath.includes('businessterm') || lowerText.includes('业务术语')) {
+    categories.push('businessTerms')
+  }
+  if (normalizedPath.includes('example') || normalizedPath.includes('sample') || normalizedPath.includes('evidence')) {
+    categories.push('examples')
+  }
+  return [...new Set(categories)]
+}
+
+function missingCriticalContextResources(coverageByCategory) {
+  return CONTEXT_QUALITY_CATEGORIES
+    .filter((category) => category.critical && !coverageByCategory[category.id].present)
+    .map((category) => missingCriticalResource(category, '上下文中未发现该关键资源。'))
+}
+
+function missingCriticalResource(category, reason) {
+  return {
+    category: category.id,
+    label: category.label,
+    reason,
+    nextAction: `重新导出 AI Context 并包含 ${category.label}。`
+  }
+}
+
+function contextEntryLooksTruncated(entry) {
+  return /truncated|截断|省略|token budget exceeded|omitted due to budget/i.test(`${entry.path}\n${entry.textSample}`)
+}
+
+function contextQualityScoreFromCoverage(coverageByCategory, truncatedCount) {
+  const score = CONTEXT_QUALITY_CATEGORIES.reduce((sum, category) => {
+    return sum + (coverageByCategory[category.id].present ? category.weight : 0)
+  }, 0)
+  return clampContextQualityScore(score - Math.min(20, truncatedCount * 10))
+}
+
+function contextBudgetPlanQualityScore(qualityRisk, missingCriticalCount, tokenBudgetBreakdown) {
+  const baseScore = {
+    LOW: 85,
+    MEDIUM: 65,
+    HIGH: 35
+  }[String(qualityRisk ?? '').toUpperCase()] ?? 60
+  const overflowPenalty = tokenBudgetBreakdown.totalEstimatedTokens && tokenBudgetBreakdown.tokenBudget && tokenBudgetBreakdown.totalEstimatedTokens > tokenBudgetBreakdown.tokenBudget * 2
+    ? 5
+    : 0
+  return clampContextQualityScore(baseScore - missingCriticalCount * 5 - overflowPenalty)
+}
+
+function clampContextQualityScore(score) {
+  return Math.max(0, Math.min(100, Math.round(score)))
+}
+
+function contextQualityLevel(score) {
+  if (score >= 80) {
+    return 'HIGH'
+  }
+  if (score >= 50) {
+    return 'MEDIUM'
+  }
+  return 'LOW'
+}
+
+function buildContextFileTokenBreakdown(entries, coverageByCategory) {
+  const totalBytes = entries.reduce((sum, entry) => sum + entry.sizeBytes, 0)
+  return {
+    source: 'context-files',
+    resourceCount: entries.length,
+    totalBytes,
+    estimatedTokens: Math.ceil(totalBytes / 4),
+    byCategory: Object.fromEntries(Object.entries(coverageByCategory).map(([categoryId, coverage]) => [
+      categoryId,
+      {
+        estimatedBytes: coverage.estimatedBytes,
+        estimatedTokens: Math.ceil(coverage.estimatedBytes / 4),
+        resourceCount: coverage.resourceCount
+      }
+    ]))
+  }
+}
+
+function markBudgetPlanCoverage(coverage, artifact, selected) {
+  if (selected) {
+    coverage.present = true
+    coverage.selectedArtifactCount += 1
+    coverage.resourceCount += 1
+    if (coverage.sampleResources.length < 5 && artifact.artifact) {
+      coverage.sampleResources.push(artifact.artifact)
+    }
+  } else {
+    coverage.droppedArtifactCount += 1
+    coverage.droppedEstimatedTokens += Number(artifact.estimatedTokens ?? 0)
+  }
+}
+
+function contextTaskFitHints(qualityLevel, missingCriticalResources, truncatedResources, qualityRisk) {
+  const hints = []
+  if (qualityRisk === 'HIGH') {
+    hints.push('qualityRisk=HIGH，当前预算计划存在高风险，不建议直接执行依赖完整字段/契约的 AI 任务。')
+  }
+  if (qualityLevel === 'HIGH') {
+    hints.push('上下文关键资源较完整，适合继续执行读写前分析、DDL 草案或 SQL 修复类任务。')
+  } else if (qualityLevel === 'MEDIUM') {
+    hints.push('上下文可用于初步分析，但执行建表、迁移或复杂 SQL 前应先补齐缺失/截断资源。')
+  } else {
+    hints.push('上下文不足，不建议直接交给 AI 执行高风险任务。')
+  }
+  if (missingCriticalResources.length > 0) {
+    hints.push(`缺少关键资源: ${missingCriticalResources.map((item) => item.label).join(', ')}。`)
+  }
+  if (truncatedResources.length > 0) {
+    hints.push(`发现 ${truncatedResources.length} 个疑似截断资源，AI 可能缺少完整规则或字段说明。`)
+  }
+  return hints
+}
+
+function contextNextActions(qualityLevel, missingCriticalResources, truncatedResources, seedActions) {
+  const actions = [...seedActions]
+  for (const resource of missingCriticalResources) {
+    actions.push(resource.nextAction)
+  }
+  if (truncatedResources.length > 0) {
+    actions.push('提高 tokenBudget 或收窄 scope/query 后重新导出，避免关键资源被截断。')
+  }
+  if (qualityLevel === 'LOW') {
+    actions.push('停止高风险 AI 写入或迁移任务，先补导出字段目录、规则和 schema registry。')
+  }
+  if (actions.length === 0) {
+    actions.push('可以继续使用当前 AI Context；执行写入前仍需运行 lint 和质量门禁。')
+  }
+  return uniqueNonEmptyStrings(actions)
+}
+
+function uniqueNonEmptyStrings(values) {
+  const seen = new Set()
+  const result = []
+  for (const value of values) {
+    const text = String(value ?? '').trim()
+    if (!text || seen.has(text)) {
+      continue
+    }
+    seen.add(text)
+    result.push(text)
+  }
+  return result
+}
+
+function numberOrNull(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function ratioOrNull(numerator, denominator) {
+  const left = Number(numerator)
+  const right = Number(denominator)
+  if (!Number.isFinite(left) || !Number.isFinite(right) || right <= 0) {
+    return null
+  }
+  return Math.round((left / right) * 1000) / 1000
+}
+
+function displayInputPath(inputPath, cwd) {
+  const resolved = path.resolve(cwd, inputPath)
+  const relative = path.relative(cwd, resolved)
+  if (relative === '') {
+    return '.'
+  }
+  if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
+    return toPosixPath(relative)
+  }
+  return toPosixPath(resolved)
 }
 
 async function runSuggestField(args, io, fetchFn) {
@@ -3763,6 +4259,33 @@ function formatContextBudgetPlanText(plan) {
   return `${lines.join('\n')}\n`
 }
 
+function formatContextQualityText(result) {
+  const lines = [
+    'AI Context 质量检查',
+    `input: ${result.input?.sourceType ?? '-'} ${result.input?.path ?? '-'}`,
+    `contextQualityScore: ${result.contextQualityScore}`,
+    `qualityLevel: ${result.qualityLevel}`,
+    `tokenSource: ${result.tokenBudgetBreakdown?.source ?? '-'}`,
+    `missingCriticalResources: ${(result.missingCriticalResources ?? []).length}`
+  ]
+  ;(result.missingCriticalResources ?? []).forEach((item) => {
+    lines.push(`  - ${item.category}: ${item.reason}`)
+  })
+  lines.push(`truncatedResources: ${(result.truncatedResources ?? []).length}`)
+  ;(result.truncatedResources ?? []).forEach((item) => {
+    lines.push(`  - ${item.path}: ${item.reason}`)
+  })
+  lines.push('taskFitHints:')
+  ;(result.taskFitHints ?? []).forEach((item) => {
+    lines.push(`  - ${item}`)
+  })
+  lines.push('nextContextActions:')
+  ;(result.nextContextActions ?? []).forEach((item) => {
+    lines.push(`  - ${item}`)
+  })
+  return `${lines.join('\n')}\n`
+}
+
 function formatSyntheticExamplesText(result) {
   const lines = [
     'DataSpec Synthetic Examples',
@@ -5815,6 +6338,7 @@ Usage:
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs export-context [--project <id>] [--profile <id>|--task-type <type>] [--output <zip>] [--cache] [--cache-ttl-days <days>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs context-budget plan [--project <id>] --token-budget <n> [--profile <id>|--task-type <type>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--target-table <name>] [--target-file <path>] [--format text|json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs context-quality check [--context-dir <dir>|--context-zip <zip>|--budget-plan <json>] [--format text|json]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
@@ -5860,6 +6384,7 @@ Options:
   index-refs 只读扫描 defaultPaths 或 --path 内字段引用，输出重命名风险；多字段扫描时 --alias 使用 field=alias 明确归属；不会调用服务端或修改业务代码
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   context-budget plan 是导出前只读预算预检；只调用后端 planner，不下载、不缓存、不写入 AI Context 文件
+  context-quality check 是本地只读质量检查；读取已导出的目录、zip 或预算 plan JSON，不调用后端、不写缓存、不修改项目状态
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
   synthetic-examples generate 只读生成合成标准样例包，可作为 fixture、Prompt 评测或人工审核草案；不会写入项目标准或调用外部 LLM
   contract-import preview 只读读取本地 OpenAPI/JSON Schema/Protobuf 契约并生成候选预览；不会自动写入标准字段或候选 Inbox

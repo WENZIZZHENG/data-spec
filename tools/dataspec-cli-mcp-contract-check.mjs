@@ -28,6 +28,7 @@ const REQUIRED_CLI_COMMANDS = [
   'install-hook',
   'export-context',
   'context-budget-plan',
+  'context-quality-check',
   'search-fields',
   'generate-ddl',
   'synthetic-examples-generate',
@@ -205,6 +206,9 @@ function validateCliCommands(commands, diagnostics) {
     requireString(command.command, `${basePath}.command`, diagnostics)
     requireString(command.description, `${basePath}.description`, diagnostics)
     requireArray(command.requiredOptions, `${basePath}.requiredOptions`, diagnostics)
+    if (command.oneOfRequiredOptions !== undefined) {
+      requireNonEmptyArray(command.oneOfRequiredOptions, `${basePath}.oneOfRequiredOptions`, diagnostics)
+    }
     requireArray(command.optionalOptions, `${basePath}.optionalOptions`, diagnostics)
     requireNonEmptyArray(command.outputShape, `${basePath}.outputShape`, diagnostics)
     requireNonEmptyArray(command.recommendedNextActions, `${basePath}.recommendedNextActions`, diagnostics)
