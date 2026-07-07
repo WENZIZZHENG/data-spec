@@ -1095,7 +1095,7 @@ function extractMarkdownLinkTargets(line) {
       continue
     }
 
-    const parenEnd = searchableLine.indexOf(')', targetStart)
+    const parenEnd = findMarkdownLinkTargetEnd(searchableLine, targetStart)
     if (parenEnd === -1) {
       cursor = targetStart
       continue
@@ -1104,6 +1104,80 @@ function extractMarkdownLinkTargets(line) {
     cursor = parenEnd + 1
   }
   return targets
+}
+
+function findMarkdownLinkTargetEnd(line, targetStart) {
+  let nestedParens = 0
+  for (let index = targetStart; index < line.length; index += 1) {
+    if (nestedParens === 0 && /\s/.test(line[index])) {
+      const titleOrCloseStart = findNextNonWhitespace(line, index)
+      if (titleOrCloseStart === -1) {
+        return -1
+      }
+      if (line[titleOrCloseStart] === ')') {
+        return titleOrCloseStart
+      }
+      const titleEnd = findMarkdownLinkTitleEnd(line, titleOrCloseStart)
+      if (titleEnd === -1) {
+        return -1
+      }
+      const closeStart = findNextNonWhitespace(line, titleEnd + 1)
+      return closeStart !== -1 && line[closeStart] === ')' ? closeStart : -1
+    }
+    if (line[index] === '(') {
+      nestedParens += 1
+      continue
+    }
+    if (line[index] !== ')') {
+      continue
+    }
+    if (nestedParens === 0) {
+      return index
+    }
+    nestedParens -= 1
+  }
+  return -1
+}
+
+function findNextNonWhitespace(line, start) {
+  for (let index = start; index < line.length; index += 1) {
+    if (!/\s/.test(line[index])) {
+      return index
+    }
+  }
+  return -1
+}
+
+function findMarkdownLinkTitleEnd(line, titleStart) {
+  const opener = line[titleStart]
+  if (opener === '"' || opener === "'") {
+    for (let index = titleStart + 1; index < line.length; index += 1) {
+      if (line[index] === opener && !isEscapedMarkdownDelimiter(line, index)) {
+        return index
+      }
+    }
+    return -1
+  }
+
+  if (opener !== '(') {
+    return -1
+  }
+
+  let nestedParens = 0
+  for (let index = titleStart + 1; index < line.length; index += 1) {
+    if (line[index] === '(' && !isEscapedMarkdownDelimiter(line, index)) {
+      nestedParens += 1
+      continue
+    }
+    if (line[index] !== ')' || isEscapedMarkdownDelimiter(line, index)) {
+      continue
+    }
+    if (nestedParens === 0) {
+      return index
+    }
+    nestedParens -= 1
+  }
+  return -1
 }
 
 function extractMarkdownReferenceDefinitionTargets(line) {
