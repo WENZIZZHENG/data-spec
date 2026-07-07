@@ -726,7 +726,7 @@ function isRequirementBodyLine(line) {
   if (!line) {
     return false
   }
-  if (/^-\s+\*\*(WHEN|THEN|AND)\*\*/i.test(line)) {
+  if (/^-\s+\*\*(GIVEN|WHEN|THEN|AND)\*\*/i.test(line)) {
     return false
   }
   return hasMeaningfulRequirementBodyText(line)
@@ -838,7 +838,7 @@ function findScenariosWithEmptyStepText(lines, requirementsIndex) {
     if (!inScenario) {
       continue
     }
-    const stepMatch = /^-\s+\*\*(WHEN|THEN|AND)\*\*\s*(?<text>.*)$/i.exec(line)
+    const stepMatch = /^-\s+\*\*(GIVEN|WHEN|THEN|AND)\*\*\s*(?<text>.*)$/i.exec(line)
     if (stepMatch && !hasMeaningfulScenarioStepText(stepMatch.groups.text)) {
       missing.push({ line: index + 1, kind: stepMatch[1].toUpperCase() })
     }

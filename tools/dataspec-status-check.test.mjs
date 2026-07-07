@@ -2424,7 +2424,7 @@ DataSpec SHALL expose a read-only SQL rule debug endpoint.
   }
 })
 
-test('runStatusCheckCli does not count bare scenario steps as Requirement body text', async () => {
+test('runStatusCheckCli does not count bare scenario step markers as Requirement body text', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
   try {
     await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
@@ -2457,9 +2457,10 @@ DataSpec SHALL expose a read-only SQL rule debug endpoint.
       `# bare-scenario-steps Specification
 
 ## Purpose
-用于验证裸 WHEN/THEN 步骤不能替代 Requirement 正文。
+用于验证裸 GIVEN/WHEN/THEN 步骤不能替代 Requirement 正文。
 ## Requirements
 ### Requirement: Bare steps
+- **GIVEN** the author writes preconditions without a Scenario heading
 - **WHEN** the author writes scenario steps without a Scenario heading
 - **THEN** status-check still requires Requirement body text
 `,
@@ -2611,13 +2612,14 @@ DataSpec SHALL keep each scenario executable.
   }
 })
 
-test('runStatusCheckCli reports Scenario WHEN or THEN steps without text', async () => {
+test('runStatusCheckCli reports Scenario GIVEN, WHEN or THEN steps without text', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
   try {
     await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
     await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
     await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
     await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'empty-given-step'), { recursive: true })
     await mkdir(path.join(dir, 'openspec', 'specs', 'empty-scenario-step'), { recursive: true })
     await mkdir(path.join(dir, 'openspec', 'specs', 'empty-then-step'), { recursive: true })
     await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
@@ -2641,11 +2643,28 @@ DataSpec SHALL expose a read-only SQL rule debug endpoint.
       'utf8'
     )
     await writeFile(
+      path.join(dir, 'openspec', 'specs', 'empty-given-step', 'spec.md'),
+      `# empty-given-step Specification
+
+## Purpose
+用于验证 Scenario GIVEN 步骤不能只有标记。
+## Requirements
+### Requirement: Executable given text
+DataSpec SHALL keep scenario preconditions readable.
+
+#### Scenario: Empty given text
+- **GIVEN**
+- **WHEN** status-check reads a scenario
+- **THEN** status-check reports empty step text
+`,
+      'utf8'
+    )
+    await writeFile(
       path.join(dir, 'openspec', 'specs', 'empty-scenario-step', 'spec.md'),
       `# empty-scenario-step Specification
 
 ## Purpose
-用于验证 Scenario WHEN/THEN 步骤不能只有标记。
+用于验证 Scenario WHEN 步骤不能只有标记。
 ## Requirements
 ### Requirement: Executable step text
 DataSpec SHALL keep scenario steps readable.
@@ -2682,17 +2701,19 @@ DataSpec SHALL keep scenario outcomes readable.
 
     assert.equal(code, 1)
     assert.equal(output.status, 'fail')
-    assert.equal(issues.length, 2)
+    assert.equal(issues.length, 3)
     assert.deepEqual(
       issues.map((issue) => [issue.file, issue.line]).sort(),
       [
+        ['openspec/specs/empty-given-step/spec.md', 10],
         ['openspec/specs/empty-scenario-step/spec.md', 10],
         ['openspec/specs/empty-then-step/spec.md', 11]
       ]
     )
+    assert.ok(issues.some((issue) => /GIVEN/.test(issue.message)))
     assert.ok(issues.some((issue) => /WHEN/.test(issue.message)))
     assert.ok(issues.some((issue) => /THEN/.test(issue.message)))
-    assert.equal(openSpecCheck.errorCount, 2)
+    assert.equal(openSpecCheck.errorCount, 3)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
