@@ -795,6 +795,46 @@ DataSpec SHALL expose a read-only SQL rule debug endpoint.
   }
 })
 
+test('runStatusCheckCli does not treat placeholder wording outside Purpose as Purpose placeholder', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint and may mention "Update Purpose after archive" as historical wording in requirements.
+
+#### Scenario: Debug rule hit
+- **WHEN** the user requests a rule explanation
+- **THEN** DataSpec returns evidence
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    assert.equal(code, 0)
+    assert.equal(output.status, 'pass')
+    assert.equal(output.issues.filter((issue) => issue.code === 'OPENSPEC_SPEC_PURPOSE_PLACEHOLDER').length, 0)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('runStatusCheckCli reports missing and empty Purpose in main OpenSpec specs', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
   try {

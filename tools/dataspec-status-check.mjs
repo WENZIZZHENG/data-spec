@@ -474,15 +474,15 @@ function checkOpenSpecSpecPurposes(specTexts, issues) {
       }))
       continue
     }
-    const placeholderIndex = lines.findIndex((line) => OPENSPEC_PURPOSE_PLACEHOLDER_PATTERN.test(line))
-    if (placeholderIndex === -1) {
+    const placeholder = purposeBody.lines.find((line) => OPENSPEC_PURPOSE_PLACEHOLDER_PATTERN.test(line.text))
+    if (!placeholder) {
       continue
     }
     issues.push(issue({
       code: 'OPENSPEC_SPEC_PURPOSE_PLACEHOLDER',
       message: `${specPath} 仍包含归档生成的默认 Purpose 占位，AI 读取主规格时会缺少能力目的说明。`,
       file: specPath,
-      line: placeholderIndex + 1,
+      line: placeholder.line,
       suggestedFix: '将默认 Purpose 占位替换为一句稳定的中文能力目的说明，并确认不改变 Requirements/Scenario 语义。'
     }))
   }
@@ -501,13 +501,14 @@ function collectPurposeBody(lines, purposeIndex) {
     }
     if (line) {
       firstLine ??= index + 1
-      bodyLines.push(line)
+      bodyLines.push({ text: line, line: index + 1 })
     }
   }
   return {
     hasBody: bodyLines.length > 0,
-    text: bodyLines.join(' '),
-    firstLine
+    text: bodyLines.map((line) => line.text).join(' '),
+    firstLine,
+    lines: bodyLines
   }
 }
 
