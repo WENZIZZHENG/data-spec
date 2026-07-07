@@ -2060,6 +2060,93 @@ DataSpec SHALL keep each scenario executable.
   }
 })
 
+test('runStatusCheckCli reports Scenario WHEN or THEN steps without text', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'empty-scenario-step'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'empty-then-step'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+
+#### Scenario: Debug rule hit
+- **WHEN** the user requests a rule explanation
+- **THEN** DataSpec returns evidence
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'empty-scenario-step', 'spec.md'),
+      `# empty-scenario-step Specification
+
+## Purpose
+用于验证 Scenario WHEN/THEN 步骤不能只有标记。
+## Requirements
+### Requirement: Executable step text
+DataSpec SHALL keep scenario steps readable.
+
+#### Scenario: Empty when text
+- **WHEN**
+- **THEN** status-check reports empty step text
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'empty-then-step', 'spec.md'),
+      `# empty-then-step Specification
+
+## Purpose
+用于验证 Scenario THEN 步骤不能只有标记。
+## Requirements
+### Requirement: Executable then text
+DataSpec SHALL keep scenario outcomes readable.
+
+#### Scenario: Empty then text
+- **WHEN** status-check reads a scenario
+- **THEN**
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    const issues = output.issues.filter((issue) => issue.code === 'OPENSPEC_SPEC_SCENARIO_STEP_TEXT_MISSING')
+    const openSpecCheck = output.checks.find((check) => check.id === 'openspec-state')
+
+    assert.equal(code, 1)
+    assert.equal(output.status, 'fail')
+    assert.equal(issues.length, 2)
+    assert.deepEqual(
+      issues.map((issue) => [issue.file, issue.line]).sort(),
+      [
+        ['openspec/specs/empty-scenario-step/spec.md', 10],
+        ['openspec/specs/empty-then-step/spec.md', 11]
+      ]
+    )
+    assert.ok(issues.some((issue) => /WHEN/.test(issue.message)))
+    assert.ok(issues.some((issue) => /THEN/.test(issue.message)))
+    assert.equal(openSpecCheck.errorCount, 2)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('runStatusCheckCli reports duplicate Scenario titles within one Requirement', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
   try {

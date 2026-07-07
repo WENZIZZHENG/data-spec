@@ -578,6 +578,15 @@ function checkOpenSpecSpecRequirements(specTexts, issues) {
         suggestedFix: '在该 Scenario 下补齐 - **WHEN** 与 - **THEN** 步骤；可按需保留 - **AND** 作为补充条件。'
       }))
     }
+    for (const step of findScenariosWithEmptyStepText(lines, requirementsIndex)) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_SCENARIO_STEP_TEXT_MISSING',
+        message: `${specPath} 的 ${step.kind} 步骤缺少文本，AI 难以稳定执行验收判断。`,
+        file: specPath,
+        line: step.line,
+        suggestedFix: `在 - **${step.kind}** 后补充具体触发条件或预期结果。`
+      }))
+    }
     for (const duplicate of findDuplicateScenarios(lines, requirementsIndex)) {
       issues.push(issue({
         code: 'OPENSPEC_SPEC_SCENARIO_DUPLICATE',
@@ -747,6 +756,40 @@ function findScenariosWithMissingSteps(lines, requirementsIndex) {
   }
 
   flushScenario()
+  return missing
+}
+
+function findScenariosWithEmptyStepText(lines, requirementsIndex) {
+  const missing = []
+  let inRequirement = false
+  let inScenario = false
+
+  for (let index = requirementsIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (/^##\s+/.test(line)) {
+      return missing
+    }
+    if (/^###\s+/.test(line)) {
+      inRequirement = /^###\s+Requirement\s*:/.test(line)
+      inScenario = false
+      continue
+    }
+    if (!inRequirement) {
+      continue
+    }
+    if (/^####\s+Scenario\s*:/.test(line)) {
+      inScenario = true
+      continue
+    }
+    if (!inScenario) {
+      continue
+    }
+    const stepMatch = /^-\s+\*\*(WHEN|THEN)\*\*\s*(?<text>.*)$/i.exec(line)
+    if (stepMatch && !stepMatch.groups.text.trim()) {
+      missing.push({ line: index + 1, kind: stepMatch[1].toUpperCase() })
+    }
+  }
+
   return missing
 }
 
