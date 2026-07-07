@@ -43,6 +43,7 @@ import com.dataspec.standardreuse.service.StandardReusePackService;
 import com.dataspec.standardusageexample.entity.StandardUsageExample;
 import com.dataspec.standardusageexample.model.StandardUsageExampleSaveReq;
 import com.dataspec.standardusageexample.service.StandardUsageExampleService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
@@ -154,6 +155,18 @@ class AiContextExportServiceTest {
         assertEquals(PROJECT_ID.longValue(), capabilities.path("projectId").asLong());
         assertTrue(capabilities.path("capabilities").toString().contains("lint-sql"));
         assertTrue(capabilities.path("capabilities").toString().contains("export-ai-context"));
+        JsonNode standardEvidence = capabilityById(capabilities, "standard-evidence");
+        assertEquals("READ_ONLY", standardEvidence.path("writeRisk").asText());
+        assertEquals(1, standardEvidence.path("apiEndpoints").size());
+        assertEquals("GET /api/standard-evidence", standardEvidence.path("apiEndpoints").get(0).asText());
+        assertTrue(standardEvidence.path("cliCommands").isArray());
+        assertEquals(0, standardEvidence.path("cliCommands").size());
+        assertTrue(standardEvidence.path("mcpResources").isArray());
+        assertEquals(0, standardEvidence.path("mcpResources").size());
+        assertTrue(standardEvidence.path("mcpTools").isArray());
+        assertEquals(0, standardEvidence.path("mcpTools").size());
+        assertTrue(standardEvidence.path("safety").path("readOnly").asBoolean());
+        assertFalse(standardEvidence.path("safety").path("writesProject").asBoolean(true));
         assertFalse(entries.get(".dataspec/capabilities.json").contains("Authorization"));
         assertFalse(entries.get(".dataspec/capabilities.json").contains("jdbc:postgresql://"));
 
@@ -1018,6 +1031,15 @@ class AiContextExportServiceTest {
                 hash,
                 null,
                 true);
+    }
+
+    private static JsonNode capabilityById(JsonNode catalog, String id) {
+        for (JsonNode capability : catalog.path("capabilities")) {
+            if (id.equals(capability.path("id").asText())) {
+                return capability;
+            }
+        }
+        return fail("capability not found: " + id);
     }
 
     private Field sampleField() {
