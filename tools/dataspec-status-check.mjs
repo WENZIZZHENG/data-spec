@@ -821,7 +821,26 @@ function parseWorkflowRecipeIds(text) {
 function checkMarkdownLinks(file, text, relativeFiles, issues) {
   const baseDir = path.posix.dirname(file) === '.' ? '' : path.posix.dirname(file)
   const lines = String(text ?? '').split(/\r?\n/)
+  let fence = null
   lines.forEach((line, index) => {
+    const trimmed = line.trim()
+    const fenceMatch = /^(?<marker>`{3,}|~{3,})(?<rest>.*)$/.exec(trimmed)
+    if (fenceMatch && !fence) {
+      const marker = fenceMatch.groups.marker
+      fence = { char: marker[0], length: marker.length }
+      return
+    }
+    if (fenceMatch && fence) {
+      const marker = fenceMatch.groups.marker
+      const rest = fenceMatch.groups.rest
+      if (marker[0] === fence.char && marker.length >= fence.length && rest.trim() === '') {
+        fence = null
+      }
+      return
+    }
+    if (fence) {
+      return
+    }
     for (const rawTarget of extractMarkdownLinkTargets(line)) {
       const target = parseMarkdownLinkTarget(rawTarget)
       if (shouldSkipLink(target)) {
