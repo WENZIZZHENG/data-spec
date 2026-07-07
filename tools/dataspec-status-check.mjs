@@ -787,7 +787,7 @@ function findScenariosWithEmptyStepText(lines, requirementsIndex) {
     if (!inScenario) {
       continue
     }
-    const stepMatch = /^-\s+\*\*(WHEN|THEN)\*\*\s*(?<text>.*)$/i.exec(line)
+    const stepMatch = /^-\s+\*\*(WHEN|THEN|AND)\*\*\s*(?<text>.*)$/i.exec(line)
     if (stepMatch && !stepMatch.groups.text.trim()) {
       missing.push({ line: index + 1, kind: stepMatch[1].toUpperCase() })
     }
