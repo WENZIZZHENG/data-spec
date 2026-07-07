@@ -577,10 +577,14 @@ function parseArgs(argv) {
 
 function requireValue(argv, index, option) {
   const value = argv[index]
-  if (!value || value.startsWith('--')) {
+  if (!isOptionValue(value)) {
     throw new Error(`${option} 需要参数值`)
   }
   return value
+}
+
+function isOptionValue(value) {
+  return typeof value === 'string' && value.length > 0 && !value.startsWith('-')
 }
 
 function requireString(value, pathName, diagnostics) {

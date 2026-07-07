@@ -418,6 +418,27 @@ test('contract check cli prints json diagnostics for invalid fixture', async () 
   }
 })
 
+test('contract check cli rejects option-like values', async () => {
+  const fixtureIo = createIo()
+  const fixtureCode = await runContractCheckCli(['--fixture', '-h'], fixtureIo)
+  const formatIo = createIo()
+  const formatCode = await runContractCheckCli(['--format', '--fixture', DEFAULT_FIXTURE_PATH], formatIo)
+
+  assert.equal(fixtureCode, 2)
+  assert.equal(formatCode, 2)
+  assert.equal(fixtureIo.stdout, '')
+  assert.equal(formatIo.stdout, '')
+
+  const fixtureDiagnostic = JSON.parse(fixtureIo.stderr)
+  const formatDiagnostic = JSON.parse(formatIo.stderr)
+  assert.equal(fixtureDiagnostic.diagnostics[0].code, 'CHECK_FAILED')
+  assert.equal(fixtureDiagnostic.diagnostics[0].path, 'cli')
+  assert.equal(fixtureDiagnostic.diagnostics[0].message, '--fixture 需要参数值')
+  assert.equal(formatDiagnostic.diagnostics[0].code, 'CHECK_FAILED')
+  assert.equal(formatDiagnostic.diagnostics[0].path, 'cli')
+  assert.equal(formatDiagnostic.diagnostics[0].message, '--format 需要参数值')
+})
+
 function createIo() {
   return {
     stdout: '',
