@@ -9,6 +9,7 @@ const SCRIPT_PATH = fileURLToPath(import.meta.url)
 const REPO_ROOT = path.resolve(path.dirname(SCRIPT_PATH), '..')
 const KIND = 'dataspec.status-check'
 const SCHEMA_VERSION = 1
+const OPENSPEC_PURPOSE_PLACEHOLDER_PATTERN = /TBD\s*-\s*created by archiving change|Update Purpose after archive/i
 const SKIPPED_DIRS = new Set([
   '.git',
   'node_modules',
@@ -47,13 +48,14 @@ export function buildStatusReport(input = {}) {
   const relativeFiles = normalizeRelativeFiles(input.relativeFiles ?? new Set())
   const changeEntries = [...(input.openSpecChangeEntries ?? [])].map(String)
   const specEntries = new Set([...(input.openSpecSpecEntries ?? [])].map(String))
+  const specTexts = normalizeOpenSpecSpecTexts(input.openSpecSpecTexts ?? new Map())
   const todoItems = parseTodoItems(todoText)
   const queueItems = parseQueueItems(todoText)
   const issues = []
 
   checkQueueItems(queueItems, todoItems, todoText, issues)
   checkCompletedItems(todoItems, issues)
-  checkOpenSpecState(todoItems, changeEntries, specEntries, relativeFiles, todoText, issues)
+  checkOpenSpecState(todoItems, changeEntries, specEntries, specTexts, relativeFiles, todoText, issues)
   checkReadmeToolEntry(readmeText, relativeFiles, issues)
   checkWorkflowRecipeContracts(todoText, aiContractsText, workflowRecipeIds, issues)
   checkMarkdownLinks('README.md', readmeText, relativeFiles, issues)
@@ -129,13 +131,14 @@ export async function runStatusCheckCli(args = process.argv.slice(2), io = defau
     }
 
     const root = path.resolve(options.root)
-    const [todoText, readmeText, aiContractsText, relativeFiles, changeEntries, specEntries] = await Promise.all([
+    const [todoText, readmeText, aiContractsText, relativeFiles, changeEntries, specEntries, specTexts] = await Promise.all([
       readFile(path.resolve(root, options.todoPath), 'utf8'),
       readFile(path.resolve(root, options.readmePath), 'utf8'),
       readOptionalFile(path.resolve(root, 'docs', 'ai-contracts.md')),
       collectRelativePaths(root),
       readDirectoryNames(path.join(root, 'openspec', 'changes')),
-      readDirectoryNames(path.join(root, 'openspec', 'specs'))
+      readDirectoryNames(path.join(root, 'openspec', 'specs')),
+      readOpenSpecMainSpecTexts(path.join(root, 'openspec', 'specs'))
     ])
     const report = buildStatusReport({
       todoText,
@@ -144,7 +147,8 @@ export async function runStatusCheckCli(args = process.argv.slice(2), io = defau
       workflowRecipeIds: supportedWorkflowRecipeIds(),
       relativeFiles,
       openSpecChangeEntries: changeEntries,
-      openSpecSpecEntries: specEntries
+      openSpecSpecEntries: specEntries,
+      openSpecSpecTexts: specTexts
     })
 
     if (options.format === 'json') {
@@ -312,7 +316,7 @@ function checkCompletedItems(todoItems, issues) {
   }
 }
 
-function checkOpenSpecState(todoItems, changeEntries, specEntries, relativeFiles, todoText, issues) {
+function checkOpenSpecState(todoItems, changeEntries, specEntries, specTexts, relativeFiles, todoText, issues) {
   const claimsActiveQueueEmpty = /active change\s*队列(?:恢复)?为空/.test(todoText)
   for (const entry of changeEntries) {
     if (entry === 'archive') {
@@ -364,6 +368,26 @@ function checkOpenSpecState(todoItems, changeEntries, specEntries, relativeFiles
         }))
       }
     }
+  }
+
+  checkOpenSpecSpecPurposes(specTexts, issues)
+}
+
+function checkOpenSpecSpecPurposes(specTexts, issues) {
+  for (const [capability, text] of specTexts) {
+    const lines = String(text ?? '').split(/\r?\n/)
+    const placeholderIndex = lines.findIndex((line) => OPENSPEC_PURPOSE_PLACEHOLDER_PATTERN.test(line))
+    if (placeholderIndex === -1) {
+      continue
+    }
+    const specPath = `openspec/specs/${capability}/spec.md`
+    issues.push(issue({
+      code: 'OPENSPEC_SPEC_PURPOSE_PLACEHOLDER',
+      message: `${specPath} 仍包含归档生成的默认 Purpose 占位，AI 读取主规格时会缺少能力目的说明。`,
+      file: specPath,
+      line: placeholderIndex + 1,
+      suggestedFix: '将默认 Purpose 占位替换为一句稳定的中文能力目的说明，并确认不改变 Requirements/Scenario 语义。'
+    }))
   }
 }
 
@@ -635,6 +659,18 @@ async function readDirectoryNames(dir) {
   }
 }
 
+async function readOpenSpecMainSpecTexts(specsDir) {
+  const result = new Map()
+  const capabilities = await readDirectoryNames(specsDir)
+  await Promise.all(capabilities.map(async (capability) => {
+    const specText = await readOptionalFile(path.join(specsDir, capability, 'spec.md'))
+    if (specText !== null) {
+      result.set(capability, specText)
+    }
+  }))
+  return result
+}
+
 async function readOptionalFile(filePath) {
   try {
     return await readFile(filePath, 'utf8')
@@ -648,6 +684,16 @@ async function readOptionalFile(filePath) {
 
 function normalizeRelativeFiles(files) {
   return new Set([...files].map((file) => normalizeRelativePath(file)))
+}
+
+function normalizeOpenSpecSpecTexts(specTexts) {
+  if (specTexts instanceof Map) {
+    return new Map([...specTexts.entries()].map(([key, value]) => [String(key), String(value ?? '')]))
+  }
+  if (Array.isArray(specTexts)) {
+    return new Map(specTexts.map(([key, value]) => [String(key), String(value ?? '')]))
+  }
+  return new Map(Object.entries(specTexts).map(([key, value]) => [String(key), String(value ?? '')]))
 }
 
 function normalizeWorkflowRecipeIds(ids) {
