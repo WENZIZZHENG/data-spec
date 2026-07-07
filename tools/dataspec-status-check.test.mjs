@@ -507,6 +507,36 @@ test('buildStatusReport accepts Markdown link paths with query strings', () => {
   assert.equal(missingLinks.length, 0)
 })
 
+test('buildStatusReport ignores non-file URI scheme Markdown links', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: [
+      CLEAN_README,
+      '参考 [FTP 资料](ftp://example.com/dataspec.md)、[电话](tel:+123456789) 和 [编辑器](vscode://file/docs/archive/example.md)。',
+      '参考 [URN](urn:isbn:9787110000000) 和 [SFTP](sftp://example.com/dataspec.md)。',
+      ''
+    ].join('\n'),
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'pass')
+  assert.equal(missingLinks.length, 0)
+})
+
 test('buildStatusReport accepts angle-bracket Markdown links with titles', () => {
   const report = buildStatusReport({
     todoText: CLEAN_TODO,
