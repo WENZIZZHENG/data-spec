@@ -38,3 +38,9 @@
 - 2026-07-07：commit 前复跑 `openspec validate add-status-check-issue-code-summary --strict` 通过。
 - 2026-07-07：commit 前复跑 `node --test tools/dataspec-status-check.test.mjs` 通过，8 pass、0 fail。
 - 2026-07-07：commit 前复跑 `git diff --check` 退出码 0；PowerShell 输出仅包含 Git 的 CRLF 工作区提示。
+- 2026-07-07：归档时已同步 `openspec/specs/ai-contract-fixtures/spec.md`，并移动到 `openspec/changes/archive/2026-07-07-add-status-check-issue-code-summary/`。
+- 2026-07-07：归档后 `openspec validate --all` 通过，129 passed、0 failed。
+- 2026-07-07：归档后 `node --test tools/dataspec-status-check.test.mjs` 通过，8 pass、0 fail。
+- 2026-07-07：归档后 `node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 24 降为 23；`summary.issueCodes[]` 汇总 `OPENSPEC_ACTIVE_CHANGE_PRESENT` count=23、severity=warning。
+- 2026-07-07：归档后 `git diff --check` 退出码 0；PowerShell 输出仅包含 Git 的 CRLF 工作区提示。
+- 2026-07-07：独立只读子 agent `019f3a98-182b-7c52-aaff-69fcd1852ff6`（Singer）完成归档 diff 复评并已关闭；结论 Ready，无 Critical/Important。
