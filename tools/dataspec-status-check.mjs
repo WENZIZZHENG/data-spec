@@ -319,6 +319,16 @@ function checkCompletedItems(todoItems, issues) {
 function checkOpenSpecState(todoItems, changeEntries, specEntries, specTexts, relativeFiles, todoText, issues) {
   const claimsActiveQueueEmpty = /active change\s*队列(?:恢复)?为空/.test(todoText)
   const activeChanges = new Set(changeEntries.filter((entry) => entry !== 'archive'))
+  const staleQueueLine = activeChanges.size === 0 ? findNonEmptyActiveQueueClaim(todoText) : null
+  if (staleQueueLine !== null) {
+    issues.push(issue({
+      code: 'OPENSPEC_ACTIVE_QUEUE_TEXT_STALE',
+      message: 'TODO.md 声明 active change 队列仍有实施项，但 openspec/changes 下没有 active change。',
+      file: 'TODO.md',
+      line: staleQueueLine,
+      suggestedFix: '将 active change 队列状态改为空，或恢复实际仍在实施的 openspec/changes/<change-id> 目录。'
+    }))
+  }
   for (const entry of changeEntries) {
     if (entry === 'archive') {
       continue
@@ -586,6 +596,19 @@ function extractTodoActiveChangeReferences(todoText) {
 
 function normalizeOpenSpecChangeId(value) {
   return String(value ?? '').trim().replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? ''
+}
+
+function findNonEmptyActiveQueueClaim(todoText) {
+  const lines = String(todoText ?? '').split(/\r?\n/)
+  const queuePattern = /active change\s*队列/i
+  const nonEmptyPattern = /保留|存在|仍有|仍处于|正在实施|未归档/i
+  for (const [index, line] of lines.entries()) {
+    if (!queuePattern.test(line) || /为空/.test(line) || !nonEmptyPattern.test(line)) {
+      continue
+    }
+    return index + 1
+  }
+  return null
 }
 
 function buildChecks(issues) {

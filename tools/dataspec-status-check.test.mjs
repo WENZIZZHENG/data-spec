@@ -283,6 +283,53 @@ test('buildStatusReport treats active changes as warning unless TODO claims queu
   )
 })
 
+test('buildStatusReport reports stale non-empty active queue text when no active changes exist', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO.replace('active change 队列恢复为空。', 'active change 队列保留正在实施项。'),
+    readmeText: CLEAN_README,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const issue = report.issues.find((candidate) => candidate.code === 'OPENSPEC_ACTIVE_QUEUE_TEXT_STALE')
+  const openSpecCheck = report.checks.find((check) => check.id === 'openspec-state')
+
+  assert.equal(report.status, 'fail')
+  assert.ok(issue)
+  assert.equal(issue.file, 'TODO.md')
+  assert.equal(issue.line, 5)
+  assert.equal(openSpecCheck.status, 'fail')
+  assert.equal(openSpecCheck.errorCount, 1)
+})
+
+test('buildStatusReport accepts cleared active queue wording when no active changes exist', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO.replace('active change 队列恢复为空。', 'active change 队列已清空。'),
+    readmeText: CLEAN_README,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  assert.equal(report.status, 'pass')
+  assert.equal(report.issues.length, 0)
+})
+
 test('buildStatusReport reports stale TODO active OpenSpec change references', () => {
   const todoText = CLEAN_TODO.replace(
     'active change 队列恢复为空。',
