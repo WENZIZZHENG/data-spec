@@ -62,6 +62,7 @@ const VALIDATION_RULES = [
     reason: 'CLI/MCP、配置读取或 AI 可读 JSON 契约改动需要跑 Node 契约测试。',
     patterns: [
       /^tools\/dataspec-(config|cli|mcp|cli-mcp-contract-check)\.(mjs|test\.mjs)$/,
+      /^tools\/dataspec-workflows\.mjs$/,
       /^tools\/fixtures\/cli-mcp-contracts\.json$/
     ]
   },
@@ -108,6 +109,7 @@ const VALIDATION_RULES = [
       /^TODO\.md$/,
       /^docs\/ai-contracts\.md$/,
       /^openspec\//,
+      /^tools\/dataspec-workflows\.mjs$/,
       /^tools\/dataspec-status-check\.(mjs|test\.mjs)$/
     ]
   },

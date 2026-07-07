@@ -56,6 +56,15 @@ test('recommends status check for AI contract documentation paths', () => {
   assert.match(statusCheck.reason, /AI workflow recipe/)
 })
 
+test('recommends status check when workflow recipe source changes', () => {
+  const advice = buildValidationAdvice(['tools/dataspec-workflows.mjs'])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  assert.ok(commandIds.includes('cli-contract-tests'))
+  assert.ok(commandIds.includes('status-check'))
+  assert.ok(commandIds.includes('diff-check'))
+})
+
 test('recommends frontend tests, build and OpenAPI check for frontend contract paths', () => {
   const advice = buildValidationAdvice([
     'dataspec-web/src/views/SqlLint.vue',
