@@ -285,11 +285,28 @@ test('normalizes absolute workspace paths before matching validation rules', () 
 
 test('drops bare workspace root paths from validation advice inputs', () => {
   const root = process.cwd()
-  const advice = buildValidationAdvice([root, `${root}\\`])
+  const advice = buildValidationAdvice([root, `${root}\\`, '.', './', `${root}\\.`, `${root}\\.\\`])
 
   assert.deepEqual(advice.inputPaths, [])
   assert.deepEqual(advice.commands, [])
   assert.match(advice.nextActions[0], /传入变更路径/)
+})
+
+test('keeps relative directory paths matchable after root filtering', () => {
+  const frontendAdvice = buildValidationAdvice(['dataspec-web/'])
+  const openSpecAdvice = buildValidationAdvice(['openspec/'])
+
+  assert.ok(frontendAdvice.commands.some((command) => command.id === 'frontend-tests'))
+  assert.ok(openSpecAdvice.commands.some((command) => command.id === 'openspec-validate'))
+})
+
+test('keeps OpenSpec dot-segment paths on all-validation fallback', () => {
+  const advice = buildValidationAdvice(['openspec/changes/add-field-quality/.'])
+
+  assert.equal(
+    advice.commands.find((command) => command.id === 'openspec-validate').command,
+    'openspec validate --all'
+  )
 })
 
 test('collects NUL-delimited git changed paths', () => {

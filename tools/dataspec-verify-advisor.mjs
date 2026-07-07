@@ -444,13 +444,26 @@ function normalizeGitChangedPaths(inputPaths) {
 function normalizePathSeparators(inputPath) {
   const normalizedPath = inputPath.replace(/\\/g, '/').replace(/^\.\//, '')
   const normalizedRoot = REPO_ROOT.replace(/\\/g, '/').replace(/\/$/, '')
-  if (normalizedPath.toLowerCase() === normalizedRoot.toLowerCase()) {
+  if (isBareWorkspaceRootPath(normalizedPath, normalizedRoot)) {
     return ''
   }
   if (normalizedPath.toLowerCase().startsWith(`${normalizedRoot.toLowerCase()}/`)) {
     return normalizedPath.slice(normalizedRoot.length + 1)
   }
   return normalizedPath
+}
+
+function isBareWorkspaceRootPath(inputPath, normalizedRoot) {
+  const normalizedInput = normalizeBareRootCandidate(inputPath)
+  const normalizedRootCandidate = normalizeBareRootCandidate(normalizedRoot)
+  return normalizedInput === '' || normalizedInput.toLowerCase() === normalizedRootCandidate.toLowerCase()
+}
+
+function normalizeBareRootCandidate(inputPath) {
+  const withoutTrailingSlash = inputPath.replace(/\/+$/, '')
+  const withoutCurrentDir = withoutTrailingSlash.replace(/\/\.$/, '')
+  const normalized = withoutCurrentDir.replace(/\/+$/, '')
+  return normalized === '.' || normalized === '/.' ? '' : normalized
 }
 
 function buildNextActions(commands) {
