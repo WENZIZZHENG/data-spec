@@ -551,6 +551,15 @@ function checkOpenSpecSpecRequirements(specTexts, issues) {
         suggestedFix: '为重复的 Requirement 使用唯一标题，或合并为一个 Requirement 下的多个 Scenario。'
       }))
     }
+    for (const requirement of findRequirementsWithoutBody(lines, requirementsIndex)) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_REQUIREMENT_BODY_MISSING',
+        message: `${specPath} 的 ${requirement.title} 缺少 Requirement 正文说明，AI 难以理解该能力契约的业务语义。`,
+        file: specPath,
+        line: requirement.line,
+        suggestedFix: '在 Requirement 标题下、Scenario 前补充一句稳定说明，说明该能力必须满足的业务行为或约束。'
+      }))
+    }
     for (const requirement of findRequirementsWithoutScenario(lines, requirementsIndex)) {
       issues.push(issue({
         code: 'OPENSPEC_SPEC_REQUIREMENT_SCENARIO_MISSING',
@@ -615,6 +624,53 @@ function findDuplicateRequirements(lines, requirementsIndex) {
   }
 
   return duplicates
+}
+
+function findRequirementsWithoutBody(lines, requirementsIndex) {
+  const missing = []
+  let currentRequirement = null
+  let hasBody = false
+  let inScenario = false
+
+  const flushRequirement = () => {
+    if (currentRequirement && !hasBody) {
+      missing.push(currentRequirement)
+    }
+  }
+
+  for (let index = requirementsIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (/^##\s+/.test(line)) {
+      flushRequirement()
+      return missing
+    }
+    if (/^###\s+/.test(line)) {
+      flushRequirement()
+      currentRequirement = /^###\s+Requirement\s*:/.test(line)
+        ? { line: index + 1, title: line }
+        : null
+      hasBody = false
+      inScenario = false
+      continue
+    }
+    if (currentRequirement && /^####\s+Scenario\s*:/.test(line)) {
+      inScenario = true
+      continue
+    }
+    if (currentRequirement && !inScenario && isRequirementBodyLine(line)) {
+      hasBody = true
+    }
+  }
+
+  flushRequirement()
+  return missing
+}
+
+function isRequirementBodyLine(line) {
+  if (!line) {
+    return false
+  }
+  return !/^-\s+\*\*(WHEN|THEN|AND)\*\*/i.test(line)
 }
 
 function findRequirementsWithoutScenario(lines, requirementsIndex) {

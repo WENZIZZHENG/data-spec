@@ -1811,6 +1811,128 @@ DataSpec SHALL keep executable scenarios close to each requirement.
   }
 })
 
+test('runStatusCheckCli reports Requirement entries without body text in main OpenSpec specs', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'missing-requirement-body'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+
+#### Scenario: Debug rule hit
+- **WHEN** the user requests a rule explanation
+- **THEN** DataSpec returns evidence
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'missing-requirement-body', 'spec.md'),
+      `# missing-requirement-body Specification
+
+## Purpose
+用于验证 Requirement 缺少正文说明的主规格。
+## Requirements
+### Requirement: Missing body
+
+#### Scenario: Body is required
+- **WHEN** status-check reads a requirement
+- **THEN** it reports a requirement without body text
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    const issue = output.issues.find((issue) => issue.code === 'OPENSPEC_SPEC_REQUIREMENT_BODY_MISSING')
+    const openSpecCheck = output.checks.find((check) => check.id === 'openspec-state')
+
+    assert.equal(code, 1)
+    assert.equal(output.status, 'fail')
+    assert.ok(issue)
+    assert.equal(issue.file, 'openspec/specs/missing-requirement-body/spec.md')
+    assert.equal(issue.line, 6)
+    assert.equal(openSpecCheck.errorCount, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('runStatusCheckCli does not count bare scenario steps as Requirement body text', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'bare-scenario-steps'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+
+#### Scenario: Debug rule hit
+- **WHEN** the user requests a rule explanation
+- **THEN** DataSpec returns evidence
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'bare-scenario-steps', 'spec.md'),
+      `# bare-scenario-steps Specification
+
+## Purpose
+用于验证裸 WHEN/THEN 步骤不能替代 Requirement 正文。
+## Requirements
+### Requirement: Bare steps
+- **WHEN** the author writes scenario steps without a Scenario heading
+- **THEN** status-check still requires Requirement body text
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    const bodyIssue = output.issues.find((issue) => issue.code === 'OPENSPEC_SPEC_REQUIREMENT_BODY_MISSING')
+    const scenarioIssue = output.issues.find((issue) => issue.code === 'OPENSPEC_SPEC_REQUIREMENT_SCENARIO_MISSING')
+
+    assert.equal(code, 1)
+    assert.equal(output.status, 'fail')
+    assert.ok(bodyIssue)
+    assert.equal(bodyIssue.file, 'openspec/specs/bare-scenario-steps/spec.md')
+    assert.equal(bodyIssue.line, 6)
+    assert.ok(scenarioIssue)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('runStatusCheckCli ignores Scenario entries under non-Requirement headings', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
   try {
