@@ -1725,13 +1725,17 @@ function parseArgs(args, allowedOptions) {
       throw new Error(`未知参数: ${token}`)
     }
     const value = args[i + 1]
-    if (!value || value.startsWith('--')) {
+    if (!isOptionValue(value)) {
       throw new Error(`缺少参数值: ${token}`)
     }
     options[name] = value
     i += 1
   }
   return { options }
+}
+
+function isOptionValue(value) {
+  return typeof value === 'string' && value.length > 0 && !value.startsWith('-')
 }
 
 function toErrorResponse(id, error) {

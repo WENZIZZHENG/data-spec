@@ -1176,6 +1176,15 @@ test('parseServerArgs keeps project optional and normalizes server url', () => {
   })
 })
 
+test('parseServerArgs rejects option-like values', () => {
+  for (const option of ['--project', '--server', '--dataspec-token', '--profile', '--task-type', '--taskType']) {
+    assert.throws(
+      () => parseServerArgs([option, '-h']),
+      new RegExp(`缺少参数值: ${option}`)
+    )
+  }
+})
+
 test('parseServerArgs reads local config defaults and keeps explicit overrides', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-mcp-'))
   try {
