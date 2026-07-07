@@ -1,7 +1,7 @@
 # sql-fixed-diff Specification
 
 ## Purpose
-TBD - created by archiving change add-sql-fixed-diff-view. Update Purpose after archive.
+定义 fixedSql 的 unified diff 输出和前端展示能力，让用户在复制或应用自动修复前能直观看到 SQL 变更。
 ## Requirements
 ### Requirement: Fixed SQL Diff Output
 The system SHALL include a unified diff for fixed SQL when a deterministic fixed SQL candidate differs from the original SQL.

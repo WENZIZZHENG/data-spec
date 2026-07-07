@@ -1,7 +1,7 @@
 # domain-starter-kits Specification
 
 ## Purpose
-TBD - created by archiving change add-domain-starter-kits. Update Purpose after archive.
+定义内置领域 starter kit 的目录、应用和安装记录，让用户能把领域字段、枚举和模板以幂等方式初始化到项目。
 ## Requirements
 ### Requirement: List built-in domain starter kits
 DataSpec SHALL expose built-in domain starter kits that describe reusable project initialization bundles.

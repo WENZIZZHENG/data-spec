@@ -1,7 +1,7 @@
 # idempotent-write-guards Specification
 
 ## Purpose
-TBD - created by archiving change add-idempotent-write-guards. Update Purpose after archive.
+定义高风险项目写入的进程内幂等保护和操作锁，防止重复提交、并发写入和缺少幂等键的 AI/CLI 写入造成不一致。
 ## Requirements
 ### Requirement: Project scoped write idempotency
 DataSpec SHALL provide a lightweight single-instance idempotency guard for high-risk project-scoped writes.

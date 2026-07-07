@@ -1,7 +1,7 @@
 # dataspec-local-config Specification
 
 ## Purpose
-TBD - created by archiving change add-dataspec-local-config. Update Purpose after archive.
+定义 CLI/MCP 读取仓库级 `.dataspec/config.json` 的配置优先级、默认扫描路径、token 来源和可读错误边界。
 ## Requirements
 ### Requirement: 读取仓库级 DataSpec 配置
 DataSpec CLI/MCP SHALL 从当前工作目录向上查找 `.dataspec/config.json`，并将其中的 `projectId`、`server` 和 `defaultPaths` 作为默认配置。

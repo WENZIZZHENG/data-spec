@@ -1,7 +1,7 @@
 # dataspec-doctor Specification
 
 ## Purpose
-TBD - created by archiving change add-dataspec-doctor. Update Purpose after archive.
+定义 `dataspec doctor` 环境自检命令，检查服务连通、项目访问、认证身份、默认路径、OpenAPI 状态和 JSON 诊断输出。
 ## Requirements
 ### Requirement: CLI 环境自检
 DataSpec CLI SHALL provide a `doctor` command that checks whether the local DataSpec CLI environment is ready for AI, CI, or personal use.

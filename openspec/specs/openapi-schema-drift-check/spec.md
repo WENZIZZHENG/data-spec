@@ -1,7 +1,7 @@
 # openapi-schema-drift-check Specification
 
 ## Purpose
-TBD - created by archiving change add-openapi-schema-drift-check. Update Purpose after archive.
+定义前端 OpenAPI TypeScript schema 漂移检查命令，通过临时重新生成并比较 `schema.ts` 来发现契约未同步问题。
 ## Requirements
 ### Requirement: OpenAPI schema drift check
 The frontend SHALL provide a verification command that regenerates OpenAPI TypeScript types into a temporary file and compares them with the committed `src/api/schema.ts`.

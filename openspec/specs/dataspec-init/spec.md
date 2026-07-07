@@ -1,7 +1,7 @@
 # dataspec-init Specification
 
 ## Purpose
-TBD - created by archiving change add-dataspec-init. Update Purpose after archive.
+定义 `dataspec init` 对业务仓库的初始化能力，生成 `.dataspec` 配置、README 和可选 AGENTS 片段，同时避免默认覆盖用户文件。
 ## Requirements
 ### Requirement: Initialize DataSpec project files
 DataSpec CLI SHALL provide an `init` command that initializes a business repository for DataSpec usage.

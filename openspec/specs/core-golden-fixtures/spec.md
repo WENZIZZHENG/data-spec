@@ -1,7 +1,7 @@
 # core-golden-fixtures Specification
 
 ## Purpose
-TBD - created by archiving change add-rule-golden-fixtures. Update Purpose after archive.
+定义核心 SQL、反向导入和合成标准示例的 golden fixture 验证资源，确保解析、lint、fixedSql、候选摘要和诊断输出保持可回归。
 ## Requirements
 ### Requirement: Core fixture test resources
 DataSpec SHALL keep reusable core SQL and reverse-import examples as test resources that are executed by the backend test suite.

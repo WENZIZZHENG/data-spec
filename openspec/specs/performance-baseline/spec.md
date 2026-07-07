@@ -1,7 +1,7 @@
 # performance-baseline Specification
 
 ## Purpose
-TBD - created by archiving change add-performance-baseline-observability. Update Purpose after archive.
+定义本地可重复的性能基线和慢操作诊断，用合成数据度量字段分组、字段建议、AI Context 导出和反向导入比对等核心路径。
 ## Requirements
 ### Requirement: Repeatable performance baseline
 

@@ -1,7 +1,7 @@
 # frontend-smoke-regression-gate Specification
 
 ## Purpose
-TBD - created by archiving change add-frontend-smoke-regression-gate. Update Purpose after archive.
+定义轻量前端冒烟回归门禁，在无需浏览器自动化或后端服务的情况下检查关键路由、项目状态耦合、API wrapper 和可见操作入口。
 ## Requirements
 ### Requirement: Frontend critical-flow smoke gate
 

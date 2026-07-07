@@ -1,7 +1,7 @@
 # github-inline-review Specification
 
 ## Purpose
-TBD - created by archiving change add-github-inline-review. Update Purpose after archive.
+定义 CLI 发布 GitHub PR inline SQL review 的能力，将可定位 lint issue 映射到 diff 行，同时保留汇总评论、去重和 fallback 诊断。
 ## Requirements
 ### Requirement: Publish inline SQL review comments
 The CLI SHALL publish GitHub inline review comments for SQL lint issues that can be mapped to Pull Request diff lines.

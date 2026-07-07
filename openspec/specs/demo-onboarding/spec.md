@@ -1,7 +1,7 @@
 # demo-onboarding Specification
 
 ## Purpose
-TBD - created by archiving change add-demo-onboarding. Update Purpose after archive.
+定义首次使用的 demo project 创建、复用和前端入口，让空工作区能快速获得内置字段、领域、模板、规则和示例 SQL。
 ## Requirements
 ### Requirement: Demo Project Creation
 DataSpec SHALL provide an API to create or reuse a demo project with seed standards for first-time use.

@@ -1,7 +1,7 @@
 # sql-inline-review-location Specification
 
 ## Purpose
-TBD - created by archiving change enhance-sql-source-location-for-inline-review. Update Purpose after archive.
+定义用于文件级 review 的稳定 SQL issue source range，在常见 PostgreSQL/MySQL DDL 中把表级和字段级问题定位到准确标识符范围。
 ## Requirements
 ### Requirement: 稳定 SQL issue source range
 DataSpec SHALL provide stable source range metadata for SQL lint issues when the related table or column can be located in the submitted SQL text.

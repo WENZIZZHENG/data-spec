@@ -1,7 +1,7 @@
 # project-standards Specification
 
 ## Purpose
-TBD - created by archiving change initialize-project-standards. Update Purpose after archive.
+定义项目创建时内置标准、领域和默认规则基线的初始化选择，支持导入默认标准、创建空项目和幂等补齐。
 ## Requirements
 ### Requirement: Built-in Standards Initialization
 The system SHALL be able to initialize a project with built-in standards.

@@ -1,7 +1,7 @@
 # frontend-workflow-memory Specification
 
 ## Purpose
-TBD - created by archiving change enhance-frontend-workflow-memory. Update Purpose after archive.
+定义前端项目级工作流记忆和字段库深链过滤，安全恢复反向导入的非敏感状态并避免跨项目复用选择。
 ## Requirements
 ### Requirement: Project-scoped reverse import memory
 The system SHALL remember reverse import workflow state per project in browser-local storage.

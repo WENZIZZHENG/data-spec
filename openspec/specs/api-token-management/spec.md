@@ -1,7 +1,7 @@
 # api-token-management Specification
 
 ## Purpose
-TBD - created by archiving change add-api-token-management. Update Purpose after archive.
+定义 API token 的元数据列表、一次性创建、禁用和授权管理边界，确保安全模式下只保存哈希并只在创建响应中展示明文 token。
 ## Requirements
 ### Requirement: Token metadata listing
 The system SHALL provide an API and frontend page for listing API token metadata without exposing token hashes or plaintext tokens.

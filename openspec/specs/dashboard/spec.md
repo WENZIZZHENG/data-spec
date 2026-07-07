@@ -1,7 +1,7 @@
 # dashboard Specification
 
 ## Purpose
-TBD - created by archiving change add-personal-dashboard. Update Purpose after archive.
+定义个人版项目 Dashboard 的摘要、活动时间线和任务入口，让用户能从默认首页查看标准资产、近期检查、趋势和核心工作流。
 ## Requirements
 ### Requirement: Project Dashboard Summary
 

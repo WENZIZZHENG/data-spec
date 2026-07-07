@@ -1,7 +1,7 @@
 # rule-exemptions Specification
 
 ## Purpose
-TBD - created by archiving change add-rule-exemptions. Update Purpose after archive.
+定义项目级规则豁免的管理、lint 抑制、AI Context 导出和前端维护边界，让例外作为可见的历史约束而不是新标准。
 ## Requirements
 ### Requirement: Manage project rule exemptions
 The system SHALL let users manage project-scoped rule exemptions.

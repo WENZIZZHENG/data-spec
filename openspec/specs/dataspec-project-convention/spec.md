@@ -1,7 +1,7 @@
 # dataspec-project-convention Specification
 
 ## Purpose
-TBD - created by archiving change define-dataspec-project-convention. Update Purpose after archive.
+定义 AI Context 包中的 `.dataspec/` 项目约定，包括 manifest、README、文件布局和 Agent 使用 DataSpec lint 命令的指引。
 ## Requirements
 ### Requirement: Dataspec Project Convention Package
 The AI context package SHALL define a stable `.dataspec/` project convention.

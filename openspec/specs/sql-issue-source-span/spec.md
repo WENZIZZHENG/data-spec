@@ -1,7 +1,7 @@
 # sql-issue-source-span Specification
 
 ## Purpose
-TBD - created by archiving change add-sql-issue-source-span. Update Purpose after archive.
+定义 SQL lint issue 的可选源码定位字段、记录持久化和编辑器跳转体验，使可解析问题能定位到行列和 source span。
 ## Requirements
 ### Requirement: Lint Issue Location Fields
 The system SHALL expose optional source location fields on each SQL lint issue.

@@ -1,7 +1,7 @@
 # sql-rule-debugger Specification
 
 ## Purpose
-TBD - created by archiving change add-sql-rule-debugger. Update Purpose after archive.
+定义只读 SQL 规则调试端点和前端面板，解释规则启用状态、参数快照、匹配轨迹、修复策略、抑制状态和安全诊断。
 ## Requirements
 ### Requirement: SQL rule debug endpoint
 DataSpec SHALL expose a read-only SQL rule debug endpoint that explains lint rule execution without changing the normal lint result contract.

@@ -1,7 +1,7 @@
 # frontend-request-state-recovery Specification
 
 ## Purpose
-TBD - created by archiving change add-frontend-request-state-recovery. Update Purpose after archive.
+定义前端统一请求状态、项目必选状态和可恢复状态展示工具，让页面加载、失败、重试、空状态和刷新时间表现一致。
 ## Requirements
 ### Requirement: Unified Request State
 DataSpec Web SHALL provide a reusable front-end request state utility for page-level data loading, failure, retry, and refresh metadata.

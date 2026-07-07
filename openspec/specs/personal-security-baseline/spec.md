@@ -1,7 +1,7 @@
 # personal-security-baseline Specification
 
 ## Purpose
-TBD - created by archiving change add-personal-security-baseline. Update Purpose after archive.
+定义个人版可选安全基线，包括 Bearer token 身份、项目级授权、操作者记录和本地未启用安全模式下的兼容行为。
 ## Requirements
 ### Requirement: 可启用的 API token 身份
 DataSpec SHALL support an optional security mode where HTTP API requests require a Bearer token.
