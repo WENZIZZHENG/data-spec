@@ -4,7 +4,7 @@
 
 ## 下一步顺序
 
-1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90、P6-91、P6-92、P6-93 已完成第一版；P6-78 OpenSpec change 已归档到 `openspec/changes/archive/2026-07-06-add-fixedsql-file-patch-flow`，P6-88 OpenSpec change `add-code-field-reference-index`、P6-90 OpenSpec change `add-ai-context-budget-planner` 和 P6-93 OpenSpec change `add-contract-candidate-import` 保持 active，后续不自动归档。
+1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90、P6-91、P6-92、P6-93 已完成第一版；P6-78、P6-82、P6-88、P6-90、P6-93 对应 OpenSpec change 均已归档，active change 队列为空。
 2. 近期优先行动项已清空，后续开发由用户从 P6-94 以后候选池或新需求中选择，不再从 P6-71 到 P6-188 全量顺扫。
 3. 效率优先顺序：真实数据库集成测试已作为可选 Docker profile，不默认阻塞小任务；下一项开工前按任务类型重新判断快速/常规/SDD。
 4. 暂缓池：P6-94 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
@@ -725,11 +725,11 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不暴露完整复杂 AST 编辑器，不要求所有规则第一版都有深度 trace；不改变现有 lint 结果兼容字段。
 
 ### P6-71：数据库元数据增量缓存与变更指纹
-- 状态：已完成第一版，本地 commit `c993ee2`；OpenSpec change `openspec/changes/add-db-metadata-incremental-cache` 暂未归档。
+- 状态：已完成第一版，本地 commit `c993ee2`；OpenSpec change `add-db-metadata-incremental-cache` 已于 2026-07-07 归档到 `openspec/changes/archive/2026-07-07-add-db-metadata-incremental-cache`。
 - 为什么做：数据库直连反向导入、覆盖率报告和元数据浏览会反复读取同一批 schema；没有增量缓存时，大库会慢，AI 也无法判断“这次和上次相比变了什么”。
 - 已有基础：已有数据库直连、连接预设、metadata 预览、覆盖率报告、字段来源批次、schema dump 待办、大库扫描计划待办和变更感知扫描待办。
 - 已完成能力：新增只保存结构信息的 metadata cache；按连接预设或脱敏连接来源、schema、table 计算 fingerprint；scan/browser/dump/preview/compare/coverage 返回 cache status、lastSeenAt、expiresAt、refreshMode、metadataFingerprint 和变化摘要；前端展示缓存状态并提供 `REFRESH` 手动刷新入口。
-- 验证证据：提交前已完成 OpenSpec strict、后端/前端验证、`git diff --check`、敏感词扫描和独立子 agent 只读评审；未主动 archive 或 push。
+- 验证证据：提交前已完成 OpenSpec strict、后端/前端验证、`git diff --check`、敏感词扫描和独立子 agent 只读评审；后续已完成 OpenSpec archive，未主动 push。
 - 验收标准：重复扫描同一数据库可复用缓存并提示是否过期；字段变化能生成差异摘要；缓存不保存密码、不保存业务数据行；AI 可根据 fingerprint 决定是否重跑反向导入。
 - 边界：不做实时同步，不监听数据库 binlog，不默认后台扫描全库。
 
@@ -825,7 +825,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不追求全量页面覆盖，不做像素级视觉回归，不要求普通 `pnpm test` 默认依赖浏览器；第一版可作为可选验证入口。
 
 ### P6-82：真实数据库 Testcontainers 集成测试矩阵
-- 状态：已完成第一版，OpenSpec change `add-testcontainers-db-integration-tests` 保持 active，暂未归档。
+- 状态：已完成第一版，OpenSpec change `add-testcontainers-db-integration-tests` 已于 2026-07-07 归档到 `openspec/changes/archive/2026-07-07-add-testcontainers-db-integration-tests`。
 - 为什么做：数据库直连反向导入、覆盖率和二次比对已经是核心能力，但当前主要依赖 fixture 和 H2/单测；真实 PostgreSQL/MySQL 元数据、COMMENT、schema、大小写和权限行为仍可能漂移。
 - 已有基础：已有 Flyway、PostgreSQL/MySQL 直连 metadata、反向导入预览、数据库覆盖率、二次比对、metadata fixture 和多方言兼容矩阵待办。
 - 已完成能力：新增基于 Testcontainers 的真实数据库集成测试矩阵，覆盖 PostgreSQL/MySQL schema-only fixture、表列表、metadata dump/browser、compare、coverage、只读连接诊断和敏感信息不外泄断言；同时补充 PostgreSQL 只读账号在 JDBC 未声明 readOnly 时的权限诊断回归测试。
@@ -879,7 +879,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：第一版不直接执行迁移，不替代 Flyway/Liquibase/Atlas 等迁移工具，不自动推断所有字段重命名；只服务个人/小团队的迁移草案和风险说明。
 
 ### P6-88：业务代码字段引用索引与重命名风险分析
-- 状态：已完成第一版，OpenSpec change `add-code-field-reference-index` 保持 active，后续按需归档。
+- 状态：已完成第一版，OpenSpec change `add-code-field-reference-index` 已于 2026-07-07 归档到 `openspec/changes/archive/2026-07-07-add-code-field-reference-index`。
 - 为什么做：修改字段名、废弃字段或合并标准前，用户和 AI 需要知道业务仓库里哪些 SQL、迁移文件、ORM 模型、报表或配置正在引用该字段，否则标准变更容易造成代码与数据库脱节。
 - 已有基础：已有 `.dataspec/config.json` 默认扫描路径、CLI 批量 lint、PR review、字段影响分析、变更感知扫描、fixedSql 文件补丁和业务仓库初始化。
 - 已完成能力：新增 CLI `index-refs`，在业务仓库本地只读扫描显式 `--path` 或 `.dataspec/config.json` 的 `defaultPaths`，输出字段引用、引用类型、文件行列、置信度、重命名风险、建议动作和 nextActions；未配置扫描路径时返回 `DATASPEC_DEFAULT_PATHS_MISSING`，不会全仓误扫。
@@ -897,7 +897,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不绑定单一 IDE 或 agent 产品，不调用外部 LLM，不把 prompts 做成复杂审批流。
 
 ### P6-90：AI 上下文预算评估与自动裁剪策略
-- 状态：已完成第一版，OpenSpec change `add-ai-context-budget-planner` 保持 active，暂未自动归档。
+- 状态：已完成第一版，OpenSpec change `add-ai-context-budget-planner` 已于 2026-07-07 归档到 `openspec/changes/archive/2026-07-07-add-ai-context-budget-planner`。
 - 为什么做：字段标准、规则、模板、样例和历史记录越来越多后，AI Context 很容易过大；仅靠手动 scope/query/limit 不够，AI 需要知道不同预算下应该保留哪些标准、舍弃哪些上下文以及风险是什么。
 - 已有基础：已有 AI Context 按需裁剪、字段检索、标准快照、业务术语表、AI 会话启动包、上下文握手和 prompt 评测待办。
 - 已完成能力：新增只读 `/api/ai-context/budget/plan`、CLI `context-budget plan`、CLI/MCP contract fixture 和前端 AI Context 预算预览；输入任务类型、query、目标表/文件、预算上限或 scoped export 参数，输出 selectedArtifacts、estimatedTokens、droppedArtifacts、qualityRisk、fallbackSteps、recommendedExportParams 和 recommendedNextActions。
@@ -924,7 +924,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不替代人工维护的高价值真实样例，不引入外部 LLM 自动造数据，不自动写入标准使用示例库，不生成可直接写入生产库的数据。
 
 ### P6-93：多源契约反向导入到标准候选
-- 状态：已完成第一版，OpenSpec change `add-contract-candidate-import` 保持 active，暂不自动归档。
+- 状态：已完成第一版，OpenSpec change `add-contract-candidate-import` 已于 2026-07-07 归档到 `openspec/changes/archive/2026-07-07-add-contract-candidate-import`。
 - 为什么做：很多字段标准并不只存在于数据库，还散落在 OpenAPI、JSON Schema、Protobuf、事件 schema 和前端类型里；AI 建表或修 SQL 时如果只看数据库来源，会遗漏接口层已经稳定下来的业务命名。
 - 已有基础：已有 OpenAPI 类型生成、字段推荐、标准候选 Inbox、数据库反向导入、字段来源追踪、业务代码引用索引和 AI Context。
 - 已完成能力：新增只读 `POST /api/contract-import/preview` 和 CLI `contract-import preview`，支持 OpenAPI、JSON Schema、Protobuf `.proto` 文本或 descriptor 风格 JSON 第一版字段抽取；输出 `candidateFields`、`contractHash`、`diagnostics`、`safety`、`nextActions` 和兼容现有候选创建语义的 `inboxPayload`。

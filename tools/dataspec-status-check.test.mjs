@@ -283,6 +283,116 @@ test('buildStatusReport treats active changes as warning unless TODO claims queu
   )
 })
 
+test('buildStatusReport reports stale TODO active OpenSpec change references', () => {
+  const todoText = CLEAN_TODO.replace(
+    'active change 队列恢复为空。',
+    'OpenSpec change `openspec/changes/add-code-field-reference-index` 暂未自动归档。'
+  )
+  const report = buildStatusReport({
+    todoText,
+    readmeText: CLEAN_README,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/changes/archive/2026-07-07-add-code-field-reference-index',
+      'openspec/specs/sql-rule-debugger/spec.md',
+      'openspec/specs/code-field-reference-index/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger', 'code-field-reference-index']
+  })
+
+  const issue = report.issues.find((candidate) => candidate.code === 'OPENSPEC_ACTIVE_CHANGE_REFERENCE_MISSING')
+  const openSpecCheck = report.checks.find((check) => check.id === 'openspec-state')
+
+  assert.equal(report.status, 'fail')
+  assert.ok(issue)
+  assert.equal(issue.file, 'TODO.md')
+  assert.equal(issue.line, 5)
+  assert.match(issue.message, /add-code-field-reference-index/)
+  assert.equal(openSpecCheck.status, 'fail')
+  assert.equal(openSpecCheck.errorCount, 1)
+})
+
+test('buildStatusReport normalizes archived OpenSpec change path references', () => {
+  const todoText = CLEAN_TODO.replace(
+    'OpenSpec change `add-sql-rule-debugger` 已于 2026-07-05 归档并同步主规格。',
+    'OpenSpec change `openspec/changes/add-sql-rule-debugger` 已于 2026-07-05 归档并同步主规格。'
+  )
+  const report = buildStatusReport({
+    todoText,
+    readmeText: CLEAN_README,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  assert.equal(report.status, 'pass')
+  assert.equal(report.issues.length, 0)
+})
+
+test('buildStatusReport resolves main specs from archived OpenSpec delta specs', () => {
+  const todoText = CLEAN_TODO.replace(
+    'OpenSpec change `add-sql-rule-debugger` 已于 2026-07-05 归档并同步主规格。',
+    'OpenSpec change `add-testcontainers-db-integration-tests` 已于 2026-07-07 归档并同步主规格。'
+  )
+  const report = buildStatusReport({
+    todoText,
+    readmeText: CLEAN_README,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-07-add-testcontainers-db-integration-tests/specs/db-testcontainers-integration-tests/spec.md',
+      'openspec/specs/db-testcontainers-integration-tests/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['db-testcontainers-integration-tests']
+  })
+
+  assert.equal(report.status, 'pass')
+  assert.equal(report.issues.length, 0)
+})
+
+test('buildStatusReport reports missing main spec for multi-capability archives', () => {
+  const todoText = CLEAN_TODO.replace(
+    'OpenSpec change `add-sql-rule-debugger` 已于 2026-07-05 归档并同步主规格。',
+    'OpenSpec change `add-composite-change` 已于 2026-07-07 归档并同步主规格。'
+  )
+  const report = buildStatusReport({
+    todoText,
+    readmeText: CLEAN_README,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-07-add-composite-change/specs/cap-a/spec.md',
+      'openspec/changes/archive/2026-07-07-add-composite-change/specs/cap-b/spec.md',
+      'openspec/specs/cap-a/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['cap-a']
+  })
+
+  const issue = report.issues.find((candidate) => candidate.code === 'OPENSPEC_MAIN_SPEC_MISSING')
+
+  assert.equal(report.status, 'fail')
+  assert.ok(issue)
+  assert.match(issue.message, /openspec\/specs\/cap-b\/spec\.md/)
+})
+
 test('runStatusCheckCli supports json output and returns non-zero on errors', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
   try {

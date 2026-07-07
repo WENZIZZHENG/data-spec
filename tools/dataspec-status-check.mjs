@@ -318,6 +318,7 @@ function checkCompletedItems(todoItems, issues) {
 
 function checkOpenSpecState(todoItems, changeEntries, specEntries, specTexts, relativeFiles, todoText, issues) {
   const claimsActiveQueueEmpty = /active change\s*队列(?:恢复)?为空/.test(todoText)
+  const activeChanges = new Set(changeEntries.filter((entry) => entry !== 'archive'))
   for (const entry of changeEntries) {
     if (entry === 'archive') {
       continue
@@ -340,12 +341,12 @@ function checkOpenSpecState(todoItems, changeEntries, specEntries, specTexts, re
     }))
   }
 
+  checkTodoActiveChangeReferences(todoText, activeChanges, issues)
+
   for (const item of todoItems) {
     const changeIds = extractArchivedChangeIds(item)
     for (const changeId of changeIds) {
-      const archiveExists = [...relativeFiles].some((filePath) =>
-        filePath.startsWith('openspec/changes/archive/') && filePath.endsWith(`-${changeId}`)
-      )
+      const archiveExists = archivedChangeExists(changeId, relativeFiles)
       if (!archiveExists) {
         issues.push(issue({
           code: 'OPENSPEC_ARCHIVE_MISSING',
@@ -356,9 +357,13 @@ function checkOpenSpecState(todoItems, changeEntries, specEntries, specTexts, re
         }))
       }
 
-      const capability = changeId.replace(/^add-/, '')
-      const specPath = `openspec/specs/${capability}/spec.md`
-      if (!relativeFiles.has(specPath) && !specEntries.has(capability)) {
+      const expectedCapabilities = archivedSpecCapabilities(changeId, relativeFiles)
+      const capabilities = expectedCapabilities.length > 0 ? expectedCapabilities : [changeId.replace(/^add-/, '')]
+      for (const capability of capabilities) {
+        const specPath = `openspec/specs/${capability}/spec.md`
+        if (relativeFiles.has(specPath) || specEntries.has(capability)) {
+          continue
+        }
         issues.push(issue({
           code: 'OPENSPEC_MAIN_SPEC_MISSING',
           message: `${item.id} 对应的主规格 ${specPath} 不存在。`,
@@ -371,6 +376,21 @@ function checkOpenSpecState(todoItems, changeEntries, specEntries, specTexts, re
   }
 
   checkOpenSpecSpecPurposes(specTexts, issues)
+}
+
+function checkTodoActiveChangeReferences(todoText, activeChanges, issues) {
+  for (const reference of extractTodoActiveChangeReferences(todoText)) {
+    if (activeChanges.has(reference.changeId)) {
+      continue
+    }
+    issues.push(issue({
+      code: 'OPENSPEC_ACTIVE_CHANGE_REFERENCE_MISSING',
+      message: `TODO.md 仍声明 OpenSpec change \`${reference.changeId}\` 处于 active/未归档状态，但 openspec/changes/${reference.changeId} 不存在。`,
+      file: 'TODO.md',
+      line: reference.line,
+      suggestedFix: `把 ${reference.changeId} 的 TODO 状态改为已归档，或恢复 openspec/changes/${reference.changeId} active change 目录。`
+    }))
+  }
 }
 
 function checkOpenSpecSpecPurposes(specTexts, issues) {
@@ -516,7 +536,56 @@ function checkMarkdownLinks(file, text, relativeFiles, issues) {
 
 function extractArchivedChangeIds(item) {
   return [...item.bodyLines.join('\n').matchAll(/OpenSpec change\s+`([^`]+)`\s+已于.+?归档/g)]
-    .map((match) => match[1])
+    .map((match) => normalizeOpenSpecChangeId(match[1]))
+    .filter(Boolean)
+}
+
+function archivedChangeExists(changeId, relativeFiles) {
+  const marker = `-${changeId}`
+  return [...relativeFiles].some((filePath) =>
+    filePath.startsWith('openspec/changes/archive/') &&
+    (filePath.endsWith(marker) || filePath.includes(`${marker}/`))
+  )
+}
+
+function archivedSpecCapabilities(changeId, relativeFiles) {
+  const marker = `-${changeId}/specs/`
+  const capabilities = new Set()
+  for (const filePath of relativeFiles) {
+    if (!filePath.startsWith('openspec/changes/archive/') || !filePath.includes(marker) || !filePath.endsWith('/spec.md')) {
+      continue
+    }
+    const afterSpecs = filePath.slice(filePath.indexOf(marker) + marker.length)
+    const [capability, fileName] = afterSpecs.split('/')
+    if (capability && fileName === 'spec.md') {
+      capabilities.add(capability)
+    }
+  }
+  return [...capabilities].sort()
+}
+
+function extractTodoActiveChangeReferences(todoText) {
+  const references = []
+  String(todoText ?? '').split(/\r?\n/).forEach((line, index) => {
+    if (!/(?:保持|保留|仍为|仍处于)\s*active|暂未(?:自动)?归档|暂不自动归档|后续按需归档/i.test(line)) {
+      return
+    }
+    for (const match of line.matchAll(/OpenSpec change\s+`([^`]+)`/g)) {
+      const changeId = normalizeOpenSpecChangeId(match[1])
+      if (!changeId) {
+        continue
+      }
+      references.push({
+        changeId,
+        line: index + 1
+      })
+    }
+  })
+  return references
+}
+
+function normalizeOpenSpecChangeId(value) {
+  return String(value ?? '').trim().replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? ''
 }
 
 function buildChecks(issues) {
