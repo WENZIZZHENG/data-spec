@@ -9,6 +9,16 @@ import {
   runStatusCheckCli
 } from './dataspec-status-check.mjs'
 
+const WORKFLOW_RECIPE_IDS = [
+  'create-table',
+  'review-pr-sql',
+  'reverse-import-standards',
+  'export-min-context',
+  'standard-evidence-review'
+]
+
+const WORKFLOW_RECIPE_SUMMARY = 'create-table/review-pr-sql/reverse-import-standards/export-min-context/standard-evidence-review'
+
 const CLEAN_TODO = `# DataSpec 待办路线图
 
 ## 下一步顺序
@@ -19,6 +29,7 @@ const CLEAN_TODO = `# DataSpec 待办路线图
 ## 说明
 
 参考 [归档](docs/archive/example.md)。
+任务卡可从 ${WORKFLOW_RECIPE_SUMMARY} workflow recipe 生成。
 
 ### P6-70：SQL 规则调试器与可解释匹配面板
 - 状态：已完成第一版，commit \`9bd40c9\`；OpenSpec change \`add-sql-rule-debugger\` 已于 2026-07-05 归档并同步主规格。
@@ -50,10 +61,19 @@ node tools/dataspec-status-check.mjs --format json
 \`\`\`
 `
 
+const CLEAN_AI_CONTRACTS = `# AI 契约
+
+## AI Context
+
+- \`.dataspec/workflows.md\`: \`create-table\`、\`review-pr-sql\`、\`reverse-import-standards\`、\`export-min-context\`、\`standard-evidence-review\` 五个 recipe id。
+`
+
 test('buildStatusReport passes for a self-consistent TODO/OpenSpec snapshot', () => {
   const report = buildStatusReport({
     todoText: CLEAN_TODO,
     readmeText: CLEAN_README,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
     relativeFiles: new Set([
       'README.md',
       'TODO.md',
@@ -72,6 +92,93 @@ test('buildStatusReport passes for a self-consistent TODO/OpenSpec snapshot', ()
   assert.equal(report.summary.todoItems, 3)
   assert.deepEqual(report.summary.queueItems, ['P6-71', 'P6-72'])
   assert.equal(report.issues.length, 0)
+})
+
+test('buildStatusReport reports workflow recipe contract drift in AI docs and TODO', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO.replace('/standard-evidence-review', ''),
+    readmeText: CLEAN_README,
+    aiContractsText: CLEAN_AI_CONTRACTS.replace('、`standard-evidence-review`', ''),
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const aiContractIssue = report.issues.find((issue) => issue.code === 'AI_CONTRACT_WORKFLOW_RECIPES_DRIFT')
+  const todoIssue = report.issues.find((issue) => issue.code === 'TODO_WORKFLOW_RECIPES_DRIFT')
+  const workflowCheck = report.checks.find((check) => check.id === 'workflow-recipes')
+
+  assert.equal(report.status, 'fail')
+  assert.ok(aiContractIssue)
+  assert.equal(aiContractIssue.file, 'docs/ai-contracts.md')
+  assert.match(aiContractIssue.message, /standard-evidence-review/)
+  assert.ok(todoIssue)
+  assert.equal(todoIssue.file, 'TODO.md')
+  assert.match(todoIssue.message, /standard-evidence-review/)
+  assert.equal(workflowCheck.status, 'fail')
+  assert.equal(workflowCheck.issueCount, 2)
+})
+
+test('buildStatusReport reports stale workflow recipe ids left in docs and TODO', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: CLEAN_README,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS.filter((id) => id !== 'standard-evidence-review'),
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const driftIssues = report.issues.filter((issue) =>
+    issue.code === 'AI_CONTRACT_WORKFLOW_RECIPES_DRIFT' || issue.code === 'TODO_WORKFLOW_RECIPES_DRIFT'
+  )
+
+  assert.equal(report.status, 'fail')
+  assert.equal(driftIssues.length, 2)
+  assert.ok(driftIssues.every((issue) => /多余：standard-evidence-review/.test(issue.message)))
+})
+
+test('buildStatusReport reports missing AI contract document for workflow recipes', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: CLEAN_README,
+    aiContractsText: null,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const issue = report.issues.find((candidate) => candidate.code === 'AI_CONTRACT_WORKFLOW_RECIPES_DRIFT')
+
+  assert.equal(report.status, 'fail')
+  assert.ok(issue)
+  assert.equal(issue.file, 'docs/ai-contracts.md')
+  assert.match(issue.message, /无法确认/)
+  assert.match(issue.message, /standard-evidence-review/)
 })
 
 test('buildStatusReport reports deterministic TODO and OpenSpec drift', () => {

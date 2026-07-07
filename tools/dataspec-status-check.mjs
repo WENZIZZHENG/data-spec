@@ -3,6 +3,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { supportedWorkflowRecipeIds } from './dataspec-workflows.mjs'
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url)
 const REPO_ROOT = path.resolve(path.dirname(SCRIPT_PATH), '..')
@@ -30,9 +31,19 @@ const FIELD_MAP = new Map([
   ['边界', 'boundary']
 ])
 
+/**
+ * 构建 DataSpec 本地状态报告。
+ *
+ * `workflowRecipeIds` 应来自 `supportedWorkflowRecipeIds()`；AI 可见 workflow recipe
+ * 是跨 CLI、MCP、AI Context 和任务卡复用的契约，不能在文档中手写漂移。
+ */
 export function buildStatusReport(input = {}) {
   const todoText = String(input.todoText ?? '')
   const readmeText = String(input.readmeText ?? '')
+  const aiContractsText = Object.hasOwn(input, 'aiContractsText')
+    ? input.aiContractsText === null ? null : String(input.aiContractsText ?? '')
+    : undefined
+  const workflowRecipeIds = normalizeWorkflowRecipeIds(input.workflowRecipeIds ?? [])
   const relativeFiles = normalizeRelativeFiles(input.relativeFiles ?? new Set())
   const changeEntries = [...(input.openSpecChangeEntries ?? [])].map(String)
   const specEntries = new Set([...(input.openSpecSpecEntries ?? [])].map(String))
@@ -44,6 +55,7 @@ export function buildStatusReport(input = {}) {
   checkCompletedItems(todoItems, issues)
   checkOpenSpecState(todoItems, changeEntries, specEntries, relativeFiles, todoText, issues)
   checkReadmeToolEntry(readmeText, relativeFiles, issues)
+  checkWorkflowRecipeContracts(todoText, aiContractsText, workflowRecipeIds, issues)
   checkMarkdownLinks('README.md', readmeText, relativeFiles, issues)
   checkMarkdownLinks('TODO.md', todoText, relativeFiles, issues)
 
@@ -107,9 +119,10 @@ export async function runStatusCheckCli(args = process.argv.slice(2), io = defau
     }
 
     const root = path.resolve(options.root)
-    const [todoText, readmeText, relativeFiles, changeEntries, specEntries] = await Promise.all([
+    const [todoText, readmeText, aiContractsText, relativeFiles, changeEntries, specEntries] = await Promise.all([
       readFile(path.resolve(root, options.todoPath), 'utf8'),
       readFile(path.resolve(root, options.readmePath), 'utf8'),
+      readOptionalFile(path.resolve(root, 'docs', 'ai-contracts.md')),
       collectRelativePaths(root),
       readDirectoryNames(path.join(root, 'openspec', 'changes')),
       readDirectoryNames(path.join(root, 'openspec', 'specs'))
@@ -117,6 +130,8 @@ export async function runStatusCheckCli(args = process.argv.slice(2), io = defau
     const report = buildStatusReport({
       todoText,
       readmeText,
+      aiContractsText,
+      workflowRecipeIds: supportedWorkflowRecipeIds(),
       relativeFiles,
       openSpecChangeEntries: changeEntries,
       openSpecSpecEntries: specEntries
@@ -357,6 +372,86 @@ function checkReadmeToolEntry(readmeText, relativeFiles, issues) {
   }))
 }
 
+function checkWorkflowRecipeContracts(todoText, aiContractsText, workflowRecipeIds, issues) {
+  if (workflowRecipeIds.length === 0) {
+    return
+  }
+
+  if (aiContractsText === null) {
+    issues.push(issue({
+      code: 'AI_CONTRACT_WORKFLOW_RECIPES_DRIFT',
+      message: `docs/ai-contracts.md 缺失，无法确认 AI workflow recipe id 清单：${workflowRecipeIds.join('、')}。`,
+      file: 'docs/ai-contracts.md',
+      suggestedFix: '恢复 `docs/ai-contracts.md`，并同步 `.dataspec/workflows.md` 的 recipe id 列表。'
+    }))
+  } else if (aiContractsText !== undefined) {
+    const workflowLine = findLine(aiContractsText, (line) =>
+      line.includes('.dataspec/workflows.md') && line.includes('recipe')
+    )
+    pushWorkflowRecipeDriftIssue({
+      code: 'AI_CONTRACT_WORKFLOW_RECIPES_DRIFT',
+      file: 'docs/ai-contracts.md',
+      line: workflowLine?.line,
+      targetText: workflowLine?.text ?? '',
+      workflowRecipeIds,
+      messagePrefix: 'AI 契约文档中的 `.dataspec/workflows.md` recipe id 清单漂移',
+      suggestedFix: '同步 `docs/ai-contracts.md` 中 `.dataspec/workflows.md` 的 recipe id 列表，确保它包含 `supportedWorkflowRecipeIds()` 的全部结果。',
+      issues
+    })
+  }
+
+  const taskCardLine = findLine(todoText, (line) =>
+    line.includes('任务卡') && line.includes('workflow recipe')
+  )
+  pushWorkflowRecipeDriftIssue({
+    code: 'TODO_WORKFLOW_RECIPES_DRIFT',
+    file: 'TODO.md',
+    line: taskCardLine?.line,
+    targetText: taskCardLine?.text ?? '',
+    workflowRecipeIds,
+    messagePrefix: 'TODO 任务卡 workflow recipe 摘要漂移',
+    suggestedFix: '同步 TODO 中任务卡已完成能力的 workflow recipe 列表，避免项目状态说明滞后于实际 recipe catalog。',
+    issues
+  })
+}
+
+function pushWorkflowRecipeDriftIssue({
+  code,
+  file,
+  line,
+  targetText,
+  workflowRecipeIds,
+  messagePrefix,
+  suggestedFix,
+  issues
+}) {
+  const declaredRecipeIds = parseWorkflowRecipeIds(targetText)
+  const expectedRecipeIds = new Set(workflowRecipeIds)
+  const missingRecipeIds = workflowRecipeIds.filter((id) => !declaredRecipeIds.has(id))
+  const extraRecipeIds = [...declaredRecipeIds].filter((id) => !expectedRecipeIds.has(id)).sort()
+  if (missingRecipeIds.length === 0 && extraRecipeIds.length === 0) {
+    return
+  }
+  const details = []
+  if (missingRecipeIds.length > 0) {
+    details.push(`缺少：${missingRecipeIds.join('、')}`)
+  }
+  if (extraRecipeIds.length > 0) {
+    details.push(`多余：${extraRecipeIds.join('、')}`)
+  }
+  issues.push(issue({
+    code,
+    message: `${messagePrefix}，${details.join('；')}。`,
+    file,
+    line,
+    suggestedFix
+  }))
+}
+
+function parseWorkflowRecipeIds(text) {
+  return new Set([...String(text ?? '').matchAll(/\b[a-z][a-z0-9]*(?:-[a-z0-9]+)+\b/g)].map((match) => match[0]))
+}
+
 function checkMarkdownLinks(file, text, relativeFiles, issues) {
   const baseDir = path.posix.dirname(file) === '.' ? '' : path.posix.dirname(file)
   const lines = String(text ?? '').split(/\r?\n/)
@@ -396,6 +491,7 @@ function buildChecks(issues) {
     ['todo-completed', 'TODO 完成态字段一致性'],
     ['openspec-state', 'OpenSpec active/archive/main spec 一致性'],
     ['readme-entry', 'README 状态检查入口'],
+    ['workflow-recipes', 'AI workflow recipe 契约文档一致性'],
     ['markdown-links', 'Markdown 相对链接']
   ]
   return definitions.map(([id, name]) => {
@@ -421,6 +517,9 @@ function codeBelongsToCheck(code, checkId) {
   }
   if (checkId === 'readme-entry') {
     return code === 'README_STATUS_CHECK_MISSING'
+  }
+  if (checkId === 'workflow-recipes') {
+    return code === 'AI_CONTRACT_WORKFLOW_RECIPES_DRIFT' || code === 'TODO_WORKFLOW_RECIPES_DRIFT'
   }
   if (checkId === 'markdown-links') {
     return code === 'MARKDOWN_LINK_MISSING'
@@ -496,8 +595,23 @@ async function readDirectoryNames(dir) {
   }
 }
 
+async function readOptionalFile(filePath) {
+  try {
+    return await readFile(filePath, 'utf8')
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return null
+    }
+    throw error
+  }
+}
+
 function normalizeRelativeFiles(files) {
   return new Set([...files].map((file) => normalizeRelativePath(file)))
+}
+
+function normalizeWorkflowRecipeIds(ids) {
+  return [...new Set([...ids].map((id) => String(id).trim()).filter(Boolean))].sort()
 }
 
 function normalizeRelativePath(filePath) {
@@ -591,7 +705,7 @@ function helpText() {
   node tools/dataspec-status-check.mjs --root <repo> --todo TODO.md --readme README.md
 
 说明:
-  本工具只做确定性状态检查，不联网、不读取业务数据。
+  本工具只做 TODO/README/OpenSpec/AI workflow recipe 文档的确定性状态检查，不联网、不读取业务数据。
 `
 }
 
