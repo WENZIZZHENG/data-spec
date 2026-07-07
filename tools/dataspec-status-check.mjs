@@ -65,6 +65,9 @@ export function buildStatusReport(input = {}) {
   if (typeof aiContractsText === 'string') {
     checkMarkdownLinks('docs/ai-contracts.md', aiContractsText, relativeFiles, issues)
   }
+  for (const [capability, specText] of specTexts) {
+    checkMarkdownLinks(`openspec/specs/${capability}/spec.md`, specText, relativeFiles, issues)
+  }
 
   const errors = issues.filter((issue) => issue.severity === 'error').length
   const warnings = issues.filter((issue) => issue.severity === 'warning').length
