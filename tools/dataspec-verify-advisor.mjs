@@ -54,6 +54,18 @@ const VALIDATION_RULES = [
     ]
   },
   {
+    id: 'frontend-e2e-tests',
+    category: 'frontend',
+    command: 'pnpm test:e2e',
+    cwd: 'dataspec-web',
+    estimatedSeconds: 60,
+    reason: 'Playwright 浏览器级流程测试或配置改动需要跑 E2E 验收，确认关键用户工作流仍可用。',
+    patterns: [
+      /^dataspec-web\/tests\/e2e\//,
+      /^dataspec-web\/playwright\.config\.ts$/
+    ]
+  },
+  {
     id: 'cli-contract-tests',
     category: 'cli',
     command: 'node --test tools/dataspec-config.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs',

@@ -152,6 +152,25 @@ test('recommends frontend tests, build and OpenAPI check for frontend contract p
   assert.equal(advice.commands.find((command) => command.id === 'frontend-build').cwd, 'dataspec-web')
 })
 
+test('recommends browser e2e tests for Playwright workflow paths', () => {
+  const advice = buildValidationAdvice([
+    'dataspec-web/tests/e2e/core-workflows.spec.ts',
+    'dataspec-web/playwright.config.ts'
+  ])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  const e2eCommand = advice.commands.find((command) => command.id === 'frontend-e2e-tests')
+  assert.ok(commandIds.includes('frontend-tests'))
+  assert.ok(commandIds.includes('frontend-build'))
+  assert.ok(commandIds.includes('frontend-e2e-tests'))
+  assert.equal(e2eCommand.command, 'pnpm test:e2e')
+  assert.equal(e2eCommand.cwd, 'dataspec-web')
+  assert.match(e2eCommand.reason, /Playwright/)
+
+  const configAdvice = buildValidationAdvice(['dataspec-web/playwright.config.ts'])
+  assert.ok(configAdvice.commands.some((command) => command.id === 'frontend-e2e-tests'))
+})
+
 test('recommends prompt eval for prompt template contract code paths', () => {
   const advice = buildValidationAdvice([
     'dataspec-server/src/main/java/com/dataspec/prompt/service/PromptTemplateRegistry.java',
