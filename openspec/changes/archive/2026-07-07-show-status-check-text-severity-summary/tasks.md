@@ -38,3 +38,9 @@
 - 2026-07-07：评审后 `openspec validate show-status-check-text-severity-summary --strict` 再次通过。
 - 2026-07-07：评审后 `node --test tools/*.test.mjs` 再次通过，248 pass、2 skip（Windows symlink 权限）、0 fail。
 - 2026-07-07：评审后 `git diff --check` 通过，仅输出 Windows LF/CRLF 提示；敏感词扫描新增 diff 行无命中。
+- 2026-07-07：归档时已同步 `openspec/specs/ai-contract-fixtures/spec.md`，并移动到 `openspec/changes/archive/2026-07-07-show-status-check-text-severity-summary/`。
+- 2026-07-07：归档后 `openspec validate --all` 通过，125 passed、0 failed。
+- 2026-07-07：归档后 `node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs` 通过，23 pass、0 fail。
+- 2026-07-07：归档后 `node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 23 降为 19；第三条 `nextActions[]` 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=19,severity=warning)`。
+- 2026-07-07：归档后 `git diff --check` 退出码 0；PowerShell 输出仅包含 Git 的 CRLF 工作区提示。
+- 2026-07-07：独立只读子 agent `019f3aaa-2d98-7b01-8042-2e5e432ffeb5`（Pauli）完成 4 个归档 diff 复评并已关闭；结论 Ready，无 Critical/Important/Minor。

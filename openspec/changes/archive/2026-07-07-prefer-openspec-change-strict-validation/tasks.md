@@ -40,3 +40,9 @@
 - 2026-07-07：修复后 `git diff --check` 通过，仅输出 Windows LF/CRLF 提示；敏感词扫描新增 diff 行无命中。
 - 2026-07-07：复评子 agent `019f3a85-2d9e-72b2-896b-4c36f0cf6fe0`（Einstein）确认上一个 Important 已修复，无 Critical / Important / Minor，结论 Ready to commit；已调用 `close_agent` 关闭。
 - 2026-07-07：commit 前 `git status --short`、`git diff --cached --check`、`git diff --cached --stat`、`git diff --cached --name-only`、staged diff 浏览和 staged 敏感词扫描均完成；无空白错误或敏感词命中。
+- 2026-07-07：归档时已同步 `openspec/specs/ai-contract-fixtures/spec.md`，并移动到 `openspec/changes/archive/2026-07-07-prefer-openspec-change-strict-validation/`。
+- 2026-07-07：归档后 `openspec validate --all` 通过，125 passed、0 failed。
+- 2026-07-07：归档后 `node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs` 通过，23 pass、0 fail。
+- 2026-07-07：归档后 `node tools/dataspec-status-check.mjs --format json` 返回 `status=warn`，active change warning 从 23 降为 19；第三条 `nextActions[]` 为 `当前问题编码：OPENSPEC_ACTIVE_CHANGE_PRESENT(count=19,severity=warning)`。
+- 2026-07-07：归档后 `git diff --check` 退出码 0；PowerShell 输出仅包含 Git 的 CRLF 工作区提示。
+- 2026-07-07：独立只读子 agent `019f3aaa-2d98-7b01-8042-2e5e432ffeb5`（Pauli）完成 4 个归档 diff 复评并已关闭；结论 Ready，无 Critical/Important/Minor。

@@ -117,3 +117,69 @@ The local status check JSON output SHALL include issue code counts and highest s
 #### Scenario: Existing action guidance remains stable
 - **WHEN** issue code summaries are included in `nextActions[]`
 - **THEN** existing `status`, exit code semantics, `summary.issueCodes[]`, `issues[]`, `checks[]`, and the first two next action guidance entries remain unchanged.
+
+### Requirement: Status check reports per-check severity counts
+The local status check JSON output SHALL include per-check warning and error counts so AI agents can distinguish warning-only checks from clean checks without re-grouping every issue.
+
+#### Scenario: Warning-only check exposes warning count
+- **WHEN** the status check emits a check that has warning issues but no error issues
+- **THEN** that check includes `warningCount` greater than zero
+- **AND** that check includes `errorCount` equal to zero.
+
+#### Scenario: Error check exposes error count
+- **WHEN** the status check emits a check that has error issues
+- **THEN** that check includes `errorCount` greater than zero.
+
+#### Scenario: Compatible status semantics
+- **WHEN** a warning-only check is emitted
+- **THEN** the existing check `status` value remains compatible with the previous no-error semantics.
+
+### Requirement: Status check next actions reflect current severity
+The local status check JSON output SHALL provide next actions that align with the highest severity present in the report so AI agents do not chase nonexistent blocking errors.
+
+#### Scenario: Warning-only report avoids error-first guidance
+- **WHEN** the status check emits warning issues and no error issues
+- **THEN** the first `nextActions[]` item does not instruct the caller to fix `severity=error`.
+- **AND** the first `nextActions[]` item guides the caller to review or resolve warning-level status drift.
+
+#### Scenario: Error report keeps blocking-error guidance
+- **WHEN** the status check emits one or more error issues
+- **THEN** the first `nextActions[]` item continues to prioritize fixing `severity=error` status drift.
+
+#### Scenario: Clean report keeps no-action guidance
+- **WHEN** the status check emits no issues
+- **THEN** `nextActions[]` continues to report that no action is needed.
+
+### Requirement: Status check text output summarizes check severity counts
+The local status check text output SHALL summarize each check's status and severity counts so readers can locate warning-only and error checks without parsing the full issue list.
+
+#### Scenario: Text output includes check summary section
+- **WHEN** the status check formats a report as text
+- **THEN** the output includes a `检查项:` section before issue details.
+
+#### Scenario: Check summary exposes severity counts
+- **WHEN** a check has warning or error issues
+- **THEN** its text summary line includes the check id, check status, total issue count, error count, and warning count.
+
+#### Scenario: JSON contract remains unchanged
+- **WHEN** status-check output is requested as JSON
+- **THEN** the existing JSON fields and status semantics remain unchanged.
+
+### Requirement: Validation advisor prefers single OpenSpec change strict validation
+The validation advisor SHALL recommend the narrowest OpenSpec validation command that safely matches the changed paths so AI agents can run fast, relevant checks before broader gates.
+
+#### Scenario: Single active change path
+- **WHEN** all OpenSpec input paths belong to the same active change under `openspec/changes/<change-id>/`
+- **THEN** the `openspec-validate` recommendation uses `openspec validate <change-id> --strict`.
+
+#### Scenario: Multiple active changes
+- **WHEN** OpenSpec input paths include more than one active change id
+- **THEN** the `openspec-validate` recommendation uses `openspec validate --all`.
+
+#### Scenario: Main specs or archive paths
+- **WHEN** OpenSpec input paths include main specs, archive paths, or paths outside a single active change
+- **THEN** the `openspec-validate` recommendation uses `openspec validate --all`.
+
+#### Scenario: Recommendation identity remains stable
+- **WHEN** the OpenSpec validation command is narrowed to one change
+- **THEN** the recommendation keeps the existing `openspec-validate` command id and category.
