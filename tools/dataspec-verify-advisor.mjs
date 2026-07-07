@@ -148,8 +148,12 @@ const VALIDATION_RULES = [
     command: 'node --test tools/prompt-template-eval.test.mjs',
     cwd: '.',
     estimatedSeconds: 5,
-    reason: 'Prompt fixture 或本地评测脚本改动需要跑 prompt golden 评测测试。',
-    patterns: [/^tools\/prompt-template-eval\.(mjs|test\.mjs)$/, /^dataspec-server\/src\/test\/resources\/fixtures\/prompts\//]
+    reason: 'Prompt fixture、本地评测脚本或后端 Prompt 模板契约代码改动需要跑 prompt golden 评测测试。',
+    patterns: [
+      /^tools\/prompt-template-eval\.(mjs|test\.mjs)$/,
+      /^dataspec-server\/src\/main\/java\/com\/dataspec\/prompt\//,
+      /^dataspec-server\/src\/test\/resources\/fixtures\/prompts\//
+    ]
   },
   {
     id: 'local-smoke-tests',

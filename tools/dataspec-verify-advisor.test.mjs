@@ -152,6 +152,22 @@ test('recommends frontend tests, build and OpenAPI check for frontend contract p
   assert.equal(advice.commands.find((command) => command.id === 'frontend-build').cwd, 'dataspec-web')
 })
 
+test('recommends prompt eval for prompt template contract code paths', () => {
+  const advice = buildValidationAdvice([
+    'dataspec-server/src/main/java/com/dataspec/prompt/service/PromptTemplateRegistry.java',
+    'dataspec-server/src/main/java/com/dataspec/prompt/service/PromptTemplateEvaluationService.java',
+    'dataspec-server/src/main/java/com/dataspec/prompt/controller/PromptTemplateController.java',
+    'dataspec-server/src/main/java/com/dataspec/prompt/model/PromptTemplateEvalReq.java'
+  ])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  const promptEval = advice.commands.find((command) => command.id === 'prompt-eval-tests')
+  assert.ok(commandIds.includes('backend-tests'))
+  assert.ok(commandIds.includes('prompt-eval-tests'))
+  assert.equal(promptEval.command, 'node --test tools/prompt-template-eval.test.mjs')
+  assert.match(promptEval.reason, /后端 Prompt 模板契约代码/)
+})
+
 test('deduplicates CLI recommendations and renders readable text', () => {
   const advice = buildValidationAdvice([
     'tools/dataspec-cli.mjs',
