@@ -873,6 +873,10 @@ function extractMarkdownLinkTargets(line) {
     if (labelStart === -1) {
       break
     }
+    if (isEscapedMarkdownDelimiter(searchableLine, labelStart)) {
+      cursor = labelStart + 1
+      continue
+    }
     const labelEnd = searchableLine.indexOf(']', labelStart + 1)
     if (labelEnd === -1) {
       break
@@ -918,7 +922,7 @@ function maskMarkdownCodeSpans(line) {
       cursor += 1
       continue
     }
-    if (isEscapedBacktick(chars, cursor)) {
+    if (isEscapedMarkdownDelimiter(chars, cursor)) {
       cursor += 1
       continue
     }
@@ -941,7 +945,7 @@ function maskMarkdownCodeSpans(line) {
   return chars.join('')
 }
 
-function isEscapedBacktick(chars, index) {
+function isEscapedMarkdownDelimiter(chars, index) {
   let slashCount = 0
   for (let cursor = index - 1; cursor >= 0 && chars[cursor] === '\\'; cursor -= 1) {
     slashCount += 1

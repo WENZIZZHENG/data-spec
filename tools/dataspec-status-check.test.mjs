@@ -524,6 +524,36 @@ test('buildStatusReport checks Markdown links between escaped backticks', () => 
   assert.match(missingLinks[0].message, /docs\/archive\/missing-escaped-inline\.md/)
 })
 
+test('buildStatusReport ignores Markdown links with escaped opening brackets', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: [
+      CLEAN_README,
+      '转义标签 \\[忽略缺失链接](docs/archive/missing-escaped-label.md) 后仍检查 [真实缺失链接](docs/archive/missing-after-escaped-label.md)。',
+      ''
+    ].join('\n'),
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'fail')
+  assert.equal(missingLinks.length, 1)
+  assert.match(missingLinks[0].message, /docs\/archive\/missing-after-escaped-label\.md/)
+})
+
 test('buildStatusReport reports deterministic TODO and OpenSpec drift', () => {
   const report = buildStatusReport({
     todoText: CLEAN_TODO.replace('P6-71、P6-72', 'P6-70、P6-404').replace('- 后续增强：更深 trace。', '- 缺口：旧缺口仍残留。'),
