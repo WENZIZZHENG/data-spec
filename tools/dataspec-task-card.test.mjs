@@ -18,7 +18,8 @@ test('creates task cards from all workflow recipes with stable shape', () => {
       'host/port/databaseName/schemaName': 'db.local:5432/app/public',
       'username/password': 'readonly/super_secret'
     },
-    'export-min-context': { projectId: 7, scope: 'field', query: '订单' }
+    'export-min-context': { projectId: 7, scope: 'field', query: '订单' },
+    'standard-evidence-review': { projectId: 7, subjectType: 'FIELD', subjectId: 42 }
   }
 
   for (const [workflowId, inputs] of Object.entries(inputsByWorkflow)) {
@@ -59,6 +60,21 @@ test('blocks task card when required workflow inputs are missing', () => {
   assert.equal(card.status, 'BLOCKED')
   assert.equal(card.currentStep, null)
   assert.ok(card.stopConditions.some((item) => item.includes('businessDescription')))
+  assert.ok(card.nextActions.some((item) => item.code === 'PROVIDE_REQUIRED_INPUT'))
+})
+
+test('standard evidence review task card blocks when subject id is missing', () => {
+  const card = createTaskCard({
+    workflowId: 'standard-evidence-review',
+    projectId: 7,
+    goal: '复核订单号字段证据',
+    inputs: { projectId: 7, subjectType: 'FIELD' },
+    now: FIXED_NOW
+  })
+
+  assert.equal(card.status, 'BLOCKED')
+  assert.equal(card.currentStep, null)
+  assert.ok(card.stopConditions.some((item) => item.includes('subjectId')))
   assert.ok(card.nextActions.some((item) => item.code === 'PROVIDE_REQUIRED_INPUT'))
 })
 

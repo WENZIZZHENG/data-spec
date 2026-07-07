@@ -5157,7 +5157,8 @@ test('workflow list prints machine-readable recipe summaries without calling ser
     'create-table',
     'review-pr-sql',
     'reverse-import-standards',
-    'export-min-context'
+    'export-min-context',
+    'standard-evidence-review'
   ])
   assert.equal(output.recipes[0].requiredInputs[0].name, 'projectId')
   assert.equal(io.stderr, '')
@@ -5180,6 +5181,32 @@ test('workflow show prints complete recipe with commands and recovery guidance',
   assert.ok(output.recipe.failureHandling.length > 0)
   assert.ok(output.recipe.nextActions.length > 0)
   assert.equal(output.recipe.sideEffectPolicy, 'plan-only')
+})
+
+test('workflow show prints standard evidence review as api-only plan', async () => {
+  const io = createIo()
+  const fetchFn = async () => {
+    throw new Error('fetch should not be called')
+  }
+
+  const code = await runCli(['workflow', 'show', 'standard-evidence-review', '--format', 'json'], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  const inputNames = output.recipe.requiredInputs.map((input) => input.name)
+  const commands = [
+    ...output.recipe.prechecks.map((precheck) => precheck.command),
+    ...output.recipe.steps.map((step) => step.command)
+  ].join('\n')
+  assert.equal(code, 0)
+  assert.equal(output.recipe.id, 'standard-evidence-review')
+  assert.deepEqual(inputNames, ['projectId', 'subjectType', 'subjectId'])
+  assert.equal(output.recipe.sideEffectPolicy, 'plan-only')
+  assert.match(commands, /GET \/api\/standard-evidence/)
+  assert.match(commands, /capability show standard-evidence/)
+  assert.doesNotMatch(commands, /dataspec(?:-cli\.mjs)?\s+standard-evidence\b/)
+  assert.doesNotMatch(commands, /dataspec:\/\/project\/<projectId>\/standard-evidence/)
+  assert.ok(output.recipe.expectedArtifacts.some((artifact) => artifact.includes('证据摘要')))
+  assert.equal(io.stderr, '')
 })
 
 test('workflow recipes do not suggest printing secret tokens', async () => {

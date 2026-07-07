@@ -288,6 +288,76 @@ export const WORKFLOW_RECIPES = [
       '若字段目录缺少关键字段，先补标准候选再生成 DDL。'
     ],
     sideEffectPolicy: 'plan-only'
+  },
+  {
+    id: 'standard-evidence-review',
+    title: '字段标准证据复核',
+    goal: '在回答字段标准依据、可信度、最近使用情况或准备调整标准前，先读取跨来源标准证据并形成可复现结论。',
+    requiredInputs: [
+      { name: 'projectId', description: 'DataSpec 项目 ID。', required: true },
+      { name: 'subjectType', description: '证据主体类型，第一版通常为 FIELD。', required: true },
+      { name: 'subjectId', description: '证据主体 ID，例如字段标准 ID。', required: true }
+    ],
+    prechecks: [
+      {
+        title: '确认 DataSpec 服务、项目和本地配置可用',
+        command: 'node tools/dataspec-cli.mjs doctor --project <projectId> --format json',
+        expected: 'server/project/auth 检查通过；warn 项需要在证据结论中记录。'
+      },
+      {
+        title: '确认 standard-evidence capability 是只读 API-only',
+        command: 'node tools/dataspec-cli.mjs capability show standard-evidence --project <projectId> --format json',
+        expected: 'writeRisk 为 READ_ONLY，apiEndpoints 包含 GET /api/standard-evidence，cliCommands/mcpResources/mcpTools 为空。'
+      }
+    ],
+    steps: [
+      {
+        order: 1,
+        title: '读取跨来源标准证据',
+        command: 'GET /api/standard-evidence?projectId=<projectId>&subjectType=<subjectType>&subjectId=<subjectId>',
+        purpose: '获取字段标准来源、可信度、最近使用、覆盖率、示例和相关任务证据的聚合视图。',
+        output: 'cross-source-standard-evidence-view JSON。'
+      },
+      {
+        order: 2,
+        title: '判断证据是否足以支撑回答或变更',
+        command: '检查 evidenceSummary、confidence、recentUsage、coverage 和 gaps',
+        purpose: '避免只凭字段名或单条示例修改标准；证据不足时先停止并补充上下文。',
+        output: '证据充分性判断和缺口列表。'
+      },
+      {
+        order: 3,
+        title: '记录证据结论和下一步',
+        command: '在任务说明中记录证据摘要、采信原因、未采信来源和建议动作',
+        purpose: '让字段标准问答、候选变更或人工复核可追溯。',
+        output: '字段标准证据摘要和后续动作。'
+      }
+    ],
+    expectedArtifacts: [
+      '字段标准证据摘要',
+      '可信度、最近使用和覆盖率判断',
+      '证据缺口、未采信来源和后续动作说明'
+    ],
+    failureHandling: [
+      {
+        condition: 'capability show 未返回 standard-evidence 或 surfaces 不一致',
+        nextAction: '先更新服务端 capability catalog 或本地 CLI 版本，不要假设存在独立 CLI/MCP 工具。'
+      },
+      {
+        condition: 'standard evidence 为空或可信度不足',
+        nextAction: '标记证据不足，先导出最小 AI Context、查看字段目录或补充使用示例，不要直接修改标准。'
+      },
+      {
+        condition: '不同来源证据冲突',
+        nextAction: '保留冲突来源和采信规则，创建任务卡或交给人工确认后再进入标准候选/变更流程。'
+      }
+    ],
+    nextActions: [
+      '把证据摘要和标准版本写入回答或交付说明。',
+      '如果需要修改标准，先创建候选或变更预览，并附上证据结论。',
+      '如果只是问答，明确说明证据来源、可信度和未覆盖风险。'
+    ],
+    sideEffectPolicy: 'plan-only'
   }
 ]
 
