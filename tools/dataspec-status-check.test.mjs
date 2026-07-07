@@ -456,6 +456,58 @@ test('buildStatusReport accepts angle-bracket Markdown links with spaces', () =>
   assert.equal(missingLinks.length, 0)
 })
 
+test('buildStatusReport accepts Markdown link paths with escaped spaces', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: `${CLEAN_README}\n参考 [带空格文档](docs/archive/example\\ note.md)。\n`,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/archive/example note.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'pass')
+  assert.equal(missingLinks.length, 0)
+})
+
+test('buildStatusReport reports missing Markdown link paths with escaped spaces', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: `${CLEAN_README}\n参考 [缺失空格文档](docs/archive/missing\\ note.md)。\n`,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'fail')
+  assert.equal(missingLinks.length, 1)
+  assert.match(missingLinks[0].message, /docs\/archive\/missing\\ note\.md/)
+})
+
 test('buildStatusReport accepts URL-encoded Markdown link paths', () => {
   const report = buildStatusReport({
     todoText: CLEAN_TODO,

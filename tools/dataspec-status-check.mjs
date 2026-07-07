@@ -1128,7 +1128,7 @@ function findMarkdownLinkLabelEnd(line, start) {
 function findMarkdownLinkTargetEnd(line, targetStart) {
   let nestedParens = 0
   for (let index = targetStart; index < line.length; index += 1) {
-    if (nestedParens === 0 && /\s/.test(line[index])) {
+    if (nestedParens === 0 && /\s/.test(line[index]) && !isEscapedMarkdownDelimiter(line, index)) {
       const titleOrCloseStart = findNextNonWhitespace(line, index)
       if (titleOrCloseStart === -1) {
         return -1
@@ -1281,7 +1281,17 @@ function parseMarkdownLinkTarget(rawTarget) {
       return rawTarget.slice(1, endIndex)
     }
   }
-  return rawTarget.split(/\s+/)[0]
+  const targetEnd = findMarkdownLinkTargetTitleSeparator(rawTarget)
+  return targetEnd === -1 ? rawTarget : rawTarget.slice(0, targetEnd)
+}
+
+function findMarkdownLinkTargetTitleSeparator(rawTarget) {
+  for (let index = 0; index < rawTarget.length; index += 1) {
+    if (/\s/.test(rawTarget[index]) && !isEscapedMarkdownDelimiter(rawTarget, index)) {
+      return index
+    }
+  }
+  return -1
 }
 
 function prepareMarkdownLinkPath(filePath) {
@@ -1294,7 +1304,7 @@ function prepareMarkdownLinkPath(filePath) {
 }
 
 function unescapeMarkdownLinkPath(filePath) {
-  return String(filePath ?? '').replace(/\\([()])/g, '$1')
+  return String(filePath ?? '').replace(/\\([() ])/g, '$1')
 }
 
 function extractArchivedChangeIds(item) {
