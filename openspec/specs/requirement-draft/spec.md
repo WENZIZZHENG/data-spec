@@ -1,3 +1,5 @@
+# requirement-draft Specification
+
 ## Purpose
 
 描述 DataSpec 如何把自然语言建表需求转换为只读标准候选草案，帮助用户和 AI 在生成 DDL 或写入标准候选前先完成字段、模板和歧义点确认。

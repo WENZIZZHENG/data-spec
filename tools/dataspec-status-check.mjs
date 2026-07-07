@@ -388,6 +388,7 @@ function checkOpenSpecState(todoItems, changeEntries, specEntries, specTexts, re
     }
   }
 
+  checkOpenSpecSpecTitles(specTexts, issues)
   checkOpenSpecSpecPurposes(specTexts, issues)
   checkOpenSpecSpecRequirements(specTexts, issues)
 }
@@ -404,6 +405,34 @@ function checkTodoActiveChangeReferences(todoText, activeChanges, issues) {
       line: reference.line,
       suggestedFix: `把 ${reference.changeId} 的 TODO 状态改为已归档，或恢复 openspec/changes/${reference.changeId} active change 目录。`
     }))
+  }
+}
+
+function checkOpenSpecSpecTitles(specTexts, issues) {
+  for (const [capability, text] of specTexts) {
+    const lines = String(text ?? '').split(/\r?\n/)
+    const titleIndex = lines.findIndex((line) => line.trim().length > 0)
+    const specPath = `openspec/specs/${capability}/spec.md`
+    const expectedTitle = `# ${capability} Specification`
+    if (titleIndex === -1 || !/^#\s+/.test(lines[titleIndex].trim())) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_TITLE_MISSING',
+        message: `${specPath} 缺少顶层标题 ${expectedTitle}，AI 读取主规格时会缺少稳定 capability 标识。`,
+        file: specPath,
+        line: titleIndex === -1 ? 1 : titleIndex + 1,
+        suggestedFix: `在文件开头补充 ${expectedTitle}。`
+      }))
+      continue
+    }
+    if (lines[titleIndex].trim() !== expectedTitle) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_TITLE_MISMATCH',
+        message: `${specPath} 的顶层标题应为 ${expectedTitle}，当前标题会让 AI 将能力归属到错误 capability。`,
+        file: specPath,
+        line: titleIndex + 1,
+        suggestedFix: `将顶层标题改为 ${expectedTitle}，并保持目录名与 capability 名一致。`
+      }))
+    }
   }
 }
 

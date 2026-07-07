@@ -500,6 +500,90 @@ test('runStatusCheckCli supports json output and returns non-zero on errors', as
   }
 })
 
+test('runStatusCheckCli reports missing and mismatched main OpenSpec spec titles', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'missing-title'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'mismatched-title'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+
+#### Scenario: Debug rule hit
+- **WHEN** the user requests a rule explanation
+- **THEN** DataSpec returns evidence
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'missing-title', 'spec.md'),
+      `## Purpose
+用于验证缺少主标题的规格。
+## Requirements
+### Requirement: Missing title example
+DataSpec SHALL keep a title.
+
+#### Scenario: Keep title
+- **WHEN** the main spec is checked
+- **THEN** DataSpec reports the missing title
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'mismatched-title', 'spec.md'),
+      `# wrong-title Specification
+
+## Purpose
+用于验证主标题与 capability 目录名不一致的规格。
+## Requirements
+### Requirement: Mismatched title example
+DataSpec SHALL keep the title aligned with the capability directory.
+
+#### Scenario: Keep title aligned
+- **WHEN** the main spec is checked
+- **THEN** DataSpec reports the mismatched title
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    const missingIssue = output.issues.find((issue) => issue.code === 'OPENSPEC_SPEC_TITLE_MISSING')
+    const mismatchIssue = output.issues.find((issue) => issue.code === 'OPENSPEC_SPEC_TITLE_MISMATCH')
+    const openSpecCheck = output.checks.find((check) => check.id === 'openspec-state')
+
+    assert.equal(code, 1)
+    assert.equal(output.status, 'fail')
+    assert.ok(missingIssue)
+    assert.equal(missingIssue.file, 'openspec/specs/missing-title/spec.md')
+    assert.equal(missingIssue.line, 1)
+    assert.ok(mismatchIssue)
+    assert.equal(mismatchIssue.file, 'openspec/specs/mismatched-title/spec.md')
+    assert.equal(mismatchIssue.line, 1)
+    assert.match(mismatchIssue.message, /mismatched-title/)
+    assert.equal(openSpecCheck.status, 'fail')
+    assert.equal(openSpecCheck.errorCount, 2)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('runStatusCheckCli reports placeholder Purpose in main OpenSpec specs', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
   try {
