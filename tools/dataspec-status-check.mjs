@@ -866,29 +866,30 @@ function checkMarkdownLinks(file, text, relativeFiles, issues) {
 
 function extractMarkdownLinkTargets(line) {
   const targets = []
+  const searchableLine = maskMarkdownCodeSpans(line)
   let cursor = 0
-  while (cursor < line.length) {
-    const labelStart = line.indexOf('[', cursor)
+  while (cursor < searchableLine.length) {
+    const labelStart = searchableLine.indexOf('[', cursor)
     if (labelStart === -1) {
       break
     }
-    const labelEnd = line.indexOf(']', labelStart + 1)
+    const labelEnd = searchableLine.indexOf(']', labelStart + 1)
     if (labelEnd === -1) {
       break
     }
-    if (line[labelEnd + 1] !== '(') {
+    if (searchableLine[labelEnd + 1] !== '(') {
       cursor = labelEnd + 1
       continue
     }
 
     const targetStart = labelEnd + 2
-    if (line[targetStart] === '<') {
-      const angleEnd = line.indexOf('>', targetStart + 1)
+    if (searchableLine[targetStart] === '<') {
+      const angleEnd = searchableLine.indexOf('>', targetStart + 1)
       if (angleEnd === -1) {
         cursor = targetStart + 1
         continue
       }
-      const parenEnd = line.indexOf(')', angleEnd + 1)
+      const parenEnd = searchableLine.indexOf(')', angleEnd + 1)
       if (parenEnd === -1) {
         cursor = angleEnd + 1
         continue
@@ -898,7 +899,7 @@ function extractMarkdownLinkTargets(line) {
       continue
     }
 
-    const parenEnd = line.indexOf(')', targetStart)
+    const parenEnd = searchableLine.indexOf(')', targetStart)
     if (parenEnd === -1) {
       cursor = targetStart
       continue
@@ -907,6 +908,69 @@ function extractMarkdownLinkTargets(line) {
     cursor = parenEnd + 1
   }
   return targets
+}
+
+function maskMarkdownCodeSpans(line) {
+  const chars = String(line ?? '').split('')
+  let cursor = 0
+  while (cursor < chars.length) {
+    if (chars[cursor] !== '`') {
+      cursor += 1
+      continue
+    }
+    if (isEscapedBacktick(chars, cursor)) {
+      cursor += 1
+      continue
+    }
+
+    const openingEnd = findBacktickRunEnd(chars, cursor)
+    const runLength = openingEnd - cursor
+    const closingStart = findClosingBacktickRun(chars, openingEnd, runLength)
+    if (closingStart === -1) {
+      cursor = openingEnd
+      continue
+    }
+
+    // 只屏蔽能按 Markdown 规则闭合的行内代码，避免未闭合反引号吞掉真实链接。
+    const closingEnd = closingStart + runLength
+    for (let index = cursor; index < closingEnd; index += 1) {
+      chars[index] = ' '
+    }
+    cursor = closingEnd
+  }
+  return chars.join('')
+}
+
+function isEscapedBacktick(chars, index) {
+  let slashCount = 0
+  for (let cursor = index - 1; cursor >= 0 && chars[cursor] === '\\'; cursor -= 1) {
+    slashCount += 1
+  }
+  return slashCount % 2 === 1
+}
+
+function findBacktickRunEnd(chars, start) {
+  let end = start
+  while (end < chars.length && chars[end] === '`') {
+    end += 1
+  }
+  return end
+}
+
+function findClosingBacktickRun(chars, start, runLength) {
+  let cursor = start
+  while (cursor < chars.length) {
+    if (chars[cursor] !== '`') {
+      cursor += 1
+      continue
+    }
+    const runEnd = findBacktickRunEnd(chars, cursor)
+    if (runEnd - cursor === runLength) {
+      return cursor
+    }
+    cursor = runEnd
+  }
+  return -1
 }
 
 function parseMarkdownLinkTarget(rawTarget) {

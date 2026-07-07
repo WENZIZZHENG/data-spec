@@ -439,6 +439,91 @@ test('buildStatusReport resumes Markdown link checks after fenced code blocks', 
   assert.match(missingLinks[0].message, /docs\/archive\/missing-after-fence\.md/)
 })
 
+test('buildStatusReport ignores Markdown links inside inline code spans', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: `${CLEAN_README}
+行内示例 \`[忽略缺失链接](docs/archive/missing-inline-example.md)\` 后仍检查 [真实缺失链接](docs/archive/missing-after-inline.md)。
+`,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'fail')
+  assert.equal(missingLinks.length, 1)
+  assert.match(missingLinks[0].message, /docs\/archive\/missing-after-inline\.md/)
+})
+
+test('buildStatusReport keeps link targets aligned after emoji inside inline code spans', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: `${CLEAN_README}
+行内示例 \`😀 [忽略缺失链接](docs/archive/missing-inline-emoji-example.md)\` 后仍检查 [存在链接](docs/archive/example.md)。
+`,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'pass')
+  assert.equal(missingLinks.length, 0)
+})
+
+test('buildStatusReport checks Markdown links between escaped backticks', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: [
+      CLEAN_README,
+      '转义反引号 \\`[真实缺失链接](docs/archive/missing-escaped-inline.md)\\` 仍应检查。',
+      ''
+    ].join('\n'),
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'fail')
+  assert.equal(missingLinks.length, 1)
+  assert.match(missingLinks[0].message, /docs\/archive\/missing-escaped-inline\.md/)
+})
+
 test('buildStatusReport reports deterministic TODO and OpenSpec drift', () => {
   const report = buildStatusReport({
     todoText: CLEAN_TODO.replace('P6-71、P6-72', 'P6-70、P6-404').replace('- 后续增强：更深 trace。', '- 缺口：旧缺口仍残留。'),
