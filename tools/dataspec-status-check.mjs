@@ -496,11 +496,15 @@ function buildChecks(issues) {
   ]
   return definitions.map(([id, name]) => {
     const related = issues.filter((item) => codeBelongsToCheck(item.code, id))
+    const errorCount = related.filter((item) => item.severity === 'error').length
+    const warningCount = related.filter((item) => item.severity === 'warning').length
     return {
       id,
       name,
-      status: related.some((item) => item.severity === 'error') ? 'fail' : 'pass',
-      issueCount: related.length
+      status: errorCount > 0 ? 'fail' : 'pass',
+      issueCount: related.length,
+      errorCount,
+      warningCount
     }
   })
 }

@@ -247,6 +247,10 @@ test('buildStatusReport treats active changes as warning unless TODO claims queu
   assert.equal(report.status, 'warn')
   assert.deepEqual(report.issues.map((issue) => issue.code), ['OPENSPEC_ACTIVE_CHANGE_PRESENT'])
   assert.equal(report.issues[0].severity, 'warning')
+  const openSpecCheck = report.checks.find((check) => check.id === 'openspec-state')
+  assert.equal(openSpecCheck.status, 'pass')
+  assert.equal(openSpecCheck.warningCount, 1)
+  assert.equal(openSpecCheck.errorCount, 0)
 })
 
 test('runStatusCheckCli supports json output and returns non-zero on errors', async () => {
@@ -264,6 +268,9 @@ test('runStatusCheckCli supports json output and returns non-zero on errors', as
     assert.equal(code, 1)
     assert.equal(output.status, 'fail')
     assert.ok(output.issues.some((issue) => issue.code === 'TODO_QUEUE_ITEM_MISSING'))
+    const todoQueueCheck = output.checks.find((check) => check.id === 'todo-queue')
+    assert.equal(todoQueueCheck.errorCount, 2)
+    assert.equal(todoQueueCheck.warningCount, 0)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
