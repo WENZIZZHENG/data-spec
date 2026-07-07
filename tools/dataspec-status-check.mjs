@@ -824,7 +824,7 @@ function checkMarkdownLinks(file, text, relativeFiles, issues) {
   lines.forEach((line, index) => {
     for (const match of line.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
       const rawTarget = match[1].trim()
-      const target = rawTarget.split(/\s+/)[0]
+      const target = parseMarkdownLinkTarget(rawTarget)
       if (shouldSkipLink(target)) {
         continue
       }
@@ -844,6 +844,16 @@ function checkMarkdownLinks(file, text, relativeFiles, issues) {
       }
     }
   })
+}
+
+function parseMarkdownLinkTarget(rawTarget) {
+  if (rawTarget.startsWith('<')) {
+    const endIndex = rawTarget.indexOf('>')
+    if (endIndex > 0) {
+      return rawTarget.slice(1, endIndex)
+    }
+  }
+  return rawTarget.split(/\s+/)[0]
 }
 
 function extractArchivedChangeIds(item) {
