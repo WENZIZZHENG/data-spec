@@ -29,7 +29,7 @@ class AiCapabilityCatalogServiceImplTest {
 
         assertEquals(AiCapabilityCatalogServiceImpl.KIND, catalog.kind());
         assertEquals(1, catalog.schemaVersion());
-        assertEquals("2026.07.05", catalog.catalogVersion());
+        assertEquals("2026.07.07", catalog.catalogVersion());
         assertNotNull(catalog.generatedAt());
         assertFalse(catalog.capabilities().isEmpty());
         assertEquals(catalog.requiredCapabilityIds(), catalog.capabilities().stream().map(AiCapabilityEntry::id).toList());
@@ -53,7 +53,8 @@ class AiCapabilityCatalogServiceImplTest {
                 "workflow-recipes",
                 "ai-task-profiles",
                 "domain-starter-kits",
-                "session-bootstrap"
+                "session-bootstrap",
+                "standard-evidence"
         )));
     }
 
@@ -155,6 +156,39 @@ class AiCapabilityCatalogServiceImplTest {
         assertTrue(safety.path("readOnly").asBoolean(false));
         assertFalse(safety.path("writesProject").asBoolean(true));
         assertFalse(safety.path("requiresIdempotencyKey").asBoolean(true));
+    }
+
+    @Test
+    void standardEvidenceCapabilityIsReadOnlyAndDiscoverable() {
+        AiCapabilityCatalog catalog = service.getCatalog(1L);
+        AiCapabilityEntry entry = service.getCapability("standard_evidence", 1L);
+        JsonNode safety = objectMapper.valueToTree(entry).path("safety");
+        VersionCompatibilityResponse version = service.getVersionCompatibility("cli", "0.1.0");
+
+        assertTrue(catalog.requiredCapabilityIds().contains("standard-evidence"));
+        assertEquals("standard-evidence", entry.id());
+        assertEquals("evidence", entry.category());
+        assertEquals("READ_ONLY", entry.writeRisk());
+        assertTrue(entry.requiresProject());
+        assertEquals(List.of("projectId", "subjectType", "subjectId"), entry.requiredInputs());
+        assertTrue(entry.optionalInputs().isEmpty());
+        assertEquals(List.of("cross-source-standard-evidence-view"), entry.outputContracts());
+        assertEquals(List.of("GET /api/standard-evidence"), entry.apiEndpoints());
+        assertEquals(List.of(), entry.cliCommands());
+        assertEquals(List.of(), entry.mcpResources());
+        assertEquals(List.of(), entry.mcpTools());
+        assertTrue(entry.examples().stream().anyMatch(example ->
+                "GET /api/standard-evidence?projectId=1&subjectType=FIELD&subjectId=10"
+                        .equals(example.request())));
+        assertTrue(entry.preflightChecks().stream().anyMatch(check -> check.contains("FIELD")));
+        assertTrue(entry.nextActions().stream().anyMatch(action -> action.contains("/api/standard-evidence")));
+        assertTrue(safety.path("readOnly").asBoolean(false));
+        assertFalse(safety.path("writesProject").asBoolean(true));
+        assertFalse(safety.path("requiresIdempotencyKey").asBoolean(true));
+        assertTrue(safety.path("sensitiveInputs").isArray());
+        assertTrue(safety.path("nextActions").toString().contains("raw SQL"));
+        assertTrue(version.supportedCapabilities().stream()
+                .anyMatch(capability -> "standard-evidence".equals(capability.id())));
     }
 
     @Test

@@ -74,6 +74,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI 批量任务，支持后端保存 SQL lint batch run、前端查看最近任务/分项结果/下一步动作、绑定 AI task run 并下载 JSON 交付包。
 - AI 任务失败恢复，记录 task run 状态、失败步骤、partial artifacts、retryable、idempotencyKey 和 resumeCommand；API/CLI/MCP/前端可查询最近失败任务并复制恢复命令。
 - AI 执行证据包，支持从 SQL 检查记录、AI job、AI 批量任务、AI task run 和当前覆盖率报告生成 JSON 或 zip，前端可复制/下载，CLI/MCP 可机器读取。
+- 跨来源标准证据视图，提供只读 `GET /api/standard-evidence?projectId=1&subjectType=FIELD&subjectId=10`，按单字段聚合字段来源、可信度、使用热区、候选决策、变更日志、SQL 检查命中和 AI 作业使用摘要；响应不会返回 raw SQL、AI payload、候选 raw evidence、raw source metadata、token、password、Authorization、JDBC URL、DSN 或业务数据行。
 - AI 交接证据看板，按项目聚合 AI task run、AI job、SQL 检查和 AI 批量任务，标红失败或未验证项，并可直接生成、复制或下载脱敏 evidence package。
 - AI/CLI 写入保护，标准快照、反向导入确认、AI 批量 SQL lint、项目恢复 apply 和 AI job 回放记录已接入单机轻量 idempotency key、项目级 operation lock 和可重试冲突诊断。
 - 自然语言需求草案 API 和前端入口，基于字段推荐/检索、业务术语表和表模板，把建表描述拆成 matchedFields、missingCandidates、ambiguousTerms、recommendedTemplate、nextActions 和可复制 Prompt；字段、候选和模板会展示 Explain Trace 证据来源；第一版只读，不自动写入候选或字段库。
@@ -270,13 +271,15 @@ node tools/dataspec-cli.mjs task-card update --file .dataspec/task-card.json --s
 ```bash
 curl "http://localhost:8090/api/capabilities?projectId=1"
 curl "http://localhost:8090/api/capabilities/lint-sql?projectId=1"
+curl "http://localhost:8090/api/capabilities/standard-evidence?projectId=1"
+curl "http://localhost:8090/api/standard-evidence?projectId=1&subjectType=FIELD&subjectId=10"
 
 node tools/dataspec-cli.mjs capability list --project 1 --format json
 node tools/dataspec-cli.mjs capability show lint-sql --project 1 --format json
 node tools/dataspec-cli.mjs capability check --project 1 --format json
 ```
 
-第一版内置 `session-bootstrap`、`version-compatibility`、`capability-catalog`、`doctor`、`export-ai-context`、`lint-sql`、`sql-rule-debugger`、`search-fields`、`suggest-fields`、`merge-standard-fields`、`generate-ddl`、`reverse-import`、`project-backup-restore`、`standard-reuse-packs`、`ai-batch-sql-lint`、`coverage-report`、`schema-registry`、`export-evidence-package`、`workflow-recipes`、`ai-task-profiles` 和 `domain-starter-kits`。每项能力都会返回兼容新增的 `safety` 对象，字段包括 `readOnly`、`writesProject`、`requiresDryRun`、`supportsUndo`、`requiresIdempotencyKey`、`sensitiveInputs` 和 `nextActions`；旧版 `writeRisk` 和 `preflightChecks` 仍保留，方便旧客户端继续读取摘要风险。写入型能力应先按 `safety.nextActions` 执行预览、dry-run、幂等 key 或证据导出步骤，再执行实际工具。
+第一版内置 `session-bootstrap`、`version-compatibility`、`capability-catalog`、`doctor`、`export-ai-context`、`lint-sql`、`sql-rule-debugger`、`search-fields`、`suggest-fields`、`merge-standard-fields`、`generate-ddl`、`reverse-import`、`project-backup-restore`、`standard-reuse-packs`、`ai-batch-sql-lint`、`coverage-report`、`schema-registry`、`export-evidence-package`、`standard-evidence`、`workflow-recipes`、`ai-task-profiles` 和 `domain-starter-kits`。每项能力都会返回兼容新增的 `safety` 对象，字段包括 `readOnly`、`writesProject`、`requiresDryRun`、`supportsUndo`、`requiresIdempotencyKey`、`sensitiveInputs` 和 `nextActions`；旧版 `writeRisk` 和 `preflightChecks` 仍保留，方便旧客户端继续读取摘要风险。写入型能力应先按 `safety.nextActions` 执行预览、dry-run、幂等 key 或证据导出步骤，再执行实际工具。`standard-evidence` 当前只声明 API surface，不声明 CLI/MCP 命令，适合 AI 在回答字段标准来源、可信度和最近使用证据前读取。
 
 ## 版本兼容握手
 

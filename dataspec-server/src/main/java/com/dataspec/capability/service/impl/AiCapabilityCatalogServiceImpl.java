@@ -35,7 +35,7 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
 
     public static final String KIND = "dataspec-ai-capability-catalog";
     public static final int SCHEMA_VERSION = 1;
-    public static final String CATALOG_VERSION = "2026.07.05";
+    public static final String CATALOG_VERSION = "2026.07.07";
     public static final String VERSION_COMPATIBILITY_KIND = "dataspec-version-compatibility";
     public static final int VERSION_COMPATIBILITY_SCHEMA_VERSION = 1;
     public static final String SERVER_VERSION = "0.1.0-SNAPSHOT";
@@ -443,6 +443,24 @@ public class AiCapabilityCatalogServiceImpl implements AiCapabilityCatalogServic
                 list("证据包只读", "zip 输出必须指定安全路径"),
                 list("完成 SQL 修复、覆盖率或批量任务后导出证据包交付。"),
                 "README.md#ai-与自动化"
+        ));
+        add(map, cap(
+                "standard-evidence", "evidence", "跨来源标准证据视图",
+                "按单个标准字段聚合来源、可信度、使用热区、候选决策、变更日志、SQL 检查命中和 AI 作业使用摘要。",
+                true, "READ_ONLY",
+                list("projectId", "subjectType", "subjectId"), list(),
+                list("cross-source-standard-evidence-view"),
+                list("GET /api/standard-evidence"),
+                list(),
+                list(), list(),
+                list(),
+                list("cross-source-standard-evidence-view"),
+                list(), list(),
+                examples("API", null, "GET /api/standard-evidence?projectId=1&subjectType=FIELD&subjectId=10"),
+                list("先通过字段库、字段检索或字段影响分析确认同项目 fieldId", "第一版仅支持 subjectType=FIELD"),
+                list("调用 /api/standard-evidence 前确认 projectId 与 subjectId 归属一致。",
+                        "把 aiEvidenceSummary 复制给 AI 时，不要补入 raw SQL、AI payload、候选 raw evidence 或凭据。"),
+                "README.md#ai-能力清单"
         ));
         add(map, cap(
                 "workflow-recipes", "workflow", "任务化 Workflow Recipes",
