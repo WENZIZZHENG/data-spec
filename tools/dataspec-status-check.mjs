@@ -496,6 +496,15 @@ function checkOpenSpecSpecRequirements(specTexts, issues) {
         suggestedFix: '在该 Requirement 下补充至少一个 #### Scenario:，描述 WHEN/THEN 或等价验收行为。'
       }))
     }
+    for (const scenario of findScenariosWithMissingSteps(lines, requirementsIndex)) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_SCENARIO_STEPS_MISSING',
+        message: `${specPath} 的 ${scenario.title} 缺少 - **WHEN** 或 - **THEN** 步骤，AI 难以稳定执行验收判断。`,
+        file: specPath,
+        line: scenario.line,
+        suggestedFix: '在该 Scenario 下补齐 - **WHEN** 与 - **THEN** 步骤；可按需保留 - **AND** 作为补充条件。'
+      }))
+    }
   }
 }
 
@@ -543,6 +552,49 @@ function findRequirementsWithoutScenario(lines, requirementsIndex) {
   }
 
   flushRequirement()
+  return missing
+}
+
+function findScenariosWithMissingSteps(lines, requirementsIndex) {
+  const missing = []
+  let inRequirement = false
+  let currentScenario = null
+
+  const flushScenario = () => {
+    if (currentScenario && (!currentScenario.hasWhen || !currentScenario.hasThen)) {
+      missing.push(currentScenario)
+    }
+  }
+
+  for (let index = requirementsIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (/^##\s+/.test(line)) {
+      flushScenario()
+      return missing
+    }
+    if (/^###\s+/.test(line)) {
+      flushScenario()
+      currentScenario = null
+      inRequirement = /^###\s+Requirement\s*:/.test(line)
+      continue
+    }
+    if (!inRequirement) {
+      continue
+    }
+    if (/^####\s+Scenario\s*:/.test(line)) {
+      flushScenario()
+      currentScenario = { line: index + 1, title: line, hasWhen: false, hasThen: false }
+      continue
+    }
+    if (currentScenario && /^-\s+\*\*WHEN\*\*/i.test(line)) {
+      currentScenario.hasWhen = true
+    }
+    if (currentScenario && /^-\s+\*\*THEN\*\*/i.test(line)) {
+      currentScenario.hasThen = true
+    }
+  }
+
+  flushScenario()
   return missing
 }
 

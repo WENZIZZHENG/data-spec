@@ -891,6 +891,71 @@ DataSpec SHALL keep scenarios directly under the requirement they verify.
   }
 })
 
+test('runStatusCheckCli reports Scenario entries without WHEN or THEN steps', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'missing-scenario-step'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+
+#### Scenario: Debug rule hit
+- **WHEN** the user requests a rule explanation
+- **THEN** DataSpec returns evidence
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'missing-scenario-step', 'spec.md'),
+      `# missing-scenario-step Specification
+
+## Purpose
+用于验证 Scenario 缺少 WHEN 或 THEN 步骤的主规格。
+## Requirements
+### Requirement: Executable scenario steps
+DataSpec SHALL keep each scenario executable.
+
+#### Scenario: Missing then step
+- **WHEN** the main spec is checked
+- **AND** the scenario omits the outcome
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    const issue = output.issues.find((issue) => issue.code === 'OPENSPEC_SPEC_SCENARIO_STEPS_MISSING')
+    const openSpecCheck = output.checks.find((check) => check.id === 'openspec-state')
+
+    assert.equal(code, 1)
+    assert.equal(output.status, 'fail')
+    assert.ok(issue)
+    assert.equal(issue.file, 'openspec/specs/missing-scenario-step/spec.md')
+    assert.equal(issue.line, 9)
+    assert.match(issue.message, /WHEN.*THEN/)
+    assert.equal(openSpecCheck.status, 'fail')
+    assert.equal(openSpecCheck.errorCount, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 function createIo() {
   return {
     stdout: '',
