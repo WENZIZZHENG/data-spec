@@ -60,6 +60,33 @@ public class StandardCandidateRepository {
                         .orderByDesc(StandardCandidate::getId));
     }
 
+    /**
+     * 查询候选安全摘要列，供跨来源证据视图聚合使用，避免装载 raw evidenceJson、comment 等可能包含业务样例或凭据的字段。
+     */
+    public List<StandardCandidate> findSummaryByProjectId(Long projectId) {
+        return standardCandidateMapper.selectList(
+                new LambdaQueryWrapper<StandardCandidate>()
+                        .select(
+                                StandardCandidate::getId,
+                                StandardCandidate::getProjectId,
+                                StandardCandidate::getCandidateName,
+                                StandardCandidate::getDisplayName,
+                                StandardCandidate::getDataType,
+                                StandardCandidate::getSourceType,
+                                StandardCandidate::getSourceRef,
+                                StandardCandidate::getConfidence,
+                                StandardCandidate::getStatus,
+                                StandardCandidate::getTargetFieldId,
+                                StandardCandidate::getDecisionReason,
+                                StandardCandidate::getDecidedAt,
+                                StandardCandidate::getCreatedAt,
+                                StandardCandidate::getUpdatedAt)
+                        .eq(StandardCandidate::getProjectId, projectId)
+                        .orderByDesc(StandardCandidate::getDecidedAt)
+                        .orderByDesc(StandardCandidate::getCreatedAt)
+                        .orderByDesc(StandardCandidate::getId));
+    }
+
     public boolean existsActiveByNameInProject(Long projectId, String candidateName) {
         return standardCandidateMapper.exists(new LambdaQueryWrapper<StandardCandidate>()
                 .eq(StandardCandidate::getProjectId, projectId)

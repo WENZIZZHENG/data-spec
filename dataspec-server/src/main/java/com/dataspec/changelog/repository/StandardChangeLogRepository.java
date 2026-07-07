@@ -48,4 +48,26 @@ public class StandardChangeLogRepository {
                 .orderByDesc(StandardChangeLog::getId)
                 .last("limit " + Math.max(1, limit)));
     }
+
+    /**
+     * 查询目标对象的变更日志安全摘要列，避免把 beforeJson/afterJson 原始快照带入证据响应。
+     */
+    public List<StandardChangeLog> findSummaryByTarget(Long projectId, String targetType, Long targetId, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        return standardChangeLogMapper.selectList(new LambdaQueryWrapper<StandardChangeLog>()
+                .select(
+                        StandardChangeLog::getId,
+                        StandardChangeLog::getProjectId,
+                        StandardChangeLog::getTargetType,
+                        StandardChangeLog::getTargetId,
+                        StandardChangeLog::getAction,
+                        StandardChangeLog::getOperatorName,
+                        StandardChangeLog::getChangedAt)
+                .eq(StandardChangeLog::getProjectId, projectId)
+                .eq(StandardChangeLog::getTargetType, targetType)
+                .eq(StandardChangeLog::getTargetId, targetId)
+                .orderByDesc(StandardChangeLog::getChangedAt)
+                .orderByDesc(StandardChangeLog::getId)
+                .last("limit " + safeLimit));
+    }
 }
