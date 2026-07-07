@@ -256,6 +256,25 @@ test('cli supports --changed json output with injected changed paths', async () 
   assert.deepEqual(output.nextActions.slice(0, 1), ['先运行推荐命令中耗时最短且最贴近本次改动的检查。'])
 })
 
+test('cli rejects missing --path values before option-like arguments', async () => {
+  const optionValueIo = createIo()
+  const optionValueCode = await runAdvisorCli(['--path', '--format', 'json'], optionValueIo)
+  const emptyInlineIo = createIo()
+  const emptyInlineCode = await runAdvisorCli(['--path='], emptyInlineIo)
+  const formatValueIo = createIo()
+  const formatValueCode = await runAdvisorCli(['--format', '--path', 'README.md'], formatValueIo)
+
+  assert.equal(optionValueCode, 2)
+  assert.equal(emptyInlineCode, 2)
+  assert.equal(formatValueCode, 2)
+  assert.match(optionValueIo.stderr, /--path 需要文件路径/)
+  assert.match(emptyInlineIo.stderr, /--path 需要文件路径/)
+  assert.match(formatValueIo.stderr, /--format 需要 text 或 json/)
+  assert.equal(optionValueIo.stdout, '')
+  assert.equal(emptyInlineIo.stdout, '')
+  assert.equal(formatValueIo.stdout, '')
+})
+
 test('collects tracked and untracked git changed paths without duplicates', () => {
   assert.deepEqual(
     collectChangedPathsFromGitOutput(

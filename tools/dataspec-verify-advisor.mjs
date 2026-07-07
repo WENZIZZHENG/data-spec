@@ -290,7 +290,7 @@ function parseArgs(args) {
     }
     if (arg === '--path') {
       const value = args[index + 1]
-      if (!value) {
+      if (!isOptionValue(value)) {
         throw new Error('--path 需要文件路径')
       }
       options.paths.push(value)
@@ -298,12 +298,16 @@ function parseArgs(args) {
       continue
     }
     if (arg.startsWith('--path=')) {
-      options.paths.push(arg.slice('--path='.length))
+      const value = arg.slice('--path='.length)
+      if (!value) {
+        throw new Error('--path 需要文件路径')
+      }
+      options.paths.push(value)
       continue
     }
     if (arg === '--format') {
       const value = args[index + 1]
-      if (!value) {
+      if (!isOptionValue(value)) {
         throw new Error('--format 需要 text 或 json')
       }
       options.format = normalizeFormat(value)
@@ -321,6 +325,10 @@ function parseArgs(args) {
   }
 
   return options
+}
+
+function isOptionValue(value) {
+  return typeof value === 'string' && value.length > 0 && !value.startsWith('-')
 }
 
 function normalizeFormat(value) {
