@@ -1351,7 +1351,7 @@ function isPending(item) {
 }
 
 function shouldSkipLink(target) {
-  return /^#/.test(target) || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(target)
+  return /^#/.test(target) || target.startsWith('//') || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(target)
 }
 
 async function collectRelativePaths(root) {

@@ -537,6 +537,31 @@ test('buildStatusReport ignores non-file URI scheme Markdown links', () => {
   assert.equal(missingLinks.length, 0)
 })
 
+test('buildStatusReport ignores protocol-relative Markdown links', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: `${CLEAN_README}\n参考 [协议相对资料](//example.com/dataspec.md)。\n`,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'pass')
+  assert.equal(missingLinks.length, 0)
+})
+
 test('buildStatusReport accepts angle-bracket Markdown links with titles', () => {
   const report = buildStatusReport({
     todoText: CLEAN_TODO,
