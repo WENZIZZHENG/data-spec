@@ -32,6 +32,31 @@ test('parseArgs resolves env defaults and explicit options', () => {
   assert.equal(options.skipDemo, true)
 })
 
+test('parseArgs rejects option-like values before numeric fallback', () => {
+  assert.throws(
+    () => parseArgs(['--timeout-ms', '-h'], {}),
+    /--timeout-ms requires a value/
+  )
+  assert.throws(
+    () => parseArgs(['--timeout-ms=-h'], {}),
+    /--timeout-ms requires a value/
+  )
+  assert.throws(
+    () => parseArgs(['--interval-ms', '-h'], {}),
+    /--interval-ms requires a value/
+  )
+  assert.throws(
+    () => parseArgs(['--interval-ms=-h'], {}),
+    /--interval-ms requires a value/
+  )
+})
+
+test('parseArgs keeps explicit equals values that start with hyphen', () => {
+  const options = parseArgs(['--token=-abc'], {})
+
+  assert.equal(options.token, '-abc')
+})
+
 test('runSmoke emits stable JSON result for a healthy stack', async () => {
   const seen = []
   const fetchFn = async (url, options = {}) => {

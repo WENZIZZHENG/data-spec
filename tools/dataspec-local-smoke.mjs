@@ -63,7 +63,7 @@ export function parseArgs(argv = [], env = process.env) {
       continue
     }
     if (arg.startsWith('--timeout-ms=')) {
-      options.timeoutMs = parsePositiveInt(arg.slice('--timeout-ms='.length), DEFAULT_TIMEOUT_MS)
+      options.timeoutMs = parsePositiveInt(readInlineValue(arg, '--timeout-ms=', '--timeout-ms'), DEFAULT_TIMEOUT_MS)
       continue
     }
     if (arg === '--interval-ms') {
@@ -72,7 +72,7 @@ export function parseArgs(argv = [], env = process.env) {
       continue
     }
     if (arg.startsWith('--interval-ms=')) {
-      options.intervalMs = parsePositiveInt(arg.slice('--interval-ms='.length), DEFAULT_INTERVAL_MS)
+      options.intervalMs = parsePositiveInt(readInlineValue(arg, '--interval-ms=', '--interval-ms'), DEFAULT_INTERVAL_MS)
       continue
     }
     if (arg === '--format') {
@@ -368,10 +368,22 @@ function normalizeFormat(value) {
 
 function readValue(argv, index, option) {
   const value = argv[index + 1]
-  if (!value || value.startsWith('--')) {
+  if (!isOptionValue(value)) {
     throw new Error(`${option} requires a value`)
   }
   return value
+}
+
+function readInlineValue(arg, prefix, option) {
+  const value = arg.slice(prefix.length)
+  if (!isOptionValue(value)) {
+    throw new Error(`${option} requires a value`)
+  }
+  return value
+}
+
+function isOptionValue(value) {
+  return typeof value === 'string' && value.length > 0 && !value.startsWith('-')
 }
 
 function sleep(ms) {
