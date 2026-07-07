@@ -1774,13 +1774,13 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不替代人工判断，不把所有低分 change 阻塞掉；第一版作为本地开工前提示和 AI 自检入口。
 
 ### P6-178：MCP 会话状态与当前项目记忆
-- 状态：待办。
+- 状态：已完成第一版，OpenSpec change 已归档到 `openspec/changes/archive/2026-07-08-add-mcp-session-state-memory`。
 - 为什么做：AI 通过 MCP 使用 DataSpec 时，经常需要重复确认 currentProjectId、标准快照、最近导出范围、上一轮任务结果和下一步建议；缺少会话状态会增加上下文浪费和误操作概率。
 - 已有基础：已有 MCP/CLI 工作流模板、AI 会话启动包、AI 能力清单、AI 任务状态机、统一任务结果协议和敏感信息脱敏边界。
-- 缺口：缺少 sessionState、currentProject、currentSnapshot、lastTaskResult、toolCursor、safeDefaults 和 redactedMemory；MCP resources/tools 之间无法稳定共享“当前项目上下文”。
+- 已完成能力：MCP 新增 `dataspec://project/<id>/session-state` resource、`dataspec://project/{projectId}/session-state` resource template 和只读 `get_session_state` tool；输出 `currentProject`、`currentSnapshot`、`lastTaskResult`、`toolCursor`、`safeDefaults`、`redactedMemory`、`diagnostics` 和 `nextActions`。
 - 参考项目：`modelcontextprotocol/servers` 的 resource/tool 组织、`langchain-ai/langgraph` 的状态化 agent 流程和 `temporalio/temporal` 的可恢复任务状态；只借鉴状态模型，不接入远程编排服务。
-- 落地产物：新增本地会话状态文件或服务端轻量 session API；MCP 暴露当前项目、标准快照、最近任务结果和可恢复动作；所有状态默认脱敏且可清理。
-- 验收标准：AI 第一次选择项目后，后续 MCP 调用能读取同一项目上下文；切换项目有明确记录和确认边界；状态文件不包含 token、密码、JDBC URL 或业务数据行。
+- 落地产物：新增 MCP `session-state` resource 和 `get_session_state` tool；第一版只读聚合本地 `.dataspec/config.json`、`.dataspec/context/cache-metadata.json`、当前 profile、最近 task run 入口、safeDefaults、redactedMemory 和 nextActions，不自动写会话状态文件。
+- 验证证据：`node --test tools/dataspec-mcp.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 68 pass；`node tools/dataspec-cli-mcp-contract-check.mjs --format json` `ok=true` 且 0 diagnostics；`node --test tools/*.test.mjs` 362 pass、2 skipped；`openspec validate add-mcp-session-state-memory --strict` valid；独立评审 agent `019f3db6-49ae-71f2-b7a2-d5462b1f9c61` 的 1 个 Critical 和 3 个 Important finding 均已修复并关闭 agent。
 - 边界：不做云端长期记忆，不跨用户同步，不把会话状态当权限依据。
 
 ### P6-179：标准字段到业务代码 Patch Plan

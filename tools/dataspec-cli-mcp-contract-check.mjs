@@ -38,6 +38,7 @@ const REQUIRED_CLI_COMMANDS = [
 
 const REQUIRED_MCP_TOOLS = [
   'get_session_bootstrap',
+  'get_session_state',
   'lint_sql',
   'get_field_catalog',
   'search_field_catalog',
@@ -52,6 +53,7 @@ const REQUIRED_MCP_RESOURCES = [
   'dataspec://version-compatibility',
   'capability-catalog',
   'session-bootstrap',
+  'session-state',
   'field-catalog',
   'workflow-recipes',
   'agent-guidance-pack',
@@ -61,6 +63,7 @@ const REQUIRED_MCP_RESOURCES = [
 
 const REQUIRED_MCP_RESOURCE_TEMPLATES = [
   'dataspec://project/{projectId}/session-bootstrap',
+  'dataspec://project/{projectId}/session-state',
   'dataspec://project/{projectId}/capability-catalog',
   'dataspec://project/{projectId}/schema-registry',
   'dataspec://project/{projectId}/field-catalog',
@@ -317,8 +320,14 @@ function validateMcpResources(fixtures, liveResources, diagnostics) {
       diagnostics.push(diagnosticOf('UNKNOWN_MCP_RESOURCE', `${basePath}.uri`, `MCP resources/list 中不存在 ${resource.uri}。`))
       return
     }
+    if (resource.name !== undefined && liveResource.name !== resource.name) {
+      diagnostics.push(diagnosticOf('MCP_RESOURCE_NAME_MISMATCH', `${basePath}.name`, 'fixture 与 MCP resources/list 的 name 不一致。'))
+    }
     if (liveResource.description !== resource.description) {
       diagnostics.push(diagnosticOf('MCP_RESOURCE_DESCRIPTION_MISMATCH', `${basePath}.description`, 'fixture 与 MCP resources/list 的 description 不一致。'))
+    }
+    if (resource.mimeType !== undefined && liveResource.mimeType !== resource.mimeType) {
+      diagnostics.push(diagnosticOf('MCP_RESOURCE_MIME_TYPE_MISMATCH', `${basePath}.mimeType`, 'fixture 与 MCP resources/list 的 mimeType 不一致。'))
     }
   })
 }
@@ -548,6 +557,7 @@ function scanSecrets(value, diagnostics, pathName = '$') {
 function looksLikeRawSecret(value) {
   return [
     /jdbc:[^\s"',;}&]+/i,
+    /\bhttps?:\/\/(?!\[REDACTED\]@|<)[^\s/?#@]+@/i,
     /\b(?:postgres(?:ql)?|mysql|mariadb|sqlserver|oracle|mongodb|redis):\/\/(?!\[REDACTED\]|<)[^\s"',;}&]+/i,
     /(authorization\s*[:=]\s*bearer\s+)(?!<|\[REDACTED\]|\*\*\*)[^\s,;]+/i,
     /--dataspec-token\s+(?!<|\[REDACTED\]|\$\{|\*\*\*)[^\s,;]+/i,

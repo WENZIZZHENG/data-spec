@@ -44,6 +44,7 @@ test('resources list and read use configured project', async () => {
     'dataspec://version-compatibility',
     'dataspec://project/7/capability-catalog',
     'dataspec://project/7/session-bootstrap',
+    'dataspec://project/7/session-state',
     'dataspec://project/7/field-catalog',
     'dataspec://project/7/database-rules',
     'dataspec://project/7/rules-yaml',
@@ -200,6 +201,175 @@ test('session bootstrap resource is read from backend with structured content', 
   assert.equal(read.result.contents[0].mimeType, 'application/json')
   assert.equal(payload.kind, 'dataspec-ai-session-bootstrap')
   assert.equal(read.result.structuredContent.status, 'READY')
+})
+
+test('session state resource summarizes local project memory without backend calls', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-mcp-session-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec', 'context'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'context', 'cache-metadata.json'),
+      JSON.stringify({
+        projectId: 7,
+        server: 'http://token:secret@dataspec.local',
+        scope: 'field',
+        query: 'password=raw-secret Bearer raw-token jdbc:postgresql://db/app',
+        contentHash: '0123456789abcdef',
+        generatedAt: '2026-07-08T10:00:00Z',
+        standard: { specVersion: 'v1', specHash: 'hash-1', source: 'current' }
+      }),
+      'utf8'
+    )
+
+    const handler = createMcpHandler({
+      projectId: 7,
+      server: 'http://token:secret@dataspec.local',
+      apiToken: 'ds_mcp_secret_token',
+      aiProfile: 'sql-fix',
+      taskType: 'SQL_FIX',
+      rootDir: dir
+    }, failingFetch)
+
+    const listed = await handler({ jsonrpc: '2.0', id: 301, method: 'resources/list' })
+    assert.ok(listed.result.resources.some((resource) => resource.uri === 'dataspec://project/7/session-state'))
+
+    const read = await handler({
+      jsonrpc: '2.0',
+      id: 302,
+      method: 'resources/read',
+      params: { uri: 'dataspec://project/7/session-state' }
+    })
+    const payload = JSON.parse(read.result.contents[0].text)
+    const fullText = JSON.stringify(read.result)
+
+    assert.equal(read.result.contents[0].mimeType, 'application/json')
+    assert.equal(payload.kind, 'dataspec-mcp-session-state')
+    assert.equal(payload.currentProject.projectId, 7)
+    assert.equal(payload.currentProject.status, 'READY')
+    assert.equal(payload.currentProject.authMode, 'TOKEN_PRESENT')
+    assert.equal(payload.currentProject.profile.profileId, 'sql-fix')
+    assert.equal(payload.currentProject.profile.taskType, 'SQL_FIX')
+    assert.equal(payload.currentSnapshot.specHash, 'hash-1')
+    assert.equal(payload.redactedMemory.contextCache.scope, 'field')
+    assert.equal(payload.safeDefaults.sessionStateIsAuthorization, false)
+    assert.deepEqual(read.result.structuredContent.currentProject, payload.currentProject)
+    assert.doesNotMatch(fullText, /ds_mcp_secret_token|token:secret|raw-secret|raw-token|jdbc:postgresql:\/\/db\/app|Bearer raw-token/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('session state tool supports explicit project override and projectless blocked state', async () => {
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local'
+  }, failingFetch)
+
+  const tools = await handler({ jsonrpc: '2.0', id: 303, method: 'tools/list' })
+  const descriptor = tools.result.tools.find((tool) => tool.name === 'get_session_state')
+  assert.ok(descriptor)
+  assert.equal(descriptor.safety.readOnly, true)
+  assert.equal(descriptor.safety.writesProject, false)
+  assert.deepEqual(descriptor.inputSchema.properties.projectId, {
+    type: 'integer',
+    description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+  })
+
+  const overridden = await handler({
+    jsonrpc: '2.0',
+    id: 304,
+    method: 'tools/call',
+    params: { name: 'get_session_state', arguments: { projectId: 8 } }
+  })
+  assert.equal(overridden.result.structuredContent.currentProject.projectId, 8)
+  assert.equal(JSON.parse(overridden.result.content[0].text).currentProject.projectId, 8)
+
+  const projectless = createMcpHandler({ server: 'http://dataspec.local' }, failingFetch)
+  const templates = await projectless({ jsonrpc: '2.0', id: 305, method: 'resources/templates/list' })
+  assert.ok(templates.result.resourceTemplates.some((template) =>
+    template.uriTemplate === 'dataspec://project/{projectId}/session-state'))
+
+  const blocked = await projectless({
+    jsonrpc: '2.0',
+    id: 306,
+    method: 'tools/call',
+    params: { name: 'get_session_state', arguments: {} }
+  })
+  assert.equal(blocked.result.structuredContent.currentProject.status, 'BLOCKED')
+  assert.equal(blocked.result.structuredContent.currentProject.projectId, null)
+  assert.ok(blocked.result.structuredContent.nextActions.some((action) => /projectId|config/.test(action.command ?? action.message)))
+})
+
+test('session state reads real context cache metadata and blocks stale project snapshots', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-mcp-session-real-cache-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec', 'context'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'context', 'cache-metadata.json'),
+      JSON.stringify({
+        kind: 'dataspec-ai-context-cache',
+        schemaVersion: 1,
+        projectId: 7,
+        server: 'http://dataspec.local',
+        exportedAt: '2026-07-08T09:00:00Z',
+        expiresAt: '2026-07-15T09:00:00Z',
+        ttlDays: 7,
+        exportOptions: {
+          scope: 'field',
+          query: '{"token":"raw-json-token","password":"raw-json-password"}',
+          status: 'enabled',
+          limit: 12
+        },
+        contentHash: 'cache-hash-1',
+        standard: { specVersion: 'v2', specHash: 'hash-real', source: 'remote' },
+        sourcePackage: {
+          schemaVersion: 1,
+          kind: 'dataspec-ai-context-package',
+          generatedAt: '2026-07-08T08:59:00Z',
+          contextScope: 'field'
+        }
+      }),
+      'utf8'
+    )
+
+    const handler = createMcpHandler({
+      projectId: 7,
+      server: 'http://dataspec.local',
+      rootDir: dir
+    }, failingFetch)
+
+    const read = await handler({
+      jsonrpc: '2.0',
+      id: 307,
+      method: 'resources/read',
+      params: { uri: 'dataspec://project/7/session-state' }
+    })
+    const payload = JSON.parse(read.result.contents[0].text)
+    const fullText = JSON.stringify(read.result)
+
+    assert.equal(payload.redactedMemory.contextCache.scope, 'field')
+    assert.match(payload.redactedMemory.contextCache.query, /token/)
+    assert.equal(payload.redactedMemory.contextCache.statusFilter, 'enabled')
+    assert.equal(payload.redactedMemory.contextCache.limit, 12)
+    assert.equal(payload.redactedMemory.contextCache.generatedAt, '2026-07-08T09:00:00Z')
+    assert.equal(payload.redactedMemory.contextCache.sourcePackageGeneratedAt, '2026-07-08T08:59:00Z')
+    assert.equal(payload.currentSnapshot.specHash, 'hash-real')
+    assert.doesNotMatch(fullText, /raw-json-token|raw-json-password/)
+
+    const overridden = await handler({
+      jsonrpc: '2.0',
+      id: 308,
+      method: 'tools/call',
+      params: { name: 'get_session_state', arguments: { projectId: 8 } }
+    })
+    const stale = overridden.result.structuredContent
+    assert.equal(stale.currentProject.projectId, 8)
+    assert.equal(stale.redactedMemory.contextCache.status, 'PROJECT_MISMATCH')
+    assert.equal(stale.currentSnapshot.specHash, null)
+    assert.ok(stale.diagnostics.some((diagnostic) => diagnostic.code === 'CONTEXT_CACHE_PROJECT_MISMATCH'))
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
 
 test('capability catalog resource is read from backend with project diagnostics and structured content', async () => {

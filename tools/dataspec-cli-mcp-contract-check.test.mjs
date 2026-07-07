@@ -185,6 +185,34 @@ test('bundled fixtures include install-hook local write contract', async () => {
   assert.ok(command.recommendedNextActions.some((item) => item.includes('lint-changed')))
 })
 
+test('bundled fixtures include MCP session state readonly contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const tool = fixture.mcpTools.find((item) => item.name === 'get_session_state')
+  const resource = fixture.mcpResources.find((item) => item.uri === 'dataspec://project/<projectId>/session-state')
+  const template = fixture.mcpResourceTemplates.find((item) =>
+    item.uriTemplate === 'dataspec://project/{projectId}/session-state')
+
+  assert.ok(tool)
+  assert.equal(tool.safety.readOnly, true)
+  assert.equal(tool.safety.writesProject, false)
+  assert.ok(tool.inputProperties.includes('projectId'))
+  assert.ok(tool.outputShape.includes('structuredContent.currentProject'))
+  assert.ok(tool.outputShape.includes('structuredContent.redactedMemory'))
+  assert.ok(tool.outputShape.includes('structuredContent.safeDefaults.sessionStateIsAuthorization'))
+  assert.ok(tool.recommendedNextActions.some((item) => item.includes('get_session_bootstrap')))
+
+  assert.ok(resource)
+  assert.equal(resource.name, 'DataSpec MCP Session State')
+  assert.equal(resource.mimeType, 'application/json')
+  assert.equal(resource.safety.readOnly, true)
+  assert.equal(resource.safety.writesProject, false)
+  assert.ok(resource.outputShape.includes('currentProject'))
+  assert.ok(resource.outputShape.includes('redactedMemory'))
+
+  assert.ok(template)
+  assert.equal(template.mimeType, 'application/json')
+})
+
 test('fixed SQL patch fixture matches actual dry-run json shape', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'fixed-sql-patch')
@@ -239,7 +267,7 @@ test('fixture checker reports missing MCP tool and safety metadata drift', async
 test('fixture checker reports MCP resource and prompt descriptor drift', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   fixture.mcpResources = fixture.mcpResources.map((resource) => resource.uri === 'dataspec://version-compatibility'
-    ? { ...resource, description: 'drifted description' }
+    ? { ...resource, name: 'Drifted Name', description: 'drifted description', mimeType: 'text/plain' }
     : resource)
   fixture.mcpPrompts = fixture.mcpPrompts.map((prompt) => prompt.name === 'dataspec_create_table'
     ? { ...prompt, description: 'drifted description' }
@@ -248,7 +276,9 @@ test('fixture checker reports MCP resource and prompt descriptor drift', async (
   const result = await validateContractFixtures({ fixture })
 
   assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'MCP_RESOURCE_NAME_MISMATCH'))
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'MCP_RESOURCE_DESCRIPTION_MISMATCH'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'MCP_RESOURCE_MIME_TYPE_MISMATCH'))
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'MCP_PROMPT_DESCRIPTION_MISMATCH'))
 })
 
@@ -383,7 +413,7 @@ test('fixture checker rejects incomplete MCP tool entries', async () => {
 
 test('fixture checker rejects raw secret-like examples', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
-  fixture.cliCommands[0].successExample.command = 'node tools/dataspec-cli.mjs doctor --dataspec-token raw-secret'
+  fixture.cliCommands[0].successExample.command = 'node tools/dataspec-cli.mjs doctor --server https://user:pass@dataspec.local'
 
   const result = await validateContractFixtures({ fixture })
 

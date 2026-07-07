@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { pathToFileURL } from 'node:url'
 import { loadDataSpecConfig } from './dataspec-config.mjs'
@@ -29,6 +31,7 @@ const READ_ONLY_TOOL_SAFETY = {
 
 const TOOL_SAFETY = {
   get_session_bootstrap: READ_ONLY_TOOL_SAFETY,
+  get_session_state: READ_ONLY_TOOL_SAFETY,
   create_task_card: READ_ONLY_TOOL_SAFETY,
   render_task_card: READ_ONLY_TOOL_SAFETY,
   lint_sql: {
@@ -126,6 +129,7 @@ const AGENT_GUIDANCE_TEMPLATES = [
 
 const RESOURCE_TEMPLATE_KEYS = [
   'session-bootstrap',
+  'session-state',
   'capability-catalog',
   'schema-registry',
   'field-catalog',
@@ -184,6 +188,14 @@ const RESOURCE_DEFS = {
     path: '/api/bootstrap/session',
     mimeType: 'application/json',
     bootstrapResource: true
+  },
+  'session-state': {
+    name: 'DataSpec MCP Session State',
+    description: 'MCP 当前项目记忆，只读聚合本地配置、上下文缓存、最近任务入口、安全默认值和下一步建议。',
+    mimeType: 'application/json',
+    localContent(projectId, context) {
+      return buildMcpSessionState(projectId, context)
+    }
   },
   'field-catalog': {
     name: 'DataSpec Field Catalog',
@@ -249,6 +261,264 @@ function agentGuidancePackPayload(projectId) {
     compatibilityPolicy: 'Additive templates and optional fields are compatible; removing or renaming template ids, required inputs, safe defaults, tool sequence, stop conditions, or evidence requirements requires fixture and spec updates.',
     templates: AGENT_GUIDANCE_TEMPLATES.map((template) => materializeGuidanceTemplate(template, projectId)),
     nextActions: ['Choose a guidance template, read the listed resources in order, inspect tool safety metadata, then call tools only when inputs and stop conditions are satisfied.']
+  }
+}
+
+async function buildMcpSessionState(projectId, context) {
+  const diagnostics = []
+  const [configMemory, contextCache] = await Promise.all([
+    readLocalConfigMemory(context.rootDir),
+    readContextCacheMemory(context.rootDir, projectId)
+  ])
+  diagnostics.push(...configMemory.diagnostics, ...contextCache.diagnostics)
+  if (projectId === undefined) {
+    diagnostics.push({
+      code: 'PROJECT_ID_MISSING',
+      severity: 'WARN',
+      message: '当前 MCP Server 未配置项目 ID，session-state 只能返回 BLOCKED 状态和后续选择项目建议。'
+    })
+  }
+  diagnostics.push({
+    code: 'SESSION_STATE_NOT_AUTHORIZATION',
+    severity: 'INFO',
+    message: 'session-state 只是本地只读快照，不代表后端权限判定；写入型后续动作仍需检查 capability safety、dry-run 和用户确认。'
+  })
+
+  const profile = {
+    profileId: context.defaultProfileSelection.profileId ?? null,
+    taskType: context.defaultProfileSelection.taskType ?? null
+  }
+  const currentProject = {
+    projectId: projectId ?? null,
+    status: projectId === undefined ? 'BLOCKED' : 'READY',
+    server: sanitizeSecretText(context.server),
+    authMode: context.apiToken ? 'TOKEN_PRESENT' : 'TOKEN_MISSING',
+    profile
+  }
+  const currentSnapshot = contextCache.currentSnapshot
+  const state = {
+    kind: 'dataspec-mcp-session-state',
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    currentProject,
+    currentSnapshot,
+    lastTaskResult: {
+      source: 'ai-task-runs-resource',
+      status: projectId === undefined ? 'PROJECT_REQUIRED' : 'AVAILABLE',
+      resourceUri: projectId === undefined ? null : resourceUri(projectId, 'ai-task-runs'),
+      tool: 'get_ai_task_run',
+      summary: projectId === undefined
+        ? '选择项目后可读取最近失败或部分失败的 AI task run。'
+        : '如需恢复上一轮任务，先读 ai-task-runs resource，再按 taskRunId 调用 get_ai_task_run。'
+    },
+    toolCursor: {
+      recommendedFirstResources: projectId === undefined
+        ? ['dataspec://project/{projectId}/session-state', 'dataspec://project/{projectId}/session-bootstrap']
+        : [resourceUri(projectId, 'session-state'), resourceUri(projectId, 'session-bootstrap'), resourceUri(projectId, 'capability-catalog')],
+      recommendedNextTools: ['get_session_bootstrap', 'get_field_catalog', 'search_fields', 'export_evidence_package']
+    },
+    safeDefaults: {
+      readOnly: true,
+      executeWorkflow: false,
+      dryRunOnly: true,
+      requireCapabilitySafety: true,
+      sessionStateIsAuthorization: false,
+      writesProject: false,
+      containsRealBusinessRows: false
+    },
+    redactedMemory: {
+      config: {
+        status: configMemory.status,
+        hasConfig: configMemory.status === 'PRESENT',
+        location: configMemory.status === 'PRESENT' ? '.dataspec/config.json' : null,
+        projectIdPresent: configMemory.projectIdPresent,
+        server: configMemory.server,
+        apiTokenPresent: Boolean(context.apiToken) || configMemory.apiTokenPresent,
+        defaultPathsCount: configMemory.defaultPathsCount
+      },
+      contextCache: contextCache.memory
+    },
+    diagnostics,
+    nextActions: projectId === undefined
+      ? [
+          { command: 'get_session_state(projectId)', message: '重新调用时提供 projectId 参数，或在 .dataspec/config.json 配置 projectId。' },
+          { command: 'get_session_bootstrap', message: '选择项目后调用 get_session_bootstrap 获取后端能力启动包。' }
+        ]
+      : [
+          { command: 'get_session_bootstrap', message: '读取后端会话启动包，确认项目能力、版本兼容和下一步建议。' },
+          { command: 'get_field_catalog', message: '需要字段标准时读取裁剪后的字段目录。' },
+          { command: 'export_evidence_package', message: '交付前导出证据包，便于用户和下游 AI 复盘。' }
+        ]
+  }
+  return sanitizeSecretValue(state)
+}
+
+async function readLocalConfigMemory(rootDir) {
+  const diagnostics = []
+  const configPath = path.join(rootDir, '.dataspec', 'config.json')
+  try {
+    const rawConfig = JSON.parse(await readFile(configPath, 'utf8'))
+    return {
+      status: 'PRESENT',
+      projectIdPresent: rawConfig.projectId !== undefined && rawConfig.projectId !== null && rawConfig.projectId !== '',
+      server: sanitizeSecretText(rawConfig.server ?? null),
+      apiTokenPresent: rawConfig.apiToken !== undefined && rawConfig.apiToken !== null && rawConfig.apiToken !== '',
+      defaultPathsCount: Array.isArray(rawConfig.defaultPaths) ? rawConfig.defaultPaths.length : 0,
+      diagnostics
+    }
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') {
+      diagnostics.push({
+        code: 'CONFIG_MISSING',
+        severity: 'INFO',
+        message: '未找到 .dataspec/config.json；已仅使用 MCP 启动参数。'
+      })
+      return {
+        status: 'MISSING',
+        projectIdPresent: false,
+        server: null,
+        apiTokenPresent: false,
+        defaultPathsCount: 0,
+        diagnostics
+      }
+    }
+    diagnostics.push({
+      code: 'CONFIG_INVALID',
+      severity: 'WARN',
+      message: `无法读取 .dataspec/config.json: ${sanitizeSecretText(error?.message ?? 'unknown error')}`
+    })
+    return {
+      status: 'INVALID',
+      projectIdPresent: false,
+      server: null,
+      apiTokenPresent: false,
+      defaultPathsCount: 0,
+      diagnostics
+    }
+  }
+}
+
+async function readContextCacheMemory(rootDir, projectId) {
+  const diagnostics = []
+  const metadataPath = path.join(rootDir, '.dataspec', 'context', 'cache-metadata.json')
+  try {
+    const metadata = JSON.parse(await readFile(metadataPath, 'utf8'))
+    const metadataProjectId = parseMetadataProjectId(metadata.projectId)
+    if (projectId !== undefined && metadataProjectId !== null && metadataProjectId !== projectId) {
+      diagnostics.push({
+        code: 'CONTEXT_CACHE_PROJECT_MISMATCH',
+        severity: 'WARN',
+        message: `context cache 属于项目 ${metadataProjectId}，当前 session projectId 为 ${projectId}；已忽略该缓存快照。`
+      })
+      return {
+        currentSnapshot: emptySessionSnapshot(),
+        memory: {
+          status: 'PROJECT_MISMATCH',
+          projectId: metadataProjectId,
+          scope: null,
+          query: null,
+          statusFilter: null,
+          limit: null,
+          server: sanitizeSecretText(metadata.server ?? null),
+          contentHash: sanitizeSecretText(metadata.contentHash ?? null),
+          generatedAt: sanitizeSecretText(metadata.exportedAt ?? metadata.generatedAt ?? null),
+          expiresAt: sanitizeSecretText(metadata.expiresAt ?? null),
+          ttlDays: metadata.ttlDays ?? null,
+          standard: null,
+          sourcePackageGeneratedAt: sanitizeSecretText(metadata.sourcePackage?.generatedAt ?? null)
+        },
+        diagnostics
+      }
+    }
+    const exportOptions = metadata.exportOptions && typeof metadata.exportOptions === 'object'
+      ? metadata.exportOptions
+      : {}
+    return {
+      currentSnapshot: sessionSnapshotFromMetadata(metadata),
+      memory: {
+        status: 'PRESENT',
+        projectId: metadataProjectId,
+        scope: sanitizeSecretText(exportOptions.scope ?? metadata.scope ?? null),
+        query: sanitizeSecretText(exportOptions.query ?? metadata.query ?? null),
+        statusFilter: sanitizeSecretText(exportOptions.status ?? metadata.status ?? null),
+        limit: exportOptions.limit ?? metadata.limit ?? null,
+        server: sanitizeSecretText(metadata.server ?? null),
+        contentHash: sanitizeSecretText(metadata.contentHash ?? null),
+        generatedAt: sanitizeSecretText(metadata.exportedAt ?? metadata.generatedAt ?? null),
+        expiresAt: sanitizeSecretText(metadata.expiresAt ?? null),
+        ttlDays: metadata.ttlDays ?? null,
+        standard: sanitizeSecretValue(metadata.standard ?? null),
+        sourcePackageGeneratedAt: sanitizeSecretText(metadata.sourcePackage?.generatedAt ?? null)
+      },
+      diagnostics
+    }
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') {
+      diagnostics.push({
+        code: 'CONTEXT_CACHE_MISSING',
+        severity: 'INFO',
+        message: '未找到 .dataspec/context/cache-metadata.json；如需更准确的标准快照，请先导出或刷新 AI context。'
+      })
+      return {
+        currentSnapshot: emptySessionSnapshot(),
+        memory: {
+          status: 'MISSING',
+          scope: null,
+          query: null,
+          server: null,
+          contentHash: null,
+          generatedAt: null,
+          standard: null
+        },
+        diagnostics
+      }
+    }
+    diagnostics.push({
+      code: 'CONTEXT_CACHE_INVALID',
+      severity: 'WARN',
+      message: `无法读取 context cache metadata: ${sanitizeSecretText(error?.message ?? 'unknown error')}`
+    })
+    return {
+      currentSnapshot: emptySessionSnapshot(),
+      memory: {
+        status: 'INVALID',
+        scope: null,
+        query: null,
+        server: null,
+        contentHash: null,
+        generatedAt: null,
+        standard: null
+      },
+      diagnostics
+    }
+  }
+}
+
+function sessionSnapshotFromMetadata(metadata) {
+  return {
+    specVersion: sanitizeSecretText(metadata?.standard?.specVersion ?? null),
+    specHash: sanitizeSecretText(metadata?.standard?.specHash ?? null),
+    source: sanitizeSecretText(metadata?.standard?.source ?? null),
+    contentHash: sanitizeSecretText(metadata?.contentHash ?? null),
+    generatedAt: sanitizeSecretText(metadata?.exportedAt ?? metadata?.generatedAt ?? metadata?.sourcePackage?.generatedAt ?? null)
+  }
+}
+
+function parseMetadataProjectId(value) {
+  if (value === undefined || value === null || value === '') {
+    return null
+  }
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function emptySessionSnapshot() {
+  return {
+    specVersion: null,
+    specHash: null,
+    source: null,
+    contentHash: null,
+    generatedAt: null
   }
 }
 
@@ -417,6 +687,7 @@ export function createMcpHandler(config, fetchFn = globalThis.fetch) {
   const defaultProjectId = parseConfiguredProjectId(config.projectId)
   const apiToken = normalizeApiToken(config.apiToken)
   const defaultProfileSelection = resolveProfileSelection(config)
+  const rootDir = path.resolve(config.rootDir ?? process.cwd())
 
   return async function handleMessage(message) {
     const id = message?.id
@@ -432,6 +703,7 @@ export function createMcpHandler(config, fetchFn = globalThis.fetch) {
         defaultProjectId,
         defaultProfileSelection,
         apiToken,
+        rootDir,
         fetchFn
       })
       return { jsonrpc: '2.0', id, result }
@@ -565,7 +837,7 @@ async function readResource(params, context) {
     throw new JsonRpcError(-32602, `未知 resource: ${uri}`)
   }
   let structuredContent
-  const localContent = typeof def.localContent === 'function' ? def.localContent(projectId) : undefined
+  const localContent = typeof def.localContent === 'function' ? await def.localContent(projectId, context) : undefined
   const text = localContent !== undefined
     ? typeof localContent === 'string'
       ? localContent
@@ -637,6 +909,19 @@ function listTools() {
       {
         name: 'get_session_bootstrap',
         description: '读取 DataSpec AI 会话启动包，返回当前项目、标准版本、可用能力、推荐命令、风险提示和 nextActions。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            }
+          }
+        }
+      },
+      {
+        name: 'get_session_state',
+        description: '读取 DataSpec MCP 当前项目记忆，返回只读本地会话状态、上下文缓存摘要、安全默认值和下一步建议。',
         inputSchema: {
           type: 'object',
           properties: {
@@ -956,6 +1241,9 @@ async function callTool(params, context) {
   if (name === 'get_session_bootstrap') {
     return await callGetSessionBootstrap(args, context)
   }
+  if (name === 'get_session_state') {
+    return await callGetSessionState(args, context)
+  }
   if (name === 'create_task_card') {
     return callCreateTaskCard(args, context)
   }
@@ -993,6 +1281,18 @@ async function callGetSessionBootstrap(args, context) {
   const projectId = optionalBootstrapProjectId(args.projectId, context.defaultProjectId)
   const result = await fetchSessionBootstrapResource(context, projectId)
   return toolJsonResult(result)
+}
+
+async function callGetSessionState(args, context) {
+  const projectId = optionalSessionProjectId(args.projectId, context.defaultProjectId)
+  return toolJsonResult(await buildMcpSessionState(projectId, context))
+}
+
+function optionalSessionProjectId(value, fallback) {
+  if (value !== undefined && value !== null && value !== '') {
+    return parseProjectId(value)
+  }
+  return fallback
 }
 
 function callCreateTaskCard(args, context) {
@@ -1775,11 +2075,14 @@ function sanitizeSecretText(value) {
     return value
   }
   return String(value)
+    .replace(/\b(https?:\/\/)[^\s/?#@]+@/gi, '$1')
     .replace(/jdbc:[^\s"',;}&]+/gi, 'jdbc:[REDACTED]')
     .replace(/\b((?:postgres(?:ql)?|mysql|mariadb|sqlserver|oracle|mongodb|redis):\/\/)[^\s"',;}&]+/gi, '$1[REDACTED]')
     .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s,;]+/gi, '$1[REDACTED]')
     .replace(/(authorization\s*[:=]\s*)(?!\s*['"]?bearer\s+)(['"]?)[^,;}&\r\n]+\2/gi, '$1$2[REDACTED]$2')
     .replace(/(bearer\s+)[A-Za-z0-9._~+/-]+=*/gi, '$1[REDACTED]')
+    .replace(/((?:["'])(?:password|passwd|pwd|token|api[_-]?token|dataspec[_-]?token|api[_-]?key|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|plain[_-]?token|token[_-]?hash|jdbc[_-]?url|connection[_-]?string|dsn)(?:["'])\s*[:=]\s*)(["'])[^"']*\2/gi, '$1$2[REDACTED]$2')
+    .replace(/((?:["'])(?:password|passwd|pwd|token|api[_-]?token|dataspec[_-]?token|api[_-]?key|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|plain[_-]?token|token[_-]?hash|jdbc[_-]?url|connection[_-]?string|dsn)(?:["'])\s*[:=]\s*)[^\s"',;}&]+/gi, '$1[REDACTED]')
     .replace(/((?:password|passwd|pwd|token|api[_-]?token|dataspec[_-]?token|api[_-]?key|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|plain[_-]?token|token[_-]?hash|jdbc[_-]?url|connection[_-]?string|dsn)\s*[:=]\s*)[^\s"',;}&]+/gi, '$1[REDACTED]')
 }
 
