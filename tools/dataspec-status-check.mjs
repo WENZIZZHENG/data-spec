@@ -516,6 +516,15 @@ function checkOpenSpecSpecRequirements(specTexts, issues) {
       }))
       continue
     }
+    for (const duplicate of findDuplicateRequirements(lines, requirementsIndex)) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_REQUIREMENT_DUPLICATE',
+        message: `${specPath} 的 ${duplicate.title} 与 line ${duplicate.firstLine} 的 Requirement 标题重复，AI 难以唯一引用能力契约。`,
+        file: specPath,
+        line: duplicate.line,
+        suggestedFix: '为重复的 Requirement 使用唯一标题，或合并为一个 Requirement 下的多个 Scenario。'
+      }))
+    }
     for (const requirement of findRequirementsWithoutScenario(lines, requirementsIndex)) {
       issues.push(issue({
         code: 'OPENSPEC_SPEC_REQUIREMENT_SCENARIO_MISSING',
@@ -548,6 +557,29 @@ function hasRequirementEntry(lines, requirementsIndex) {
     }
   }
   return false
+}
+
+function findDuplicateRequirements(lines, requirementsIndex) {
+  const seen = new Map()
+  const duplicates = []
+
+  for (let index = requirementsIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (/^##\s+/.test(line)) {
+      return duplicates
+    }
+    if (!/^###\s+Requirement\s*:/.test(line)) {
+      continue
+    }
+    const normalizedTitle = line.replace(/^###\s+Requirement\s*:\s*/, '').trim().toLowerCase()
+    if (seen.has(normalizedTitle)) {
+      duplicates.push({ line: index + 1, firstLine: seen.get(normalizedTitle), title: line })
+      continue
+    }
+    seen.set(normalizedTitle, index + 1)
+  }
+
+  return duplicates
 }
 
 function findRequirementsWithoutScenario(lines, requirementsIndex) {
