@@ -1026,7 +1026,8 @@ function checkMarkdownLinks(file, text, relativeFiles, issues) {
       if (!withoutAnchor) {
         continue
       }
-      const normalized = normalizeRelativePath(path.posix.normalize(path.posix.join(baseDir, withoutAnchor)))
+      const decodedPath = decodeMarkdownLinkPath(withoutAnchor)
+      const normalized = normalizeRelativePath(path.posix.normalize(path.posix.join(baseDir, decodedPath)))
       if (!relativeFiles.has(normalized)) {
         issues.push(issue({
           code: 'MARKDOWN_LINK_MISSING',
@@ -1173,6 +1174,14 @@ function parseMarkdownLinkTarget(rawTarget) {
     }
   }
   return rawTarget.split(/\s+/)[0]
+}
+
+function decodeMarkdownLinkPath(filePath) {
+  try {
+    return decodeURI(filePath)
+  } catch {
+    return filePath
+  }
 }
 
 function extractArchivedChangeIds(item) {
