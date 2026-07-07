@@ -314,11 +314,11 @@ function normalizeFormat(value) {
 
 async function getGitChangedPaths() {
   const [tracked, untracked] = await Promise.all([
-    execFileAsync('git', ['diff', '--name-only', 'HEAD'], {
+    execFileAsync('git', ['diff', '--name-only', '-z', 'HEAD'], {
       cwd: REPO_ROOT,
       encoding: 'utf8'
     }),
-    execFileAsync('git', ['ls-files', '--others', '--exclude-standard'], {
+    execFileAsync('git', ['ls-files', '--others', '--exclude-standard', '-z'], {
       cwd: REPO_ROOT,
       encoding: 'utf8'
     })
@@ -327,14 +327,18 @@ async function getGitChangedPaths() {
 }
 
 export function collectChangedPathsFromGitOutput(trackedStdout, untrackedStdout) {
-  return normalizePaths([
+  return normalizeGitChangedPaths([
     ...splitGitPathOutput(trackedStdout),
     ...splitGitPathOutput(untrackedStdout)
   ])
 }
 
 function splitGitPathOutput(stdout) {
-  return String(stdout ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const text = String(stdout ?? '')
+  if (text.includes('\0')) {
+    return text.split('\0').filter((line) => line.length > 0)
+  }
+  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
 }
 
 function matchesRule(inputPath, rule) {
@@ -400,7 +404,18 @@ function normalizePaths(inputPaths) {
   return [...new Set(inputPaths
     .map((inputPath) => String(inputPath ?? '').trim())
     .filter(Boolean)
-    .map((inputPath) => inputPath.replace(/\\/g, '/').replace(/^\.\//, '')))]
+    .map(normalizePathSeparators))]
+}
+
+function normalizeGitChangedPaths(inputPaths) {
+  return [...new Set(inputPaths
+    .map((inputPath) => String(inputPath ?? ''))
+    .filter((inputPath) => inputPath.length > 0)
+    .map(normalizePathSeparators))]
+}
+
+function normalizePathSeparators(inputPath) {
+  return inputPath.replace(/\\/g, '/').replace(/^\.\//, '')
 }
 
 function buildNextActions(commands) {

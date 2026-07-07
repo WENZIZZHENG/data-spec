@@ -229,6 +229,26 @@ test('collects tracked and untracked git changed paths without duplicates', () =
   )
 })
 
+test('collects NUL-delimited git changed paths', () => {
+  assert.deepEqual(
+    collectChangedPathsFromGitOutput(
+      'README.md\0docs/example note.md\0',
+      'tools/dataspec-verify-advisor.mjs\0README.md\0'
+    ),
+    ['README.md', 'docs/example note.md', 'tools/dataspec-verify-advisor.mjs']
+  )
+})
+
+test('preserves significant whitespace in NUL-delimited git paths', () => {
+  assert.deepEqual(
+    collectChangedPathsFromGitOutput(
+      ' leading.md\0trailing.md \0./docs\\example.md\0',
+      ''
+    ),
+    [' leading.md', 'trailing.md ', 'docs/example.md']
+  )
+})
+
 function createIo() {
   return {
     stdout: '',
