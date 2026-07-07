@@ -283,6 +283,23 @@ test('normalizes absolute workspace paths before matching validation rules', () 
   assert.ok(commandIds.includes('diff-check'))
 })
 
+test('derives strict OpenSpec validation from absolute workspace change paths', () => {
+  const root = process.cwd()
+  const advice = buildValidationAdvice([
+    `${root}\\openspec\\changes\\add-field-quality\\tasks.md`,
+    `${root.replace(/\\/g, '/')}/openspec/changes/add-field-quality/specs/field-quality/spec.md`
+  ])
+
+  assert.deepEqual(advice.inputPaths, [
+    'openspec/changes/add-field-quality/tasks.md',
+    'openspec/changes/add-field-quality/specs/field-quality/spec.md'
+  ])
+  assert.equal(
+    advice.commands.find((command) => command.id === 'openspec-validate').command,
+    'openspec validate add-field-quality --strict'
+  )
+})
+
 test('drops bare workspace root paths from validation advice inputs', () => {
   const root = process.cwd()
   const advice = buildValidationAdvice([root, `${root}\\`, '.', './', `${root}\\.`, `${root}\\.\\`])
