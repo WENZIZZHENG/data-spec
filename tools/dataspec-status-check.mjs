@@ -93,6 +93,15 @@ export function formatStatusReportText(report) {
     `问题：${report.summary.totalIssues} 个`
   ]
 
+  if (Array.isArray(report.checks) && report.checks.length > 0) {
+    lines.push('', '检查项:')
+    for (const check of report.checks) {
+      lines.push(
+        `- ${check.id} (${check.name}): status=${check.status} issues=${check.issueCount} errors=${check.errorCount} warnings=${check.warningCount}`
+      )
+    }
+  }
+
   if (report.issues.length > 0) {
     lines.push('', '问题明细:')
     report.issues.forEach((issue, index) => {

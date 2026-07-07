@@ -201,7 +201,12 @@ test('buildStatusReport reports deterministic TODO and OpenSpec drift', () => {
   assert.ok(codes.includes('MARKDOWN_LINK_MISSING'))
   assert.ok(codes.includes('OPENSPEC_ARCHIVE_MISSING'))
   assert.ok(codes.includes('OPENSPEC_MAIN_SPEC_MISSING'))
-  assert.match(formatStatusReportText(report), /状态：fail/)
+  const text = formatStatusReportText(report)
+  assert.match(text, /状态：fail/)
+  assert.match(text, /检查项:/)
+  assert.ok(text.indexOf('检查项:') < text.indexOf('问题明细:'))
+  assert.match(text, /- todo-queue \(TODO 近期队列一致性\): status=fail issues=2 errors=2 warnings=0/)
+  assert.match(text, /- readme-entry \(README 状态检查入口\): status=fail issues=1 errors=1 warnings=0/)
 })
 
 test('buildStatusReport reports queue count drift in queue line and summaries', () => {
@@ -254,6 +259,10 @@ test('buildStatusReport treats active changes as warning unless TODO claims queu
   assert.equal(openSpecCheck.errorCount, 0)
   assert.doesNotMatch(report.nextActions[0], /severity=error/)
   assert.match(report.nextActions[0], /severity=warning/)
+  assert.match(
+    formatStatusReportText(report),
+    /- openspec-state \(OpenSpec active\/archive\/main spec 一致性\): status=pass issues=1 errors=0 warnings=1/
+  )
 })
 
 test('runStatusCheckCli supports json output and returns non-zero on errors', async () => {
