@@ -640,6 +640,60 @@ test('buildStatusReport accepts Markdown link paths with balanced parentheses', 
   assert.equal(missingLinks.length, 0)
 })
 
+test('buildStatusReport accepts Markdown link paths with escaped parentheses', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: `${CLEAN_README}\n参考 [转义括号文档](docs/archive/example\\(draft\\).md)。\n`,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/archive/example(draft).md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'pass')
+  assert.equal(missingLinks.length, 0)
+})
+
+test('buildStatusReport does not close Markdown links on escaped closing parentheses', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: `${CLEAN_README}\n参考 [转义右括号文档](docs/archive/example\\).md) 后接 [缺失](docs/archive/missing.md)。\n`,
+    aiContractsText: CLEAN_AI_CONTRACTS,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/archive/example).md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const missingLinks = report.issues.filter((issue) => issue.code === 'MARKDOWN_LINK_MISSING')
+
+  assert.equal(report.status, 'fail')
+  assert.equal(missingLinks.length, 1)
+  assert.match(missingLinks[0].message, /docs\/archive\/missing\.md/)
+  assert.doesNotMatch(missingLinks[0].message, /docs\/archive\/example/)
+})
+
 test('buildStatusReport keeps later Markdown links after malformed parenthesis links', () => {
   const report = buildStatusReport({
     todoText: CLEAN_TODO,

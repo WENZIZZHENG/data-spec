@@ -1124,11 +1124,11 @@ function findMarkdownLinkTargetEnd(line, targetStart) {
       const closeStart = findNextNonWhitespace(line, titleEnd + 1)
       return closeStart !== -1 && line[closeStart] === ')' ? closeStart : -1
     }
-    if (line[index] === '(') {
+    if (line[index] === '(' && !isEscapedMarkdownDelimiter(line, index)) {
       nestedParens += 1
       continue
     }
-    if (line[index] !== ')') {
+    if (line[index] !== ')' || isEscapedMarkdownDelimiter(line, index)) {
       continue
     }
     if (nestedParens === 0) {
@@ -1266,12 +1266,16 @@ function parseMarkdownLinkTarget(rawTarget) {
 }
 
 function prepareMarkdownLinkPath(filePath) {
-  const withoutQuery = filePath.split('?')[0]
+  const withoutQuery = unescapeMarkdownLinkPath(filePath.split('?')[0])
   try {
     return decodeURI(withoutQuery)
   } catch {
     return withoutQuery
   }
+}
+
+function unescapeMarkdownLinkPath(filePath) {
+  return String(filePath ?? '').replace(/\\([()])/g, '$1')
 }
 
 function extractArchivedChangeIds(item) {
