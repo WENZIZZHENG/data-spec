@@ -832,12 +832,16 @@ function findScenariosWithEmptyStepText(lines, requirementsIndex) {
       continue
     }
     const stepMatch = /^-\s+\*\*(WHEN|THEN|AND)\*\*\s*(?<text>.*)$/i.exec(line)
-    if (stepMatch && !stepMatch.groups.text.trim()) {
+    if (stepMatch && !hasMeaningfulScenarioStepText(stepMatch.groups.text)) {
       missing.push({ line: index + 1, kind: stepMatch[1].toUpperCase() })
     }
   }
 
   return missing
+}
+
+function hasMeaningfulScenarioStepText(text) {
+  return /[\p{L}\p{N}]/u.test(String(text ?? ''))
 }
 
 function findScenariosWithMissingTitle(lines, requirementsIndex) {
