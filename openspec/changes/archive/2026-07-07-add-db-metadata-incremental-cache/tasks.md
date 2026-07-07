@@ -57,3 +57,15 @@
 - 剩余风险：
   - Maven 本地依赖 POM warning、Java agent warning、前端 Rolldown annotation/chunk warning 均为既有非失败 warning。
   - 本 change 尚未 archive；当前收口目标为本地 commit，不 push。
+
+## Archive Verification Evidence
+
+- 2026-07-07：执行 `openspec archive add-db-metadata-incremental-cache --yes`，同步 `db-metadata-dump`、`db-metadata-incremental-cache`、`db-metadata-scan-plan`、`db-reverse-import-frontend`、`field-coverage-report` 主规格，并归档到 `openspec/changes/archive/2026-07-07-add-db-metadata-incremental-cache/`；CLI 关于 delta 数量较多的 proposal warning 为非阻塞提示，归档已成功。
+- 2026-07-07：补齐新建主规格 `openspec/specs/db-metadata-incremental-cache/spec.md` 的 Purpose，确认默认占位文本扫描无命中。
+- 2026-07-07：`openspec validate --all` 通过，118 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=pass`，active changes 为空，`totalIssues=0`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：补齐本次 touched 主规格 `openspec/specs/db-reverse-import-frontend/spec.md` 的 Purpose；新增行占位文本扫描无命中。
+- 2026-07-07：`git diff --cached --check` 通过；暂存区敏感词扫描仅命中 password、token、JDBC、DSN 等安全约束文字，未发现真实凭据或可复制连接信息。
+- 2026-07-07：独立归档复评 agent `019f3ad4-eaf6-76e3-9d9b-aa37f31bacf5`（Tesla，用途：最后 2 个数据库 OpenSpec change 归档只读复评）已完成并关闭；结论为未发现阻塞 commit 的问题，确认 active changes 清零、8 个主规格同步一致、占位无新增命中、敏感词命中均为安全说明。

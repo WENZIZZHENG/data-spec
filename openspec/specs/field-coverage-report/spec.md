@@ -79,3 +79,33 @@ The system SHALL generate a field coverage report from a database schema dump wi
 - **WHEN** a coverage report is generated from dump input
 - **THEN** the system analyzes only table and column metadata
 - **AND** it does not require or expose source database row values.
+
+### Requirement: 覆盖率报告复用 metadata cache
+DataSpec SHALL allow database direct field coverage reports to use fresh metadata cache entries instead of reconnecting for unchanged schema structures.
+
+#### Scenario: 覆盖率报告使用新鲜缓存
+- **WHEN** a database direct coverage request uses `metadataCacheMode=AUTO` and selected table cache entries are fresh
+- **THEN** DataSpec SHALL generate the coverage report from cached schema-only table definitions
+- **AND** it SHALL return the associated `metadataFingerprint` and cache status with the report.
+
+#### Scenario: 覆盖率报告强制刷新
+- **WHEN** a database direct coverage request uses `metadataCacheMode=REFRESH`
+- **THEN** DataSpec SHALL refresh selected table metadata before generating coverage
+- **AND** it SHALL return any schema-only change summary alongside the coverage report.
+
+#### Scenario: 覆盖率缓存边界
+- **WHEN** DataSpec generates a coverage report from metadata cache
+- **THEN** the report SHALL analyze only table and column metadata
+- **AND** it MUST NOT require or expose source database row values, passwords, tokens, full JDBC URLs, or connection strings.
+
+### Requirement: Coverage report has real database integration coverage
+DataSpec SHALL verify database direct coverage behavior against real PostgreSQL and MySQL containers through the optional database integration profile.
+
+#### Scenario: Coverage uses real metadata without source rows
+- **WHEN** the integration test generates a coverage report from selected real database tables
+- **THEN** DataSpec SHALL classify standard matches, alias matches, missing comments, possible duplicates, and unmanaged fields from schema metadata
+- **AND** it MUST NOT read or require source database business rows.
+
+#### Scenario: Coverage summary remains stable across dialects
+- **WHEN** PostgreSQL and MySQL fixtures contain equivalent standard and unmanaged columns
+- **THEN** DataSpec SHALL return deterministic coverage summary fields such as tableCount, columnCount, coveredCount, unmanagedCount, missingCommentCount, and coverageRate for each dialect.

@@ -37,3 +37,15 @@
 - 敏感信息扫描：对新增 IT、README/TODO 和本 change 执行 `rg "(top-secret|Bearer |jdbc:postgresql://|jdbc:mysql://|password=|Authorization|api_key|apikey|token123)" ...`，未发现新增 raw password、完整 JDBC URL、DSN、token 或业务数据行；命中项为脱敏边界说明或测试中的 `doesNotContain` 断言。
 - 独立评审：子 agent `019f3860-1984-7ac0-b3ac-d899e4b419a2`（用途：P6-82 真实数据库 Testcontainers 集成测试矩阵只读代码评审）已完成并关闭。Critical 无；Important 1 指出 compare/coverage spec 与 IT 断言覆盖不一致，已通过扩展 schema-only fixture 和断言补齐 matched/changed/new/missing-comment/non-standard、standard/alias/missing/possible-duplicate/unmanaged 与 coverageRate；Important 2 指出真实容器矩阵尚无 Docker green evidence，当前环境无 Docker，已作为未覆盖风险和后续补跑要求记录；Minor 的 MySQL `execInContainer` exit code 未检查已修复。
 - 复评：子 agent `019f386a-008b-7ac1-9da9-683ea4a845c7`（用途：P6-82 修复后只读复评）已完成并关闭。Critical 无；Important 指出 MySQL root 密码与 Testcontainers `withPassword` 行为可能不一致，已移除独立 root password env，改用容器实际 `MYSQL.getPassword()` 执行 root 初始化，并保留输出不含 owner/readonly 动态密码断言。
+
+## Archive Verification Evidence
+
+- 2026-07-07：执行 `openspec archive add-testcontainers-db-integration-tests --yes`，同步 `db-metadata-dump`、`db-readonly-security-diagnostics`、`db-reverse-import-compare`、`db-testcontainers-integration-tests`、`field-coverage-report` 主规格，并归档到 `openspec/changes/archive/2026-07-07-add-testcontainers-db-integration-tests/`。
+- 2026-07-07：补齐新建主规格 `openspec/specs/db-testcontainers-integration-tests/spec.md` 的 Purpose，确认默认占位文本扫描无命中。
+- 2026-07-07：`openspec validate --all` 通过，118 passed、0 failed。
+- 2026-07-07：`node --test tools/dataspec-status-check.test.mjs tools/dataspec-verify-advisor.test.mjs tools/dataspec-cli-mcp-contract-check.test.mjs` 通过，44 pass、0 fail。
+- 2026-07-07：`node tools/dataspec-status-check.mjs --format json` 返回 `status=pass`，active changes 为空，`totalIssues=0`。
+- 2026-07-07：`git diff --check` 退出码 0，仅输出 Windows LF/CRLF 提示。
+- 2026-07-07：补齐本次 touched 主规格 `openspec/specs/db-reverse-import-frontend/spec.md` 的 Purpose；新增行占位文本扫描无命中。
+- 2026-07-07：`git diff --cached --check` 通过；暂存区敏感词扫描仅命中 password、token、JDBC、DSN 等安全约束文字，未发现真实凭据或可复制连接信息。
+- 2026-07-07：独立归档复评 agent `019f3ad4-eaf6-76e3-9d9b-aa37f31bacf5`（Tesla，用途：最后 2 个数据库 OpenSpec change 归档只读复评）已完成并关闭；结论为未发现阻塞 commit 的问题，确认 active changes 清零、8 个主规格同步一致、占位无新增命中、敏感词命中均为安全说明。

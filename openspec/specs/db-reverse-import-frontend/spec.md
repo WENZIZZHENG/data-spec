@@ -1,7 +1,7 @@
 # db-reverse-import-frontend Specification
 
 ## Purpose
-TBD - created by archiving change enhance-db-reverse-import-frontend. Update Purpose after archive.
+定义 DataSpec 反向导入页面的数据库直连流程、预览确认、导入结果和元数据缓存状态展示，确保用户能安全理解扫描进度、候选字段和 AI 可读摘要。
 ## Requirements
 ### Requirement: 数据库直连流程步骤化
 反向导入页在数据库直连模式下 SHALL 以连续步骤呈现连接信息、选择表、预览确认、导入结果，且 SHALL 根据当前操作状态高亮当前步骤。
@@ -51,3 +51,29 @@ TBD - created by archiving change enhance-db-reverse-import-frontend. Update Pur
 #### Scenario: 用户查看映射决策摘要
 - **WHEN** 后端返回本次 mapping decisions
 - **THEN** 页面展示导入、跳过和忽略的字段决策摘要与理由。
+
+### Requirement: 反向导入页展示 metadata cache 状态
+反向导入页 SHALL display database metadata cache freshness, fingerprint, and refresh controls in database direct flows.
+
+#### Scenario: 展示缓存命中和过期信息
+- **WHEN** scan, browser, preview, compare, or import preparation returns metadata cache information
+- **THEN** the page SHALL show whether the result came from fresh cache, stale cache, refresh, or bypass
+- **AND** it SHALL show `lastSeenAt`, `expiresAt`, and `metadataFingerprint` when available.
+
+#### Scenario: 用户手动刷新 metadata
+- **WHEN** a user chooses to refresh database metadata
+- **THEN** the next database metadata request SHALL send `metadataCacheMode=REFRESH`
+- **AND** the UI SHALL keep existing selected table names unless the user explicitly clears them.
+
+### Requirement: 反向导入页展示结构变化摘要
+反向导入页 SHALL show schema-only metadata change summaries returned by backend refreshes.
+
+#### Scenario: 刷新后展示字段变化
+- **WHEN** a refresh response contains added, removed, or changed fields
+- **THEN** the page SHALL display a bounded summary grouped by table
+- **AND** it SHALL NOT display passwords, tokens, full JDBC URLs, connection strings, or source database row values.
+
+#### Scenario: AI 摘要包含 fingerprint
+- **WHEN** the user copies or views AI-readable database metadata context
+- **THEN** the context SHALL include the metadata fingerprint and freshness state
+- **AND** it SHALL remain sanitized for credential-like values.
