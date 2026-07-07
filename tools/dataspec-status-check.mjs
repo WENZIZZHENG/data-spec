@@ -822,8 +822,7 @@ function checkMarkdownLinks(file, text, relativeFiles, issues) {
   const baseDir = path.posix.dirname(file) === '.' ? '' : path.posix.dirname(file)
   const lines = String(text ?? '').split(/\r?\n/)
   lines.forEach((line, index) => {
-    for (const match of line.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
-      const rawTarget = match[1].trim()
+    for (const rawTarget of extractMarkdownLinkTargets(line)) {
       const target = parseMarkdownLinkTarget(rawTarget)
       if (shouldSkipLink(target)) {
         continue
@@ -844,6 +843,51 @@ function checkMarkdownLinks(file, text, relativeFiles, issues) {
       }
     }
   })
+}
+
+function extractMarkdownLinkTargets(line) {
+  const targets = []
+  let cursor = 0
+  while (cursor < line.length) {
+    const labelStart = line.indexOf('[', cursor)
+    if (labelStart === -1) {
+      break
+    }
+    const labelEnd = line.indexOf(']', labelStart + 1)
+    if (labelEnd === -1) {
+      break
+    }
+    if (line[labelEnd + 1] !== '(') {
+      cursor = labelEnd + 1
+      continue
+    }
+
+    const targetStart = labelEnd + 2
+    if (line[targetStart] === '<') {
+      const angleEnd = line.indexOf('>', targetStart + 1)
+      if (angleEnd === -1) {
+        cursor = targetStart + 1
+        continue
+      }
+      const parenEnd = line.indexOf(')', angleEnd + 1)
+      if (parenEnd === -1) {
+        cursor = angleEnd + 1
+        continue
+      }
+      targets.push(line.slice(targetStart, parenEnd).trim())
+      cursor = parenEnd + 1
+      continue
+    }
+
+    const parenEnd = line.indexOf(')', targetStart)
+    if (parenEnd === -1) {
+      cursor = targetStart
+      continue
+    }
+    targets.push(line.slice(targetStart, parenEnd).trim())
+    cursor = parenEnd + 1
+  }
+  return targets
 }
 
 function parseMarkdownLinkTarget(rawTarget) {
