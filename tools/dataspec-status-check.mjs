@@ -529,9 +529,11 @@ function findRequirementsWithoutScenario(lines, requirementsIndex) {
       flushRequirement()
       return missing
     }
-    if (/^###\s+Requirement\s*:/.test(line)) {
+    if (/^###\s+/.test(line)) {
       flushRequirement()
-      currentRequirement = { line: index + 1, title: line }
+      currentRequirement = /^###\s+Requirement\s*:/.test(line)
+        ? { line: index + 1, title: line }
+        : null
       hasScenario = false
       continue
     }

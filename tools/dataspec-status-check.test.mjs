@@ -829,6 +829,68 @@ DataSpec SHALL keep executable scenarios close to each requirement.
   }
 })
 
+test('runStatusCheckCli ignores Scenario entries under non-Requirement headings', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-status-check-'))
+  try {
+    await mkdir(path.join(dir, 'docs', 'archive'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'changes', 'archive', '2026-07-05-add-sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'sql-rule-debugger'), { recursive: true })
+    await mkdir(path.join(dir, 'openspec', 'specs', 'scenario-under-notes'), { recursive: true })
+    await writeFile(path.join(dir, 'TODO.md'), CLEAN_TODO, 'utf8')
+    await writeFile(path.join(dir, 'README.md'), CLEAN_README, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'ai-contracts.md'), CLEAN_AI_CONTRACTS, 'utf8')
+    await writeFile(path.join(dir, 'docs', 'archive', 'example.md'), '# Archive\n', 'utf8')
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'sql-rule-debugger', 'spec.md'),
+      `# sql-rule-debugger Specification
+
+## Purpose
+用于解释 SQL 规则命中原因，帮助 AI 和开发者定位 lint 结果。
+## Requirements
+### Requirement: SQL rule debug endpoint
+DataSpec SHALL expose a read-only SQL rule debug endpoint.
+
+#### Scenario: Debug rule hit
+- **WHEN** the user requests a rule explanation
+- **THEN** DataSpec returns evidence
+`,
+      'utf8'
+    )
+    await writeFile(
+      path.join(dir, 'openspec', 'specs', 'scenario-under-notes', 'spec.md'),
+      `# scenario-under-notes Specification
+
+## Purpose
+用于验证非 Requirement 三级标题下的 Scenario 不会归属到前一个 Requirement。
+## Requirements
+### Requirement: Missing direct scenario
+DataSpec SHALL keep scenarios directly under the requirement they verify.
+
+### Notes
+#### Scenario: Wrong parent heading
+- **WHEN** a scenario appears under notes
+- **THEN** it must not satisfy the previous requirement
+`,
+      'utf8'
+    )
+    const io = createIo()
+
+    const code = await runStatusCheckCli(['--root', dir, '--format', 'json'], io)
+    const output = JSON.parse(io.stdout)
+
+    const issue = output.issues.find((issue) => issue.code === 'OPENSPEC_SPEC_REQUIREMENT_SCENARIO_MISSING')
+
+    assert.equal(code, 1)
+    assert.equal(output.status, 'fail')
+    assert.ok(issue)
+    assert.equal(issue.file, 'openspec/specs/scenario-under-notes/spec.md')
+    assert.equal(issue.line, 6)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 function createIo() {
   return {
     stdout: '',
