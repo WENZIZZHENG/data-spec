@@ -39,7 +39,7 @@
       "outputShape": ["kind", "schemaVersion", "capabilities[]", "requiredCapabilityIds[]", "recommendedFirstActions[]", "diagnostics[]"],
       "exitCodes": { "0": "catalog printed", "2": "server or argument error" },
       "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": ["dataspec-token"], "nextActions": ["Inspect safety before invoking write-capable capabilities."] },
-      "successExample": { "command": "node tools/dataspec-cli.mjs capability list --format json", "output": { "kind": "dataspec-ai-capability-catalog", "capabilities": ["lint-sql"] } },
+      "successExample": { "command": "node tools/dataspec-cli.mjs capability list --format json", "output": { "kind": "dataspec-ai-capability-catalog", "capabilities": ["lint-sql", "standard-evidence"] } },
       "failureExample": { "exitCode": 2, "diagnostic": { "code": "DATASPEC_SERVER_UNAVAILABLE" } },
       "recommendedNextActions": ["Run capability show for the selected capability."]
     },
@@ -52,7 +52,7 @@
       "outputShape": ["id", "category", "status", "apiEndpoints[]", "cliCommands[]", "mcpTools[]", "mcpResources[]", "safety", "nextActions[]"],
       "exitCodes": { "0": "capability printed", "2": "unknown capability or request error" },
       "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": ["dataspec-token"], "nextActions": ["Use safety.nextActions before running the selected capability."] },
-      "successExample": { "command": "node tools/dataspec-cli.mjs capability show lint-sql --format json", "output": { "id": "lint-sql", "safety": { "writesProject": true } } },
+      "successExample": { "command": "node tools/dataspec-cli.mjs capability show standard-evidence --format json", "output": { "id": "standard-evidence", "writeRisk": "READ_ONLY", "apiEndpoints": ["GET /api/standard-evidence"], "cliCommands": [], "mcpResources": [], "mcpTools": [], "safety": { "readOnly": true, "writesProject": false } } },
       "failureExample": { "exitCode": 2, "diagnostic": { "code": "DATASPEC_REQUEST_FAILED" } },
       "recommendedNextActions": ["Prefer JSON output when an AI agent consumes the result."]
     },

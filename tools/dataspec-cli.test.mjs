@@ -3029,6 +3029,12 @@ test('capability list prints machine-readable catalog with project diagnostics',
   assert.equal(output.projectId, 7)
   assert.ok(output.capabilities.some((capability) => capability.id === 'session-bootstrap'))
   assert.ok(output.capabilities.some((capability) => capability.id === 'capability-catalog'))
+  const standardEvidence = output.capabilities.find((capability) => capability.id === 'standard-evidence')
+  assert.equal(standardEvidence.writeRisk, 'READ_ONLY')
+  assert.deepEqual(standardEvidence.apiEndpoints, ['GET /api/standard-evidence'])
+  assert.deepEqual(standardEvidence.cliCommands, [])
+  assert.deepEqual(standardEvidence.mcpResources, [])
+  assert.deepEqual(standardEvidence.mcpTools, [])
 })
 
 test('capability show prints capability detail', async () => {
@@ -3062,6 +3068,47 @@ test('capability show prints capability detail', async () => {
   assert.equal(output.id, 'lint-sql')
   assert.equal(output.writeRisk, 'WRITES_DATASPEC_RECORD')
   assert.match(output.cliCommands[0], /dataspec lint/)
+})
+
+test('capability show prints standard evidence as api-only capability', async () => {
+  const fetchFn = async (url) => {
+    assert.equal(url, 'http://dataspec.local/api/capabilities/standard-evidence?projectId=7')
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: capabilityCatalogFixture().capabilities.find((item) => item.id === 'standard-evidence')
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'capability',
+    'show',
+    'standard-evidence',
+    '--project',
+    '7',
+    '--server',
+    'http://dataspec.local',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  assert.equal(code, 0)
+  assert.equal(output.id, 'standard-evidence')
+  assert.equal(output.category, 'evidence')
+  assert.equal(output.writeRisk, 'READ_ONLY')
+  assert.deepEqual(output.requiredInputs, ['projectId', 'subjectType', 'subjectId'])
+  assert.deepEqual(output.outputContracts, ['cross-source-standard-evidence-view'])
+  assert.deepEqual(output.apiEndpoints, ['GET /api/standard-evidence'])
+  assert.deepEqual(output.cliCommands, [])
+  assert.deepEqual(output.mcpResources, [])
+  assert.deepEqual(output.mcpTools, [])
+  assert.equal(output.safety.readOnly, true)
+  assert.equal(output.safety.writesProject, false)
 })
 
 test('capability show text includes write safety summary', async () => {
@@ -5607,6 +5654,7 @@ function capabilityCatalogFixture() {
     'coverage-report',
     'schema-registry',
     'export-evidence-package',
+    'standard-evidence',
     'workflow-recipes',
     'ai-task-profiles',
     'domain-starter-kits'
@@ -5619,7 +5667,7 @@ function capabilityCatalogFixture() {
     projectId: 7,
     capabilities: ids.map((id) => ({
       id,
-      category: ['lint-sql', 'sql-rule-debugger'].includes(id) ? 'sql' : 'discovery',
+      category: ['lint-sql', 'sql-rule-debugger'].includes(id) ? 'sql' : id === 'standard-evidence' ? 'evidence' : 'discovery',
       title: id,
       summary: `${id} summary`,
       status: 'AVAILABLE',
@@ -5627,17 +5675,23 @@ function capabilityCatalogFixture() {
       requiresProject: !['session-bootstrap', 'capability-catalog', 'doctor', 'schema-registry', 'workflow-recipes'].includes(id),
       writeRisk: id === 'lint-sql' ? 'WRITES_DATASPEC_RECORD' : 'READ_ONLY',
       safety: capabilitySafetyFixture(id),
-      requiredInputs: ['lint-sql', 'sql-rule-debugger'].includes(id) ? ['projectId', 'sql'] : [],
+      requiredInputs: id === 'standard-evidence'
+        ? ['projectId', 'subjectType', 'subjectId']
+        : ['lint-sql', 'sql-rule-debugger'].includes(id) ? ['projectId', 'sql'] : [],
       optionalInputs: [],
       outputContracts: id === 'lint-sql'
         ? ['lint-result']
-        : id === 'sql-rule-debugger' ? ['sql-rule-debug-result', 'lint-result'] : ['ai-capability-catalog'],
+        : id === 'sql-rule-debugger' ? ['sql-rule-debug-result', 'lint-result']
+        : id === 'standard-evidence' ? ['cross-source-standard-evidence-view'] : ['ai-capability-catalog'],
       apiEndpoints: id === 'session-bootstrap'
         ? ['GET /api/bootstrap/session']
-        : id === 'lint-sql' ? ['POST /api/lint'] : id === 'sql-rule-debugger' ? ['POST /api/lint/debug'] : ['GET /api/capabilities'],
+        : id === 'lint-sql' ? ['POST /api/lint']
+        : id === 'sql-rule-debugger' ? ['POST /api/lint/debug']
+        : id === 'standard-evidence' ? ['GET /api/standard-evidence'] : ['GET /api/capabilities'],
       cliCommands: id === 'lint-sql'
         ? ['dataspec lint <file.sql> --project <id> --format json']
         : id === 'sql-rule-debugger' ? ['dataspec lint-debug <file.sql> --project <id> --format json']
+        : id === 'standard-evidence' ? []
         : id === 'session-bootstrap' ? ['dataspec bootstrap --project <id> --format json'] : ['dataspec capability list --format json'],
       mcpResources: id === 'capability-catalog'
         ? ['dataspec://project/<id>/capability-catalog']
