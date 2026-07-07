@@ -543,6 +543,15 @@ function checkOpenSpecSpecRequirements(specTexts, issues) {
         suggestedFix: '在该 Scenario 下补齐 - **WHEN** 与 - **THEN** 步骤；可按需保留 - **AND** 作为补充条件。'
       }))
     }
+    for (const duplicate of findDuplicateScenarios(lines, requirementsIndex)) {
+      issues.push(issue({
+        code: 'OPENSPEC_SPEC_SCENARIO_DUPLICATE',
+        message: `${specPath} 的 ${duplicate.title} 与 line ${duplicate.firstLine} 的 Scenario 标题重复，AI 难以唯一引用验收行为。`,
+        file: specPath,
+        line: duplicate.line,
+        suggestedFix: '为同一 Requirement 下的重复 Scenario 使用唯一标题，或合并重复验收行为。'
+      }))
+    }
   }
 }
 
@@ -657,6 +666,35 @@ function findScenariosWithMissingSteps(lines, requirementsIndex) {
 
   flushScenario()
   return missing
+}
+
+function findDuplicateScenarios(lines, requirementsIndex) {
+  const duplicates = []
+  let inRequirement = false
+  let seenScenarios = new Map()
+
+  for (let index = requirementsIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (/^##\s+/.test(line)) {
+      return duplicates
+    }
+    if (/^###\s+/.test(line)) {
+      inRequirement = /^###\s+Requirement\s*:/.test(line)
+      seenScenarios = new Map()
+      continue
+    }
+    if (!inRequirement || !/^####\s+Scenario\s*:/.test(line)) {
+      continue
+    }
+    const normalizedTitle = line.replace(/^####\s+Scenario\s*:\s*/, '').trim().toLowerCase()
+    if (seenScenarios.has(normalizedTitle)) {
+      duplicates.push({ line: index + 1, firstLine: seenScenarios.get(normalizedTitle), title: line })
+      continue
+    }
+    seenScenarios.set(normalizedTitle, index + 1)
+  }
+
+  return duplicates
 }
 
 function checkReadmeToolEntry(readmeText, relativeFiles, issues) {
