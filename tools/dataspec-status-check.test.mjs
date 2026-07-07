@@ -92,6 +92,7 @@ test('buildStatusReport passes for a self-consistent TODO/OpenSpec snapshot', ()
   assert.equal(report.summary.todoItems, 3)
   assert.deepEqual(report.summary.queueItems, ['P6-71', 'P6-72'])
   assert.equal(report.issues.length, 0)
+  assert.match(report.nextActions[0], /检查通过/)
 })
 
 test('buildStatusReport reports workflow recipe contract drift in AI docs and TODO', () => {
@@ -251,6 +252,8 @@ test('buildStatusReport treats active changes as warning unless TODO claims queu
   assert.equal(openSpecCheck.status, 'pass')
   assert.equal(openSpecCheck.warningCount, 1)
   assert.equal(openSpecCheck.errorCount, 0)
+  assert.doesNotMatch(report.nextActions[0], /severity=error/)
+  assert.match(report.nextActions[0], /severity=warning/)
 })
 
 test('runStatusCheckCli supports json output and returns non-zero on errors', async () => {
@@ -268,6 +271,7 @@ test('runStatusCheckCli supports json output and returns non-zero on errors', as
     assert.equal(code, 1)
     assert.equal(output.status, 'fail')
     assert.ok(output.issues.some((issue) => issue.code === 'TODO_QUEUE_ITEM_MISSING'))
+    assert.match(output.nextActions[0], /severity=error/)
     const todoQueueCheck = output.checks.find((check) => check.id === 'todo-queue')
     assert.equal(todoQueueCheck.errorCount, 2)
     assert.equal(todoQueueCheck.warningCount, 0)
