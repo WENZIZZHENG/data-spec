@@ -1,7 +1,7 @@
 # standard-reuse-pack Specification
 
 ## Purpose
-TBD - created by archiving change add-standard-reuse-pack. Update Purpose after archive.
+定义标准复用包的创建、列表、预览应用和确认应用能力，让源项目的字段、规则、模板和枚举资产能以版本化、脱敏、可比对的方式复用到目标项目。
 ## Requirements
 ### Requirement: 标准复用包创建与列表
 DataSpec SHALL allow users to create and list versioned standard reuse packs from a source project.

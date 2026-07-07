@@ -1,7 +1,7 @@
 # field-rule-pages Specification
 
 ## Purpose
-TBD - created by archiving change build-field-rule-pages. Update Purpose after archive.
+定义字段库和规则配置前端页面的核心操作边界，支持在当前项目下维护标准字段、个人 metadata、规则配置和基线操作。
 ## Requirements
 ### Requirement: Field Library Page
 The system SHALL provide a usable frontend page for managing standard fields in the current project.

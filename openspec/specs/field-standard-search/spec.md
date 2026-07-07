@@ -1,7 +1,7 @@
 # field-standard-search Specification
 
 ## Purpose
-TBD - created by archiving change add-field-standard-search. Update Purpose after archive.
+定义项目级标准字段搜索能力，通过关键词、语义别名和结构化过滤返回 AI 可读的匹配理由、推荐用法和下一步动作。
 ## Requirements
 ### Requirement: Field standard search API
 

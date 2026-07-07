@@ -1,7 +1,7 @@
 # standard-change-what-if Specification
 
 ## Purpose
-TBD - created by archiving change add-standard-change-what-if. Update Purpose after archive.
+定义标准字段和规则变更的只读 what-if 预览，在保存前展示属性差异、影响摘要、风险等级、验证建议、回滚提示和当前快照信息。
 ## Requirements
 ### Requirement: Standard change what-if preview
 DataSpec SHALL provide a read-only what-if preview for standard field and rule changes before the change is saved.

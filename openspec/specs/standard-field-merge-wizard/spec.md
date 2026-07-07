@@ -1,7 +1,7 @@
 # standard-field-merge-wizard Specification
 
 ## Purpose
-TBD - created by archiving change add-standard-field-merge-wizard. Update Purpose after archive.
+定义标准字段合并向导的预览、确认和前端流程，让用户在合并重复字段前审查可迁移属性、风险、影响项、原因和回滚提示。
 ## Requirements
 ### Requirement: 标准字段合并预览
 DataSpec SHALL provide a merge preview before changing formal standard fields.

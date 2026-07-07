@@ -1,7 +1,7 @@
 # field-format-constraints Specification
 
 ## Purpose
-TBD - created by archiving change add-field-format-examples. Update Purpose after archive.
+定义标准字段的值格式约束和正反例 metadata，使字段库、AI Context 和 DDL 生成能复用格式类型、模式、单位、精度、时区、空值策略和示例。
 ## Requirements
 ### Requirement: Store Field Format Constraints
 DataSpec SHALL allow each standard field to store optional value-format constraints for AI-readable reuse.

@@ -1,7 +1,7 @@
 # field-suggestion Specification
 
 ## Purpose
-TBD - created by archiving change add-field-suggestion. Update Purpose after archive.
+定义字段建议能力，为业务描述或候选字段返回项目内已有标准字段匹配、确定性语义推荐和新字段命名兜底，并暴露 API、CLI 和 MCP 入口。
 ## Requirements
 ### Requirement: Field Suggestion API
 The system SHALL recommend standard field candidates for a business description in a project.

@@ -1,7 +1,7 @@
 # standard-snapshot-versioning Specification
 
 ## Purpose
-TBD - created by archiving change add-standard-snapshot-versioning. Update Purpose after archive.
+定义项目标准快照的创建、最新版本查询和下游引用契约，让 AI Context、SQL 检查和变更预览能关联稳定版本与哈希。
 ## Requirements
 ### Requirement: Standard snapshot creation
 The system SHALL allow users to create a project-level standard snapshot for the current fields, enum dictionaries, enum values, and rule configurations.

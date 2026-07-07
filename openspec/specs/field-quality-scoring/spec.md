@@ -1,7 +1,7 @@
 # field-quality-scoring Specification
 
 ## Purpose
-TBD - created by archiving change add-field-quality-scoring. Update Purpose after archive.
+定义标准字段质量评分报告，用确定性规则评估 metadata 完整度、AI 复用风险、敏感标记缺口、码表缺失和命名问题。
 ## Requirements
 ### Requirement: Generate field quality report
 The system SHALL generate a read-only quality report for standard fields in a project.

@@ -1,7 +1,7 @@
 # standard-schema-registry Specification
 
 ## Purpose
-TBD - created by archiving change add-schema-registry-contract-versions. Update Purpose after archive.
+定义 AI 可消费标准契约的 Schema Registry，集中描述字段、枚举、规则、模板、快照、lint 结果、AI Context 和任务画像的版本、稳定字段与兼容策略。
 ## Requirements
 ### Requirement: Schema registry catalog
 DataSpec SHALL expose a machine-readable schema registry catalog for AI-consumed standard contracts.

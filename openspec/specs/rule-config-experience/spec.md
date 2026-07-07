@@ -1,7 +1,7 @@
 # rule-config-experience Specification
 
 ## Purpose
-TBD - created by archiving change enhance-rule-config-experience. Update Purpose after archive.
+定义规则配置页的结构化参数编辑、JSON 兜底、参数摘要和基线操作体验，让常见 SQL 标准规则更容易维护且仍兼容复杂参数。
 ## Requirements
 ### Requirement: 常见规则参数结构化编辑
 规则配置页 SHALL 根据规则编码为常见规则展示结构化参数编辑器，覆盖必含列、禁用字段名、推荐替换、字段后缀类型和字段前缀类型。

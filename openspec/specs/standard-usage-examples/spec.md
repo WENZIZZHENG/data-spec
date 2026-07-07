@@ -1,7 +1,7 @@
 # standard-usage-examples Specification
 
 ## Purpose
-TBD - created by archiving change add-standard-usage-examples. Update Purpose after archive.
+定义项目级标准使用示例和反例的存储、管理与 AI Context 选择规则，让 AI 能复用高价值字段、规则和 SQL 场景样例并避开反模式。
 ## Requirements
 ### Requirement: Standard Usage Example Storage
 DataSpec SHALL store project-scoped standard usage examples and anti-examples for AI-readable reuse.

@@ -1,7 +1,7 @@
 # standard-quality-gate Specification
 
 ## Purpose
-TBD - created by archiving change add-quality-gate-policy. Update Purpose after archive.
+定义项目标准质量门禁策略和评估结果，用覆盖率、字段质量、错误数量、新增未管理字段和敏感标记要求给出 AI 与 CI 可读的通过或失败状态。
 ## Requirements
 ### Requirement: Configure project quality gate
 DataSpec SHALL allow each project to store a lightweight standard quality gate policy.

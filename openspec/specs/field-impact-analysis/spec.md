@@ -1,7 +1,7 @@
 # field-impact-analysis Specification
 
 ## Purpose
-TBD - created by archiving change add-field-impact-analysis. Update Purpose after archive.
+定义标准字段影响分析报告，汇总模板、导入来源、历史 SQL 检查、快照和 AI Context 中对字段的引用，并在编辑前给出风险提示。
 ## Requirements
 ### Requirement: Generate field impact report
 The system SHALL generate a read-only impact report for a standard field in a project.

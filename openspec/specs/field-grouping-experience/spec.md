@@ -1,7 +1,7 @@
 # field-grouping-experience Specification
 
 ## Purpose
-TBD - created by archiving change enhance-field-grouping-experience. Update Purpose after archive.
+定义字段库按领域、分类、标签和未分组状态浏览与批量维护的体验，让用户能理解字段组织情况并安全更新分组 metadata。
 ## Requirements
 ### Requirement: Field grouping summary
 The system SHALL provide a project-level field grouping summary based on existing field metadata.

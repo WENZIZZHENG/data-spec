@@ -1,7 +1,7 @@
 # field-conflict-detection Specification
 
 ## Purpose
-TBD - created by archiving change add-field-conflict-detection. Update Purpose after archive.
+定义项目标准字段的只读冲突检测报告，用确定性证据识别别名冲突、语义重复、属性不一致、保留字风险、大小写碰撞和歧义别名。
 ## Requirements
 ### Requirement: Generate field conflict report
 The system SHALL generate a read-only field conflict report for a project.

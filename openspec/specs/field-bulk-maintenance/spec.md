@@ -1,7 +1,7 @@
 # field-bulk-maintenance Specification
 
 ## Purpose
-TBD - created by archiving change add-field-bulk-maintenance-undo. Update Purpose after archive.
+定义标准字段批量维护的预览、确认应用和撤销边界，让用户批量修改状态、分类、标签、敏感标记、码表和别名时可先看差异并保留变更日志。
 ## Requirements
 ### Requirement: Field bulk update preview
 The system SHALL provide a read-only preview before applying bulk field maintenance updates.

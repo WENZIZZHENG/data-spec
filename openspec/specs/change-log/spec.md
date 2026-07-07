@@ -1,7 +1,7 @@
 # change-log Specification
 
 ## Purpose
-TBD - created by archiving change add-standard-change-log. Update Purpose after archive.
+定义标准字段、枚举和值域、规则配置等项目标准变更的追加式日志和查询能力，为保存后追溯、预览回滚提示和审计提供稳定记录。
 ## Requirements
 ### Requirement: Standard Change Logging
 
