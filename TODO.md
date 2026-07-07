@@ -648,7 +648,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 状态：已完成第一版，已新增本地 `dataspec-ai-task-card` JSON/Markdown 协议、CLI `task-card create/show/update`、MCP `create_task_card/render_task_card` tool 和前端 `taskCardDisplay` 展示工具。
 - 为什么做：P6-11 的工作流模板解决“应该怎么做”，但 AI 真正执行时还需要知道当前任务做到哪一步、缺哪些输入、失败后从哪一步恢复，否则长任务容易重复执行或越界。
 - 已有基础：已有 AI 回放、执行证据包待办、AI 任务重试待办、CLI/MCP 工作流模板和 OpenSpec tasks 习惯。
-- 已完成能力：任务卡可从 `create-table/review-pr-sql/reverse-import-standards/export-min-context` workflow recipe 生成，包含 `goal/inputs/currentStep/steps/allowedActions/artifacts/resumeCommand/validationCommands/stopConditions/risks/nextActions`；缺必填输入时返回 `BLOCKED` 和 `PROVIDE_REQUIRED_INPUT`；更新步骤只改本地任务卡文件，不执行 workflow。
+- 已完成能力：任务卡可从 `create-table/review-pr-sql/reverse-import-standards/export-min-context/standard-evidence-review` workflow recipe 生成，包含 `goal/inputs/currentStep/steps/allowedActions/artifacts/resumeCommand/validationCommands/stopConditions/risks/nextActions`；缺必填输入时返回 `BLOCKED` 和 `PROVIDE_REQUIRED_INPUT`；更新步骤只改本地任务卡文件，不执行 workflow。
 - 落地产物：新增 `tools/dataspec-task-card.mjs` 共享模块和测试；CLI 支持创建、展示、更新本地 JSON/Markdown 任务卡并限制输出路径；MCP 支持本地创建/渲染任务卡；前端提供摘要与 Markdown 展示工具并接入 smoke gate。
 - 验收标准：AI 执行建表、反向导入、PR SQL Review 或导出最小 Context 时，能用任务卡描述当前进度、下一条安全命令和恢复方式；失败重试不会重复写入。已通过 task card 共享测试、CLI/MCP Node 测试和前端统一测试。
 - 边界：不实现企业审批流，不引入外部队列，不把所有同步接口强制改成异步任务。

@@ -208,7 +208,7 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - `.dataspec/field-catalog.json`: `projectId`、`standard.specVersion`、`standard.specHash`、`contextScope`、`fields[]`、`enums[]`。
 - `fields[]`: `name`、`dataType`、`nullable`、`sensitive`、`status`、`replacementFieldId`、`replacementReason`、`comment`、`displayName`、`category`、`tags`、`codeSetId`、`example`、`aliases[]`、`matchReasons[]`。
 - `.dataspec/rules.yaml`: `standard`、`naming`、`rules`、`rule_exemptions`。
-- `.dataspec/workflows.md`: `create-table`、`review-pr-sql`、`reverse-import-standards`、`export-min-context` 四个 recipe id。
+- `.dataspec/workflows.md`: `create-table`、`review-pr-sql`、`reverse-import-standards`、`export-min-context`、`standard-evidence-review` 五个 recipe id。
 
 ## SQL Lint
 
