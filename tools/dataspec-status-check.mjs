@@ -653,7 +653,7 @@ function findDuplicateRequirements(lines, requirementsIndex) {
     if (!/^###\s+Requirement\s*:/.test(line)) {
       continue
     }
-    const normalizedTitle = line.replace(/^###\s+Requirement\s*:\s*/, '').trim().toLowerCase()
+    const normalizedTitle = normalizeOpenSpecTitle(line.replace(/^###\s+Requirement\s*:\s*/, ''))
     if (!normalizedTitle) {
       continue
     }
@@ -892,7 +892,7 @@ function findDuplicateScenarios(lines, requirementsIndex) {
     if (!inRequirement || !/^####\s+Scenario\s*:/.test(line)) {
       continue
     }
-    const normalizedTitle = line.replace(/^####\s+Scenario\s*:\s*/, '').trim().toLowerCase()
+    const normalizedTitle = normalizeOpenSpecTitle(line.replace(/^####\s+Scenario\s*:\s*/, ''))
     if (!normalizedTitle) {
       continue
     }
@@ -904,6 +904,10 @@ function findDuplicateScenarios(lines, requirementsIndex) {
   }
 
   return duplicates
+}
+
+function normalizeOpenSpecTitle(title) {
+  return String(title ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
 function checkReadmeToolEntry(readmeText, relativeFiles, issues) {
