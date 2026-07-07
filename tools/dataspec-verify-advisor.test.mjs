@@ -133,6 +133,7 @@ test('recommends status check when workflow recipe source changes', () => {
 
   const commandIds = advice.commands.map((command) => command.id)
   assert.ok(commandIds.includes('cli-contract-tests'))
+  assert.ok(commandIds.includes('task-card-tests'))
   assert.ok(commandIds.includes('status-check'))
   assert.ok(commandIds.includes('diff-check'))
 })

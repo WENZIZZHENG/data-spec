@@ -112,8 +112,8 @@ const VALIDATION_RULES = [
     command: 'node --test --test-name-pattern "task-card|task card|create_task_card|render_task_card" tools/dataspec-task-card.test.mjs tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs',
     cwd: '.',
     estimatedSeconds: 8,
-    reason: 'AI 任务卡协议、渲染或本地更新逻辑改动需要跑 task-card 共享模块、CLI 与 MCP 定点测试。',
-    patterns: [/^tools\/dataspec-task-card\.(mjs|test\.mjs)$/]
+    reason: 'AI 任务卡协议、workflow recipe 源、渲染或本地更新逻辑改动需要跑 task-card 共享模块、CLI 与 MCP 定点测试。',
+    patterns: [/^tools\/dataspec-task-card\.(mjs|test\.mjs)$/, /^tools\/dataspec-workflows\.mjs$/]
   },
   {
     id: 'status-check',
