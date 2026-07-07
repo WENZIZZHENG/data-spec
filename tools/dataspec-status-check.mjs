@@ -60,6 +60,9 @@ export function buildStatusReport(input = {}) {
   checkWorkflowRecipeContracts(todoText, aiContractsText, workflowRecipeIds, issues)
   checkMarkdownLinks('README.md', readmeText, relativeFiles, issues)
   checkMarkdownLinks('TODO.md', todoText, relativeFiles, issues)
+  if (typeof aiContractsText === 'string') {
+    checkMarkdownLinks('docs/ai-contracts.md', aiContractsText, relativeFiles, issues)
+  }
 
   const errors = issues.filter((issue) => issue.severity === 'error').length
   const warnings = issues.filter((issue) => issue.severity === 'warning').length

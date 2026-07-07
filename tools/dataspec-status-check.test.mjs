@@ -183,6 +183,38 @@ test('buildStatusReport reports missing AI contract document for workflow recipe
   assert.match(issue.message, /standard-evidence-review/)
 })
 
+test('buildStatusReport checks Markdown links in AI contract docs', () => {
+  const report = buildStatusReport({
+    todoText: CLEAN_TODO,
+    readmeText: CLEAN_README,
+    aiContractsText: `${CLEAN_AI_CONTRACTS}\n\n参考 [缺失契约](missing-contract.md)。\n`,
+    workflowRecipeIds: WORKFLOW_RECIPE_IDS,
+    relativeFiles: new Set([
+      'README.md',
+      'TODO.md',
+      'docs/archive/example.md',
+      'docs/ai-contracts.md',
+      'tools/dataspec-status-check.mjs',
+      'openspec/changes/archive/2026-07-05-add-sql-rule-debugger',
+      'openspec/specs/sql-rule-debugger/spec.md'
+    ]),
+    openSpecChangeEntries: ['archive'],
+    openSpecSpecEntries: ['sql-rule-debugger']
+  })
+
+  const issue = report.issues.find((candidate) =>
+    candidate.code === 'MARKDOWN_LINK_MISSING' && candidate.file === 'docs/ai-contracts.md'
+  )
+  const markdownCheck = report.checks.find((check) => check.id === 'markdown-links')
+
+  assert.equal(report.status, 'fail')
+  assert.ok(issue)
+  assert.equal(issue.line, 8)
+  assert.match(issue.message, /missing-contract\.md/)
+  assert.equal(markdownCheck.status, 'fail')
+  assert.equal(markdownCheck.errorCount, 1)
+})
+
 test('buildStatusReport reports deterministic TODO and OpenSpec drift', () => {
   const report = buildStatusReport({
     todoText: CLEAN_TODO.replace('P6-71、P6-72', 'P6-70、P6-404').replace('- 后续增强：更深 trace。', '- 缺口：旧缺口仍残留。'),
