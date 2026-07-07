@@ -266,6 +266,23 @@ test('collects tracked and untracked git changed paths without duplicates', () =
   )
 })
 
+test('normalizes absolute workspace paths before matching validation rules', () => {
+  const root = process.cwd()
+  const advice = buildValidationAdvice([
+    `${root}\\tools\\dataspec-status-check.mjs`,
+    `${root.replace(/\\/g, '/')}/TODO.md`
+  ])
+
+  const commandIds = advice.commands.map((command) => command.id)
+  assert.deepEqual(advice.inputPaths, [
+    'tools/dataspec-status-check.mjs',
+    'TODO.md'
+  ])
+  assert.ok(commandIds.includes('status-check-tests'))
+  assert.ok(commandIds.includes('status-check'))
+  assert.ok(commandIds.includes('diff-check'))
+})
+
 test('collects NUL-delimited git changed paths', () => {
   assert.deepEqual(
     collectChangedPathsFromGitOutput(
