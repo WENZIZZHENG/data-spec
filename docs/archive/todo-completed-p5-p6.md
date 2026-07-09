@@ -4,8 +4,8 @@
 
 本文件从根 TODO.md 机械迁移已完成的 P5/P6 待办详情，根待办只保留入口和当前候选池。每个条目保留原始状态、已完成能力、验证证据、产物、后续增强和边界；原条目未记录 commit 的地方不补猜。
 
-- 完成项数量：106
-- 当前未完成候选：91，详见 [P6 候选池](../todo-p6-candidates.md)
+- 完成项数量：112
+- 当前未完成候选：76，详见 [P6 候选池](../todo-p6-candidates.md)
 - P0-P4 已完成归档：[todo-completed-p0-p4.md](todo-completed-p0-p4.md)
 
 ## 历史追加记录（已降级为背景）
@@ -979,3 +979,77 @@
 - 验证证据：`node --test tests/standardQuestionDisplay.test.ts` 12 pass；`pnpm test` 159 pass；`pnpm build` 通过，保留现有第三方 pure annotation、chunk size 和 plugin timings warning；`git diff --check` 通过，仅 LF/CRLF warning；当时 `node tools/dataspec-status-check.mjs --format json` warn 仅因 active change `add-ai-context-quality-check`，该 warning 已随 P6-186 归档消除。
 - 评审证据：独立子 agent `019f3d2f-b5c4-75d3-886d-c1c83c759dab` 完成只读评审并已关闭；发现的格式证据缺失 P1 已补失败测试并修复，停用字段覆盖和废弃字段替代信息误报风险已处理。
 - 边界：不实现通用自然语言问答引擎，不调用外部 LLM；第一版基于现有检索、术语表、证据和质量分确定性判断。
+
+## 本轮候选覆盖归档（2026-07-09）
+
+以下条目原位于 P6 候选池，经评审确认已被现有能力覆盖，归档为不再独立排期的完成项。
+
+### P6-94：标准来源可信度与 AI 置信度标记
+- 状态：已归档，独立候选已被现有能力覆盖（2026-07-09）。
+- 处理原因：已有 field-provenance-confidence 相关主规格和字段来源/可信度能力表面；独立候选改为二期增强，不再占用默认队列。
+- 处理结论：不再作为默认后续开发项；如后续出现缺口，按对应主规格或二期增强重新开任务。
+- 为什么做：AI 使用数标时需要知道哪些字段是人工确认的核心标准、哪些是数据库反向导入候选、哪些是样例生成或低置信度推断；否则容易把“疑似标准”当成“强制标准”使用。
+- 已有基础：已有字段来源批次、变更日志、标准快照、标准候选 Inbox、字段质量评分、冲突检测、AI 输出证据和反向导入映射待办。
+- 缺口：字段与规则缺少统一 provenance/confidence 结构；AI Context、字段推荐和标准问答无法稳定表达“建议使用但需确认”“已废弃但仍被引用”“仅来自样例”的差异。
+- 落地产物：为字段、别名、枚举、规则和模板补充来源证据模型；输出 sourceType、sourceRef、verifiedBy、verifiedAt、confidenceLevel、evidenceCount、lastSeenAt 和 warning；前端字段详情和 AI Context 展示可信度摘要。
+- 验收标准：AI 能区分 confirmed、imported、generated、deprecated、conflicting 等来源状态；低置信度字段不会被推荐为首选；标准快照包含可信度摘要且可回放。
+- 边界：不做复杂组织认证流程，不引入人工审批；可信度只辅助决策，不自动删除或隐藏已有标准。
+
+### P6-97：标准使用热区与清理优先级报告
+- 状态：已归档，独立候选已被现有能力覆盖（2026-07-09）。
+- 处理原因：已有 standard-usage-heatmap 相关主规格和标准使用热区能力表面；独立候选归档为已覆盖。
+- 处理结论：不再作为默认后续开发项；如后续出现缺口，按对应主规格或二期增强重新开任务。
+- 为什么做：标准字段、规则和候选越来越多后，用户需要知道哪些标准被 SQL、DDL、数据库表、AI 任务和业务代码频繁使用，哪些长期无人使用或冲突高，才能优先清理真正影响 AI 输出质量的部分。
+- 已有基础：已有字段影响分析、字段覆盖率、业务代码引用索引、AI 使用画像、字段质量评分、冲突检测、检查记录和 AI 回放。
+- 缺口：缺少跨来源 usage heatmap 和 cleanup priority；字段列表只能看静态属性，无法按“高使用低质量”“高冲突高影响”“长期未命中”排序。
+- 落地产物：新增标准使用热区报告；聚合 fieldUsageCount、lastReferencedAt、sourceKinds、qualityScore、conflictCount、aiJobHits、lintHits、cleanupPriority 和 suggestedNextAction；前端提供可筛选列表和跳转。
+- 验收标准：用户能一眼看到最值得优先修的字段、规则和模板；AI 可读取报告先处理高影响标准，而不是随机优化；报告生成不读取业务数据行。
+- 边界：不做团队 KPI，不上传使用统计，不以使用次数自动删除低频字段；第一版只聚合 DataSpec 已有记录和用户指定扫描结果。
+
+### P6-114：AI 任务推荐队列与下一步编排
+- 状态：已归档，独立候选已被现有能力覆盖（2026-07-09）。
+- 处理原因：AI task recommendation queue 已有 API/schema 与推荐队列能力表面；独立候选归档为已覆盖。
+- 处理结论：不再作为默认后续开发项；如后续出现缺口，按对应主规格或二期增强重新开任务。
+- 为什么做：DataSpec 已有很多页面和命令，但 AI 或用户常见问题是“不知道下一步该跑覆盖率、导出 Context、修规则还是采纳候选”；需要把诊断结果变成可执行任务队列。
+- 已有基础：已有个人工作台、AI 一页式工作台待办、AI 任务卡、AI 反馈报告、字段质量、覆盖率、标准候选 Inbox、`dataspec doctor` 和 workflow recipes。
+- 缺口：缺少项目级 recommended task queue，无法按当前项目状态生成优先级、依赖、输入参数、可复制命令和完成判定。
+- 参考项目：`backstage/backstage` 的开发者入口、`langfuse/langfuse` 的任务观测和 MCP tools/prompts 的可执行描述；只做本地推荐，不做自动代理执行。
+- 落地产物：新增任务推荐 API/前端分区；根据 missingProject、noFields、lowCoverage、pendingCandidates、staleContext、failingLint、openAiFeedback 等信号生成任务卡，包含 actionType、priority、reason、command、targetRoute 和 completionCheck。
+- 验收标准：新项目、已有数据库项目和 AI 反馈较多项目会得到不同任务顺序；每张任务卡都能跳转到页面或复制 CLI/MCP 命令；完成后任务状态能刷新消失或降级。
+- 边界：不自动执行写操作，不引入后台调度，不替代用户判断；第一版只推荐 DataSpec 内已有能力或明确待办中的 dry-run 动作。
+
+### P6-115：跨来源标准证据视图
+- 状态：已归档，独立候选已被现有能力覆盖（2026-07-09）。
+- 处理原因：跨来源标准证据视图已有 README/API schema 与 cross-source evidence 能力表面；独立候选归档为已覆盖。
+- 处理结论：不再作为默认后续开发项；如后续出现缺口，按对应主规格或二期增强重新开任务。
+- 为什么做：字段标准的证据分散在数据库 metadata、SQL 检查、AI job、候选、变更日志、文档和接口契约里；AI 要解释一个字段是否可信时，需要一页聚合证据而不是翻多个页面。
+- 已有基础：已有字段来源、变更日志、AI 回放、AI 反馈、标准候选、标准决策理由库待办、Explain Trace、执行证据包和项目活动时间线。
+- 缺口：缺少以字段/表/规则为中心的 evidence timeline，无法稳定回答“这个标准来自哪里、被谁用过、最近哪里冲突、哪些材料支持它”。
+- 参考项目：`datahub-project/datahub` 和 `open-metadata/OpenMetadata` 的资产详情页、`OpenLineage/OpenLineage` 的 lineage event；只借鉴证据聚合，不建设重型数据目录。
+- 落地产物：新增只读证据视图或 API；按 subjectType/subjectId 汇总 sourceEvents、aiUsages、lintHits、candidateDecisions、changeLogs、documentRefs、contractRefs 和 confidenceSummary；AI Context 可按需引用证据摘要。
+- 验收标准：打开某个标准字段能看到来源、采纳记录、最近 AI 使用、相关 SQL 问题和决策理由；证据摘要可复制给 AI，且不包含敏感连接信息或业务数据行。
+- 边界：不做全量血缘平台，不自动判断证据真伪，不把临时低置信度证据写成正式标准；第一版只聚合 DataSpec 已保存的安全记录。
+
+### P6-148：可复用 AI 工作流 Recipe 编排
+- 状态：已归档，独立候选已被现有能力覆盖（2026-07-09）。
+- 处理原因：workflow recipe 已通过 CLI/MCP/README/AI Context 暴露，且已有 task-card 绑定；独立候选归档为已覆盖。
+- 处理结论：不再作为默认后续开发项；如后续出现缺口，按对应主规格或二期增强重新开任务。
+- 为什么做：很多 AI 任务不是单个 API 调用，而是 doctor、preflight、导出 Context、执行 lint、生成 fixedSql、导出证据包等步骤的组合；每次在聊天里临时拼命令容易漏验证和边界。
+- 已有基础：已有 MCP/CLI 工作流模板、AI 任务卡、AI 任务推荐队列、任务结果协议、执行证据包、doctor 和 preflight 待办。
+- 缺口：缺少 machine-readable workflow recipe，无法表达 steps、inputs、requiredCapabilities、verificationCommands、artifacts、rollbackHint 和 blockedReason。
+- 参考项目：GitHub Actions reusable workflow、`go-task/task` 的本地任务组织和 `casey/just` 的命令 recipe；只借鉴步骤声明，不引入远程任务调度平台。
+- 落地产物：新增 `.dataspec/workflows/*.json|yaml` 约定、CLI `dataspec workflow list/run --dry-run` 和 MCP prompt/resource；内置 `safe-sql-fix`、`reverse-import-review`、`export-ai-context` 等个人高频流程。
+- 验收标准：AI 能列出当前项目可执行工作流，先 dry-run 展示步骤和验证命令，再逐步执行并产出 TaskResult；失败步骤能给出可恢复位置和下一步建议。
+- 边界：不做长任务队列，不自动执行高风险写入，不替代 OpenSpec 实施流程；第一版只编排已有能力和只读/显式确认步骤。
+
+### P6-170：标准维护工作量估算与任务批量拆分
+- 状态：已归档，独立候选已被现有能力覆盖（2026-07-09）。
+- 处理原因：标准维护 workflow 与推荐队列已覆盖维护任务拆分的主要价值；独立候选归档为已覆盖。
+- 处理结论：不再作为默认后续开发项；如后续出现缺口，按对应主规格或二期增强重新开任务。
+- 为什么做：DataSpec 已能发现低质量字段、候选、导入差异、规则冲突和 AI 失败记录，但用户还需要知道“先做哪 20 分钟最值”；AI 也需要把一堆标准维护问题拆成可执行小任务，而不是一次性尝试全修。
+- 已有基础：已有字段质量评分、覆盖率报告、候选 Inbox、个人健康摘要、AI 任务推荐队列、TODO 到 OpenSpec 交接、执行证据包和统一任务结果协议待办。
+- 缺口：缺少 workEstimate、batchPlan、taskSlices、expectedImpact、riskLevel 和 verificationCommands；健康摘要能看到问题，但还不能按投入产出拆成可执行批次。
+- 参考项目：GitHub Actions job summary、`backstage/backstage` 的开发者任务入口和 `dagster-io/dagster` 的资产任务视图；只借鉴任务摘要和优先级表达，不做团队排期系统。
+- 落地产物：新增标准维护任务拆分 API/CLI；把低质量字段、未纳管字段、导入候选、规则冲突、覆盖率缺口和 AI 反馈失败项聚合成 15/30/60 分钟任务包；每个任务包包含目标对象、来源证据、预计收益、验证命令和回滚/跳过说明。
+- 验收标准：打开项目后能生成“本次最值得处理的 3 个维护批次”；每个批次能跳转到候选、字段、规则或覆盖率来源；AI 可按批次逐步执行并产出 TaskResult；完成后健康摘要和任务建议会更新。
+- 边界：不做团队工时估算，不自动修改标准，不把估算当承诺；第一版按本地项目指标给出启发式建议。
