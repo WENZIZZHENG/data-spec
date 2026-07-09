@@ -52,6 +52,19 @@ class AiTaskRecommendationServiceImplTest {
         assertThat(report.items()).extracting("taskType")
                 .contains("FIX_QUALITY_GATE", "REPAIR_HOT_STANDARD", "REVIEW_STANDARD_CANDIDATES", "CREATE_HEALTH_SNAPSHOT");
         assertThat(report.items().getFirst().priority()).isEqualTo("HIGH");
+        assertThat(report.items()).filteredOn(item -> item.taskType().equals("REVIEW_STANDARD_CANDIDATES"))
+                .first()
+                .satisfies(item -> {
+                    assertThat(item.recipeBinding()).isNotNull();
+                    assertThat(item.recipeBinding().recipeId()).isEqualTo("standard-maintenance");
+                    assertThat(item.recipeBinding().sourceParameters()).containsEntry("sourceType", "STANDARD_CANDIDATE");
+                });
+        assertThat(report.items()).filteredOn(item -> item.taskType().equals("FIX_QUALITY_GATE"))
+                .first()
+                .satisfies(item -> {
+                    assertThat(item.recipeBinding()).isNotNull();
+                    assertThat(item.recipeBinding().sourceParameters()).containsEntry("sourceType", "FIELD_QUALITY");
+                });
         assertThat(report.items()).allSatisfy(item -> {
             assertThat(item.title()).isNotBlank();
             assertThat(item.reason()).isNotBlank();
@@ -158,6 +171,59 @@ class AiTaskRecommendationServiceImplTest {
                 .satisfies(item -> assertThat(item.recommendedCommand())
                         .contains("/standard-candidates?projectId=1&status=PENDING")
                         .doesNotContain("?status=PENDING?projectId"));
+    }
+
+    @Test
+    void report_bindsHealthMaintenanceActionsToStandardMaintenanceRecipe() {
+        StandardHealthService healthService = mock(StandardHealthService.class);
+        StandardUsageHeatmapService heatmapService = mock(StandardUsageHeatmapService.class);
+        StandardCandidateRepository candidateRepository = mock(StandardCandidateRepository.class);
+        StandardQualityGateService qualityGateService = mock(StandardQualityGateService.class);
+        AiTaskRecommendationServiceImpl service = new AiTaskRecommendationServiceImpl(
+                healthService,
+                heatmapService,
+                candidateRepository,
+                qualityGateService);
+
+        StandardHealthSnapshotView latest = new StandardHealthSnapshotView();
+        latest.setTopActions(List.of(
+                new StandardHealthAction(
+                        "补齐覆盖率报告",
+                        "覆盖率存在未纳管字段",
+                        "HIGH",
+                        "/field-coverage?status=UNMANAGED",
+                        "coverage.unmanaged=5"),
+                new StandardHealthAction(
+                        "处理标准候选 Inbox",
+                        "已有候选需要处理",
+                        "MEDIUM",
+                        "/standard-candidates?status=PENDING",
+                        "candidate.pending=3")
+        ));
+        StandardHealthTrend trend = new StandardHealthTrend();
+        trend.setLatest(latest);
+        when(healthService.trend(1L, 1)).thenReturn(trend);
+        when(heatmapService.report(1L)).thenReturn(new StandardUsageHeatmapReport(
+                1L,
+                new StandardUsageHeatmapSummary(0, 0, 0, 0, 0, 0),
+                List.of()));
+        when(candidateRepository.countByStatuses(1L, List.of("PENDING", "POSTPONED"))).thenReturn(0);
+        when(qualityGateService.evaluate(any(StandardQualityGateEvaluateReq.class))).thenReturn(new StandardQualityGateResult());
+
+        var report = service.report(1L);
+
+        assertThat(report.items()).filteredOn(item -> item.taskType().equals("RUN_COVERAGE_REPORT"))
+                .first()
+                .satisfies(item -> {
+                    assertThat(item.recipeBinding()).isNotNull();
+                    assertThat(item.recipeBinding().sourceParameters()).containsEntry("sourceType", "FIELD_COVERAGE");
+                });
+        assertThat(report.items()).filteredOn(item -> item.taskType().equals("REVIEW_STANDARD_CANDIDATES"))
+                .first()
+                .satisfies(item -> {
+                    assertThat(item.recipeBinding()).isNotNull();
+                    assertThat(item.recipeBinding().sourceParameters()).containsEntry("sourceType", "STANDARD_CANDIDATE");
+                });
     }
 
     @Test

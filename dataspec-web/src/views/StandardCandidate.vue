@@ -6,6 +6,10 @@
         <p class="page-subtitle">{{ projectStore.currentProjectName || '未选择项目' }}</p>
       </div>
       <div class="header-actions">
+        <el-button type="primary" :disabled="!hasProject" :loading="maintenanceWorkflowLoading" @click="generateCandidateMaintenanceWorkflow">
+          <el-icon><DataAnalysis /></el-icon>
+          生成维护 workflow
+        </el-button>
         <el-button :disabled="!hasProject" @click="openCreate">
           <el-icon><Plus /></el-icon>
           新建候选
@@ -48,6 +52,18 @@
         />
         <el-button @click="resetAndLoad">搜索</el-button>
       </div>
+
+      <el-alert
+        v-if="maintenanceWorkflowError"
+        type="warning"
+        :closable="false"
+        show-icon
+        :title="maintenanceWorkflowError"
+      />
+      <StandardMaintenanceWorkflowPlanPanel
+        v-if="maintenanceWorkflowPlan"
+        :workflow-plan="maintenanceWorkflowPlan"
+      />
 
       <el-table
         v-loading="loading"
@@ -229,8 +245,9 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Plus, Refresh } from '@element-plus/icons-vue'
+import { DataAnalysis, Plus, Refresh } from '@element-plus/icons-vue'
 import { listFields } from '@/api/field'
+import { generateStandardMaintenanceWorkflowPlan } from '@/api/standardMaintenanceWorkflow'
 import {
   acceptStandardCandidate,
   createStandardCandidate,
@@ -239,6 +256,7 @@ import {
   mergeStandardCandidate,
   postponeStandardCandidate
 } from '@/api/standardCandidate'
+import StandardMaintenanceWorkflowPlanPanel from '@/components/StandardMaintenanceWorkflowPlanPanel.vue'
 import { useProjectStore } from '@/stores/project'
 import {
   formatCandidateEvidence,
@@ -247,7 +265,7 @@ import {
   standardCandidateStatusLabel,
   standardCandidateStatusTag
 } from '@/utils/standardCandidateDisplay'
-import type { Field, StandardCandidate, StandardCandidateCreateReq } from '@/types'
+import type { Field, StandardCandidate, StandardCandidateCreateReq, StandardMaintenanceWorkflowPlan } from '@/types'
 
 type DecisionMode = 'accept' | 'ignore' | 'postpone'
 
@@ -265,6 +283,9 @@ const size = ref(10)
 const statusFilter = ref('PENDING')
 const sourceFilter = ref('ALL')
 const keyword = ref(keywordFromQuery())
+const maintenanceWorkflowLoading = ref(false)
+const maintenanceWorkflowError = ref('')
+const maintenanceWorkflowPlan = ref<StandardMaintenanceWorkflowPlan | null>(null)
 
 const createVisible = ref(false)
 const decisionVisible = ref(false)
@@ -312,6 +333,8 @@ watch(
     current.value = 1
     candidates.value = []
     fields.value = []
+    maintenanceWorkflowPlan.value = null
+    maintenanceWorkflowError.value = ''
     createVisible.value = false
     decisionVisible.value = false
     mergeVisible.value = false
@@ -350,6 +373,35 @@ async function loadCandidates() {
     total.value = result.total ?? 0
   } finally {
     loading.value = false
+  }
+}
+
+async function generateCandidateMaintenanceWorkflow() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    maintenanceWorkflowPlan.value = null
+    maintenanceWorkflowError.value = '请先选择项目'
+    return
+  }
+  maintenanceWorkflowLoading.value = true
+  maintenanceWorkflowError.value = ''
+  try {
+    const sourceIds = candidates.value
+      .filter((candidate) => isStandardCandidateDecidable(candidate) && typeof candidate.id === 'number')
+      .map((candidate) => candidate.id as number)
+      .slice(0, 20)
+    maintenanceWorkflowPlan.value = await generateStandardMaintenanceWorkflowPlan({
+      projectId,
+      sourceType: 'STANDARD_CANDIDATE',
+      sourceIds,
+      sourceRoute: `/standard-candidates?projectId=${projectId}&status=${statusFilter.value}`,
+      itemCount: sourceIds.length || total.value
+    })
+  } catch (error) {
+    maintenanceWorkflowPlan.value = null
+    maintenanceWorkflowError.value = error instanceof Error ? error.message : '维护 workflow 生成失败'
+  } finally {
+    maintenanceWorkflowLoading.value = false
   }
 }
 

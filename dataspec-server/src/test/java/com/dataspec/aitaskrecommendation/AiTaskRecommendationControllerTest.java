@@ -5,10 +5,12 @@ import com.dataspec.aitaskrecommendation.model.AiTaskRecommendationItem;
 import com.dataspec.aitaskrecommendation.model.AiTaskRecommendationReport;
 import com.dataspec.aitaskrecommendation.model.AiTaskRecommendationSummary;
 import com.dataspec.aitaskrecommendation.service.AiTaskRecommendationService;
+import com.dataspec.standardmaintenanceworkflow.model.StandardMaintenanceWorkflowRecipeBinding;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -32,7 +34,12 @@ class AiTaskRecommendationControllerTest {
                         "/quality-gate",
                         "POST /api/quality-gate/evaluate {\"projectId\":1}",
                         List.of("qualityGate.failedChecks=2"),
-                        "failedChecks 降为 0"
+                        "failedChecks 降为 0",
+                        new StandardMaintenanceWorkflowRecipeBinding(
+                                "standard-maintenance",
+                                1,
+                                Map.of("sourceType", "FIELD_QUALITY"),
+                                "node tools/dataspec-cli.mjs task-card create --workflow standard-maintenance --project 1")
                 ))));
         MockMvc mockMvc = standaloneSetup(new AiTaskRecommendationController(service)).build();
 
@@ -41,6 +48,8 @@ class AiTaskRecommendationControllerTest {
                 .andExpect(jsonPath("$.data.projectId").value(1))
                 .andExpect(jsonPath("$.data.summary.totalTaskCount").value(1))
                 .andExpect(jsonPath("$.data.items[0].taskType").value("FIX_QUALITY_GATE"))
-                .andExpect(jsonPath("$.data.items[0].priority").value("HIGH"));
+                .andExpect(jsonPath("$.data.items[0].priority").value("HIGH"))
+                .andExpect(jsonPath("$.data.items[0].recipeBinding.recipeId").value("standard-maintenance"))
+                .andExpect(jsonPath("$.data.items[0].recipeBinding.sourceParameters.sourceType").value("FIELD_QUALITY"));
     }
 }

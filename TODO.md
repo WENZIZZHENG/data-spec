@@ -651,7 +651,7 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 状态：已完成第一版，已新增本地 `dataspec-ai-task-card` JSON/Markdown 协议、CLI `task-card create/show/update`、MCP `create_task_card/render_task_card` tool 和前端 `taskCardDisplay` 展示工具。
 - 为什么做：P6-11 的工作流模板解决“应该怎么做”，但 AI 真正执行时还需要知道当前任务做到哪一步、缺哪些输入、失败后从哪一步恢复，否则长任务容易重复执行或越界。
 - 已有基础：已有 AI 回放、执行证据包待办、AI 任务重试待办、CLI/MCP 工作流模板和 OpenSpec tasks 习惯。
-- 已完成能力：任务卡可从 `create-table/review-pr-sql/reverse-import-standards/export-min-context/standard-evidence-review` workflow recipe 生成，包含 `goal/inputs/currentStep/steps/allowedActions/artifacts/resumeCommand/validationCommands/stopConditions/risks/nextActions`；缺必填输入时返回 `BLOCKED` 和 `PROVIDE_REQUIRED_INPUT`；更新步骤只改本地任务卡文件，不执行 workflow。
+- 已完成能力：任务卡可从 `create-table/review-pr-sql/reverse-import-standards/export-min-context/standard-evidence-review/standard-maintenance` workflow recipe 生成，包含 `goal/inputs/currentStep/steps/allowedActions/artifacts/resumeCommand/validationCommands/stopConditions/risks/nextActions`；缺必填输入时返回 `BLOCKED` 和 `PROVIDE_REQUIRED_INPUT`；更新步骤只改本地任务卡文件，不执行 workflow。
 - 落地产物：新增 `tools/dataspec-task-card.mjs` 共享模块和测试；CLI 支持创建、展示、更新本地 JSON/Markdown 任务卡并限制输出路径；MCP 支持本地创建/渲染任务卡；前端提供摘要与 Markdown 展示工具并接入 smoke gate。
 - 验收标准：AI 执行建表、反向导入、PR SQL Review 或导出最小 Context 时，能用任务卡描述当前进度、下一条安全命令和恢复方式；失败重试不会重复写入。已通过 task card 共享测试、CLI/MCP Node 测试和前端统一测试。
 - 边界：不实现企业审批流，不引入外部队列，不把所有同步接口强制改成异步任务。
@@ -1805,14 +1805,16 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不扫描业务数据行，不做定时同步，不绕过源库权限；第一版只服务反向导入、覆盖率和元数据浏览。
 
 ### P6-181：标准维护 Inbox 到可执行工作流
-- 状态：待办。
+- 状态：已完成（2026-07-09，第一版 dry-run）。
 - 为什么做：覆盖率、字段质量、候选 Inbox、规则冲突和 AI 反馈已经能产生很多“该处理的事”，但用户和 AI 还需要把这些事项一键转成可执行 recipe，而不是在多个页面间手工拼步骤。
 - 已有基础：已有标准候选 Inbox、AI 任务推荐队列、可复用 AI 工作流 Recipe、标准维护工作量估算、统一任务结果协议和前端命令面板。
-- 缺口：缺少 inboxAction、recipeBinding、dryRunSteps、executionState、undoHint 和 evidenceLinks；待处理项能看见，但还不能稳定转成“预检 -> 执行 -> 验证 -> 归档”的闭环。
+- 已完成能力：新增只读标准维护 workflow plan API `POST /api/standard-maintenance/workflows/plan`，统一输出 `inboxAction`、`recipeBinding`、`dryRunSteps`、`executionState`、`undoHint`、`evidenceLinks` 和 `nextActions`；支持标准候选、字段质量、字段覆盖率和 AI 任务失败来源，质量计划按 `sourceIds` 收窄，partial coverage 证据保留 failed/skipped table counts。
 - 参考项目：`backstage/backstage` 的开发者任务入口、`go-task/task` 的任务 recipe 和 `dagster-io/dagster` 的资产任务视图；只借鉴可执行步骤表达，不做团队排期系统。
-- 落地产物：新增 Inbox action 到 workflow recipe 的绑定层；聚合待处理候选、低质量字段、未纳管字段、规则冲突和 AI 反馈失败项；前端可从候选、质量问题或覆盖率缺口发起 dry-run；CLI/MCP 可读取同一任务步骤和证据链接。
-- 验收标准：选择一个未纳管字段批次或 AI 反馈失败项后，可生成“预检 -> 执行 -> 验证 -> 归档”的可执行工作流，包含采纳/忽略/补资料、验证命令、结果记录和证据包入口；失败步骤能显示可恢复位置。
-- 边界：不自动批量采纳标准，不跳过人工确认；第一版只绑定高频维护动作。
+- 落地产物：新增 `standardmaintenanceworkflow` 后端 controller/service/model、前端 API wrapper 和 `StandardMaintenanceWorkflowPlanPanel`；`StandardCandidate.vue`、`FieldQuality.vue`、`FieldCoverage.vue` 可生成维护 workflow dry-run；`standard-maintenance` workflow recipe 已进入 CLI/MCP/task-card/status-check 文档与测试；AI 推荐维护类任务可绑定 `standard-maintenance` recipe。
+- 验收标准：选择候选、低质量字段或覆盖率缺口后，可生成“预检 -> 复核 -> 执行 -> 验证 -> 归档”的 dry-run 工作流，包含显式人工确认边界、验证命令、恢复提示和证据链接；不完整覆盖率来源不会把失败/未扫描字段视为已处理。
+- 验证证据：`mvn test` 564/564 pass；`pnpm test` 167/167 pass；`pnpm build` 通过（保留既有 `@vueuse/core` pure annotation、chunk size、plugin timing warnings）；`node --test tools/*.test.mjs` 371 total，369 pass / 2 skipped；`openspec archive add-standard-maintenance-workflows --yes` 已同步 7 个主规格并归档；`openspec validate --all` 123/123 pass；`node tools/dataspec-status-check.mjs --format json` `status=pass`。
+- 评审证据：独立只读子 agent `019f46a3-3645-7370-96d3-2d02099e7c49` 发现健康 action recipeBinding、字段质量 sourceIds、partial coverage failed/skipped evidence 和 tasks/evidence 收口问题；已全部修复并补回归测试。`close_agent` 返回 `not found`，记录为系统已清理或无法再次关闭。
+- 边界：不自动批量采纳、合并、忽略或编辑标准字段，不持久化 workflow instance，不做后台任务调度；第一版只生成可复制、可验证、可恢复的 dry-run 计划。
 
 ### P6-182：前端页面对象模型与稳定测试选择器
 - 状态：待办。

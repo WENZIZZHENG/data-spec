@@ -19,7 +19,8 @@ test('creates task cards from all workflow recipes with stable shape', () => {
       'username/password': 'readonly/super_secret'
     },
     'export-min-context': { projectId: 7, scope: 'field', query: '订单' },
-    'standard-evidence-review': { projectId: 7, subjectType: 'FIELD', subjectId: 42 }
+    'standard-evidence-review': { projectId: 7, subjectType: 'FIELD', subjectId: 42 },
+    'standard-maintenance': { projectId: 7, sourceType: 'STANDARD_CANDIDATE', sourceIds: '10,11' }
   }
 
   for (const [workflowId, inputs] of Object.entries(inputsByWorkflow)) {

@@ -467,12 +467,16 @@ test('workflow recipes resource is served locally without external service', asy
     'review-pr-sql',
     'reverse-import-standards',
     'export-min-context',
-    'standard-evidence-review'
+    'standard-evidence-review',
+    'standard-maintenance'
   ])
   assert.ok(payload.recipes[0].steps.some((step) => step.command.includes('export-context')))
   const evidenceRecipe = payload.recipes.find((recipe) => recipe.id === 'standard-evidence-review')
   assert.ok(evidenceRecipe.steps.some((step) => step.command.includes('GET /api/standard-evidence')))
   assert.equal(evidenceRecipe.sideEffectPolicy, 'plan-only')
+  const maintenanceRecipe = payload.recipes.find((recipe) => recipe.id === 'standard-maintenance')
+  assert.ok(maintenanceRecipe.steps.some((step) => step.command.includes('/api/standard-maintenance/workflows/plan')))
+  assert.equal(maintenanceRecipe.sideEffectPolicy, 'plan-only')
 })
 
 test('ai task profiles resource is read from backend with configured profile', async () => {

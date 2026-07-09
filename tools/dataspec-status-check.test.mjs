@@ -14,10 +14,11 @@ const WORKFLOW_RECIPE_IDS = [
   'review-pr-sql',
   'reverse-import-standards',
   'export-min-context',
-  'standard-evidence-review'
+  'standard-evidence-review',
+  'standard-maintenance'
 ]
 
-const WORKFLOW_RECIPE_SUMMARY = 'create-table/review-pr-sql/reverse-import-standards/export-min-context/standard-evidence-review'
+const WORKFLOW_RECIPE_SUMMARY = 'create-table/review-pr-sql/reverse-import-standards/export-min-context/standard-evidence-review/standard-maintenance'
 
 const CLEAN_TODO = `# DataSpec 待办路线图
 
@@ -65,7 +66,7 @@ const CLEAN_AI_CONTRACTS = `# AI 契约
 
 ## AI Context
 
-- \`.dataspec/workflows.md\`: \`create-table\`、\`review-pr-sql\`、\`reverse-import-standards\`、\`export-min-context\`、\`standard-evidence-review\` 五个 recipe id。
+- \`.dataspec/workflows.md\`: \`create-table\`、\`review-pr-sql\`、\`reverse-import-standards\`、\`export-min-context\`、\`standard-evidence-review\`、\`standard-maintenance\` 六个 recipe id。
 `
 
 test('buildStatusReport passes for a self-consistent TODO/OpenSpec snapshot', () => {

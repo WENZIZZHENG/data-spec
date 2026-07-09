@@ -358,6 +358,97 @@ export const WORKFLOW_RECIPES = [
       '如果只是问答，明确说明证据来源、可信度和未覆盖风险。'
     ],
     sideEffectPolicy: 'plan-only'
+  },
+  {
+    id: 'standard-maintenance',
+    title: '标准维护 Inbox 工作流',
+    goal: '把候选、字段质量、覆盖率缺口或 AI 失败反馈转成只读 dry-run 计划，再由用户显式确认执行维护动作。',
+    requiredInputs: [
+      { name: 'projectId', description: 'DataSpec 项目 ID。', required: true },
+      { name: 'sourceType', description: '维护来源类型：STANDARD_CANDIDATE、FIELD_QUALITY、FIELD_COVERAGE 或 AI_TASK_FAILURE。', required: true },
+      { name: 'sourceIds', description: '可选来源 ID 列表，例如候选 ID、字段 ID 或任务运行 ID。', required: false },
+      { name: 'issueCodes', description: '可选字段质量问题代码，例如 comment_missing、code_set_missing。', required: false },
+      { name: 'coverageStatuses', description: '可选覆盖率状态，例如 UNMANAGED、POSSIBLE_DUPLICATE、MISSING_COMMENT。', required: false }
+    ],
+    prechecks: [
+      {
+        title: '确认 DataSpec 服务、项目和 token 可用',
+        command: 'node tools/dataspec-cli.mjs doctor --project <projectId> --format json',
+        expected: 'server/project/auth 检查通过；warn 项需要在维护记录中说明。'
+      },
+      {
+        title: '确认维护来源仍有待处理项',
+        command: 'GET /api/standard-maintenance/workflows/plan { "projectId": <projectId>, "sourceType": "<sourceType>" }',
+        expected: 'workflowPlan.executionState.status 为 DRY_RUN 或明确 BLOCKED 原因。'
+      }
+    ],
+    steps: [
+      {
+        order: 1,
+        title: '生成维护 workflow dry-run 计划',
+        command: 'POST /api/standard-maintenance/workflows/plan { "projectId": <projectId>, "sourceType": "<sourceType>", "sourceIds": [<ids>] }',
+        purpose: '把候选、质量或覆盖率信号转成 inboxAction、recipeBinding、dryRunSteps、executionState、evidenceLinks 和 nextActions。',
+        output: 'workflowPlan JSON。'
+      },
+      {
+        order: 2,
+        title: '复核 workflowPlan 证据和边界',
+        command: '检查 workflowPlan.evidenceLinks、workflowPlan.executionState、workflowPlan.undoHint 和 workflowPlan.nextActions',
+        purpose: '确认没有 raw evidence、SQL、AI payload、JDBC URL、DSN、token、password 或 Authorization，并记录 partial/blocked 边界。',
+        output: '可复制的维护计划摘要。'
+      },
+      {
+        order: 3,
+        title: '人工确认后执行单步维护动作',
+        command: '按 workflowPlan.dryRunSteps[].recommendedAction 打开页面或调用既有候选/字段 API',
+        purpose: '只执行用户确认过的候选采纳/合并/忽略、字段 metadata 修复或覆盖率后续动作。',
+        output: '候选状态、字段更新结果或维护页面操作记录。'
+      },
+      {
+        order: 4,
+        title: '验证维护结果',
+        command: '按 workflowPlan.dryRunSteps 中 verify 阶段的命令重新运行候选列表、字段质量报告或覆盖率报告',
+        purpose: '确认待处理项降低，且未扫描、失败或未确认项没有被视为完成。',
+        output: '验证命令、报告摘要和剩余风险。'
+      },
+      {
+        order: 5,
+        title: '归档维护证据',
+        command: '记录 workflowPlan、执行动作、验证结果、completionCheck 和未处理项',
+        purpose: '让用户、AI 或后续 OpenSpec 任务能恢复上下文。',
+        output: '标准维护交付摘要。'
+      }
+    ],
+    expectedArtifacts: [
+      'standard maintenance workflowPlan JSON',
+      '人工确认过的维护动作记录',
+      '候选/字段质量/覆盖率验证结果',
+      '剩余 blocked 或 partial 边界说明'
+    ],
+    failureHandling: [
+      {
+        condition: 'workflowPlan.executionState.status 为 BLOCKED',
+        nextAction: '先按 nextActions 补充来源报告、候选选择或项目信息，再重新生成计划。'
+      },
+      {
+        condition: 'execute 阶段需要写入候选或字段',
+        nextAction: '必须人工确认具体候选、目标字段和理由；不要让 AI 自动批量采纳、合并、忽略或编辑字段。'
+      },
+      {
+        condition: 'coverage 来源为 PARTIAL/CANCELLED/FAILED',
+        nextAction: '只处理成功统计的字段，并在维护记录中保留未扫描或失败边界。'
+      },
+      {
+        condition: '计划或错误信息包含 token/password/JDBC URL/DSN/Authorization',
+        nextAction: '停止复制该内容，先重新生成脱敏计划或修复脱敏边界。'
+      }
+    ],
+    nextActions: [
+      '把 workflowPlan.recipeBinding 写入 AI task card 或维护说明。',
+      '执行前逐条确认 requiresConfirmation=true 的步骤。',
+      '完成后重新运行对应报告，并记录 completionCheck。'
+    ],
+    sideEffectPolicy: 'plan-only'
   }
 ]
 

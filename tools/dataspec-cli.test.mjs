@@ -5556,7 +5556,8 @@ test('workflow list prints machine-readable recipe summaries without calling ser
     'review-pr-sql',
     'reverse-import-standards',
     'export-min-context',
-    'standard-evidence-review'
+    'standard-evidence-review',
+    'standard-maintenance'
   ])
   assert.equal(output.recipes[0].requiredInputs[0].name, 'projectId')
   assert.equal(io.stderr, '')
@@ -5604,6 +5605,32 @@ test('workflow show prints standard evidence review as api-only plan', async () 
   assert.doesNotMatch(commands, /dataspec(?:-cli\.mjs)?\s+standard-evidence\b/)
   assert.doesNotMatch(commands, /dataspec:\/\/project\/<projectId>\/standard-evidence/)
   assert.ok(output.recipe.expectedArtifacts.some((artifact) => artifact.includes('证据摘要')))
+  assert.equal(io.stderr, '')
+})
+
+test('workflow show prints standard maintenance as dry-run plan', async () => {
+  const io = createIo()
+  const fetchFn = async () => {
+    throw new Error('fetch should not be called')
+  }
+
+  const code = await runCli(['workflow', 'show', 'standard-maintenance', '--format', 'json'], io, fetchFn)
+
+  const output = JSON.parse(io.stdout)
+  const inputNames = output.recipe.requiredInputs.map((input) => input.name)
+  const commands = [
+    ...output.recipe.prechecks.map((precheck) => precheck.command),
+    ...output.recipe.steps.map((step) => step.command)
+  ].join('\n')
+  assert.equal(code, 0)
+  assert.equal(output.recipe.id, 'standard-maintenance')
+  assert.ok(inputNames.includes('projectId'))
+  assert.ok(inputNames.includes('sourceType'))
+  assert.match(commands, /\/api\/standard-maintenance\/workflows\/plan/)
+  assert.match(commands, /workflowPlan/)
+  assert.doesNotMatch(commands, /accept\|merge\|ignore\|postpone.*--auto/)
+  assert.equal(output.recipe.sideEffectPolicy, 'plan-only')
+  assert.ok(output.recipe.failureHandling.some((item) => item.nextAction.includes('人工确认')))
   assert.equal(io.stderr, '')
 })
 

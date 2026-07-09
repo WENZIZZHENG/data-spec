@@ -570,6 +570,142 @@ export interface FieldQualityReport {
   fields?: FieldQualityItem[]
 }
 
+/** 标准维护 workflow dry-run 计划来源请求。 */
+export interface StandardMaintenanceWorkflowPlanReq {
+  /** DataSpec 项目 ID。 */
+  projectId?: number
+  /** 维护来源类型，例如 STANDARD_CANDIDATE、FIELD_QUALITY 或 FIELD_COVERAGE。 */
+  sourceType?: 'STANDARD_CANDIDATE' | 'FIELD_QUALITY' | 'FIELD_COVERAGE' | 'AI_TASK_FAILURE' | string
+  /** 来源对象 ID 列表，例如候选 ID、字段 ID 或任务运行 ID。 */
+  sourceIds?: number[]
+  /** 字段质量问题代码筛选。 */
+  issueCodes?: string[]
+  /** 覆盖率状态筛选。 */
+  coverageStatuses?: string[]
+  /** 来源报告完整性状态。 */
+  sourceStatus?: 'COMPLETE' | 'PARTIAL' | 'CANCELLED' | 'FAILED' | string
+  /** 覆盖率来源中未纳入统计的失败表数量。 */
+  failedTableCount?: number
+  /** 覆盖率来源中跳过或未扫描表数量。 */
+  skippedTableCount?: number
+  /** 页面已知待处理项数量。 */
+  itemCount?: number
+  /** 可打开的来源页面 route。 */
+  sourceRoute?: string
+  /** 非敏感补充说明。 */
+  note?: string
+}
+
+/** 标准维护 workflow 的建议动作摘要。 */
+export interface StandardMaintenanceWorkflowInboxAction {
+  /** 稳定动作类型。 */
+  actionType?: string
+  /** 触发动作的来源类型。 */
+  sourceType?: string
+  /** 本次计划覆盖的待处理项数量。 */
+  targetCount?: number
+  /** 人类可读标题。 */
+  title?: string
+  /** 脱敏动作说明。 */
+  description?: string
+  /** 是否需要人工确认。 */
+  confirmationRequired?: boolean
+}
+
+/** 标准维护 workflow 与 AI recipe/task-card 的绑定。 */
+export interface StandardMaintenanceWorkflowRecipeBinding {
+  /** workflow recipe id。 */
+  recipeId?: string
+  /** recipe 契约版本。 */
+  recipeVersion?: number
+  /** 脱敏来源参数。 */
+  sourceParameters?: Record<string, unknown>
+  /** 可复制 task-card 命令模板。 */
+  taskCardCommand?: string
+}
+
+/** 标准维护 workflow dry-run 步骤。 */
+export interface StandardMaintenanceWorkflowStep {
+  /** 步骤稳定 ID。 */
+  stepId?: string
+  /** 阶段：precheck、review、execute、verify 或 archive。 */
+  phase?: string
+  /** 步骤标题。 */
+  title?: string
+  /** 脱敏步骤说明。 */
+  description?: string
+  /** 推荐页面、API 或命令模板。 */
+  recommendedAction?: string
+  /** 是否需要人工确认。 */
+  requiresConfirmation?: boolean
+  /** 完成后应记录的证据。 */
+  expectedEvidence?: string
+  /** dry-run 步骤状态。 */
+  status?: string
+}
+
+/** 标准维护 workflow 执行状态摘要。 */
+export interface StandardMaintenanceWorkflowExecutionState {
+  /** 当前状态。 */
+  status?: string
+  /** 当前建议步骤 ID。 */
+  currentStepId?: string
+  /** 是否可重试。 */
+  retryable?: boolean
+  /** 阻塞或 partial 来源说明。 */
+  blockedReason?: string | null
+}
+
+/** 标准维护 workflow 证据链接或安全摘要。 */
+export interface StandardMaintenanceWorkflowEvidenceLink {
+  /** 来源能力。 */
+  sourceCapability?: string
+  /** 证据名称。 */
+  label?: string
+  /** 可打开的页面或 API 模板。 */
+  targetRoute?: string
+  /** 脱敏证据摘要。 */
+  summary?: string
+  /** 证据代表的待处理项数量。 */
+  count?: number
+}
+
+/** 标准维护 workflow 下一步提示。 */
+export interface StandardMaintenanceWorkflowNextAction {
+  /** 稳定动作代码。 */
+  code?: string
+  /** 提示级别。 */
+  severity?: string
+  /** 脱敏说明。 */
+  message?: string
+  /** 可选命令或 API 模板。 */
+  command?: string | null
+  /** 是否可重试。 */
+  retryable?: boolean
+}
+
+/** 标准维护 workflow dry-run 计划响应。 */
+export interface StandardMaintenanceWorkflowPlan {
+  /** DataSpec 项目 ID。 */
+  projectId?: number
+  /** 本次 dry-run 计划 ID。 */
+  workflowId?: string
+  /** 来源 Inbox 或诊断信号动作。 */
+  inboxAction?: StandardMaintenanceWorkflowInboxAction
+  /** AI workflow recipe 绑定。 */
+  recipeBinding?: StandardMaintenanceWorkflowRecipeBinding
+  /** dry-run 步骤。 */
+  dryRunSteps?: StandardMaintenanceWorkflowStep[]
+  /** 当前状态和恢复位置。 */
+  executionState?: StandardMaintenanceWorkflowExecutionState
+  /** 未执行或中止时的安全回退说明。 */
+  undoHint?: string
+  /** 脱敏证据链接。 */
+  evidenceLinks?: StandardMaintenanceWorkflowEvidenceLink[]
+  /** 当前可执行下一步。 */
+  nextActions?: StandardMaintenanceWorkflowNextAction[]
+}
+
 export type FieldConflictSeverity = 'ERROR' | 'WARNING' | 'INFO'
 export type FieldConflictType =
   | 'NAME_DUPLICATE'

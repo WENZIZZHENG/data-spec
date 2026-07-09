@@ -257,7 +257,21 @@
           <el-button size="small" type="primary" :loading="evidenceLoading" @click="handleDownloadCoverageEvidence">
             下载证据包
           </el-button>
+          <el-button size="small" type="primary" :loading="maintenanceWorkflowLoading" @click="generateCoverageMaintenanceWorkflow">
+            生成维护 workflow
+          </el-button>
         </div>
+        <el-alert
+          v-if="maintenanceWorkflowError"
+          type="warning"
+          :closable="false"
+          show-icon
+          :title="maintenanceWorkflowError"
+        />
+        <StandardMaintenanceWorkflowPlanPanel
+          v-if="maintenanceWorkflowPlan"
+          :workflow-plan="maintenanceWorkflowPlan"
+        />
 
         <div class="result-layout">
           <div class="main-panel">
@@ -361,7 +375,9 @@ import { Connection, DataAnalysis, Link, Refresh, Search } from '@element-plus/i
 import { reportDatabaseCoverage, reportScanPartialCoverage, reportSqlCoverage } from '@/api/coverage'
 import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
 import { listDatabaseTables, testDatabaseConnection } from '@/api/reverseImport'
+import { generateStandardMaintenanceWorkflowPlan } from '@/api/standardMaintenanceWorkflow'
 import ProjectRequired from '@/components/ProjectRequired.vue'
+import StandardMaintenanceWorkflowPlanPanel from '@/components/StandardMaintenanceWorkflowPlanPanel.vue'
 import StateBlock from '@/components/StateBlock.vue'
 import { useRequestState } from '@/composables/useRequestState'
 import { useProjectStore } from '@/stores/project'
@@ -402,7 +418,8 @@ import type {
   DatabaseConnectionSecurityDiagnostic,
   DatabaseTableInfo,
   FieldCoverageReport,
-  FieldCoverageStatus
+  FieldCoverageStatus,
+  StandardMaintenanceWorkflowPlan
 } from '@/types'
 
 type CoverageMode = 'database' | 'sql'
@@ -428,6 +445,9 @@ const connectionMessage = ref('')
 const connectionSecurity = ref<DatabaseConnectionSecurityDiagnostic | null>(null)
 const connectionHealth = ref<DatabaseConnectionHealthDiagnostic | null>(null)
 const consumedScanPartialId = ref<string | null>(null)
+const maintenanceWorkflowLoading = ref(false)
+const maintenanceWorkflowError = ref('')
+const maintenanceWorkflowPlan = ref<StandardMaintenanceWorkflowPlan | null>(null)
 const dbForm = reactive<DatabaseConnectionReq>({
   databaseType: 'postgresql',
   host: 'localhost',
@@ -543,6 +563,12 @@ const partialCoverageSkippedText = computed(() => {
   }
   return `跳过/未扫描 ${skippedCount}`
 })
+const maintenanceCoverageStatuses = computed(() => {
+  if (statusFilter.value !== 'ALL') {
+    return [statusFilter.value]
+  }
+  return ['UNMANAGED', 'POSSIBLE_DUPLICATE', 'MISSING_COMMENT']
+})
 
 applyCoverageUrlState()
 
@@ -594,6 +620,8 @@ watch(
 
 function resetReport() {
   reportState.reset()
+  maintenanceWorkflowPlan.value = null
+  maintenanceWorkflowError.value = ''
   applyCoverageUrlState()
 }
 
@@ -734,6 +762,35 @@ async function handleDownloadCoverageEvidence() {
     ElMessage.success('已下载证据包')
   } finally {
     evidenceLoading.value = false
+  }
+}
+
+async function generateCoverageMaintenanceWorkflow() {
+  const projectId = projectStore.currentProjectId
+  const reportSnapshot = report.value
+  if (!projectId || !reportSnapshot) {
+    maintenanceWorkflowPlan.value = null
+    maintenanceWorkflowError.value = '请先生成覆盖率报告'
+    return
+  }
+  maintenanceWorkflowLoading.value = true
+  maintenanceWorkflowError.value = ''
+  try {
+    maintenanceWorkflowPlan.value = await generateStandardMaintenanceWorkflowPlan({
+      projectId,
+      sourceType: 'FIELD_COVERAGE',
+      coverageStatuses: maintenanceCoverageStatuses.value,
+      sourceStatus: reportSnapshot.inputStatus,
+      failedTableCount: reportSnapshot.failedTableCount,
+      skippedTableCount: reportSnapshot.skippedTableCount,
+      itemCount: filteredFields.value.length || reportSnapshot.summary?.unmanagedCount || 0,
+      sourceRoute: `/field-coverage?projectId=${projectId}`
+    })
+  } catch (error) {
+    maintenanceWorkflowPlan.value = null
+    maintenanceWorkflowError.value = error instanceof Error ? error.message : '维护 workflow 生成失败'
+  } finally {
+    maintenanceWorkflowLoading.value = false
   }
 }
 

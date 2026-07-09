@@ -12,6 +12,7 @@ import com.dataspec.standardhealth.model.StandardHealthAction;
 import com.dataspec.standardhealth.model.StandardHealthSnapshotView;
 import com.dataspec.standardhealth.model.StandardHealthTrend;
 import com.dataspec.standardhealth.service.StandardHealthService;
+import com.dataspec.standardmaintenanceworkflow.model.StandardMaintenanceWorkflowRecipeBinding;
 import com.dataspec.standardqualitygate.model.QualityGateCheckResult;
 import com.dataspec.standardqualitygate.model.StandardQualityGateEvaluateReq;
 import com.dataspec.standardqualitygate.model.StandardQualityGateResult;
@@ -28,6 +29,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -90,7 +92,8 @@ public class AiTaskRecommendationServiceImpl implements AiTaskRecommendationServ
                 routeOrDefault(first.getRoute(), "/quality-gate"),
                 "POST /api/quality-gate/evaluate {\"projectId\":" + projectId + "}",
                 evidence("qualityGate.failedChecks=" + failedChecks.size(), "qualityGate.status=" + valueOrDefault(result.getStatus(), "UNKNOWN"), "qualityGate.firstCode=" + valueOrDefault(first.getCode(), "UNKNOWN")),
-                "重新评估质量门禁，failedChecks 降为 0"));
+                "重新评估质量门禁，failedChecks 降为 0",
+                recipeBinding(projectId, "FIELD_QUALITY")));
     }
 
     private void addHeatmapTask(Long projectId, List<AiTaskRecommendationItem> items) {
@@ -114,7 +117,8 @@ public class AiTaskRecommendationServiceImpl implements AiTaskRecommendationServ
                 "/standard-usage/heatmap",
                 "GET /api/standard-usage/heatmap?projectId=" + projectId,
                 List.copyOf(evidenceRefs),
-                "热区报告 riskyFieldCount 降低，或最高 cleanupPriority 低于 70"));
+                "热区报告 riskyFieldCount 降低，或最高 cleanupPriority 低于 70",
+                recipeBinding(projectId, "FIELD_QUALITY")));
     }
 
     private void addCandidateTask(Long projectId, List<AiTaskRecommendationItem> items) {
@@ -130,7 +134,8 @@ public class AiTaskRecommendationServiceImpl implements AiTaskRecommendationServ
                 "/standard-candidates",
                 "GET /api/standard-candidates?projectId=" + projectId + "&status=PENDING",
                 evidence("candidate.activeCount=" + pendingCount, "candidate.statuses=PENDING,POSTPONED"),
-                "候选状态不再为 PENDING/POSTPONED，或 activeCount 明显降低"));
+                "候选状态不再为 PENDING/POSTPONED，或 activeCount 明显降低",
+                recipeBinding(projectId, "STANDARD_CANDIDATE")));
     }
 
     private void addHealthTasks(Long projectId, List<AiTaskRecommendationItem> items) {
@@ -148,6 +153,7 @@ public class AiTaskRecommendationServiceImpl implements AiTaskRecommendationServ
                 continue;
             }
             String targetRoute = routeOrDefault(action.targetRoute(), "/standard-health");
+            String recipeSourceType = healthRecipeSourceType(taskType);
             items.add(new AiTaskRecommendationItem(
                     taskType,
                     normalizePriority(action.priority()),
@@ -156,7 +162,8 @@ public class AiTaskRecommendationServiceImpl implements AiTaskRecommendationServ
                     targetRoute,
                     "OPEN " + appendProjectId(targetRoute, projectId),
                     evidence("standardHealth.action=" + safeText(valueOrDefault(action.evidence(), "topAction"))),
-                    "完成该健康建议后重新生成标准健康快照或刷新趋势"));
+                    "完成该健康建议后重新生成标准健康快照或刷新趋势",
+                    recipeSourceType == null ? null : recipeBinding(projectId, recipeSourceType)));
         }
     }
 
@@ -169,7 +176,8 @@ public class AiTaskRecommendationServiceImpl implements AiTaskRecommendationServ
                 "/field-quality",
                 "OPEN /field-quality?projectId=" + projectId,
                 evidence("fallback.source=fieldQuality"),
-                "字段质量报告已刷新，并确认 lowQualityCount 是否为 0"));
+                "字段质量报告已刷新，并确认 lowQualityCount 是否为 0",
+                recipeBinding(projectId, "FIELD_QUALITY")));
         addFallbackIfNeeded(items, new AiTaskRecommendationItem(
                 "EXPORT_AI_CONTEXT",
                 "LOW",
@@ -250,6 +258,14 @@ public class AiTaskRecommendationServiceImpl implements AiTaskRecommendationServ
         return "FOLLOW_HEALTH_ACTION";
     }
 
+    private String healthRecipeSourceType(String taskType) {
+        return switch (taskType) {
+            case "RUN_COVERAGE_REPORT" -> "FIELD_COVERAGE";
+            case "REVIEW_STANDARD_CANDIDATES" -> "STANDARD_CANDIDATE";
+            default -> null;
+        };
+    }
+
     private int priorityRank(String priority) {
         return switch (normalizePriority(priority)) {
             case "HIGH" -> 0;
@@ -288,6 +304,16 @@ public class AiTaskRecommendationServiceImpl implements AiTaskRecommendationServ
         }
         // 推荐队列会被 AI 直接复制阅读，敏感标签本身也不应残留为可误用上下文。
         return sanitized.replaceAll("(?i)\\b(password|passwd|token|authorization|api[_-]?key|secret|dsn)\\b", "凭据");
+    }
+
+    private StandardMaintenanceWorkflowRecipeBinding recipeBinding(Long projectId, String sourceType) {
+        return new StandardMaintenanceWorkflowRecipeBinding(
+                "standard-maintenance",
+                1,
+                Map.of(
+                        "projectId", projectId,
+                        "sourceType", sourceType),
+                "node tools/dataspec-cli.mjs task-card create --workflow standard-maintenance --project " + projectId);
     }
 
     private List<String> evidence(String... refs) {

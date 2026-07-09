@@ -1,5 +1,7 @@
 package com.dataspec.aitaskrecommendation.model;
 
+import com.dataspec.standardmaintenanceworkflow.model.StandardMaintenanceWorkflowRecipeBinding;
+
 import java.util.List;
 
 /**
@@ -13,6 +15,7 @@ import java.util.List;
  * @param recommendedCommand 可复制的安全命令或 API 调用模板，不包含 token、password 或本地路径。
  * @param evidenceRefs 支撑推荐的摘要证据引用，如计数、状态或来源能力标识。
  * @param completionCheck 任务完成或降级的判定方式。
+ * @param recipeBinding 可选 workflow recipe 绑定；维护类推荐使用 standard-maintenance，非 workflow 推荐可为空。
  */
 public record AiTaskRecommendationItem(
         String taskType,
@@ -22,6 +25,27 @@ public record AiTaskRecommendationItem(
         String targetRoute,
         String recommendedCommand,
         List<String> evidenceRefs,
-        String completionCheck
+        String completionCheck,
+        StandardMaintenanceWorkflowRecipeBinding recipeBinding
 ) {
+    public AiTaskRecommendationItem(
+            String taskType,
+            String priority,
+            String title,
+            String reason,
+            String targetRoute,
+            String recommendedCommand,
+            List<String> evidenceRefs,
+            String completionCheck) {
+        this(
+                taskType,
+                priority,
+                title,
+                reason,
+                targetRoute,
+                recommendedCommand,
+                evidenceRefs,
+                completionCheck,
+                null);
+    }
 }

@@ -5,10 +5,16 @@
         <h2>字段质量</h2>
         <p class="page-subtitle">{{ projectStore.currentProjectName || '未选择项目' }}</p>
       </div>
-      <el-button :disabled="!hasProject" :loading="loading" @click="loadReport">
-        <el-icon><Refresh /></el-icon>
-        刷新
-      </el-button>
+      <div class="header-actions">
+        <el-button type="primary" :disabled="!hasProject" :loading="maintenanceWorkflowLoading" @click="generateQualityMaintenanceWorkflow">
+          <el-icon><DataAnalysis /></el-icon>
+          生成维护 workflow
+        </el-button>
+        <el-button :disabled="!hasProject" :loading="loading" @click="loadReport">
+          <el-icon><Refresh /></el-icon>
+          刷新
+        </el-button>
+      </div>
     </div>
 
     <el-empty v-if="!hasProject" description="请先创建并选择项目">
@@ -68,6 +74,18 @@
         </el-select>
         <span class="toolbar-count">当前匹配 {{ filteredItems.length }} / {{ items.length }}</span>
       </div>
+
+      <el-alert
+        v-if="maintenanceWorkflowError"
+        type="warning"
+        :closable="false"
+        show-icon
+        :title="maintenanceWorkflowError"
+      />
+      <StandardMaintenanceWorkflowPlanPanel
+        v-if="maintenanceWorkflowPlan"
+        :workflow-plan="maintenanceWorkflowPlan"
+      />
 
       <el-table
         v-loading="loading"
@@ -132,8 +150,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Refresh } from '@element-plus/icons-vue'
+import { DataAnalysis, Refresh } from '@element-plus/icons-vue'
 import { getFieldQualityReport } from '@/api/field'
+import { generateStandardMaintenanceWorkflowPlan } from '@/api/standardMaintenanceWorkflow'
+import StandardMaintenanceWorkflowPlanPanel from '@/components/StandardMaintenanceWorkflowPlanPanel.vue'
 import { useProjectStore } from '@/stores/project'
 import {
   fieldQualityEditQuery,
@@ -143,7 +163,7 @@ import {
   qualityLevelTagType,
   qualitySeverityTagType
 } from '@/utils/fieldQualityDisplay'
-import type { FieldQualityItem, FieldQualityLevel, FieldQualityReport } from '@/types'
+import type { FieldQualityItem, FieldQualityLevel, FieldQualityReport, StandardMaintenanceWorkflowPlan } from '@/types'
 
 const projectStore = useProjectStore()
 const router = useRouter()
@@ -152,6 +172,9 @@ const loading = ref(false)
 const report = ref<FieldQualityReport>({})
 const levelFilter = ref<FieldQualityLevel | 'ALL'>('ALL')
 const issueFilter = ref('ALL')
+const maintenanceWorkflowLoading = ref(false)
+const maintenanceWorkflowError = ref('')
+const maintenanceWorkflowPlan = ref<StandardMaintenanceWorkflowPlan | null>(null)
 
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
 const summary = computed(() => report.value.summary ?? {})
@@ -159,6 +182,9 @@ const items = computed(() => report.value.fields ?? [])
 const issueCodes = computed(() => issueOptions(items.value))
 const filteredItems = computed(() =>
   filterQualityItems(items.value, levelFilter.value, issueFilter.value)
+)
+const maintenanceIssueCodes = computed(() =>
+  issueFilter.value === 'ALL' ? issueCodes.value : [issueFilter.value]
 )
 
 onMounted(() => {
@@ -172,6 +198,8 @@ watch(
   () => {
     levelFilter.value = 'ALL'
     issueFilter.value = 'ALL'
+    maintenanceWorkflowPlan.value = null
+    maintenanceWorkflowError.value = ''
     void loadReport()
   },
   { immediate: true }
@@ -208,6 +236,35 @@ function goToField(item: FieldQualityItem) {
     query: fieldQualityEditQuery(item)
   })
 }
+
+async function generateQualityMaintenanceWorkflow() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    maintenanceWorkflowPlan.value = null
+    maintenanceWorkflowError.value = '请先选择项目'
+    return
+  }
+  maintenanceWorkflowLoading.value = true
+  maintenanceWorkflowError.value = ''
+  try {
+    maintenanceWorkflowPlan.value = await generateStandardMaintenanceWorkflowPlan({
+      projectId,
+      sourceType: 'FIELD_QUALITY',
+      sourceIds: filteredItems.value
+        .map((item) => item.fieldId)
+        .filter((fieldId): fieldId is number => typeof fieldId === 'number')
+        .slice(0, 50),
+      issueCodes: maintenanceIssueCodes.value,
+      itemCount: filteredItems.value.length,
+      sourceRoute: `/field-quality?projectId=${projectId}`
+    })
+  } catch (error) {
+    maintenanceWorkflowPlan.value = null
+    maintenanceWorkflowError.value = error instanceof Error ? error.message : '维护 workflow 生成失败'
+  } finally {
+    maintenanceWorkflowLoading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -221,6 +278,13 @@ function goToField(item: FieldQualityItem) {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .page-header h2 {
