@@ -4,8 +4,8 @@
 
 本文件从根 TODO.md 机械迁移已完成的 P5/P6 待办详情，根待办只保留入口和当前候选池。每个条目保留原始状态、已完成能力、验证证据、产物、后续增强和边界；原条目未记录 commit 的地方不补猜。
 
-- 完成项数量：112
-- 当前未完成候选：76，详见 [P6 候选池](../todo-p6-candidates.md)
+- 完成项数量：115
+- 当前未完成候选：73，详见 [P6 候选池](../todo-p6-candidates.md)
 - P0-P4 已完成归档：[todo-completed-p0-p4.md](todo-completed-p0-p4.md)
 
 ## 历史追加记录（已降级为背景）
@@ -979,6 +979,25 @@
 - 验证证据：`node --test tests/standardQuestionDisplay.test.ts` 12 pass；`pnpm test` 159 pass；`pnpm build` 通过，保留现有第三方 pure annotation、chunk size 和 plugin timings warning；`git diff --check` 通过，仅 LF/CRLF warning；当时 `node tools/dataspec-status-check.mjs --format json` warn 仅因 active change `add-ai-context-quality-check`，该 warning 已随 P6-186 归档消除。
 - 评审证据：独立子 agent `019f3d2f-b5c4-75d3-886d-c1c83c759dab` 完成只读评审并已关闭；发现的格式证据缺失 P1 已补失败测试并修复，停用字段覆盖和废弃字段替代信息误报风险已处理。
 - 边界：不实现通用自然语言问答引擎，不调用外部 LLM；第一版基于现有检索、术语表、证据和质量分确定性判断。
+
+### P6-153：AI Context 注入防护与不可信文本隔离
+- 状态：已完成第一版，OpenSpec change `add-ai-context-safety-controls` 当前按项目约定保留为 active change。
+- 已完成能力：AI Context package 的 `manifest.json` 新增 `contextSafetySummary`，`.dataspec/README.md`、`.dataspec/prompts.md` 和 `AGENTS.md.fragment` 明确 DataSpec 指令/契约与字段注释、样例、SQL、业务描述、glossary、metadata 等不可信业务内容的边界；字段目录新增 `contextSafety`，记录 `sourceTrustLevel`、`instructionBoundary`、redaction reasons 和 warnings。
+- 验证证据：`mvn -Dtest=AiContextExportServiceTest,AiContextControllerTest,AiContextBudgetPlannerServiceTest,SensitiveDataSanitizerTest test` 48 pass；`node --test tools\dataspec-config.test.mjs tools\dataspec-mcp.test.mjs` 52 pass；`node --test tools\dataspec-cli.test.mjs tools\dataspec-cli-mcp-contract-check.test.mjs` 184 pass、2 个 symlink skip；`openspec validate add-ai-context-safety-controls --strict` 通过；`openspec validate --all` 125 passed；`git diff --check` 通过，仅 LF/CRLF warning；状态检查仅 `OPENSPEC_ACTIVE_CHANGE_PRESENT` warning，符合 active change 暂保留约定。
+- 评审证据：独立评审 agent `019f4764-7724-7232-a90b-b3a29f132333` 多轮只读复评发现并跟踪敏感 format examples、snapshot field catalog、scoped matchReasons/query、glossary/enum raw text、规则 metadata、scope metadata、rule exemption、status matchReasons 和 standard metadata 等泄漏面；已全部修复并补回归测试或防御性脱敏，最终结论 Critical/Important/Minor 均无，`Ready to merge: Yes`，agent 已关闭。
+- 后续增强：不替代专业 DLP，不扫描真实业务数据行；后续如要做更强 prompt-injection 分类，可在本地策略和 AI Context 质量预算主题中继续增强。
+
+### P6-158：字段可见性等级与 AI Context 最小暴露策略
+- 状态：已完成第一版，作为 `add-ai-context-safety-controls` 的字段级安全决策部分交付。
+- 已完成能力：字段目录每个字段新增 `exportDecision`，敏感字段默认 `visibility=restricted`、`maskingProfile=metadata-only`，主 example 和 format valid/invalid examples 等 example-like 值输出 `[REDACTED]`；live 和 snapshot 导出路径都输出安全元数据，并把 redacted/restricted/warning 计入 package safety summary。
+- 验证证据：`AiContextExportServiceTest` 覆盖 live field、snapshot field、scoped field、format examples、prompt 输入、usage examples、glossary、enum、rule metadata、rule exemption、matchReasons 和 standard metadata 的脱敏；相关后端目标测试 48 pass；OpenSpec strict 和 all 均通过。
+- 后续增强：第一版不新增企业权限审批，也不回溯删除历史 Context 包；如后续需要按 AI profile 进一步裁剪字段，可承接稳定引用、查询 DSL 或安全预检主题。
+
+### P6-164：个人安全红线配置中心
+- 状态：已完成最小本地配置第一版，作为 AI Context 安全主题配置子项交付。
+- 已完成能力：`.dataspec/config.json` 支持可选 `securityProfile`，CLI/MCP 配置加载会规范 `redactionStrictness`、`sensitiveFieldPolicy`、`allowedAiTools`、`neverExportPatterns`、`localOnlyPaths`、`samplePolicy` 和 `credentialPolicy`；MCP `session-state` 只输出 profile presence、policy names 和数组计数，不输出 raw pattern、local path 或 secret-like 值。
+- 验证证据：`tools/dataspec-config.test.mjs` 覆盖合法 profile 和非法类型诊断；`tools/dataspec-mcp.test.mjs` 覆盖 session-state 安全摘要不泄漏 raw pattern/token/password/JDBC/local path；tools 目标测试 52 pass，CLI/MCP 契约扩展测试 184 pass、2 个 symlink skip。
+- 后续增强：本轮不做前端配置页和 `.dataspec/security.json` 独立 schema；后续如需要可从配置 schema、doctor 诊断或安全红线 UI 单独开任务。
 
 ## 本轮候选覆盖归档（2026-07-09）
 

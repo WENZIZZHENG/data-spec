@@ -5,11 +5,11 @@
 ## 当前状态
 
 - 近期优先行动项已清空；后续开发由用户从评审后的候选池或新需求中选择，不再从 P6-71 到 P6-188 全量顺扫。
-- OpenSpec 当前无 active change；新任务开工前按 AGENTS/SDD 判断快速、常规或 SDD 流程。
+- OpenSpec 当前 active change：`add-ai-context-safety-controls`；实现、验证和独立评审已完成，按项目约定暂保留 open change，不自动 archive。
 - 已完成 P0-P4 详情见 [docs/archive/todo-completed-p0-p4.md](docs/archive/todo-completed-p0-p4.md)。
-- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 112 项。
+- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 115 项。
 - 已删除 / 不做独立候选 9 项，详见 [docs/archive/todo-removed-p6-candidates.md](docs/archive/todo-removed-p6-candidates.md)。
-- 未完成 P6 候选共 76 项，详情见 [docs/todo-p6-candidates.md](docs/todo-p6-candidates.md)。
+- 未完成 P6 候选共 73 项，详情见 [docs/todo-p6-candidates.md](docs/todo-p6-candidates.md)。
 - 候选池价值评审见 [docs/todo-p6-candidate-review.md](docs/todo-p6-candidate-review.md)。
 - 剩余待办时间评估见 [docs/todo-p6-remaining-estimates.md](docs/todo-p6-remaining-estimates.md)。
 - 任务卡可从 create-table/review-pr-sql/reverse-import-standards/export-min-context/standard-evidence-review/standard-maintenance workflow recipe 生成；该短摘要用于本地状态检查，详细能力见完成归档。
@@ -26,7 +26,7 @@
 
 - [P6 候选池](docs/todo-p6-candidates.md)：保留所有未完成候选的完整背景、缺口、产物、验收标准和边界。
 - [P6 候选价值评审](docs/todo-p6-candidate-review.md)：记录哪些值得做、哪些应合并、哪些已删除或暂缓。
-- [P6 剩余待办时间评估](docs/todo-p6-remaining-estimates.md)：列出剩余 76 项候选和粗略开发时间。
+- [P6 剩余待办时间评估](docs/todo-p6-remaining-estimates.md)：列出剩余 73 项候选和粗略开发时间。
 - [P5/P6 完成归档](docs/archive/todo-completed-p5-p6.md)：保留已完成条目的验证证据、产物和后续增强。
 - [P6 删除候选归档](docs/archive/todo-removed-p6-candidates.md)：记录删除独立候选的原因和恢复触发条件。
 - [P0-P4 完成归档](docs/archive/todo-completed-p0-p4.md)：保留早期已完成能力的详细背景。
@@ -43,7 +43,7 @@
 
 ### 扩展候选池 P6-129 到 P6-176
 
-41 项：P6-129、P6-130、P6-131、P6-133、P6-134、P6-135、P6-136、P6-137、P6-138、P6-139、P6-140、P6-141、P6-142、P6-143、P6-144、P6-145、P6-146、P6-149、P6-150、P6-151、P6-153、P6-154、P6-155、P6-156、P6-157、P6-158、P6-159、P6-160、P6-161、P6-162、P6-163、P6-164、P6-165、P6-166、P6-167、P6-168、P6-171、P6-173、P6-174、P6-175、P6-176
+38 项：P6-129、P6-130、P6-131、P6-133、P6-134、P6-135、P6-136、P6-137、P6-138、P6-139、P6-140、P6-141、P6-142、P6-143、P6-144、P6-145、P6-146、P6-149、P6-150、P6-151、P6-154、P6-155、P6-156、P6-157、P6-159、P6-160、P6-161、P6-162、P6-163、P6-165、P6-166、P6-167、P6-168、P6-171、P6-173、P6-174、P6-175、P6-176
 
 ### 新近候选 P6-184 到 P6-185
 

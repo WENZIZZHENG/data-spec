@@ -259,6 +259,65 @@ test('session state resource summarizes local project memory without backend cal
   }
 })
 
+test('session state summarizes security profile without raw patterns or secret-like values', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-mcp-security-profile-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({
+        projectId: 7,
+        server: 'http://token:secret@dataspec.local',
+        apiToken: 'ds_config_secret_token',
+        defaultPaths: ['standards', 'sql'],
+        securityProfile: {
+          redactionStrictness: 'strict',
+          sensitiveFieldPolicy: 'metadata-only',
+          allowedAiTools: ['local-codex', 'local-reviewer'],
+          neverExportPatterns: [
+            'password=raw-secret',
+            'Authorization: Bearer raw-token',
+            'jdbc:postgresql://db/app'
+          ],
+          localOnlyPaths: ['C:\\Users\\Admin\\.ssh', '/tmp/token-cache'],
+          samplePolicy: 'synthetic-only',
+          credentialPolicy: 'env-only'
+        }
+      }),
+      'utf8'
+    )
+
+    const handler = createMcpHandler({
+      projectId: 7,
+      server: 'http://dataspec.local',
+      rootDir: dir
+    }, failingFetch)
+
+    const read = await handler({
+      jsonrpc: '2.0',
+      id: 309,
+      method: 'resources/read',
+      params: { uri: 'dataspec://project/7/session-state' }
+    })
+    const payload = JSON.parse(read.result.contents[0].text)
+    const fullText = JSON.stringify(read.result)
+
+    assert.deepEqual(payload.redactedMemory.config.securityProfile, {
+      present: true,
+      redactionStrictness: 'strict',
+      sensitiveFieldPolicy: 'metadata-only',
+      samplePolicy: 'synthetic-only',
+      credentialPolicy: 'env-only',
+      allowedAiToolsCount: 2,
+      neverExportPatternsCount: 3,
+      localOnlyPathsCount: 2
+    })
+    assert.doesNotMatch(fullText, /raw-secret|raw-token|jdbc:postgresql:\/\/db\/app|ds_config_secret_token|token:secret|C:\\Users\\Admin|token-cache/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('session state tool supports explicit project override and projectless blocked state', async () => {
   const handler = createMcpHandler({
     projectId: 7,

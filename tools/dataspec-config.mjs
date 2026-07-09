@@ -55,6 +55,7 @@ function emptyConfig(startDir) {
     apiToken: undefined,
     aiProfile: undefined,
     taskType: undefined,
+    securityProfile: undefined,
     defaultPaths: []
   }
 }
@@ -72,6 +73,7 @@ function normalizeDataSpecConfig(rawConfig, configPath) {
     apiToken: normalizeApiToken(rawConfig.apiToken),
     aiProfile: normalizeOptionalString(rawConfig.aiProfile, 'aiProfile', configPath),
     taskType: normalizeOptionalString(rawConfig.taskType, 'taskType', configPath),
+    securityProfile: normalizeSecurityProfile(rawConfig.securityProfile, configPath),
     defaultPaths: normalizeDefaultPaths(rawConfig.defaultPaths, configPath)
   }
 }
@@ -133,6 +135,50 @@ function normalizeDefaultPaths(value, configPath) {
         throw new Error(`DataSpec 配置 defaultPaths 只能包含字符串: ${configPath}`)
       }
       return inputPath.trim()
+    })
+    .filter(Boolean)
+}
+
+function normalizeSecurityProfile(value, configPath) {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`DataSpec 配置 securityProfile 必须是 JSON 对象: ${configPath}`)
+  }
+
+  const profile = {}
+  setOptionalPolicy(profile, 'redactionStrictness', value.redactionStrictness, configPath)
+  setOptionalPolicy(profile, 'sensitiveFieldPolicy', value.sensitiveFieldPolicy, configPath)
+  setOptionalStringArray(profile, 'allowedAiTools', value.allowedAiTools, configPath)
+  setOptionalStringArray(profile, 'neverExportPatterns', value.neverExportPatterns, configPath)
+  setOptionalStringArray(profile, 'localOnlyPaths', value.localOnlyPaths, configPath)
+  setOptionalPolicy(profile, 'samplePolicy', value.samplePolicy, configPath)
+  setOptionalPolicy(profile, 'credentialPolicy', value.credentialPolicy, configPath)
+
+  return Object.keys(profile).length === 0 ? undefined : profile
+}
+
+function setOptionalPolicy(target, fieldName, value, configPath) {
+  const normalized = normalizeOptionalString(value, `securityProfile.${fieldName}`, configPath)
+  if (normalized !== undefined) {
+    target[fieldName] = normalized
+  }
+}
+
+function setOptionalStringArray(target, fieldName, value, configPath) {
+  if (value === undefined || value === null) {
+    return
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`DataSpec 配置 securityProfile.${fieldName} 必须是字符串数组: ${configPath}`)
+  }
+  target[fieldName] = value
+    .map((item) => {
+      if (typeof item !== 'string') {
+        throw new Error(`DataSpec 配置 securityProfile.${fieldName} 只能包含字符串: ${configPath}`)
+      }
+      return item.trim()
     })
     .filter(Boolean)
 }

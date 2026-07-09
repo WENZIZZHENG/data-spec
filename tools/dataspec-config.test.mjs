@@ -23,6 +23,15 @@ test('loads nearest .dataspec config from parent directory', async () => {
         apiToken: 'ds_test_token',
         aiProfile: 'sql-fix',
         taskType: 'SQL_FIX',
+        securityProfile: {
+          redactionStrictness: 'strict',
+          sensitiveFieldPolicy: 'metadata-only',
+          allowedAiTools: ['codex-local', 'mcp-local'],
+          neverExportPatterns: ['customer_secret', 'token='],
+          localOnlyPaths: ['.dataspec/context'],
+          samplePolicy: 'synthetic-only',
+          credentialPolicy: 'never-export'
+        },
         defaultPaths: ['sql', 'db/migrations']
       }),
       'utf8'
@@ -39,6 +48,15 @@ test('loads nearest .dataspec config from parent directory', async () => {
     assert.equal(config.apiToken, 'ds_test_token')
     assert.equal(config.aiProfile, 'sql-fix')
     assert.equal(config.taskType, 'SQL_FIX')
+    assert.deepEqual(config.securityProfile, {
+      redactionStrictness: 'strict',
+      sensitiveFieldPolicy: 'metadata-only',
+      allowedAiTools: ['codex-local', 'mcp-local'],
+      neverExportPatterns: ['customer_secret', 'token='],
+      localOnlyPaths: ['.dataspec/context'],
+      samplePolicy: 'synthetic-only',
+      credentialPolicy: 'never-export'
+    })
     assert.deepEqual(config.defaultPaths, ['sql', 'db/migrations'])
     assert.deepEqual(resolveDefaultPaths(config), [
       path.join(dir, 'sql'),
@@ -61,7 +79,40 @@ test('returns empty config when .dataspec config is absent', async () => {
     assert.equal(config.apiToken, undefined)
     assert.equal(config.aiProfile, undefined)
     assert.equal(config.taskType, undefined)
+    assert.equal(config.securityProfile, undefined)
     assert.deepEqual(config.defaultPaths, [])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('rejects invalid security profile shape without exposing raw secret values', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-config-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({
+        projectId: 7,
+        apiToken: 'ds_config_token',
+        securityProfile: {
+          redactionStrictness: 1,
+          allowedAiTools: 'codex-local',
+          neverExportPatterns: ['password=raw-config-secret']
+        }
+      }),
+      'utf8'
+    )
+
+    assert.throws(
+      () => loadDataSpecConfig(dir),
+      (error) => {
+        assert.match(error.message, /securityProfile\.redactionStrictness 必须是字符串/)
+        assert.doesNotMatch(error.message, /raw-config-secret/)
+        assert.doesNotMatch(error.message, /ds_config_token/)
+        return true
+      }
+    )
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

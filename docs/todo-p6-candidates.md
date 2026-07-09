@@ -4,7 +4,7 @@
 
 本文件承接根 TODO.md 中尚未完成的 P6 候选详情。后续开发先读根 TODO.md、候选评审和时间评估，再按任务范围读取本文件对应条目；不要默认线性顺扫全部候选。
 
-- 未完成候选数量：76
+- 未完成候选数量：73
 - 本轮已归档为现有能力覆盖：6 项，详见 [archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
 - 本轮已删除独立候选：9 项，详见 [archive/todo-removed-p6-candidates.md](archive/todo-removed-p6-candidates.md)
 - 已完成 P5/P6 详情：[archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
@@ -74,18 +74,15 @@
 - P6-149：标准包同步巡检与漂移修复建议
 - P6-150：业务仓库标准合规分与 PR 摘要
 - P6-151：字段库密集编辑与大表格键盘体验
-- P6-153：AI Context 注入防护与不可信文本隔离
 - P6-154：标准消费端 SDK 与类型常量包导出
 - P6-155：规则依赖图与冲突诊断
 - P6-156：OpenAPI/CLI/MCP 示例契约快照自动生成
 - P6-157：个人单机分发包与离线启动预案
-- P6-158：字段可见性等级与 AI Context 最小暴露策略
 - P6-159：AI 任务状态机与断点续跑
 - P6-160：标准变更影响预演与候选修复单
 - P6-161：AI 可读字段知识卡片
 - P6-162：规则/标准 A/B 评测与回归数据集
 - P6-163：连接器能力探测与方言 Profile
-- P6-164：个人安全红线配置中心
 - P6-165：标准对象稳定标识与引用别名层
 - P6-166：AI 输出后置校验与幻觉引用拦截
 - P6-167：标准查询 DSL 与可组合筛选协议
@@ -623,16 +620,6 @@
 - 验收标准：用户能在几百到几千字段下流畅筛选和批量维护；键盘操作、焦点状态和错误提示可用；批量保存前能预览影响并保留撤销路径。
 - 边界：不重做整个前端设计系统，不一次性迁移所有表格，不牺牲简单项目的轻量体验；第一版聚焦字段库和候选 Inbox 高频表格。
 
-### P6-153：AI Context 注入防护与不可信文本隔离
-- 状态：待办。
-- 为什么做：DataSpec 会把字段注释、表注释、业务文档和数据库 metadata 提供给 AI，这些内容可能包含“忽略上文”“泄漏 token”等提示注入文本；如果不标记可信边界，AI 容易把业务文本误当作系统指令。
-- 已有基础：已有 AI Context、敏感信息脱敏、受控脱敏样例、AI 能力边界模拟、执行证据包、标准契约 Registry 和 Agent 启动包待办。
-- 缺口：缺少统一的不可信文本包装、sourceTrustLevel、instructionBoundary、redactionReason 和 contextSafetyWarnings，CLI/MCP/前端也没有把“业务内容不是指令”稳定写入上下文。
-- 参考项目：`gitleaks/gitleaks` 的敏感信息扫描、`microsoft/presidio` 的 PII 识别和 MCP 规范中的 resources/prompts 分层；只借鉴安全边界，不引入外部 LLM 安全服务。
-- 落地产物：为 AI Context、证据包、MCP resource 和 README/AGENTS 片段新增不可信文本边界说明；导出时为 comment、sample、document、metadata 标记 trustLevel 和 sanitizer 结果；高风险文本给出 warning 和可复核位置。
-- 验收标准：AI 读取 Context 时能明确区分系统指令、工具契约和业务原文；检测到可疑提示注入或 secret-like 文本时会脱敏或标记；相关契约和 fixture 有测试覆盖。
-- 边界：不替代人工安全审查，不扫描真实业务数据行，不做企业 DLP；第一版聚焦本地 AI 上下文的结构化隔离。
-
 ### P6-154：标准消费端 SDK 与类型常量包导出
 - 状态：待办。
 - 为什么做：AI 在业务仓库落地标准时，不只需要 JSON Context，还需要能被 Java、TypeScript 或 SQL 脚本直接引用的字段常量、枚举值、校验器和版本信息，减少手写字符串造成的漂移。
@@ -672,16 +659,6 @@
 - 落地产物：补充 `scripts/package-local` 或等价流程；打包 server、web 静态资源、示例数据、配置模板和启动脚本；doctor 能识别离线包版本和缺失依赖；README 增加离线恢复路径。
 - 验收标准：新机器在无公网或弱网环境下能按文档启动演示项目；升级时能保留本地数据或明确提示备份；启动失败时有可复制给 AI 的诊断包。
 - 边界：不承诺跨平台安装器第一版完整覆盖，不自动修改系统级服务，不内置真实业务数据。
-
-### P6-158：字段可见性等级与 AI Context 最小暴露策略
-- 状态：待办。
-- 为什么做：即使不包含业务数据行，字段名、注释、枚举值和样例也可能暴露业务敏感信息；AI Context 需要按任务只暴露必要字段，尤其是个人把 Context 交给不同 AI 工具时。
-- 已有基础：已有 AI Context 裁剪、上下文预算、敏感信息脱敏、受控脱敏样例、字段生命周期、标准消费清单、API Token 和 AI 使用画像待办。
-- 缺口：缺少字段级 visibility、sensitivity、allowedTasks、maskingProfile、reason 和 exportDecision，无法解释某字段为什么出现在某个 Context 包里，也不能按任务模式自动隐藏敏感字段。
-- 参考项目：`microsoft/presidio` 的敏感信息识别、`faker-js/faker` 的安全样例生成和 `gitleaks/gitleaks` 的 secret 防泄漏；只借鉴识别与标记，不做复杂权限系统。
-- 落地产物：扩展字段标准元数据和 AI profile；导出 Context 时按 taskProfile、visibility 和 maskingProfile 做最小暴露；CLI/MCP 输出 exportSummary，列出包含/排除字段数量、原因和脱敏策略。
-- 验收标准：同一项目在 SQL 修复、字段推荐、文档问答等任务下导出的字段范围不同且可解释；敏感字段默认被遮蔽或仅提供安全别名；导出结果有测试覆盖。
-- 边界：不做企业权限审批，不对历史 Context 包回溯删除，不扫描真实业务数据行；第一版只服务个人/小团队的 AI 使用安全。
 
 ### P6-159：AI 任务状态机与断点续跑
 - 状态：待办。
@@ -732,16 +709,6 @@
 - 落地产物：连接数据库后生成能力探测报告；AI Context、反向导入 plan 和 SQL 校验结果携带方言 profile；前端连接诊断页展示不支持项和替代建议。
 - 验收标准：同一个任务在 MySQL/PostgreSQL 等连接下能获得不同方言提示；不支持的能力会提前警告；探测过程只读且不保存密码。
 - 边界：不承诺覆盖所有数据库第一版，不自动安装驱动；优先 PostgreSQL/MySQL 和当前已支持路径。
-
-### P6-164：个人安全红线配置中心
-- 状态：待办。
-- 为什么做：DataSpec 优先个人/小团队使用，但 AI Context、证据包、样例、连接信息和业务仓库路径仍可能踩到用户自己的安全红线；需要一个简单可见的本地策略入口。
-- 已有基础：已有 API Token、安全基线、敏感信息脱敏、字段可见性等级、AI Context 注入防护、凭据复用、受控脱敏样例和本地运行诊断待办。
-- 缺口：缺少统一 securityProfile，无法声明 neverExportPatterns、allowedAiTools、localOnlyPaths、samplePolicy、credentialPolicy 和 redactionStrictness，也无法让 doctor/CLI/MCP 统一检查。
-- 参考项目：`gitleaks/gitleaks` 的 secret 检测、`getsops/sops` 的本地密文配置、`dotenvx/dotenvx` 的环境变量管理和 `microsoft/presidio` 的 PII 识别；只借鉴本地安全策略，不做企业权限平台。
-- 落地产物：新增个人安全红线配置页和 `.dataspec/security.json` schema；导出、证据包、样例生成、CLI/MCP 调用前统一读取策略；doctor 输出策略缺失或冲突提示。
-- 验收标准：用户能明确配置哪些内容永不导出、哪些 AI 工具可用、样例如何脱敏；违反红线时前端/CLI/MCP 给出可执行阻断或警告；策略本身不泄漏 secret。
-- 边界：不做组织级审批，不扫描真实业务数据全量内容，不替代专业 DLP；第一版聚焦本机使用安全。
 
 ### P6-165：标准对象稳定标识与引用别名层
 - 状态：待办。

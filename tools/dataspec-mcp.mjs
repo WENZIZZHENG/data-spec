@@ -334,7 +334,8 @@ async function buildMcpSessionState(projectId, context) {
         projectIdPresent: configMemory.projectIdPresent,
         server: configMemory.server,
         apiTokenPresent: Boolean(context.apiToken) || configMemory.apiTokenPresent,
-        defaultPathsCount: configMemory.defaultPathsCount
+        defaultPathsCount: configMemory.defaultPathsCount,
+        securityProfile: configMemory.securityProfile
       },
       contextCache: contextCache.memory
     },
@@ -364,6 +365,7 @@ async function readLocalConfigMemory(rootDir) {
       server: sanitizeSecretText(rawConfig.server ?? null),
       apiTokenPresent: rawConfig.apiToken !== undefined && rawConfig.apiToken !== null && rawConfig.apiToken !== '',
       defaultPathsCount: Array.isArray(rawConfig.defaultPaths) ? rawConfig.defaultPaths.length : 0,
+      securityProfile: summarizeSecurityProfile(rawConfig.securityProfile),
       diagnostics
     }
   } catch (error) {
@@ -379,6 +381,7 @@ async function readLocalConfigMemory(rootDir) {
         server: null,
         apiTokenPresent: false,
         defaultPathsCount: 0,
+        securityProfile: { present: false },
         diagnostics
       }
     }
@@ -393,9 +396,34 @@ async function readLocalConfigMemory(rootDir) {
       server: null,
       apiTokenPresent: false,
       defaultPathsCount: 0,
+      securityProfile: { present: false },
       diagnostics
     }
   }
+}
+
+function summarizeSecurityProfile(profile) {
+  if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
+    return { present: false }
+  }
+  return {
+    present: true,
+    redactionStrictness: summarizeSecurityProfilePolicy(profile.redactionStrictness),
+    sensitiveFieldPolicy: summarizeSecurityProfilePolicy(profile.sensitiveFieldPolicy),
+    samplePolicy: summarizeSecurityProfilePolicy(profile.samplePolicy),
+    credentialPolicy: summarizeSecurityProfilePolicy(profile.credentialPolicy),
+    allowedAiToolsCount: countStringArray(profile.allowedAiTools),
+    neverExportPatternsCount: countStringArray(profile.neverExportPatterns),
+    localOnlyPathsCount: countStringArray(profile.localOnlyPaths)
+  }
+}
+
+function summarizeSecurityProfilePolicy(value) {
+  return typeof value === 'string' && value.trim() ? sanitizeSecretText(value.trim()) : null
+}
+
+function countStringArray(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === 'string' && item.trim()).length : 0
 }
 
 async function readContextCacheMemory(rootDir, projectId) {
