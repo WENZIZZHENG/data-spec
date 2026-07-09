@@ -23,12 +23,15 @@ public final class SensitiveDataSanitizer {
     public static final String REDACTION = "[REDACTED]";
 
     private static final Pattern JDBC_PATTERN = Pattern.compile("(?i)jdbc:[^\\s\"'<>]+");
+    private static final Pattern HTTP_URL_USERINFO_PATTERN = Pattern.compile("(?i)\\b(https?://)[^\\s/?#@]+@");
     private static final Pattern DSN_URI_PATTERN = Pattern.compile(
             "(?i)\\b((?:postgres(?:ql)?|mysql|mariadb|sqlserver|oracle|mongodb|redis)://)[^\\s\"'<>]+");
     private static final Pattern AUTHORIZATION_BEARER_PATTERN = Pattern.compile(
             "(?i)(authorization\\s*[:=]\\s*bearer\\s+)[^\\s,;]+");
+    private static final Pattern AUTHORIZATION_SCHEME_VALUE_PATTERN = Pattern.compile(
+            "(?i)(authorization\\s*[:=]\\s*)(?!\\s*[\"']?bearer\\s+)([\"']?)([A-Za-z][A-Za-z0-9._~-]*\\s+)[^\\s,;}&\\r\\n]+\\2");
     private static final Pattern AUTHORIZATION_VALUE_PATTERN = Pattern.compile(
-            "(?i)(authorization\\s*[:=]\\s*)(?!\\s*[\"']?bearer\\s+)([\"']?)[^,;}&\\r\\n]+\\2");
+            "(?i)(authorization\\s*[:=]\\s*)(?!\\s*[\"']?bearer\\s+)([\"']?)(?![A-Za-z][A-Za-z0-9._~-]*\\s+)[^\\s,;}&\\r\\n]+\\2");
     private static final Pattern BEARER_PATTERN = Pattern.compile("(?i)(bearer\\s+)[A-Za-z0-9._~+\\-/]+=*");
     private static final Pattern SECRET_KEY_VALUE_PATTERN = Pattern.compile(
             "(?i)((?:\"|')?\\b(?:password|passwd|pwd|token|api[_-]?token|dataspec[_-]?token|api[_-]?key|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|plain[_-]?token|token[_-]?hash|jdbc[_-]?url|connection[_-]?string|dsn)\\b(?:\"|')?\\s*[:=]\\s*)([\"']?)[^\\s\"',;}&]+\\2");
@@ -65,8 +68,10 @@ public final class SensitiveDataSanitizer {
         }
         String value = redactExplicitSecrets(text, explicitSecrets);
         value = JDBC_PATTERN.matcher(value).replaceAll("jdbc:" + REDACTION);
+        value = HTTP_URL_USERINFO_PATTERN.matcher(value).replaceAll("$1");
         value = DSN_URI_PATTERN.matcher(value).replaceAll("$1" + REDACTION);
         value = AUTHORIZATION_BEARER_PATTERN.matcher(value).replaceAll("$1" + REDACTION);
+        value = AUTHORIZATION_SCHEME_VALUE_PATTERN.matcher(value).replaceAll("$1$2$3" + REDACTION + "$2");
         value = AUTHORIZATION_VALUE_PATTERN.matcher(value).replaceAll("$1$2" + REDACTION + "$2");
         value = BEARER_PATTERN.matcher(value).replaceAll("$1" + REDACTION);
         value = SECRET_KEY_VALUE_PATTERN.matcher(value).replaceAll("$1$2" + REDACTION + "$2");

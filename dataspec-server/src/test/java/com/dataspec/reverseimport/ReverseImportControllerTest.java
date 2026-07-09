@@ -2,6 +2,7 @@ package com.dataspec.reverseimport;
 
 import com.dataspec.reverseimport.controller.ReverseImportController;
 import com.dataspec.reverseimport.entity.ReverseImportDecision;
+import com.dataspec.reverseimport.model.DatabaseCommentPatchPlan;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
@@ -36,6 +37,7 @@ class ReverseImportControllerTest {
         ReverseImportCompareResult compare = new ReverseImportCompareResult();
         DatabaseMetadataBrowser browser = new DatabaseMetadataBrowser();
         DatabaseSchemaChangePlan schemaPlan = new DatabaseSchemaChangePlan();
+        DatabaseCommentPatchPlan commentPlan = new DatabaseCommentPatchPlan();
         DatabaseMetadataScanReq scanReq = new DatabaseMetadataScanReq();
         DatabaseMetadataScanResult scanResult = new DatabaseMetadataScanResult();
         when(databaseService.exportDump(connectionReq)).thenReturn(dump);
@@ -43,6 +45,7 @@ class ReverseImportControllerTest {
         when(databaseService.compareDump(dumpReq)).thenReturn(compare);
         when(databaseService.browse(connectionReq)).thenReturn(browser);
         when(databaseService.planSchemaChange(connectionReq)).thenReturn(schemaPlan);
+        when(databaseService.planCommentPatch(connectionReq)).thenReturn(commentPlan);
         when(databaseService.scan(scanReq)).thenReturn(scanResult);
 
         assertThat(controller.exportDatabaseDump(connectionReq).getData()).isSameAs(dump);
@@ -50,6 +53,7 @@ class ReverseImportControllerTest {
         assertThat(controller.compareDump(dumpReq).getData()).isSameAs(compare);
         assertThat(controller.browseDatabaseMetadata(connectionReq).getData()).isSameAs(browser);
         assertThat(controller.planDatabaseSchemaChange(connectionReq).getData()).isSameAs(schemaPlan);
+        assertThat(controller.planDatabaseCommentPatch(connectionReq).getData()).isSameAs(commentPlan);
         assertThat(controller.scanDatabaseMetadata(scanReq).getData()).isSameAs(scanResult);
 
         verify(databaseService).exportDump(connectionReq);
@@ -57,6 +61,7 @@ class ReverseImportControllerTest {
         verify(databaseService).compareDump(dumpReq);
         verify(databaseService).browse(connectionReq);
         verify(databaseService).planSchemaChange(connectionReq);
+        verify(databaseService).planCommentPatch(connectionReq);
         verify(databaseService).scan(scanReq);
     }
 

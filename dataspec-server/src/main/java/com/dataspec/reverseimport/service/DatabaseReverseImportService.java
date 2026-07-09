@@ -3,6 +3,7 @@ package com.dataspec.reverseimport.service;
 import com.dataspec.coverage.model.FieldCoverageReport;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
+import com.dataspec.reverseimport.model.DatabaseCommentPatchPlan;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
@@ -48,6 +49,11 @@ public interface DatabaseReverseImportService {
      * 只读生成数据库 schema change plan，复用 schema metadata 与标准比对结果；不执行迁移、不写源库、不保存凭据。
      */
     DatabaseSchemaChangePlan planSchemaChange(DatabaseConnectionReq req);
+
+    /**
+     * 只读生成数据库 COMMENT 回写计划，复用 schema metadata、标准字段比对和表模板注释；不执行 SQL、不写源库或标准库。
+     */
+    DatabaseCommentPatchPlan planCommentPatch(DatabaseConnectionReq req);
 
     FieldCoverageReport coverage(DatabaseConnectionReq req);
 

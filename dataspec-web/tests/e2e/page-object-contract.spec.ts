@@ -51,6 +51,11 @@ test('page objects expose stable actions for core browser workflows', async ({ p
     await reverseImport.expectCandidateRow(/public\.user_order\.buyer_mobile.*买家手机号/)
   })
 
+  await test.step(reverseImport.actionNames.generateCommentPlan, async () => {
+    await reverseImport.generateCommentPlan()
+    await reverseImport.expectCommentPlan(/COMMENT 回写计划[\s\S]*buyer_mobile[\s\S]*需补充标准字段 COMMENT/)
+  })
+
   const fields = new FieldLibraryPage(page)
   await test.step(fields.actionNames.searchField, async () => {
     await fields.goto()

@@ -35,6 +35,8 @@ test('defines shared stable selectors for high-frequency browser workflows', () 
     stableTestIds.reverseImport.databaseModeTab,
     stableTestIds.reverseImport.databaseNameInput,
     stableTestIds.reverseImport.metadataBrowserPanel,
+    stableTestIds.reverseImport.commentPlanButton,
+    stableTestIds.reverseImport.commentPlanPanel,
     stableTestIds.reverseImport.fieldCandidatesTab,
     stableTestIds.fields.page,
     stableTestIds.fields.searchInput,

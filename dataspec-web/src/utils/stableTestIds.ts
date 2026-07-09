@@ -25,7 +25,8 @@ export const aiActionNames = {
   },
   reverseImport: {
     browseDatabaseMetadata: 'reverseImport.browseDatabaseMetadata',
-    generatePreview: 'reverseImport.generatePreview'
+    generatePreview: 'reverseImport.generatePreview',
+    generateCommentPlan: 'reverseImport.generateCommentPlan'
   },
   fields: {
     searchField: 'fields.searchField'
@@ -69,6 +70,8 @@ export const stableTestIds = {
     tableChecklist: 'reverseImport.tableChecklist',
     browseMetadataButton: 'reverseImport.browseMetadataButton',
     metadataBrowserPanel: 'reverseImport.metadataBrowserPanel',
+    commentPlanButton: 'reverseImport.commentPlanButton',
+    commentPlanPanel: 'reverseImport.commentPlanPanel',
     generatePreviewButton: 'reverseImport.generatePreviewButton',
     fieldCandidatesTab: 'reverseImport.fieldCandidatesTab',
     previewTabs: 'reverseImport.previewTabs'

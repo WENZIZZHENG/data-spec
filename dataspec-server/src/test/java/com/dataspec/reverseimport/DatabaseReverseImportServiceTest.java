@@ -10,6 +10,8 @@ import com.dataspec.reverseimport.entity.ReverseImportBatch;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseConnectionSecurityDiagnostic;
+import com.dataspec.reverseimport.model.DatabaseCommentPatchPlan;
+import com.dataspec.reverseimport.model.DatabaseCommentPatchPlanItem;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataCacheMode;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
@@ -37,6 +39,10 @@ import com.dataspec.reverseimport.service.impl.DatabaseMetadataCacheServiceImpl;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.reverseimport.service.impl.DatabaseReverseImportServiceImpl;
 import com.dataspec.reverseimport.service.impl.ReverseImportServiceImpl;
+import com.dataspec.lint.model.ColumnDef;
+import com.dataspec.lint.model.TableDef;
+import com.dataspec.template.entity.Template;
+import com.dataspec.template.service.TemplateService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.junit.jupiter.api.Test;
@@ -1099,6 +1105,174 @@ class DatabaseReverseImportServiceTest {
     }
 
     @Test
+    void commentPatchPlan_buildsPostgresqlReadonlySqlEvidenceAndRedactsSecrets() throws Exception {
+        prepareCommentMetadataDatabase();
+        FieldService fieldService = mock(FieldService.class);
+        Field phone = standardField("phone", "mobile");
+        phone.setDisplayName("手机号");
+        phone.setComment("买家手机号");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(phone));
+        TemplateService templateService = mock(TemplateService.class);
+        when(templateService.listByProject(1L)).thenReturn(List.of(template("USER_ORDER", "用户订单标准")));
+        InMemoryDatabaseMetadataCacheRepository repository = new InMemoryDatabaseMetadataCacheRepository();
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> openMetadataConnection(),
+                cacheService(repository),
+                templateService);
+        DatabaseConnectionReq req = connectionReq();
+        req.setPassword("top-secret");
+        req.setTableNames(List.of("USER_ORDER"));
+
+        DatabaseCommentPatchPlan plan = service.planCommentPatch(req);
+
+        assertThat(plan.getKind()).isEqualTo("dataspec-database-comment-patch-plan");
+        assertThat(plan.getProjectId()).isEqualTo(1L);
+        assertThat(plan.getDatabaseType()).isEqualTo("POSTGRESQL");
+        assertThat(plan.getMetadataFingerprint()).hasSize(64);
+        assertThat(plan.getPlanHash()).hasSize(64);
+        assertThat(plan.getSafety().getReadOnly()).isTrue();
+        assertThat(plan.getSafety().getWritesSourceDatabase()).isFalse();
+        assertThat(plan.getSafety().getWritesProject()).isFalse();
+        assertThat(repository.entries).isEmpty();
+        assertThat(plan.getEvidence().getSafetyFlags()).contains("noMetadataCacheWrites");
+        assertThat(plan.getEvidence().getNormalizedInputSummary()).contains("metadataCacheMode=BYPASS");
+        assertThat(plan.getSummary().getChangedCount()).isEqualTo(2);
+        assertThat(plan.getSummary().getExecutableChangeCount()).isEqualTo(2);
+        assertThat(plan.getDialectSupport().getTableCommentSqlSupported()).isTrue();
+        assertThat(plan.getDialectSupport().getColumnCommentSqlSupported()).isTrue();
+        assertThat(plan.getEvidence().getMetadataFingerprint()).isEqualTo(plan.getMetadataFingerprint());
+        assertThat(plan.getEvidence().getStandardReferences()).contains("template:USER_ORDER", "field:phone");
+        assertThat(plan.getNextActions()).anyMatch(action -> action.contains("dry-run SQL"));
+
+        DatabaseCommentPatchPlanItem tableItem = item(plan, "TABLE", "USER_ORDER", null);
+        assertThat(tableItem.getStatus()).isEqualTo("CHANGED");
+        assertThat(tableItem.getCurrentComment()).isEqualTo("旧订单表");
+        assertThat(tableItem.getTargetComment()).isEqualTo("用户订单标准");
+        assertThat(tableItem.getDryRunSql()).contains("COMMENT ON TABLE", "USER_ORDER", "用户订单标准");
+        assertThat(tableItem.getRollbackHint()).contains("旧订单表");
+
+        DatabaseCommentPatchPlanItem columnItem = item(plan, "COLUMN", "USER_ORDER", "PHONE");
+        assertThat(columnItem.getStatus()).isEqualTo("CHANGED");
+        assertThat(columnItem.getCurrentComment()).isEqualTo("旧手机号");
+        assertThat(columnItem.getTargetComment()).isEqualTo("买家手机号");
+        assertThat(columnItem.getDryRunSql()).contains("COMMENT ON COLUMN", "PHONE", "买家手机号");
+        assertThat(columnItem.getEvidenceRefs()).contains("field:phone");
+
+        String json = objectMapper.writeValueAsString(plan);
+        assertThat(json).doesNotContain("top-secret", "jdbc:", "token123", "Authorization");
+    }
+
+    @Test
+    void commentPatchPlan_marksMysqlColumnUnsupportedButKeepsTableSqlSafe() throws Exception {
+        FieldService fieldService = mock(FieldService.class);
+        Field phone = standardField("phone", "mobile");
+        phone.setComment("买家手机号");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(phone));
+        TemplateService templateService = mock(TemplateService.class);
+        when(templateService.listByProject(1L)).thenReturn(List.of(template("user_order", "用户订单标准")));
+        DatabaseSchemaDump dump = dumpWithComments("MYSQL", "shop", null, "user_order", "旧订单表", "phone", "旧手机号");
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> mock(Connection.class),
+                new StaticDatabaseMetadataAdapter(dump),
+                templateService);
+        DatabaseConnectionReq req = connectionReq();
+        req.setDatabaseType("mysql");
+        req.setDatabaseName("shop");
+        req.setSchemaName(null);
+        req.setTableNames(List.of("user_order"));
+
+        DatabaseCommentPatchPlan plan = service.planCommentPatch(req);
+
+        assertThat(plan.getRiskLevel()).isEqualTo("MEDIUM");
+        assertThat(plan.getSummary().getChangedCount()).isEqualTo(1);
+        assertThat(plan.getSummary().getUnsupportedCount()).isEqualTo(1);
+        assertThat(plan.getDryRunSql()).contains("ALTER TABLE `user_order` COMMENT = '用户订单标准';");
+        assertThat(plan.getDryRunSql()).doesNotContain("MODIFY COLUMN");
+        assertThat(plan.getDialectSupport().getTableCommentSqlSupported()).isTrue();
+        assertThat(plan.getDialectSupport().getColumnCommentSqlSupported()).isFalse();
+        DatabaseCommentPatchPlanItem columnItem = item(plan, "COLUMN", "user_order", "phone");
+        assertThat(columnItem.getStatus()).isEqualTo("UNSUPPORTED");
+        assertThat(columnItem.getBlockedReasons()).anyMatch(reason -> reason.contains("完整列定义"));
+        assertThat(columnItem.getDryRunSql()).isBlank();
+    }
+
+    @Test
+    void commentPatchPlan_escapesMysqlBackslashAndQuoteInTableCommentSql() throws Exception {
+        FieldService fieldService = mock(FieldService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of());
+        TemplateService templateService = mock(TemplateService.class);
+        String targetComment = "安全\\'; DROP TABLE audit_log; --";
+        when(templateService.listByProject(1L)).thenReturn(List.of(template("user_order", targetComment)));
+        DatabaseSchemaDump dump = dumpWithComments("MYSQL", "shop", null, "user_order", "旧订单表", "phone", "旧手机号");
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> mock(Connection.class),
+                new StaticDatabaseMetadataAdapter(dump),
+                templateService);
+        DatabaseConnectionReq req = connectionReq();
+        req.setDatabaseType("mysql");
+        req.setDatabaseName("shop");
+        req.setSchemaName(null);
+        req.setTableNames(List.of("user_order"));
+
+        DatabaseCommentPatchPlan plan = service.planCommentPatch(req);
+
+        DatabaseCommentPatchPlanItem tableItem = item(plan, "TABLE", "user_order", null);
+        assertThat(tableItem.getDryRunSql()).contains("安全\\\\''; DROP TABLE audit_log; --");
+        assertThat(tableItem.getDryRunSql()).doesNotContain("安全\\'; DROP TABLE audit_log; --");
+    }
+
+    @Test
+    void commentPatchPlan_returnsNoOpWhenCommentsAlreadyMatchStandards() throws Exception {
+        FieldService fieldService = mock(FieldService.class);
+        Field phone = standardField("phone", "mobile");
+        phone.setComment("买家手机号");
+        when(fieldService.listByProject(1L)).thenReturn(List.of(phone));
+        TemplateService templateService = mock(TemplateService.class);
+        when(templateService.listByProject(1L)).thenReturn(List.of(template("USER_ORDER", "用户订单标准")));
+        DatabaseSchemaDump dump = dumpWithComments("POSTGRESQL", "demo", "PUBLIC", "USER_ORDER", "用户订单标准", "PHONE", "买家手机号");
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                req -> mock(Connection.class),
+                new StaticDatabaseMetadataAdapter(dump),
+                templateService);
+        DatabaseConnectionReq req = connectionReq();
+        req.setTableNames(List.of("USER_ORDER"));
+
+        DatabaseCommentPatchPlan plan = service.planCommentPatch(req);
+
+        assertThat(plan.getRiskLevel()).isEqualTo("SAFE");
+        assertThat(plan.getSummary().getNoOpCount()).isEqualTo(2);
+        assertThat(plan.getSummary().getExecutableChangeCount()).isZero();
+        assertThat(plan.getDryRunSql()).contains("no comment changes");
+        assertThat(plan.getItems()).extracting(DatabaseCommentPatchPlanItem::getStatus)
+                .containsOnly("NO_OP");
+    }
+
+    @Test
+    void commentPatchPlanModelsExposeOpenApiDescriptions() throws Exception {
+        assertSchemaDescription(DatabaseCommentPatchPlan.class);
+        assertSchemaDescription(com.dataspec.reverseimport.model.DatabaseCommentPatchPlanSummary.class);
+        assertSchemaDescription(DatabaseCommentPatchPlanItem.class);
+        assertSchemaDescription(com.dataspec.reverseimport.model.DatabaseCommentDialectSupport.class);
+        assertSchemaDescription(com.dataspec.reverseimport.model.DatabaseCommentPatchPlanEvidence.class);
+        assertSchemaDescription(com.dataspec.reverseimport.model.DatabaseCommentPatchPlanSafety.class);
+        assertSchemaDescription(DatabaseCommentPatchPlan.class, "dryRunSql");
+        assertSchemaDescription(DatabaseCommentPatchPlan.class, "dialectSupport");
+        assertSchemaDescription(DatabaseCommentPatchPlan.class, "riskLevel");
+        assertSchemaDescription(DatabaseCommentPatchPlan.class, "rollbackHint");
+        assertSchemaDescription(DatabaseCommentPatchPlan.class, "evidence");
+        assertSchemaDescription(DatabaseCommentPatchPlan.class, "safety");
+        assertSchemaDescription(DatabaseCommentPatchPlanItem.class, "commentDiff");
+        assertSchemaDescription(DatabaseCommentPatchPlanItem.class, "currentComment");
+        assertSchemaDescription(DatabaseCommentPatchPlanItem.class, "targetComment");
+        assertSchemaDescription(DatabaseCommentPatchPlanItem.class, "dryRunSql");
+        assertSchemaDescription(DatabaseCommentPatchPlanItem.class, "dialectSupport");
+    }
+
+    @Test
     void databaseMetadataScanJobModelsExposeOpenApiDescriptions() throws Exception {
         assertSchemaDescription(DatabaseMetadataScanReq.class, "scanJobId");
         assertSchemaDescription(DatabaseMetadataScanReq.class, "resumeCursor");
@@ -1200,6 +1374,13 @@ class DatabaseReverseImportServiceTest {
     private DatabaseReverseImportServiceImpl service(FieldService fieldService,
                                                     DatabaseReverseImportServiceImpl.ConnectionProvider connectionProvider,
                                                     DatabaseMetadataCacheServiceImpl cacheService) {
+        return service(fieldService, connectionProvider, cacheService, null);
+    }
+
+    private DatabaseReverseImportServiceImpl service(FieldService fieldService,
+                                                    DatabaseReverseImportServiceImpl.ConnectionProvider connectionProvider,
+                                                    DatabaseMetadataCacheServiceImpl cacheService,
+                                                    TemplateService templateService) {
         ReverseImportServiceImpl reverseImportService = new ReverseImportServiceImpl(
                 new com.dataspec.lint.engine.SqlParserService(),
                 fieldService,
@@ -1209,7 +1390,25 @@ class DatabaseReverseImportServiceTest {
                 new FieldCoverageServiceImpl(fieldService, new com.dataspec.lint.engine.SqlParserService()),
                 connectionProvider,
                 new com.dataspec.reverseimport.service.impl.JdbcDatabaseMetadataAdapter(),
-                cacheService);
+                cacheService,
+                templateService);
+    }
+
+    private DatabaseReverseImportServiceImpl service(FieldService fieldService,
+                                                    DatabaseReverseImportServiceImpl.ConnectionProvider connectionProvider,
+                                                    DatabaseMetadataAdapter adapter,
+                                                    TemplateService templateService) {
+        ReverseImportServiceImpl reverseImportService = new ReverseImportServiceImpl(
+                new com.dataspec.lint.engine.SqlParserService(),
+                fieldService,
+                mock(ReverseImportSourceService.class));
+        return new DatabaseReverseImportServiceImpl(
+                reverseImportService,
+                new FieldCoverageServiceImpl(fieldService, new com.dataspec.lint.engine.SqlParserService()),
+                connectionProvider,
+                adapter,
+                null,
+                templateService);
     }
 
     private DatabaseMetadataCacheServiceImpl cacheService(DatabaseMetadataCacheRepository repository) {
@@ -1231,6 +1430,21 @@ class DatabaseReverseImportServiceTest {
                     )
                     """);
             statement.execute("CREATE INDEX idx_user_order_phone ON user_order(phone)");
+        }
+    }
+
+    private void prepareCommentMetadataDatabase() throws Exception {
+        try (Connection connection = openMetadataConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS user_order");
+            statement.execute("""
+                    CREATE TABLE user_order (
+                        id BIGINT NOT NULL,
+                        phone VARCHAR(20)
+                    )
+                    """);
+            statement.execute("COMMENT ON TABLE user_order IS '旧订单表'");
+            statement.execute("COMMENT ON COLUMN user_order.phone IS '旧手机号'");
         }
     }
 
@@ -1421,6 +1635,57 @@ class DatabaseReverseImportServiceTest {
         return field;
     }
 
+    private Template template(String tablePrefix, String description) {
+        Template template = new Template();
+        template.setProjectId(1L);
+        template.setName(tablePrefix + "模板");
+        template.setTablePrefix(tablePrefix);
+        template.setDescription(description);
+        return template;
+    }
+
+    private DatabaseSchemaDump dumpWithComments(String databaseType,
+                                                String databaseName,
+                                                String schemaName,
+                                                String tableName,
+                                                String tableComment,
+                                                String columnName,
+                                                String columnComment) {
+        DatabaseSchemaDump dump = new DatabaseSchemaDump();
+        dump.setProjectId(1L);
+        dump.setDatabaseType(databaseType);
+        dump.setDatabaseName(databaseName);
+        dump.setSchemaName(schemaName);
+        DatabaseSchemaTable table = new DatabaseSchemaTable();
+        table.setSchemaName(schemaName);
+        table.setTableName(tableName);
+        table.setTableType("TABLE");
+        table.setComment(tableComment);
+        com.dataspec.reverseimport.model.DatabaseSchemaColumn column = new com.dataspec.reverseimport.model.DatabaseSchemaColumn();
+        column.setColumnName(columnName);
+        column.setDataType("VARCHAR(20)");
+        column.setNullable(true);
+        column.setComment(columnComment);
+        column.setOrdinalPosition(1);
+        table.getColumns().add(column);
+        dump.getTables().add(table);
+        return dump;
+    }
+
+    private DatabaseCommentPatchPlanItem item(DatabaseCommentPatchPlan plan,
+                                              String objectType,
+                                              String tableName,
+                                              String columnName) {
+        return plan.getItems().stream()
+                .filter(candidate -> objectType.equals(candidate.getObjectType()))
+                .filter(candidate -> tableName.equals(candidate.getTableName()))
+                .filter(candidate -> columnName == null
+                        ? candidate.getColumnName() == null
+                        : columnName.equals(candidate.getColumnName()))
+                .findFirst()
+                .orElseThrow();
+    }
+
     private void attachDryRunEvidence(DatabaseImportReq req, List<FieldCandidate> candidates) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("operation", "reverse-import:database-import");
@@ -1496,6 +1761,50 @@ class DatabaseReverseImportServiceTest {
 
         private String key(Long projectId, String sourceScopeHash, String schemaName, String tableName) {
             return projectId + "|" + sourceScopeHash + "|" + schemaName + "|" + tableName;
+        }
+    }
+
+    private static class StaticDatabaseMetadataAdapter implements DatabaseMetadataAdapter {
+
+        private final DatabaseSchemaDump dump;
+
+        private StaticDatabaseMetadataAdapter(DatabaseSchemaDump dump) {
+            this.dump = dump;
+        }
+
+        @Override
+        public List<DatabaseTableInfo> listTables(Connection connection, DatabaseConnectionReq req) {
+            return dump.getTables().stream()
+                    .map(table -> new DatabaseTableInfo(
+                            table.getSchemaName(),
+                            table.getTableName(),
+                            table.getTableType(),
+                            table.getComment()))
+                    .toList();
+        }
+
+        @Override
+        public DatabaseSchemaDump exportDump(Connection connection, DatabaseConnectionReq req) {
+            return dump;
+        }
+
+        @Override
+        public List<TableDef> toTableDefs(Long projectId, DatabaseSchemaDump dump) {
+            return dump.getTables().stream()
+                    .map(table -> TableDef.builder()
+                            .name(table.getTableName())
+                            .comment(table.getComment())
+                            .columns(table.getColumns().stream()
+                                    .map(column -> ColumnDef.builder()
+                                            .name(column.getColumnName())
+                                            .dataType(column.getDataType())
+                                            .nullable(Boolean.TRUE.equals(column.getNullable()))
+                                            .defaultValue(column.getDefaultValue())
+                                            .comment(column.getComment())
+                                            .build())
+                                    .toList())
+                            .build())
+                    .toList();
         }
     }
 

@@ -55,6 +55,35 @@ test('bundled fixtures include schema plan readonly contract', async () => {
   assert.ok(command.recommendedNextActions.some((item) => item.includes('password-env')))
 })
 
+test('bundled fixtures include comment plan preview readonly contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'comment-plan-preview')
+
+  assert.ok(command)
+  assert.equal(command.command, 'comment-plan preview --project <id> --database-type <postgresql|mysql> --host <host> --database <name> --username <user> --table <name> --format json')
+  assert.deepEqual(command.requiredOptions, ['project', 'database-type', 'host', 'database', 'username', 'table'])
+  assert.ok(command.optionalOptions.includes('metadata-cache-mode'))
+  assert.ok(command.optionalOptions.includes('password-env'))
+  assert.ok(command.optionalOptions.includes('format'))
+  assert.ok(command.outputShape.includes('metadataFingerprint'))
+  assert.ok(command.outputShape.includes('planHash'))
+  assert.ok(command.outputShape.includes('summary.executableChangeCount'))
+  assert.ok(command.outputShape.includes('summary.unsupportedCount'))
+  assert.ok(command.outputShape.includes('items[]'))
+  assert.ok(command.outputShape.includes('items[].commentDiff'))
+  assert.ok(command.outputShape.includes('items[].dryRunSql'))
+  assert.ok(command.outputShape.includes('dialectSupport.columnCommentSqlSupported'))
+  assert.ok(command.outputShape.includes('safety.readOnly'))
+  assert.equal(command.safety.readOnly, true)
+  assert.equal(command.safety.writesProject, false)
+  assert.equal(command.safety.writesSourceDatabase, false)
+  assert.equal(command.safety.requiresDryRun, true)
+  assert.equal(command.safety.requiresIdempotencyKey, false)
+  assert.ok(command.successExample.output.safety.readOnly)
+  assert.ok(command.failureExample.diagnostic.message.includes('--table'))
+  assert.ok(command.recommendedNextActions.some((item) => item.includes('dry-run SQL') || item.includes('password-env')))
+})
+
 test('bundled fixtures include index-refs readonly contract', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'index-refs')
@@ -481,6 +510,16 @@ test('fixture checker rejects incomplete MCP tool entries', async () => {
 test('fixture checker rejects raw secret-like examples', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   fixture.cliCommands[0].successExample.command = 'node tools/dataspec-cli.mjs doctor --server https://user:pass@dataspec.local'
+
+  const result = await validateContractFixtures({ fixture })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'SECRET_LIKE_VALUE'))
+})
+
+test('fixture checker rejects non bearer authorization examples', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  fixture.cliCommands[0].successExample.output.message = 'Authorization: Basic raw-basic-secret'
 
   const result = await validateContractFixtures({ fixture })
 

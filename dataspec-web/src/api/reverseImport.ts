@@ -4,6 +4,7 @@ import type {
   DatabaseConnectionReq,
   DatabaseImportSourceContext,
   DatabaseConnectionResult,
+  DatabaseCommentPatchPlan,
   DatabaseImportResult,
   DatabaseMetadataBrowser,
   DatabaseMetadataScanReq,
@@ -51,6 +52,11 @@ export function compareDatabaseReverseImport(data: DatabaseConnectionReq) {
 /** 只读生成数据库 schema change plan，不执行迁移、不保存数据库密码。 */
 export function planDatabaseSchemaChange(data: DatabaseConnectionReq) {
   return request.post<unknown, DatabaseSchemaChangePlan>('/reverse-import/database/schema-plan', data)
+}
+
+/** 只读生成数据库 COMMENT 回写计划，不执行 SQL、不保存数据库密码。 */
+export function planDatabaseCommentPatch(data: DatabaseConnectionReq) {
+  return request.post<unknown, DatabaseCommentPatchPlan>('/reverse-import/database/comment-plan', data)
 }
 
 export function importDatabaseCandidates(

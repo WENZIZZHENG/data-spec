@@ -1827,12 +1827,13 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不做全量视觉回归，不要求所有组件立刻补选择器；第一版先覆盖主路径和高频故障页。
 
 ### P6-183：标准字段到数据库 COMMENT 回写计划
-- 状态：待办。
+- 状态：已完成第一版，OpenSpec 已归档到 `openspec/changes/archive/2026-07-09-add-database-comment-patch-plan/`。
 - 为什么做：反向导入能把现有数据库补进 DataSpec，但反过来，当字段标准被修正后，源数据库的表注释和列注释也可能长期落后；AI 需要一份可审阅的 COMMENT 回写计划，而不是直接生成不可控的修改 SQL。
 - 已有基础：已有数据库直连 metadata、schema dump、二次比对、字段来源批次、schema plan 预览、DDL 生成和 SQL/DDL 验证沙箱待办。
-- 缺口：缺少 commentPatchPlan、currentComment、targetComment、commentDiff、dryRunSql、dialectSupport、riskLevel 和 rollbackHint；目前只能导入注释，不能稳定输出“标准 -> 数据库注释”的只读预览。
+- 已完成能力：新增只读 COMMENT patch plan API `/api/reverse-import/database/comment-plan`、CLI `comment-plan preview` 和反向导入页预览入口；响应包含 `commentPatchPlan`、`currentComment`、`targetComment`、`commentDiff`、`dryRunSql`、`dialectSupport`、`riskLevel`、`rollbackHint`、`evidence` 和 `nextActions`，并默认不执行 SQL、不写源库、不保存连接凭据。
 - 参考项目：`bytebase/bytebase` 的数据库变更预览、`ariga/atlas` 的 schema diff 和 `k1LoW/tbls` 的数据库文档化；只借鉴注释差异表达，不默认写源数据库。
 - 落地产物：新增 COMMENT 回写计划 API/CLI/前端预览；按 PostgreSQL/MySQL 方言生成 COMMENT ON 或 ALTER COMMENT 草稿，标记 no-op、missing、changed 和 unsupported；支持导出 SQL 与 JSON 证据。
+- 验证证据：`mvn test` 569 pass；`pnpm test` 171 pass；`pnpm build` 通过，保留既有第三方 Rolldown/chunk warning；`pnpm gen:api` + `pnpm check:api` 确认 `schema.ts` 最新；`pnpm exec playwright test tests/e2e/page-object-contract.spec.ts` 1 pass；`node --test tools/*.test.mjs` 376 pass / 2 skipped；`openspec validate add-database-comment-patch-plan --strict` valid；archive 后 `openspec validate --all` 124 passed；`git diff --check` 通过。独立评审 agent `019f470b-0329-7982-b8c4-851e5625c8ef` 与复评 agent `019f4721-4b8f-7bd2-9481-6733053bf840` 均已完成并关闭，Important findings 已修复。
 - 验收标准：连接数据库后能看到 DataSpec 标准注释与当前库注释差异；默认只输出可审阅计划和 dry-run SQL，不执行数据库写入；计划可进入证据包或标准变更 Patch Plan；输出内容不包含密码、token、完整 JDBC URL 或业务数据行。
 - 边界：第一版只处理表/列注释，不处理表重命名、字段重命名、索引调整或数据迁移；真实执行仍交给用户或后续显式 apply 流程。
 

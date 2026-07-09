@@ -324,6 +324,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/standard-maintenance/workflows/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["plan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/standard-health/snapshots": {
         parameters: {
             query?: never;
@@ -702,6 +718,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["compareDatabase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reverse-import/database/comment-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["planDatabaseCommentPatch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1172,6 +1204,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/coverage/scan-partial": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reportScanPartial"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/coverage/dump": {
         parameters: {
             query?: never;
@@ -1198,22 +1246,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["reportDatabase"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/coverage/scan-partial": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["reportScanPartial"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1483,7 +1515,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["plan"];
+        get: operations["plan_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3406,6 +3438,164 @@ export interface components {
             data?: components["schemas"]["StandardReusePackPlan"];
             error?: components["schemas"]["ErrorDetail"];
         };
+        /** @description 标准维护 workflow dry-run 计划请求；只携带来源筛选和页面上下文，不触发写入。 */
+        StandardMaintenanceWorkflowPlanReq: {
+            /**
+             * Format: int64
+             * @description 计划所属 DataSpec 项目 ID。
+             */
+            projectId: number;
+            /** @description 维护来源类型，例如 STANDARD_CANDIDATE、FIELD_QUALITY、FIELD_COVERAGE 或 AI_TASK_FAILURE。 */
+            sourceType?: string;
+            /** @description 来源对象 ID 列表，例如候选 ID、字段 ID 或任务运行 ID；为空时按当前来源摘要生成计划。 */
+            sourceIds?: number[];
+            /** @description 字段质量问题代码筛选；仅用于生成计划摘要，不直接修复字段。 */
+            issueCodes?: string[];
+            /** @description 覆盖率状态筛选，例如 UNMANAGED、POSSIBLE_DUPLICATE、MISSING_COMMENT。 */
+            coverageStatuses?: string[];
+            /** @description 来源报告完整性状态，例如 COMPLETE、PARTIAL、CANCELLED 或 FAILED。 */
+            sourceStatus?: string;
+            /**
+             * Format: int32
+             * @description 覆盖率来源中未纳入统计的失败表数量；只用于 evidence 摘要，不触发扫描或写入。
+             */
+            failedTableCount?: number;
+            /**
+             * Format: int32
+             * @description 覆盖率来源中跳过或未扫描表数量；只用于保留 partial 边界，不触发扫描或写入。
+             */
+            skippedTableCount?: number;
+            /**
+             * Format: int32
+             * @description 页面或调用方已知的待处理项数量；没有持久报告时用于生成证据摘要。
+             */
+            itemCount?: number;
+            /** @description 可返回给用户的来源页面 route；服务端会脱敏后再放入 evidence。 */
+            sourceRoute?: string;
+            /** @description 调用方补充的非敏感说明；服务端会脱敏并截断后用于计划描述。 */
+            note?: string;
+        };
+        RStandardMaintenanceWorkflowPlan: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardMaintenanceWorkflowPlan"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 标准维护 workflow 证据链接或安全摘要。 */
+        StandardMaintenanceWorkflowEvidenceLink: {
+            /** @description 来源能力，例如 standard-candidate-inbox 或 field-quality-scoring。 */
+            sourceCapability?: string;
+            /** @description 人类可读证据名称。 */
+            label?: string;
+            /** @description 可打开的 DataSpec 页面或 API 模板，不包含凭据。 */
+            targetRoute?: string;
+            /** @description 脱敏证据摘要。 */
+            summary?: string;
+            /**
+             * Format: int32
+             * @description 该证据代表的待处理项数量。
+             */
+            count?: number;
+        };
+        /** @description 标准维护 workflow dry-run 的执行状态摘要。 */
+        StandardMaintenanceWorkflowExecutionState: {
+            /** @description 当前状态：DRY_RUN、BLOCKED、WAITING_CONFIRMATION 或 READY_FOR_REVIEW。 */
+            status?: string;
+            /** @description 当前建议处理的步骤 ID。 */
+            currentStepId?: string;
+            /** @description 阻塞或失败后是否可以在补充上下文后重新生成计划。 */
+            retryable?: boolean;
+            /** @description 阻塞、partial 或失败来源说明；为空表示当前计划可继续人工执行。 */
+            blockedReason?: string;
+        };
+        /** @description 标准维护 workflow 对 Inbox 或诊断来源建议采取的动作摘要。 */
+        StandardMaintenanceWorkflowInboxAction: {
+            /** @description 稳定动作类型，例如 REVIEW_CANDIDATES、REPAIR_FIELD_QUALITY。 */
+            actionType?: string;
+            /** @description 触发动作的来源类型。 */
+            sourceType?: string;
+            /**
+             * Format: int32
+             * @description 本次计划覆盖的待处理项数量。
+             */
+            targetCount?: number;
+            /** @description 人类可读标题。 */
+            title?: string;
+            /** @description 脱敏动作说明，不包含 raw evidence 或凭据。 */
+            description?: string;
+            /** @description 执行写入或状态决策前是否必须人工确认。 */
+            confirmationRequired?: boolean;
+        };
+        /** @description 标准维护 workflow 的下一步提示。 */
+        StandardMaintenanceWorkflowNextAction: {
+            /** @description 稳定动作代码，供前端或 AI 判断下一步类型。 */
+            code?: string;
+            /** @description 提示级别：info、warning 或 error。 */
+            severity?: string;
+            /** @description 脱敏人类可读说明。 */
+            message?: string;
+            /** @description 可选命令或 API 模板，不包含凭据。 */
+            command?: string;
+            /** @description 是否可在处理后重试生成计划。 */
+            retryable?: boolean;
+        };
+        /** @description 标准维护 workflow dry-run 计划响应；该响应只描述计划，不执行写入。 */
+        StandardMaintenanceWorkflowPlan: {
+            /**
+             * Format: int64
+             * @description 计划所属项目 ID。
+             */
+            projectId?: number;
+            /** @description 本次 dry-run 计划 ID；不表示服务端持久化 workflow。 */
+            workflowId?: string;
+            inboxAction?: components["schemas"]["StandardMaintenanceWorkflowInboxAction"];
+            recipeBinding?: components["schemas"]["StandardMaintenanceWorkflowRecipeBinding"];
+            /** @description 按 precheck、review、execute、verify、archive 排列的计划步骤。 */
+            dryRunSteps?: components["schemas"]["StandardMaintenanceWorkflowStep"][];
+            executionState?: components["schemas"]["StandardMaintenanceWorkflowExecutionState"];
+            /** @description 未执行或中止时的安全回退说明。 */
+            undoHint?: string;
+            /** @description 支撑计划的脱敏证据链接和摘要。 */
+            evidenceLinks?: components["schemas"]["StandardMaintenanceWorkflowEvidenceLink"][];
+            /** @description 当前用户或 AI 可执行的下一步。 */
+            nextActions?: components["schemas"]["StandardMaintenanceWorkflowNextAction"][];
+        };
+        /** @description 标准维护 workflow 与 AI recipe/task-card 的绑定信息。 */
+        StandardMaintenanceWorkflowRecipeBinding: {
+            /** @description workflow recipe id，第一版固定为 standard-maintenance。 */
+            recipeId?: string;
+            /**
+             * Format: int32
+             * @description recipe 契约版本，用于后续兼容升级。
+             */
+            recipeVersion?: number;
+            /** @description 脱敏来源参数，供 AI task-card 或 CLI 生成计划时复用。 */
+            sourceParameters?: {
+                [key: string]: Record<string, never>;
+            };
+            /** @description 可复制的本地 task-card 命令模板，不包含 token、password 或连接串。 */
+            taskCardCommand?: string;
+        };
+        /** @description 标准维护 workflow dry-run 步骤。 */
+        StandardMaintenanceWorkflowStep: {
+            /** @description 步骤稳定 ID，用于恢复当前位置。 */
+            stepId?: string;
+            /** @description 步骤阶段：precheck、review、execute、verify 或 archive。 */
+            phase?: string;
+            /** @description 人类可读步骤标题。 */
+            title?: string;
+            /** @description 脱敏步骤说明。 */
+            description?: string;
+            /** @description 推荐执行的页面、API 或命令模板；必须由用户或 AI 显式运行。 */
+            recommendedAction?: string;
+            /** @description 是否需要人工确认后才能执行推荐动作。 */
+            requiresConfirmation?: boolean;
+            /** @description 完成该步骤后应记录的证据摘要。 */
+            expectedEvidence?: string;
+            /** @description dry-run 步骤状态，第一版通常为 PENDING。 */
+            status?: string;
+        };
         StandardHealthCoverageInput: {
             /** Format: double */
             coverageRate?: number;
@@ -4198,6 +4388,39 @@ export interface components {
             data?: components["schemas"]["DatabaseSchemaChangePlan"];
             error?: components["schemas"]["ErrorDetail"];
         };
+        /** @description 数据库 metadata 采集作业限速边界；只影响 schema-only 扫描页大小和前端等待建议，不包含连接凭据。 */
+        DatabaseMetadataScanRateLimit: {
+            /**
+             * Format: int32
+             * @description 请求方希望单页最多读取的表数量；为空时只使用 pageSize 和服务端全局上限。
+             */
+            maxTablesPerPage?: number;
+            /**
+             * Format: int32
+             * @description 建议客户端两次继续扫描之间等待的毫秒数；服务端不会在请求线程内等待。
+             */
+            minDelayMs?: number;
+            /**
+             * Format: int32
+             * @description 原始请求 pageSize；由服务端回填，用于说明是否触发降限。
+             */
+            requestedPageSize?: number;
+            /**
+             * Format: int32
+             * @description 请求方传入的 maxTablesPerPage；由服务端回填，便于前端展示限速来源。
+             */
+            requestedMaxTablesPerPage?: number;
+            /**
+             * Format: int32
+             * @description 服务端全局允许的最大单页表数量。
+             */
+            maxPageSize?: number;
+            /**
+             * Format: int32
+             * @description 本次请求实际采用的 pageSize，已经应用请求限速和服务端上限。
+             */
+            effectivePageSize?: number;
+        };
         DatabaseMetadataScanReq: {
             /** Format: int64 */
             projectId: number;
@@ -4214,14 +4437,96 @@ export interface components {
             metadataCacheMode?: string;
             tableNames?: string[];
             scanId?: string;
+            /** @description 新版采集作业标识；兼容旧 scanId，不包含凭据且不承诺跨重启持久化。 */
             scanJobId?: string;
             cursor?: string;
+            /** @description 新版恢复 cursor；兼容旧 cursor，只保存短期偏移，不包含连接凭据。 */
             resumeCursor?: string;
             /** Format: int32 */
             pageSize?: number;
             cancel?: boolean;
+            /** @description 新版取消令牌；只作为取消动作标识，不携带连接密码、token、Authorization 或完整 DSN。 */
             cancelToken?: string;
             rateLimit?: components["schemas"]["DatabaseMetadataScanRateLimit"];
+        };
+        /** @description 可复制给 AI 的 metadata 采集作业证据；只描述 schema-only 边界、进度和安全标志。 */
+        DatabaseMetadataScanEvidence: {
+            /** @description 采集作业标识；不携带连接凭据，不承诺跨重启持久化。 */
+            scanJobId?: string;
+            /** @description 作业状态：RUNNING、PARTIAL、COMPLETED、CANCELLED 或 FAILED。 */
+            status?: string;
+            /**
+             * Format: int32
+             * @description 已处理表数量。
+             */
+            processedTableCount?: number;
+            /**
+             * Format: int32
+             * @description 失败表数量。
+             */
+            failedTableCount?: number;
+            /** @description schema 扫描范围摘要；不得包含连接串。 */
+            schemaScope?: string;
+            /** @description 表范围摘要，只保留表名，不包含业务数据行。 */
+            tableScope?: string[];
+            /** @description metadata cache fingerprint；为空表示未命中缓存证据。 */
+            metadataFingerprint?: string;
+            /** @description true 表示只读取 schema metadata，不读取业务数据行。 */
+            schemaOnly?: boolean;
+            /** @description true 表示本作业不会写入源数据库。 */
+            noSourceWrites?: boolean;
+            /** @description true 表示本作业不会写入 DataSpec 标准字段库。 */
+            noStandardWrites?: boolean;
+            /** @description true 表示 evidence 已脱敏，可复制给 AI。 */
+            safeForAiCopy?: boolean;
+            /** @description 基于当前作业状态生成的下一步验证或恢复动作；不得包含凭据。 */
+            nextActions?: string[];
+        };
+        /** @description 单张表 metadata 读取失败的脱敏摘要；只记录 schema/table、类别和安全错误摘要。 */
+        DatabaseMetadataScanFailureItem: {
+            /** @description 失败表所在 schema；MySQL 场景可能为空。 */
+            schemaName?: string;
+            /** @description 失败表名；来自 metadata，不包含业务数据行。 */
+            tableName?: string;
+            /** @description 失败类别，如 PERMISSION_DENIED、TIMEOUT、CONNECTION 或 UNKNOWN。 */
+            category?: string;
+            /** @description true 表示可在降低 pageSize 或等待后重试。 */
+            retryable?: boolean;
+            /** @description 脱敏错误摘要；不得包含 password、token、Authorization、JDBC URL 或 DSN。 */
+            message?: string;
+        };
+        /** @description 数据库 metadata 采集页的 bounded 失败摘要；用于展示失败表样例和安全下一步。 */
+        DatabaseMetadataScanFailureSummary: {
+            /**
+             * Format: int32
+             * @description 本页失败表数量。
+             */
+            failedTableCount?: number;
+            /** @description bounded 失败表示例，默认只保留前若干项。 */
+            failedTables?: components["schemas"]["DatabaseMetadataScanFailureItem"][];
+            /** @description 本页出现过的失败类别。 */
+            failureCategories?: string[];
+            /** @description true 表示至少一个失败项可重试。 */
+            retryable?: boolean;
+            /** @description 安全下一步动作，不包含凭据、完整连接串或业务数据行。 */
+            safeNextActions?: string[];
+        };
+        /** @description 数据库 metadata 采集作业的 schema-only 部分结果；区分成功、失败和跳过表，供预览或覆盖率只使用成功表。 */
+        DatabaseMetadataScanPartialResult: {
+            /** @description 成功读取到列和索引 metadata 的表结构；不包含业务数据行。 */
+            successfulTables?: components["schemas"]["DatabaseSchemaTable"][];
+            /** @description 成功读取 metadata 的表名，便于前端继续选择或生成覆盖率。 */
+            successfulTableNames?: string[];
+            /** @description 读取失败的表名；客户端不得静默导入或覆盖这些表。 */
+            failedTableNames?: string[];
+            /** @description 跳过的表名；通常表示未在本页扫描或用户未选择。 */
+            skippedTableNames?: string[];
+            /** @description true 表示成功表足以生成反向导入预览，但只限 successfulTableNames。 */
+            completeForPreview?: boolean;
+            /** @description true 表示成功表足以生成覆盖率报告，但报告必须标记 partial 边界。 */
+            completeForCoverage?: boolean;
+            /** @description true 表示整个扫描范围已完成且没有失败表。 */
+            complete?: boolean;
         };
         DatabaseMetadataScanProgress: {
             /** Format: int32 */
@@ -4231,77 +4536,6 @@ export interface components {
             /** Format: int32 */
             pageSize?: number;
             hasMore?: boolean;
-        };
-        DatabaseMetadataScanRateLimit: {
-            /** Format: int32 */
-            maxTablesPerPage?: number;
-            /** Format: int32 */
-            minDelayMs?: number;
-            /** Format: int32 */
-            requestedPageSize?: number;
-            /** Format: int32 */
-            requestedMaxTablesPerPage?: number;
-            /** Format: int32 */
-            maxPageSize?: number;
-            /** Format: int32 */
-            effectivePageSize?: number;
-        };
-        DatabaseMetadataScanSourcePressureHint: {
-            level?: string;
-            message?: string;
-            boundedByServerLimit?: boolean;
-            /** Format: int32 */
-            suggestedPageSize?: number;
-            safeNextActions?: string[];
-        };
-        DatabaseMetadataScanRetryPolicy: {
-            retryable?: boolean;
-            /** Format: int32 */
-            retryAfterMs?: number;
-            /** Format: int32 */
-            maxRetryAttempts?: number;
-            lowerPageSizeRecommended?: boolean;
-            useMetadataCacheRecommended?: boolean;
-        };
-        DatabaseMetadataScanPartialResult: {
-            successfulTables?: components["schemas"]["DatabaseSchemaTable"][];
-            successfulTableNames?: string[];
-            failedTableNames?: string[];
-            skippedTableNames?: string[];
-            completeForPreview?: boolean;
-            completeForCoverage?: boolean;
-            complete?: boolean;
-        };
-        DatabaseMetadataScanFailureItem: {
-            schemaName?: string;
-            tableName?: string;
-            category?: string;
-            retryable?: boolean;
-            message?: string;
-        };
-        DatabaseMetadataScanFailureSummary: {
-            /** Format: int32 */
-            failedTableCount?: number;
-            failedTables?: components["schemas"]["DatabaseMetadataScanFailureItem"][];
-            failureCategories?: string[];
-            retryable?: boolean;
-            safeNextActions?: string[];
-        };
-        DatabaseMetadataScanEvidence: {
-            scanJobId?: string;
-            status?: string;
-            /** Format: int32 */
-            processedTableCount?: number;
-            /** Format: int32 */
-            failedTableCount?: number;
-            schemaScope?: string;
-            tableScope?: string[];
-            metadataFingerprint?: string;
-            schemaOnly?: boolean;
-            noSourceWrites?: boolean;
-            noStandardWrites?: boolean;
-            safeForAiCopy?: boolean;
-            nextActions?: string[];
         };
         DatabaseMetadataScanResult: {
             kind?: string;
@@ -4313,14 +4547,21 @@ export interface components {
             databaseName?: string;
             schemaName?: string;
             scanId?: string;
+            /** @description 新版采集作业 ID；与 scanId 保持兼容，不携带连接凭据。 */
             scanJobId?: string;
+            /** @description 作业状态：RUNNING、PARTIAL、COMPLETED、CANCELLED 或 FAILED。 */
             status?: string;
             /** Format: int32 */
             estimatedTableCount?: number;
             cursor?: string;
+            /** @description 新版恢复 cursor；为空表示没有后续批次。 */
             resumeCursor?: string;
+            /** @description 新版取消令牌；仅用于本次轻量作业取消，不包含凭据。 */
             cancelToken?: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description 本次请求实际采用的 pageSize，已经应用请求限速和服务端上限。
+             */
             pageSize?: number;
             tables?: components["schemas"]["DatabaseTableInfo"][];
             rateLimit?: components["schemas"]["DatabaseMetadataScanRateLimit"];
@@ -4335,6 +4576,41 @@ export interface components {
             nextActions?: string[];
             metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
             evidence?: components["schemas"]["DatabaseMetadataScanEvidence"];
+        };
+        /** @description 数据库 metadata 采集作业的安全重试建议；只描述客户端下一步，不自动重放请求。 */
+        DatabaseMetadataScanRetryPolicy: {
+            /** @description true 表示可以由用户或 AI 显式发起继续或重试；服务端不会自动重放。 */
+            retryable?: boolean;
+            /**
+             * Format: int32
+             * @description 建议下一次继续或重试前等待的毫秒数。
+             */
+            retryAfterMs?: number;
+            /**
+             * Format: int32
+             * @description 建议的最大重试次数，避免对源库持续施压。
+             */
+            maxRetryAttempts?: number;
+            /** @description true 表示重试前建议降低 pageSize。 */
+            lowerPageSizeRecommended?: boolean;
+            /** @description true 表示可优先使用 metadata cache 或刷新缓存后再继续。 */
+            useMetadataCacheRecommended?: boolean;
+        };
+        /** @description 数据库 metadata 采集作业的源库压力提示；解释 pageSize 限制、重试等待和安全下一步。 */
+        DatabaseMetadataScanSourcePressureHint: {
+            /** @description 压力等级：INFO、WARNING 或 DANGER；第一版只用于提示，不自动阻塞只读扫描。 */
+            level?: string;
+            /** @description 可读说明；必须脱敏，不包含 JDBC URL、DSN、token、Authorization 或 password。 */
+            message?: string;
+            /** @description true 表示请求 pageSize 被服务端上限或 rateLimit 降低。 */
+            boundedByServerLimit?: boolean;
+            /**
+             * Format: int32
+             * @description 建议下一次继续扫描采用的 pageSize。
+             */
+            suggestedPageSize?: number;
+            /** @description 对用户和 AI 安全的下一步动作；不得包含连接凭据或业务数据行。 */
+            safeNextActions?: string[];
         };
         DatabaseMetadataScanSummary: {
             /** Format: int32 */
@@ -4386,6 +4662,178 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["DatabaseSchemaDump"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 数据库 COMMENT SQL 方言支持摘要；说明表/列注释是否能安全生成 dry-run SQL。 */
+        DatabaseCommentDialectSupport: {
+            /** @description 数据库类型，如 POSTGRESQL 或 MYSQL。 */
+            databaseType?: string;
+            /** @description true 表示当前方言可安全生成表 COMMENT dry-run SQL。 */
+            tableCommentSqlSupported?: boolean;
+            /** @description true 表示当前方言可安全生成列 COMMENT dry-run SQL。 */
+            columnCommentSqlSupported?: boolean;
+            /** @description 不支持或需人工处理的原因；不得包含凭据或业务数据行。 */
+            unsupportedReasons?: string[];
+            /** @description 方言相关补充说明；用于前端和 CLI 展示人工处理边界。 */
+            notes?: string[];
+        };
+        /** @description 数据库 COMMENT 回写计划预览；只输出 dry-run SQL 和审阅证据，不执行源库写入、不保存连接凭据。 */
+        DatabaseCommentPatchPlan: {
+            /** @description 响应类型标识，供 CLI、前端和 AI 判断 JSON 语义。 */
+            kind?: string;
+            /**
+             * Format: int32
+             * @description 响应 schema 版本；新增可选字段时保持兼容递增。
+             */
+            schemaVersion?: number;
+            /**
+             * Format: int64
+             * @description DataSpec 项目 ID。
+             */
+            projectId?: number;
+            /** @description 数据库类型，如 POSTGRESQL 或 MYSQL。 */
+            databaseType?: string;
+            /** @description 数据库名；已脱敏，不包含 JDBC URL 或 DSN。 */
+            databaseName?: string;
+            /** @description schema 名；PostgreSQL 用于限定对象，MySQL 场景可能为空。 */
+            schemaName?: string;
+            /** @description schema-only metadata fingerprint；不包含密码、连接串或业务数据行。 */
+            metadataFingerprint?: string;
+            /** @description 当前 COMMENT 计划内容 hash；用于审阅、复制和后续人工迁移记录。 */
+            planHash?: string;
+            summary?: components["schemas"]["DatabaseCommentPatchPlanSummary"];
+            /** @description 表/字段 COMMENT 差异项；每项描述当前注释、目标注释、风险、SQL 草稿和人工检查。 */
+            items?: components["schemas"]["DatabaseCommentPatchPlanItem"][];
+            /** @description 合并后的 dry-run SQL 草案；不得直接视为已审批迁移脚本。 */
+            dryRunSql?: string;
+            dialectSupport?: components["schemas"]["DatabaseCommentDialectSupport"];
+            /** @description 整体风险：SAFE、LOW、MEDIUM 或 HIGH；unsupported/blocked 会提升风险。 */
+            riskLevel?: string;
+            /** @description 整体回滚提示；正式迁移前需要据此准备反向 COMMENT 或恢复方案。 */
+            rollbackHint?: string;
+            evidence?: components["schemas"]["DatabaseCommentPatchPlanEvidence"];
+            safety?: components["schemas"]["DatabaseCommentPatchPlanSafety"];
+            /** @description 面向用户和 AI 的后续动作建议；不代表自动执行 SQL。 */
+            nextActions?: string[];
+        };
+        /** @description COMMENT 回写计划生成证据；只记录 schema-only 范围、标准引用和安全摘要。 */
+        DatabaseCommentPatchPlanEvidence: {
+            /** @description schema/database 范围摘要，不包含 JDBC URL。 */
+            schemaScope?: string;
+            /** @description 本次选择的表范围；只包含表名或 schema.table 名。 */
+            tableScope?: string[];
+            /** @description schema-only metadata fingerprint；不包含凭据或业务数据行。 */
+            metadataFingerprint?: string;
+            /** @description 参与计划判断的标准引用，如 template:<key> 或 field:<name>。 */
+            standardReferences?: string[];
+            /** @description 脱敏请求摘要，便于 AI/评审复核；不得包含 password、token、完整 JDBC URL 或 DSN。 */
+            normalizedInputSummary?: string;
+            /** @description 安全标记，如 readOnly、noSourceWrites、schemaOnly。 */
+            safetyFlags?: string[];
+        };
+        /** @description COMMENT 回写计划的单个表或字段注释差异项；用于 dry-run 审阅、前端展示和 AI 证据导出。 */
+        DatabaseCommentPatchPlanItem: {
+            /** @description 对象类型：TABLE 或 COLUMN。 */
+            objectType?: string;
+            /** @description 来源 schema 名；MySQL 场景可能为空。 */
+            schemaName?: string;
+            /** @description 来源表名；来自 schema metadata，不包含连接串或业务数据行。 */
+            tableName?: string;
+            /** @description 来源字段名；TABLE 项为空，COLUMN 项来自 schema metadata。 */
+            columnName?: string;
+            /** @description 命中的 DataSpec 标准字段名；表项或未命中时为空。 */
+            standardFieldName?: string;
+            /** @description 差异状态：NO_OP、MISSING、CHANGED 或 UNSUPPORTED。 */
+            status?: string;
+            /** @description 当前数据库 COMMENT；已脱敏，不包含凭据或业务数据行。 */
+            currentComment?: string;
+            /** @description 目标 DataSpec COMMENT；已脱敏，来源于表模板或标准字段注释。 */
+            targetComment?: string;
+            /** @description 面向用户和 AI 的注释差异说明，例如缺失注释、旧值到新值或不支持原因。 */
+            commentDiff?: string;
+            /** @description 单项 dry-run SQL；unsupported/no-op 项为空，不代表已审批迁移脚本。 */
+            dryRunSql?: string;
+            /** @description 当前项的方言支持摘要，说明表/列 COMMENT 是否可安全生成 SQL。 */
+            dialectSupport?: string;
+            /** @description 字段级风险：LOW、MEDIUM 或 HIGH；unsupported 和人工确认项通常为 MEDIUM 以上。 */
+            riskLevel?: string;
+            /** @description 本项回滚提示；正式迁移前应据此准备反向 COMMENT。 */
+            rollbackHint?: string;
+            /** @description 证据引用，如 template:<tablePrefix> 或 field:<fieldName>，不包含凭据。 */
+            evidenceRefs?: string[];
+            /** @description 需要人工处理的检查点；客户端不得把这些项当成自动执行。 */
+            manualChecks?: string[];
+            /** @description 阻止生成可执行 SQL 的原因；非空时 dryRunSql 应为空或仅为说明。 */
+            blockedReasons?: string[];
+        };
+        /** @description COMMENT 回写计划安全边界；说明计划只读、不会写源库或项目状态，可安全用于 AI 审阅。 */
+        DatabaseCommentPatchPlanSafety: {
+            /** @description true 表示计划生成只读取 schema metadata。 */
+            readOnly?: boolean;
+            /** @description true 表示服务端会写源数据库；COMMENT plan 必须保持 false。 */
+            writesSourceDatabase?: boolean;
+            /** @description true 表示服务端会写 DataSpec 项目状态；COMMENT plan 必须保持 false。 */
+            writesProject?: boolean;
+            /** @description true 表示输出需要人工审阅后再进入迁移流程。 */
+            requiresManualApply?: boolean;
+            /** @description true 表示响应已按敏感信息规则脱敏，可复制给 AI 辅助审阅。 */
+            safeForAiCopy?: boolean;
+            /** @description true 表示自由文本经过 password、token、JDBC URL、DSN 等脱敏处理。 */
+            sensitiveRedaction?: boolean;
+        };
+        /** @description COMMENT 回写计划聚合统计；用于前端、CLI 和 AI 快速判断差异范围与风险。 */
+        DatabaseCommentPatchPlanSummary: {
+            /**
+             * Format: int32
+             * @description 本次计划覆盖的表数量。
+             */
+            tableCount?: number;
+            /**
+             * Format: int32
+             * @description 本次计划读取的字段数量。
+             */
+            columnCount?: number;
+            /**
+             * Format: int32
+             * @description 计划项总数，包含 no-op、可执行变更和 unsupported 项。
+             */
+            itemCount?: number;
+            /**
+             * Format: int32
+             * @description 可生成 dry-run SQL 的变更数量；不代表已执行或可自动执行。
+             */
+            executableChangeCount?: number;
+            /**
+             * Format: int32
+             * @description 已一致、无需生成 COMMENT SQL 的项数量。
+             */
+            noOpCount?: number;
+            /**
+             * Format: int32
+             * @description 当前注释为空但存在目标标准注释的项数量。
+             */
+            missingCount?: number;
+            /**
+             * Format: int32
+             * @description 当前注释与目标标准注释不同的项数量。
+             */
+            changedCount?: number;
+            /**
+             * Format: int32
+             * @description 因方言或证据不足不能安全生成 SQL 的项数量。
+             */
+            unsupportedCount?: number;
+            /**
+             * Format: int32
+             * @description 带阻塞原因、不得自动执行的项数量。
+             */
+            blockedCount?: number;
+        };
+        RDatabaseCommentPatchPlan: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["DatabaseCommentPatchPlan"];
             error?: components["schemas"]["ErrorDetail"];
         };
         DatabaseMetadataBrowser: {
@@ -4479,14 +4927,23 @@ export interface components {
             recommendedFieldName?: string;
             reason?: string;
         };
+        /** @description 项目字段标准覆盖率报告；可标记完整输入或采集作业 partial 输入边界。 */
         FieldCoverageReport: {
-            summary?: components["schemas"]["FieldCoverageSummary"];
+            /** @description 输入完整性状态：COMPLETE/PARTIAL/CANCELLED/FAILED；PARTIAL 表示只统计成功采集的 schema-only 表。 */
             inputStatus?: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description 未纳入覆盖率计算的失败表数量；这些表不得视为已覆盖。
+             */
             failedTableCount?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description 未纳入覆盖率计算的跳过或未扫描表数量；这些表不得视为已覆盖。
+             */
             skippedTableCount?: number;
+            /** @description 针对 partial/cancelled/failed 输入的安全下一步，不包含凭据、完整连接串或源库业务数据。 */
             nextActions?: string[];
+            summary?: components["schemas"]["FieldCoverageSummary"];
             tables?: components["schemas"]["FieldCoverageTable"][];
             unmanagedRankings?: components["schemas"]["UnmanagedFieldRanking"][];
             metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
@@ -5534,19 +5991,24 @@ export interface components {
             projectId: number;
             sql: string;
         };
-        ScanPartialCoverageReq: {
-            /** Format: int64 */
-            projectId: number;
-            partialResult: components["schemas"]["DatabaseMetadataScanPartialResult"];
-            failureSummary?: components["schemas"]["DatabaseMetadataScanFailureSummary"];
-            scanStatus?: string;
-        };
         RFieldCoverageReport: {
             /** Format: int32 */
             code?: number;
             message?: string;
             data?: components["schemas"]["FieldCoverageReport"];
             error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 基于 metadata scan job schema-only partial result 生成字段覆盖率的请求；不包含数据库密码或连接串。 */
+        ScanPartialCoverageReq: {
+            /**
+             * Format: int64
+             * @description DataSpec 项目 ID。
+             */
+            projectId: number;
+            partialResult: components["schemas"]["DatabaseMetadataScanPartialResult"];
+            failureSummary?: components["schemas"]["DatabaseMetadataScanFailureSummary"];
+            /** @description metadata scan job 状态，如 PARTIAL/CANCELLED/FAILED/COMPLETED，用于标记报告输入完整性。 */
+            scanStatus?: string;
         };
         /** @description 契约候选导入预览请求；只读解析本地提交的契约文本，不访问外部 URL 或写入候选库。 */
         ContractCandidatePreviewReq: {
@@ -7480,6 +7942,7 @@ export interface components {
             recommendedCommand?: string;
             evidenceRefs?: string[];
             completionCheck?: string;
+            recipeBinding?: components["schemas"]["StandardMaintenanceWorkflowRecipeBinding"];
         };
         AiTaskRecommendationReport: {
             /** Format: int64 */
@@ -8858,6 +9321,30 @@ export interface operations {
             };
         };
     };
+    plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardMaintenanceWorkflowPlanReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardMaintenanceWorkflowPlan"];
+                };
+            };
+        };
+    };
     createSnapshot: {
         parameters: {
             query?: never;
@@ -9516,6 +10003,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RReverseImportCompareResult"];
+                };
+            };
+        };
+    };
+    planDatabaseCommentPatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseConnectionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RDatabaseCommentPatchPlan"];
                 };
             };
         };
@@ -10415,6 +10926,30 @@ export interface operations {
             };
         };
     };
+    reportScanPartial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanPartialCoverageReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldCoverageReport"];
+                };
+            };
+        };
+    };
     reportDump: {
         parameters: {
             query?: never;
@@ -10449,30 +10984,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DatabaseConnectionReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RFieldCoverageReport"];
-                };
-            };
-        };
-    };
-    reportScanPartial: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ScanPartialCoverageReq"];
             };
         };
         responses: {
@@ -10856,7 +11367,7 @@ export interface operations {
             };
         };
     };
-    plan: {
+    plan_1: {
         parameters: {
             query: {
                 projectId: number;

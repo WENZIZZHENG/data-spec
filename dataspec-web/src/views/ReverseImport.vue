@@ -194,6 +194,15 @@
                     <el-icon><View /></el-icon>
                     生成迁移计划
                   </el-button>
+                  <el-button
+                    :disabled="!canGenerateCommentPlan"
+                    :loading="commentPlanLoading"
+                    :data-testid="stableTestIds.reverseImport.commentPlanButton"
+                    @click="handleGenerateCommentPlan"
+                  >
+                    <el-icon><View /></el-icon>
+                    COMMENT 计划
+                  </el-button>
                   <el-button :disabled="!canBrowseMetadata" :loading="metadataLoading" @click="handleRefreshMetadata">
                     <el-icon><Refresh /></el-icon>
                     刷新元数据
@@ -474,7 +483,9 @@
                   <el-tag :type="schemaRiskTagType(schemaPlan.riskLevel)" effect="plain">
                     {{ schemaRiskLabel(schemaPlan.riskLevel) }}
                   </el-tag>
-                  <el-tag type="info" effect="plain">dry-run SQL</el-tag>
+                  <el-tag :type="hasExecutableCommentSql ? 'info' : 'success'" effect="plain">
+                    {{ hasExecutableCommentSql ? 'dry-run SQL' : '无可执行 SQL' }}
+                  </el-tag>
                   <el-button size="small" plain @click="handleCopySchemaPlanSummary">
                     <el-icon><Link /></el-icon>
                     复制 AI 摘要
@@ -561,6 +572,107 @@
                 <pre class="schema-plan-sql-block">{{ schemaPlan.migrationSql || '-- 暂无 SQL 草案' }}</pre>
                 <div v-if="schemaPlan.rollbackHint" class="schema-plan-rollback">
                   回滚提示：{{ schemaPlan.rollbackHint }}
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="commentPlan"
+              class="schema-plan-preview comment-plan-preview"
+              :data-testid="stableTestIds.reverseImport.commentPlanPanel"
+            >
+              <div class="section-header compact-header">
+                <h3>COMMENT 回写计划</h3>
+                <div class="inline-actions">
+                  <el-tag :type="commentPlanRiskTagType(commentPlan.riskLevel)" effect="plain">
+                    {{ commentPlanRiskLabel(commentPlan.riskLevel) }}
+                  </el-tag>
+                  <el-tag type="info" effect="plain">dry-run SQL</el-tag>
+                  <el-button size="small" plain @click="handleCopyCommentPlanSummary">
+                    <el-icon><Link /></el-icon>
+                    复制审阅摘要
+                  </el-button>
+                </div>
+              </div>
+              <div class="schema-plan-meta">
+                <span>{{ commentPlan.databaseType || '-' }} / {{ commentPlan.databaseName || '-' }} / {{ commentPlan.schemaName || '-' }}</span>
+                <span>metadata={{ commentPlan.metadataFingerprint?.slice(0, 12) || '-' }}</span>
+                <span>plan={{ commentPlan.planHash?.slice(0, 12) || '-' }}</span>
+              </div>
+              <div class="summary-grid schema-plan-summary">
+                <div v-for="item in commentPlanSummaryItems" :key="item.key" class="summary-item">
+                  <div class="summary-label">{{ item.label }}</div>
+                  <div class="summary-value">{{ item.value }}</div>
+                </div>
+              </div>
+              <div class="schema-plan-notes">
+                <div v-if="commentPlan.dialectSupport?.unsupportedReasons?.length" class="schema-plan-list warning">
+                  <div class="list-title">方言限制</div>
+                  <ul>
+                    <li v-for="reason in commentPlan.dialectSupport.unsupportedReasons" :key="reason">{{ reason }}</li>
+                  </ul>
+                </div>
+                <div v-if="commentPlan.nextActions?.length" class="schema-plan-list">
+                  <div class="list-title">下一步建议</div>
+                  <ul>
+                    <li v-for="action in commentPlan.nextActions" :key="action">{{ action }}</li>
+                  </ul>
+                </div>
+                <div v-if="commentPlan.evidence?.standardReferences?.length" class="schema-plan-list">
+                  <div class="list-title">标准证据</div>
+                  <ul>
+                    <li v-for="refItem in commentPlan.evidence.standardReferences" :key="refItem">{{ refItem }}</li>
+                  </ul>
+                </div>
+              </div>
+              <pre class="metadata-ai-summary">{{ commentPlanCopyPayload }}</pre>
+              <el-empty v-if="commentPlanGroups.length === 0" description="暂无 COMMENT 差异项" />
+              <el-collapse v-else class="schema-plan-groups">
+                <el-collapse-item
+                  v-for="group in commentPlanGroups"
+                  :key="group.tableName"
+                  :name="group.tableName"
+                >
+                  <template #title>
+                    <span class="group-title">{{ group.tableName }}</span>
+                    <el-tag size="small" effect="plain">{{ group.items.length }} 个 COMMENT 项</el-tag>
+                  </template>
+                  <el-table :data="group.items" size="small" stripe :row-class-name="commentPlanRowClassName">
+                    <el-table-column label="状态" width="116">
+                      <template #default="{ row }">
+                        <el-tag size="small" :type="commentPlanRiskTagType(row.riskLevel)" effect="plain">
+                          {{ commentPlanStatusLabel(row.status) }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="对象" min-width="180">
+                      <template #default="{ row }">
+                        <div class="metadata-field-name">
+                          {{ row.tableName || '-' }}<span v-if="row.columnName">.{{ row.columnName }}</span>
+                        </div>
+                        <div v-if="row.standardFieldName" class="muted-text">{{ row.standardFieldName }}</div>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="当前注释" min-width="160" show-overflow-tooltip>
+                      <template #default="{ row }">{{ formatSchemaPlanValue(row.currentComment) }}</template>
+                    </el-table-column>
+                    <el-table-column label="目标注释" min-width="160" show-overflow-tooltip>
+                      <template #default="{ row }">{{ formatSchemaPlanValue(row.targetComment) }}</template>
+                    </el-table-column>
+                    <el-table-column prop="commentDiff" label="说明" min-width="220" show-overflow-tooltip />
+                    <el-table-column label="阻塞" min-width="160" show-overflow-tooltip>
+                      <template #default="{ row }">
+                        {{ row.blockedReasons?.join('；') || row.manualChecks?.join('；') || '-' }}
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </el-collapse-item>
+              </el-collapse>
+              <div class="schema-plan-sql">
+                <div class="list-title">dry-run SQL 草案</div>
+                <pre class="schema-plan-sql-block">{{ commentPlan.dryRunSql || '-- 暂无 SQL 草案' }}</pre>
+                <div v-if="commentPlan.rollbackHint" class="schema-plan-rollback">
+                  回滚提示：{{ commentPlan.rollbackHint }}
                 </div>
               </div>
             </div>
@@ -885,6 +997,7 @@ import {
   compareDatabaseReverseImport,
   importDatabaseCandidates,
   listDatabaseTables,
+  planDatabaseCommentPatch,
   planDatabaseSchemaChange,
   previewDatabaseReverseImport,
   previewReverseImport,
@@ -964,6 +1077,13 @@ import {
   schemaRiskLabel,
   schemaRiskTagType
 } from '@/utils/databaseSchemaPlan'
+import {
+  buildCommentPlanCopyPayload,
+  buildCommentPlanTableGroups,
+  commentPlanRiskLabel,
+  commentPlanRiskTagType,
+  commentPlanStatusLabel
+} from '@/utils/databaseCommentPlan'
 import { reverseImportTableOptionTestId, stableTestIds } from '@/utils/stableTestIds'
 import { copyRouteUrl, readEnumQuery, readPositiveIntQuery, readStringQuery, replaceRouteQuery } from '@/utils/urlState'
 import type {
@@ -972,6 +1092,8 @@ import type {
   DatabaseConnectionPreset,
   DatabaseConnectionPresetReq,
   DatabaseConnectionSecurityDiagnostic,
+  DatabaseCommentPatchPlan,
+  DatabaseCommentPatchPlanItem,
   DatabaseImportResult,
   DatabaseMetadataBrowser,
   DatabaseMetadataCacheMode,
@@ -1009,10 +1131,12 @@ const sqlText = ref('')
 const preview = ref<ReverseImportPreview | null>(null)
 const compareResult = ref<ReverseImportCompareResult | null>(null)
 const schemaPlan = ref<DatabaseSchemaChangePlan | null>(null)
+const commentPlan = ref<DatabaseCommentPatchPlan | null>(null)
 const importResult = ref<DatabaseImportResult | null>(null)
 const previewLoading = ref(false)
 const compareLoading = ref(false)
 const schemaPlanLoading = ref(false)
+const commentPlanLoading = ref(false)
 const testLoading = ref(false)
 const tableLoading = ref(false)
 const scanLoading = ref(false)
@@ -1080,6 +1204,9 @@ const canGenerateCompare = computed(() =>
   activeMode.value === 'database' && canPreviewDatabase.value
 )
 const canGenerateSchemaPlan = computed(() =>
+  activeMode.value === 'database' && canPreviewDatabase.value
+)
+const canGenerateCommentPlan = computed(() =>
   activeMode.value === 'database' && canPreviewDatabase.value
 )
 const canScanMetadata = computed(() =>
@@ -1151,7 +1278,7 @@ const databaseStep = computed(() => {
   if (importResult.value) {
     return 3
   }
-  if (preview.value || compareResult.value || schemaPlan.value) {
+  if (preview.value || compareResult.value || schemaPlan.value || commentPlan.value) {
     return 2
   }
   if (selectedTableCount.value > 0) {
@@ -1301,6 +1428,24 @@ const schemaPlanGroups = computed<SchemaPlanTableGroup[]>(() => {
 const schemaPlanAiSummary = computed(() =>
   buildSchemaPlanAiSummary(schemaPlan.value)
 )
+const commentPlanSummaryItems = computed(() => [
+  { key: 'risk', label: '整体风险', value: commentPlanRiskLabel(commentPlan.value?.riskLevel) },
+  { key: 'tables', label: '表', value: commentPlan.value?.summary?.tableCount ?? 0 },
+  { key: 'columns', label: '字段', value: commentPlan.value?.summary?.columnCount ?? 0 },
+  { key: 'changes', label: '可执行', value: commentPlan.value?.summary?.executableChangeCount ?? 0 },
+  { key: 'unsupported', label: '不支持', value: commentPlan.value?.summary?.unsupportedCount ?? 0 },
+  { key: 'blocked', label: '阻塞项', value: commentPlan.value?.summary?.blockedCount ?? 0 }
+])
+const hasExecutableCommentSql = computed(() =>
+  (commentPlan.value?.summary?.executableChangeCount ?? 0) > 0
+  && Boolean(commentPlan.value?.dryRunSql?.trim())
+)
+const commentPlanGroups = computed(() =>
+  buildCommentPlanTableGroups(commentPlan.value)
+)
+const commentPlanCopyPayload = computed(() =>
+  buildCommentPlanCopyPayload(commentPlan.value)
+)
 const urlSourceBatchId = computed(() =>
   readPositiveIntQuery(route.query, 'sourceBatchId') ?? readPositiveIntQuery(route.query, 'batchId')
 )
@@ -1408,6 +1553,7 @@ function resetResults() {
   preview.value = null
   compareResult.value = null
   schemaPlan.value = null
+  commentPlan.value = null
   importResult.value = null
   metadataBrowser.value = null
   metadataSearch.value = ''
@@ -1621,6 +1767,22 @@ async function handleGenerateSchemaPlan() {
   }
 }
 
+async function handleGenerateCommentPlan() {
+  if (!canGenerateCommentPlan.value) {
+    return
+  }
+  commentPlanLoading.value = true
+  try {
+    commentPlan.value = await planDatabaseCommentPatch(databaseRequest())
+    importResult.value = null
+    connectionStatus.value = 'success'
+    connectionMessage.value = `已生成 ${commentPlan.value.summary?.executableChangeCount ?? 0} 个 COMMENT 变更项`
+    ElMessage.success('COMMENT 回写计划已生成')
+  } finally {
+    commentPlanLoading.value = false
+  }
+}
+
 async function handleTestConnection() {
   if (!canUseDatabaseConnection.value) {
     return
@@ -1764,6 +1926,7 @@ async function handleBrowseMetadata(metadataCacheMode: DatabaseMetadataCacheMode
     preview.value = browser.preview ?? null
     compareResult.value = browser.compare ?? null
     schemaPlan.value = null
+    commentPlan.value = null
     importResult.value = null
     selectedCandidateKeys.value = buildBrowserCandidateKeySet(browser)
     candidateConfirmReasons.value = {}
@@ -1829,6 +1992,11 @@ async function handleCopyMetadataSummary() {
 async function handleCopySchemaPlanSummary() {
   await navigator.clipboard.writeText(schemaPlanAiSummary.value)
   ElMessage.success('迁移计划摘要已复制')
+}
+
+async function handleCopyCommentPlanSummary() {
+  await navigator.clipboard.writeText(commentPlanCopyPayload.value)
+  ElMessage.success('COMMENT 计划摘要已复制')
 }
 
 function handleFileChange(uploadFile: UploadFile) {
@@ -2002,6 +2170,15 @@ function schemaPlanRowClassName({ row }: { row: DatabaseSchemaChangeItem }) {
   const action = (row.action ?? '').toUpperCase()
   const riskLevel = (row.riskLevel ?? '').toUpperCase()
   if (action === 'DROP_CANDIDATE' || riskLevel === 'HIGH' || riskLevel === 'BLOCKED') {
+    return 'schema-plan-row-danger'
+  }
+  return ''
+}
+
+function commentPlanRowClassName({ row }: { row: DatabaseCommentPatchPlanItem }) {
+  const status = (row.status ?? '').toUpperCase()
+  const riskLevel = (row.riskLevel ?? '').toUpperCase()
+  if (status === 'UNSUPPORTED' || riskLevel === 'HIGH') {
     return 'schema-plan-row-danger'
   }
   return ''
@@ -2578,6 +2755,11 @@ function browserStorage() {
   border: 1px solid #d9ecff;
   border-radius: 6px;
   background: #fbfdff;
+}
+
+.comment-plan-preview {
+  border-color: #d1fae5;
+  background: #fbfffd;
 }
 
 .schema-plan-meta {

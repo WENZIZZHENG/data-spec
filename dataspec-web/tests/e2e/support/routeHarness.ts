@@ -152,6 +152,10 @@ export async function installDataSpecRouteHarness(page: Page): Promise<DataSpecR
       await ok(route, reverseImportPreview())
       return
     }
+    if (method === 'POST' && pathname === '/api/reverse-import/database/comment-plan') {
+      await ok(route, commentPatchPlan())
+      return
+    }
     if (method === 'GET' && pathname === '/api/fields/all') {
       await ok(route, fields)
       return
@@ -369,6 +373,89 @@ function reverseImportPreview() {
     tableRows: [
       { tableName: 'user_order', columnName: 'buyer_mobile', dataType: 'varchar(32)', comment: '买家手机号' }
     ]
+  }
+}
+
+function commentPatchPlan() {
+  return {
+    kind: 'databaseCommentPatchPlan',
+    schemaVersion: 1,
+    projectId: project.id,
+    databaseType: 'postgresql',
+    databaseName: 'sales_demo',
+    schemaName: 'public',
+    metadataFingerprint: 'e2e-fingerprint-123456',
+    planHash: 'e2e-comment-plan-abcdef',
+    riskLevel: 'LOW',
+    summary: {
+      tableCount: 1,
+      columnCount: 2,
+      itemCount: 2,
+      executableChangeCount: 1,
+      noOpCount: 1,
+      missingCount: 0,
+      changedCount: 1,
+      unsupportedCount: 0,
+      blockedCount: 0
+    },
+    items: [
+      {
+        objectType: 'TABLE',
+        schemaName: 'public',
+        tableName: 'user_order',
+        status: 'NO_OP',
+        currentComment: '订单表',
+        targetComment: '订单表',
+        commentDiff: '表 COMMENT 已符合 DataSpec 表标准',
+        dialectSupport: 'POSTGRESQL_TABLE_COMMENT',
+        riskLevel: 'LOW',
+        rollbackHint: '无需回滚',
+        evidenceRefs: ['template:user_order']
+      },
+      {
+        objectType: 'COLUMN',
+        schemaName: 'public',
+        tableName: 'user_order',
+        columnName: 'buyer_mobile',
+        standardFieldName: 'buyer_mobile',
+        status: 'CHANGED',
+        currentComment: '手机号',
+        targetComment: '买家手机号',
+        commentDiff: '需补充标准字段 COMMENT：买家手机号',
+        dryRunSql: "COMMENT ON COLUMN public.user_order.buyer_mobile IS '买家手机号';",
+        dialectSupport: 'POSTGRESQL_COLUMN_COMMENT',
+        riskLevel: 'LOW',
+        rollbackHint: "COMMENT ON COLUMN public.user_order.buyer_mobile IS '手机号';",
+        evidenceRefs: ['field:buyer_mobile'],
+        manualChecks: ['确认手机号字段在业务库中仍表示买家联系方式']
+      }
+    ],
+    dryRunSql: "COMMENT ON COLUMN public.user_order.buyer_mobile IS '买家手机号';",
+    dialectSupport: {
+      databaseType: 'postgresql',
+      tableCommentSqlSupported: true,
+      columnCommentSqlSupported: true,
+      unsupportedReasons: [],
+      notes: ['PostgreSQL COMMENT ON 语句仅作为 dry-run 审阅输出']
+    },
+    rollbackHint: "COMMENT ON COLUMN public.user_order.buyer_mobile IS '手机号';",
+    evidence: {
+      schemaScope: 'postgresql/sales_demo/public',
+      tableScope: ['public.user_order'],
+      metadataFingerprint: 'e2e-fingerprint-123456',
+      standardReferences: ['template:user_order', 'field:buyer_mobile'],
+      normalizedInputSummary: 'project=101 database=postgresql schema=public tables=public.user_order',
+      safetyFlags: ['readOnly', 'schemaOnly', 'noSourceWrites', 'noCredentialsPersisted']
+    },
+    safety: {
+      readOnly: true,
+      writesSourceDatabase: false,
+      writesProject: false,
+      requiresManualApply: true,
+      safeForAiCopy: true,
+      sensitiveRedaction: true
+    },
+    nextActions: ['复制 dry-run SQL 前再次人工审阅', '确认 COMMENT SQL 由正式 migration 流程执行']
   }
 }
 

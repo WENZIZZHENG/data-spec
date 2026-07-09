@@ -12,6 +12,11 @@ import com.dataspec.reverseimport.model.DatabaseConnectionHealthDiagnostic;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseConnectionSecurityDiagnostic;
+import com.dataspec.reverseimport.model.DatabaseCommentDialectSupport;
+import com.dataspec.reverseimport.model.DatabaseCommentPatchPlan;
+import com.dataspec.reverseimport.model.DatabaseCommentPatchPlanEvidence;
+import com.dataspec.reverseimport.model.DatabaseCommentPatchPlanItem;
+import com.dataspec.reverseimport.model.DatabaseCommentPatchPlanSummary;
 import com.dataspec.reverseimport.model.DatabaseDialectCapability;
 import com.dataspec.reverseimport.model.DatabaseMetadataCacheInfo;
 import com.dataspec.reverseimport.model.DatabaseMetadataCacheMode;
@@ -54,6 +59,9 @@ import com.dataspec.reverseimport.service.DatabaseMetadataAdapter;
 import com.dataspec.reverseimport.service.DatabaseMetadataCacheService;
 import com.dataspec.reverseimport.service.DatabaseReverseImportService;
 import com.dataspec.reverseimport.service.ReverseImportService;
+import com.dataspec.security.context.ProjectAccessGuard;
+import com.dataspec.template.entity.Template;
+import com.dataspec.template.service.TemplateService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -88,6 +96,12 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     private static final String SCHEMA_RISK_MEDIUM = "MEDIUM";
     private static final String SCHEMA_RISK_HIGH = "HIGH";
     private static final String SCHEMA_RISK_BLOCKED = "BLOCKED";
+    private static final String COMMENT_STATUS_NO_OP = "NO_OP";
+    private static final String COMMENT_STATUS_MISSING = "MISSING";
+    private static final String COMMENT_STATUS_CHANGED = "CHANGED";
+    private static final String COMMENT_STATUS_UNSUPPORTED = "UNSUPPORTED";
+    private static final String COMMENT_OBJECT_TABLE = "TABLE";
+    private static final String COMMENT_OBJECT_COLUMN = "COLUMN";
     private static final String RISK_WARNING = "WARNING";
     private static final String RISK_DANGER = "DANGER";
     private static final String RISK_UNKNOWN = "UNKNOWN";
@@ -107,32 +121,41 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     private final ConnectionProvider connectionProvider;
     private final DatabaseMetadataAdapter metadataAdapter;
     private final DatabaseMetadataCacheService metadataCacheService;
+    private final TemplateService templateService;
     private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
 
     @Autowired
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
                                             FieldCoverageService fieldCoverageService,
                                             DatabaseMetadataAdapter metadataAdapter,
-                                            DatabaseMetadataCacheService metadataCacheService) {
-        this(reverseImportService, fieldCoverageService, new DriverManagerConnectionProvider(), metadataAdapter, metadataCacheService);
+                                            DatabaseMetadataCacheService metadataCacheService,
+                                            TemplateService templateService) {
+        this(reverseImportService, fieldCoverageService, new DriverManagerConnectionProvider(), metadataAdapter, metadataCacheService, templateService);
     }
 
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
                                             ConnectionProvider connectionProvider) {
-        this(reverseImportService, null, connectionProvider, new JdbcDatabaseMetadataAdapter(), null);
+        this(reverseImportService, null, connectionProvider, new JdbcDatabaseMetadataAdapter(), null, null);
     }
 
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
                                             FieldCoverageService fieldCoverageService,
                                             ConnectionProvider connectionProvider) {
-        this(reverseImportService, fieldCoverageService, connectionProvider, new JdbcDatabaseMetadataAdapter(), null);
+        this(reverseImportService, fieldCoverageService, connectionProvider, new JdbcDatabaseMetadataAdapter(), null, null);
     }
 
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
                                             FieldCoverageService fieldCoverageService,
                                             ConnectionProvider connectionProvider,
                                             DatabaseMetadataAdapter metadataAdapter) {
-        this(reverseImportService, fieldCoverageService, connectionProvider, metadataAdapter, null);
+        this(reverseImportService, fieldCoverageService, connectionProvider, metadataAdapter, null, null);
+    }
+
+    public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
+                                            FieldCoverageService fieldCoverageService,
+                                            DatabaseMetadataAdapter metadataAdapter,
+                                            DatabaseMetadataCacheService metadataCacheService) {
+        this(reverseImportService, fieldCoverageService, new DriverManagerConnectionProvider(), metadataAdapter, metadataCacheService, null);
     }
 
     public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
@@ -140,6 +163,15 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
                                             ConnectionProvider connectionProvider,
                                             DatabaseMetadataAdapter metadataAdapter,
                                             DatabaseMetadataCacheService metadataCacheService) {
+        this(reverseImportService, fieldCoverageService, connectionProvider, metadataAdapter, metadataCacheService, null);
+    }
+
+    public DatabaseReverseImportServiceImpl(ReverseImportService reverseImportService,
+                                            FieldCoverageService fieldCoverageService,
+                                            ConnectionProvider connectionProvider,
+                                            DatabaseMetadataAdapter metadataAdapter,
+                                            DatabaseMetadataCacheService metadataCacheService,
+                                            TemplateService templateService) {
         this.reverseImportService = reverseImportService;
         this.fieldCoverageService = fieldCoverageService;
         this.connectionProvider = connectionProvider;
@@ -147,6 +179,7 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         this.metadataCacheService = metadataCacheService == null
                 ? NoopDatabaseMetadataCacheService.INSTANCE
                 : metadataCacheService;
+        this.templateService = templateService;
     }
 
     @Override
@@ -535,6 +568,49 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     }
 
     @Override
+    public DatabaseCommentPatchPlan planCommentPatch(DatabaseConnectionReq req) {
+        validateConnectionReq(req);
+        ProjectAccessGuard.requireProjectAccess(req.getProjectId());
+        DatabaseConnectionReq readOnlyReq = copyConnectionReq(
+                req,
+                req.getTableNames() == null ? List.of() : req.getTableNames());
+        // COMMENT plan 承诺不写 DataSpec 项目状态；强制绕过 metadata cache，避免 cache miss/refresh 触发 upsert。
+        readOnlyReq.setMetadataCacheMode(DatabaseMetadataCacheMode.BYPASS.name());
+        DatabaseSchemaDump dump = exportDump(readOnlyReq);
+        DatabaseSchemaDumpReq dumpReq = new DatabaseSchemaDumpReq();
+        dumpReq.setProjectId(readOnlyReq.getProjectId());
+        dumpReq.setDump(dump);
+        ReverseImportCompareResult compare = compareDump(dumpReq);
+        Map<String, ReverseImportFieldDiff> diffs = diffByColumn(compare);
+        Map<String, Template> templates = commentTemplatesByTable(readOnlyReq.getProjectId());
+        DatabaseCommentPatchPlan plan = baseCommentPatchPlan(readOnlyReq, dump);
+        plan.setDialectSupport(commentDialectSupport(readOnlyReq));
+
+        for (DatabaseSchemaTable table : dump.getTables()) {
+            Template template = findCommentTemplate(table, templates);
+            if (template != null) {
+                plan.getItems().add(tableCommentItem(table, template, readOnlyReq));
+            }
+            for (DatabaseSchemaColumn column : table.getColumns()) {
+                ReverseImportFieldDiff diff = diffs.get(metadataKey(table.getTableName(), column.getColumnName()));
+                DatabaseCommentPatchPlanItem item = columnCommentItem(table, column, diff, readOnlyReq);
+                if (item != null) {
+                    plan.getItems().add(item);
+                }
+            }
+        }
+
+        plan.setSummary(commentPlanSummary(dump, plan.getItems()));
+        plan.setRiskLevel(commentPlanRisk(plan.getSummary()));
+        plan.setDryRunSql(commentPlanDryRunSql(plan.getItems(), readOnlyReq));
+        plan.setRollbackHint(commentPlanRollbackHint(plan));
+        plan.setEvidence(commentPlanEvidence(readOnlyReq, dump, plan));
+        plan.setPlanHash(sha256Hex(commentPlanHashSource(plan)));
+        plan.setNextActions(commentPlanNextActions(plan));
+        return plan;
+    }
+
+    @Override
     public FieldCoverageReport coverage(DatabaseConnectionReq req) {
         if (fieldCoverageService == null) {
             throw new BizException("字段覆盖率服务未初始化");
@@ -626,6 +702,353 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         item.setColumnName(sanitizeMetadataText(diff.getColumnName(), req));
         item.setStandardFieldName(sanitizeMetadataText(diff.getStandardFieldName(), req));
         return item;
+    }
+
+    private DatabaseCommentPatchPlan baseCommentPatchPlan(DatabaseConnectionReq req, DatabaseSchemaDump dump) {
+        DatabaseCommentPatchPlan plan = new DatabaseCommentPatchPlan();
+        plan.setProjectId(req.getProjectId());
+        plan.setDatabaseType(sanitizeMetadataText(normalizeDiagnosticType(databaseType(req)), req));
+        plan.setDatabaseName(sanitizeMetadataText(dump.getDatabaseName(), req));
+        plan.setSchemaName(sanitizeMetadataText(dump.getSchemaName(), req));
+        String fingerprint = dump.getMetadataCache() == null
+                ? sha256Hex(schemaHashSource(dump))
+                : dump.getMetadataCache().getMetadataFingerprint();
+        plan.setMetadataFingerprint(sanitizeMetadataText(firstNonBlank(fingerprint, sha256Hex(schemaHashSource(dump))), req));
+        return plan;
+    }
+
+    private DatabaseCommentDialectSupport commentDialectSupport(DatabaseConnectionReq req) {
+        DatabaseCommentDialectSupport support = new DatabaseCommentDialectSupport();
+        String type = databaseType(req);
+        support.setDatabaseType(sanitizeMetadataText(normalizeDiagnosticType(type), req));
+        if (TYPE_POSTGRESQL.equals(type)) {
+            support.setTableCommentSqlSupported(true);
+            support.setColumnCommentSqlSupported(true);
+            support.getNotes().add("PostgreSQL 表/字段注释使用 COMMENT ON TABLE/COLUMN dry-run SQL。");
+            return support;
+        }
+        if (TYPE_MYSQL.equals(type)) {
+            support.setTableCommentSqlSupported(true);
+            support.setColumnCommentSqlSupported(false);
+            support.getUnsupportedReasons().add("MySQL 字段 COMMENT 需要完整列定义，当前 metadata 不足以安全生成 MODIFY COLUMN。");
+            support.getNotes().add("MySQL 第一版仅生成表 COMMENT dry-run SQL，字段 COMMENT 交给人工迁移脚本处理。");
+            return support;
+        }
+        support.getUnsupportedReasons().add("当前方言暂不支持 COMMENT dry-run SQL。");
+        return support;
+    }
+
+    private Map<String, Template> commentTemplatesByTable(Long projectId) {
+        Map<String, Template> values = new LinkedHashMap<>();
+        if (templateService == null || projectId == null) {
+            return values;
+        }
+        for (Template template : templateService.listByProject(projectId)) {
+            if (template == null || isBlank(template.getTablePrefix())) {
+                continue;
+            }
+            values.putIfAbsent(normalizeKeyPart(template.getTablePrefix()), template);
+        }
+        return values;
+    }
+
+    private Template findCommentTemplate(DatabaseSchemaTable table, Map<String, Template> templates) {
+        if (table == null || templates == null || templates.isEmpty()) {
+            return null;
+        }
+        String tableName = normalizeKeyPart(table.getTableName());
+        Template best = null;
+        int bestLength = -1;
+        for (Map.Entry<String, Template> entry : templates.entrySet()) {
+            String prefix = entry.getKey();
+            if (!tableName.startsWith(prefix) || prefix.length() <= bestLength) {
+                continue;
+            }
+            best = entry.getValue();
+            bestLength = prefix.length();
+        }
+        return best;
+    }
+
+    private DatabaseCommentPatchPlanItem tableCommentItem(DatabaseSchemaTable table,
+                                                          Template template,
+                                                          DatabaseConnectionReq req) {
+        String targetComment = sanitizeMetadataText(firstNonBlank(template.getDescription(), template.getName()), req);
+        if (isBlank(targetComment)) {
+            return null;
+        }
+        DatabaseCommentPatchPlanItem item = baseCommentPatchItem(
+                COMMENT_OBJECT_TABLE,
+                table.getSchemaName(),
+                table.getTableName(),
+                null,
+                table.getComment(),
+                targetComment,
+                req);
+        item.getEvidenceRefs().add(sanitizeMetadataText("template:" + template.getTablePrefix(), req));
+        fillCommentStatus(item, req);
+        if (!COMMENT_STATUS_NO_OP.equals(item.getStatus())) {
+            item.setDryRunSql(sanitizeMetadataText(tableCommentSql(table, targetComment, req), req));
+        }
+        item.setDialectSupport(TYPE_MYSQL.equals(databaseType(req))
+                ? "MYSQL_TABLE_COMMENT_SUPPORTED"
+                : "TABLE_COMMENT_SUPPORTED");
+        return item;
+    }
+
+    private DatabaseCommentPatchPlanItem columnCommentItem(DatabaseSchemaTable table,
+                                                           DatabaseSchemaColumn column,
+                                                           ReverseImportFieldDiff diff,
+                                                           DatabaseConnectionReq req) {
+        ReverseImportFieldChange commentChange = commentChange(diff);
+        String targetComment = commentChange == null ? null : commentChange.getStandardValue();
+        if (diff != null && isBlank(targetComment) && !isBlank(diff.getStandardFieldName()) && !isBlank(column.getComment())) {
+            targetComment = column.getComment();
+        }
+        if (diff == null || isBlank(targetComment)) {
+            return null;
+        }
+        DatabaseCommentPatchPlanItem item = baseCommentPatchItem(
+                COMMENT_OBJECT_COLUMN,
+                table.getSchemaName(),
+                table.getTableName(),
+                column.getColumnName(),
+                column.getComment(),
+                targetComment,
+                req);
+        item.setStandardFieldName(sanitizeMetadataText(diff.getStandardFieldName(), req));
+        item.getEvidenceRefs().add(sanitizeMetadataText("field:" + diff.getStandardFieldName(), req));
+        fillCommentStatus(item, req);
+        if (TYPE_MYSQL.equals(databaseType(req)) && !COMMENT_STATUS_NO_OP.equals(item.getStatus())) {
+            item.setStatus(COMMENT_STATUS_UNSUPPORTED);
+            item.setRiskLevel(SCHEMA_RISK_MEDIUM);
+            item.setDryRunSql("");
+            item.setDialectSupport("MYSQL_COLUMN_COMMENT_UNSUPPORTED");
+            item.getBlockedReasons().add("MySQL 字段 COMMENT 需要完整列定义，当前 metadata 不足以安全生成 MODIFY COLUMN。");
+            item.getManualChecks().add("请在人工迁移脚本中保留字段类型、nullable、default、索引和约束后再修改字段 COMMENT。");
+            item.setCommentDiff("字段注释需要修改，但当前方言不能安全生成字段 COMMENT SQL。");
+            return item;
+        }
+        if (!COMMENT_STATUS_NO_OP.equals(item.getStatus())) {
+            item.setDryRunSql(sanitizeMetadataText(columnCommentSql(table, column, targetComment, req), req));
+        }
+        item.setDialectSupport("COLUMN_COMMENT_SUPPORTED");
+        return item;
+    }
+
+    private DatabaseCommentPatchPlanItem baseCommentPatchItem(String objectType,
+                                                              String schemaName,
+                                                              String tableName,
+                                                              String columnName,
+                                                              String currentComment,
+                                                              String targetComment,
+                                                              DatabaseConnectionReq req) {
+        DatabaseCommentPatchPlanItem item = new DatabaseCommentPatchPlanItem();
+        item.setObjectType(objectType);
+        item.setSchemaName(sanitizeMetadataText(schemaName, req));
+        item.setTableName(sanitizeMetadataText(tableName, req));
+        item.setColumnName(sanitizeMetadataText(columnName, req));
+        item.setCurrentComment(sanitizeMetadataText(currentComment, req));
+        item.setTargetComment(sanitizeMetadataText(targetComment, req));
+        item.setRiskLevel(SCHEMA_RISK_LOW);
+        item.setRollbackHint(commentPlanItemRollbackHint(objectType, currentComment, req));
+        return item;
+    }
+
+    private ReverseImportFieldChange commentChange(ReverseImportFieldDiff diff) {
+        if (diff == null || diff.getChanges() == null) {
+            return null;
+        }
+        for (ReverseImportFieldChange change : diff.getChanges()) {
+            if ("comment".equals(change.getProperty())) {
+                return change;
+            }
+        }
+        return null;
+    }
+
+    private void fillCommentStatus(DatabaseCommentPatchPlanItem item, DatabaseConnectionReq req) {
+        String current = normalizeComparable(item.getCurrentComment());
+        String target = normalizeComparable(item.getTargetComment());
+        if (current.equals(target)) {
+            item.setStatus(COMMENT_STATUS_NO_OP);
+            item.setCommentDiff("当前数据库 COMMENT 已与 DataSpec 标准一致。");
+            item.setRiskLevel(SCHEMA_RISK_LOW);
+            return;
+        }
+        if (isBlank(item.getCurrentComment())) {
+            item.setStatus(COMMENT_STATUS_MISSING);
+            item.setCommentDiff(sanitizeMetadataText("当前数据库 COMMENT 为空，目标为：" + item.getTargetComment(), req));
+        } else {
+            item.setStatus(COMMENT_STATUS_CHANGED);
+            item.setCommentDiff(sanitizeMetadataText("当前数据库 COMMENT 为“"
+                    + item.getCurrentComment()
+                    + "”，目标为“"
+                    + item.getTargetComment()
+                    + "”。", req));
+        }
+        item.setRiskLevel(SCHEMA_RISK_LOW);
+    }
+
+    private String tableCommentSql(DatabaseSchemaTable table, String targetComment, DatabaseConnectionReq req) {
+        if (TYPE_MYSQL.equals(databaseType(req))) {
+            return "ALTER TABLE " + quoteTable(table, req) + " COMMENT = " + mysqlSqlLiteral(targetComment) + ";";
+        }
+        return "COMMENT ON TABLE " + quoteTable(table, req) + " IS " + sqlLiteral(targetComment) + ";";
+    }
+
+    private String columnCommentSql(DatabaseSchemaTable table,
+                                    DatabaseSchemaColumn column,
+                                    String targetComment,
+                                    DatabaseConnectionReq req) {
+        return "COMMENT ON COLUMN " + quoteColumn(table, column, req) + " IS " + sqlLiteral(targetComment) + ";";
+    }
+
+    private String quoteTable(DatabaseSchemaTable table, DatabaseConnectionReq req) {
+        if (TYPE_MYSQL.equals(databaseType(req)) || isBlank(table.getSchemaName())) {
+            return quoteIdentifier(table.getTableName(), req);
+        }
+        return quoteIdentifier(table.getSchemaName(), req) + "." + quoteIdentifier(table.getTableName(), req);
+    }
+
+    private String quoteColumn(DatabaseSchemaTable table, DatabaseSchemaColumn column, DatabaseConnectionReq req) {
+        return quoteTable(table, req) + "." + quoteIdentifier(column.getColumnName(), req);
+    }
+
+    private DatabaseCommentPatchPlanSummary commentPlanSummary(DatabaseSchemaDump dump,
+                                                               List<DatabaseCommentPatchPlanItem> items) {
+        DatabaseCommentPatchPlanSummary summary = new DatabaseCommentPatchPlanSummary();
+        summary.setTableCount(dump.getTables().size());
+        summary.setColumnCount(dump.getTables().stream().mapToInt(table -> table.getColumns().size()).sum());
+        summary.setItemCount(items.size());
+        for (DatabaseCommentPatchPlanItem item : items) {
+            if (COMMENT_STATUS_NO_OP.equals(item.getStatus())) {
+                summary.setNoOpCount(summary.getNoOpCount() + 1);
+            } else if (COMMENT_STATUS_MISSING.equals(item.getStatus())) {
+                summary.setMissingCount(summary.getMissingCount() + 1);
+            } else if (COMMENT_STATUS_CHANGED.equals(item.getStatus())) {
+                summary.setChangedCount(summary.getChangedCount() + 1);
+            } else if (COMMENT_STATUS_UNSUPPORTED.equals(item.getStatus())) {
+                summary.setUnsupportedCount(summary.getUnsupportedCount() + 1);
+            }
+            if (!isBlank(item.getDryRunSql())) {
+                summary.setExecutableChangeCount(summary.getExecutableChangeCount() + 1);
+            }
+            if (item.getBlockedReasons() != null && !item.getBlockedReasons().isEmpty()) {
+                summary.setBlockedCount(summary.getBlockedCount() + 1);
+            }
+        }
+        return summary;
+    }
+
+    private String commentPlanRisk(DatabaseCommentPatchPlanSummary summary) {
+        if (summary.getUnsupportedCount() > 0 || summary.getBlockedCount() > 0) {
+            return SCHEMA_RISK_MEDIUM;
+        }
+        if (summary.getExecutableChangeCount() > 0) {
+            return SCHEMA_RISK_LOW;
+        }
+        return RISK_SAFE;
+    }
+
+    private String commentPlanDryRunSql(List<DatabaseCommentPatchPlanItem> items, DatabaseConnectionReq req) {
+        List<String> sql = new ArrayList<>();
+        for (DatabaseCommentPatchPlanItem item : items) {
+            if (!isBlank(item.getDryRunSql())) {
+                sql.add(item.getDryRunSql());
+            }
+        }
+        if (sql.isEmpty()) {
+            return "-- DataSpec comment plan: no comment changes suggested for the selected metadata scope.";
+        }
+        return sanitizeMetadataText(String.join("\n", sql), req);
+    }
+
+    private String commentPlanRollbackHint(DatabaseCommentPatchPlan plan) {
+        if (RISK_SAFE.equals(plan.getRiskLevel())) {
+            return "当前无 COMMENT 变更，无需准备回滚 SQL。";
+        }
+        if (plan.getSummary().getUnsupportedCount() > 0 || plan.getSummary().getBlockedCount() > 0) {
+            return "存在 unsupported 或 blocked 项，正式迁移前必须人工补齐回滚 COMMENT SQL 并复核完整列定义。";
+        }
+        return "执行正式 COMMENT 迁移前，请按每个 item 的 currentComment 准备反向 COMMENT SQL。";
+    }
+
+    private String commentPlanItemRollbackHint(String objectType, String currentComment, DatabaseConnectionReq req) {
+        String current = isBlank(currentComment) ? "空 COMMENT" : "当前值：" + currentComment;
+        return sanitizeMetadataText(objectType + " 回滚时恢复为" + current + "。", req);
+    }
+
+    private DatabaseCommentPatchPlanEvidence commentPlanEvidence(DatabaseConnectionReq req,
+                                                                 DatabaseSchemaDump dump,
+                                                                 DatabaseCommentPatchPlan plan) {
+        DatabaseCommentPatchPlanEvidence evidence = new DatabaseCommentPatchPlanEvidence();
+        evidence.setSchemaScope(sanitizeMetadataText(nullToDash(firstNonBlank(dump.getSchemaName(), req.getSchemaName())), req));
+        for (DatabaseSchemaTable table : dump.getTables()) {
+            String scope = isBlank(table.getSchemaName())
+                    ? table.getTableName()
+                    : table.getSchemaName() + "." + table.getTableName();
+            evidence.getTableScope().add(sanitizeMetadataText(scope, req));
+        }
+        evidence.setMetadataFingerprint(plan.getMetadataFingerprint());
+        for (DatabaseCommentPatchPlanItem item : plan.getItems()) {
+            for (String ref : item.getEvidenceRefs()) {
+                addDistinct(evidence.getStandardReferences(), sanitizeMetadataText(ref, req));
+            }
+        }
+        evidence.setNormalizedInputSummary(commentPlanInputSummary(req, dump));
+        evidence.getSafetyFlags().add("readOnly");
+        evidence.getSafetyFlags().add("schemaOnly");
+        evidence.getSafetyFlags().add("noSourceWrites");
+        evidence.getSafetyFlags().add("noProjectWrites");
+        evidence.getSafetyFlags().add("noMetadataCacheWrites");
+        return evidence;
+    }
+
+    private String commentPlanInputSummary(DatabaseConnectionReq req, DatabaseSchemaDump dump) {
+        String summary = "projectId=" + req.getProjectId()
+                + " databaseType=" + databaseType(req)
+                + " databaseName=" + dump.getDatabaseName()
+                + " schemaName=" + nullToDash(dump.getSchemaName())
+                + " selectedTables=" + dump.getTables().stream()
+                .map(DatabaseSchemaTable::getTableName)
+                .toList()
+                + " metadataCacheMode=" + metadataCacheMode(req);
+        return SensitiveDataSanitizer.redactText(summary, 1000, req.getPassword());
+    }
+
+    private String commentPlanHashSource(DatabaseCommentPatchPlan plan) {
+        StringBuilder source = new StringBuilder();
+        source.append(plan.getProjectId()).append('|')
+                .append(plan.getDatabaseType()).append('|')
+                .append(plan.getMetadataFingerprint()).append('|')
+                .append(plan.getRiskLevel()).append('|');
+        for (DatabaseCommentPatchPlanItem item : plan.getItems()) {
+            source.append(item.getObjectType()).append(':')
+                    .append(item.getSchemaName()).append('.')
+                    .append(item.getTableName()).append('.')
+                    .append(nullToDash(item.getColumnName())).append(':')
+                    .append(item.getStatus()).append(':')
+                    .append(nullToDash(item.getCurrentComment())).append("->")
+                    .append(nullToDash(item.getTargetComment())).append('|');
+        }
+        return source.toString();
+    }
+
+    private List<String> commentPlanNextActions(DatabaseCommentPatchPlan plan) {
+        List<String> actions = new ArrayList<>();
+        if (RISK_SAFE.equals(plan.getRiskLevel())) {
+            actions.add("当前选择范围没有需要回写的 COMMENT 差异。");
+            return actions;
+        }
+        actions.add("先审阅 comment plan、evidence 和 dry-run SQL，再决定是否纳入人工迁移脚本。");
+        if (plan.getSummary().getExecutableChangeCount() > 0) {
+            actions.add("将 dry-run SQL 复制到受控迁移流程前，先在测试库验证并准备回滚 COMMENT。");
+        }
+        if (plan.getSummary().getUnsupportedCount() > 0 || plan.getSummary().getBlockedCount() > 0) {
+            actions.add("unsupported/blocked 项不得自动执行，需要人工补齐方言细节后再处理。");
+        }
+        return actions;
     }
 
     private DatabaseSchemaChangeSummary schemaPlanSummary(DatabaseSchemaDump dump, List<DatabaseSchemaChangeItem> items) {
@@ -1355,6 +1778,10 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
+    private String normalizeComparable(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
     private String candidateKey(FieldCandidate candidate) {
         return (candidate.getTableName() == null ? "" : candidate.getTableName())
                 + "."
@@ -1856,6 +2283,10 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
 
     private String sqlLiteral(String value) {
         return "'" + (value == null ? "" : value.replace("'", "''")) + "'";
+    }
+
+    private String mysqlSqlLiteral(String value) {
+        return "'" + (value == null ? "" : value.replace("\\", "\\\\").replace("'", "''")) + "'";
     }
 
     private String sanitizeConnectionError(String message, DatabaseConnectionReq req) {

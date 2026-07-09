@@ -2,6 +2,7 @@ package com.dataspec.reverseimport.controller;
 
 import com.dataspec.common.result.R;
 import com.dataspec.reverseimport.entity.ReverseImportDecision;
+import com.dataspec.reverseimport.model.DatabaseCommentPatchPlan;
 import com.dataspec.reverseimport.model.DatabaseConnectionReq;
 import com.dataspec.reverseimport.model.DatabaseConnectionResult;
 import com.dataspec.reverseimport.model.DatabaseImportReq;
@@ -102,6 +103,14 @@ public class ReverseImportController {
     @PostMapping("/database/schema-plan")
     public R<DatabaseSchemaChangePlan> planDatabaseSchemaChange(@Valid @RequestBody DatabaseConnectionReq req) {
         return R.ok(databaseReverseImportService.planSchemaChange(req));
+    }
+
+    /**
+     * 只读生成数据库 COMMENT 回写计划，输出 dry-run SQL、差异证据和人工处理建议；不会执行源库写入。
+     */
+    @PostMapping("/database/comment-plan")
+    public R<DatabaseCommentPatchPlan> planDatabaseCommentPatch(@Valid @RequestBody DatabaseConnectionReq req) {
+        return R.ok(databaseReverseImportService.planCommentPatch(req));
     }
 
     @PostMapping("/dump/compare")

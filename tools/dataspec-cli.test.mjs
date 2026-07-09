@@ -4730,6 +4730,281 @@ test('schema-plan posts database connection request and prints readonly plan jso
   }
 })
 
+test('comment-plan preview posts database connection request and prints plan json', async () => {
+  const calls = []
+  const previous = process.env.DATASPEC_DB_PASSWORD
+  process.env.DATASPEC_DB_PASSWORD = 'raw-db-secret'
+  try {
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            kind: 'dataspec-database-comment-patch-plan',
+            riskLevel: 'LOW',
+            metadataFingerprint: 'c'.repeat(64),
+            planHash: 'd'.repeat(64),
+            summary: {
+              tableCount: 1,
+              columnCount: 1,
+              executableChangeCount: 1,
+              unsupportedCount: 0
+            },
+            dryRunSql: 'COMMENT ON COLUMN "public"."user_order"."phone" IS \'手机号\';',
+            nextActions: ['先审阅 dry-run SQL，再交给迁移工具。']
+          }
+        })
+      }
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'comment-plan',
+      'preview',
+      '--project',
+      '7',
+      '--database-type',
+      'postgresql',
+      '--host',
+      'localhost',
+      '--port',
+      '5432',
+      '--database',
+      'demo',
+      '--schema',
+      'public',
+      '--username',
+      'readonly',
+      '--password-env',
+      'DATASPEC_DB_PASSWORD',
+      '--table',
+      'user_order',
+      '--metadata-cache-mode',
+      'REFRESH',
+      '--format',
+      'json',
+      '--server',
+      'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(calls[0].url, 'http://dataspec.local/api/reverse-import/database/comment-plan')
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      projectId: 7,
+      databaseType: 'postgresql',
+      host: 'localhost',
+      port: 5432,
+      databaseName: 'demo',
+      schemaName: 'public',
+      username: 'readonly',
+      password: 'raw-db-secret',
+      tableNames: ['user_order'],
+      metadataCacheMode: 'REFRESH'
+    })
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.kind, 'dataspec-database-comment-patch-plan')
+    assert.equal(output.riskLevel, 'LOW')
+    assert.doesNotMatch(io.stdout, /raw-db-secret|jdbc:/)
+    assert.equal(io.stderr, '')
+  } finally {
+    if (previous === undefined) {
+      delete process.env.DATASPEC_DB_PASSWORD
+    } else {
+      process.env.DATASPEC_DB_PASSWORD = previous
+    }
+  }
+})
+
+test('comment-plan preview text output summarizes risk sql and next actions without stable json contract', async () => {
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 200,
+      data: {
+        kind: 'dataspec-database-comment-patch-plan',
+        riskLevel: 'MEDIUM',
+        metadataFingerprint: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+        summary: {
+          tableCount: 1,
+          columnCount: 2,
+          executableChangeCount: 1,
+          unsupportedCount: 1
+        },
+        dryRunSql: 'COMMENT ON TABLE "public"."user_order" IS \'用户订单\';',
+        nextActions: ['MySQL 列注释需人工补完整列定义。'],
+        rollbackHint: 'password=raw-secret jdbc:postgresql://db.internal/app'
+      }
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'comment-plan',
+    'preview',
+    '--project',
+    '7',
+    '--database-type',
+    'postgresql',
+    '--host',
+    'localhost',
+    '--database',
+    'demo',
+    '--username',
+    'readonly',
+    '--table',
+    'user_order',
+    '--format',
+    'text'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.match(io.stdout, /COMMENT patch plan/)
+  assert.match(io.stdout, /risk=MEDIUM/)
+  assert.match(io.stdout, /unsupported=1/)
+  assert.match(io.stdout, /dryRunSql=yes/)
+  assert.match(io.stdout, /metadataFingerprint=abcdef123456/)
+  assert.match(io.stdout, /MySQL 列注释/)
+  assert.doesNotMatch(io.stdout, /raw-secret|jdbc:postgresql|db\.internal/)
+})
+
+test('comment-plan preview text reports no executable sql for no-op explanatory dry run text', async () => {
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 200,
+      data: {
+        kind: 'dataspec-database-comment-patch-plan',
+        riskLevel: 'SAFE',
+        metadataFingerprint: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+        summary: {
+          tableCount: 1,
+          columnCount: 2,
+          executableChangeCount: 0,
+          unsupportedCount: 0
+        },
+        dryRunSql: '-- 当前无 COMMENT 变更。',
+        nextActions: ['无需执行 COMMENT SQL。']
+      }
+    })
+  })
+  const io = createIo()
+
+  const code = await runCli([
+    'comment-plan',
+    'preview',
+    '--project',
+    '7',
+    '--database-type',
+    'postgresql',
+    '--host',
+    'localhost',
+    '--database',
+    'demo',
+    '--username',
+    'readonly',
+    '--table',
+    'user_order',
+    '--format',
+    'text'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.match(io.stdout, /totalChanges=0/)
+  assert.match(io.stdout, /dryRunSql=no/)
+  assert.match(io.stdout, /无需执行 COMMENT SQL/)
+})
+
+test('comment-plan preview rejects missing table and redacts server failures', async () => {
+  const missingIo = createIo()
+  const missingCode = await runCli([
+    'comment-plan',
+    'preview',
+    '--project',
+    '7',
+    '--database-type',
+    'postgresql',
+    '--host',
+    'localhost',
+    '--database',
+    'demo',
+    '--username',
+    'readonly',
+    '--format',
+    'json'
+  ], missingIo, async () => {
+    throw new Error('fetch should not be called')
+  })
+
+  assert.equal(missingCode, 2)
+  assert.match(missingIo.stderr, /至少提供一个 --table/)
+
+  const failIo = createIo()
+  const failCode = await runCli([
+    'comment-plan',
+    'preview',
+    '--project',
+    '7',
+    '--database-type',
+    'postgresql',
+    '--host',
+    'localhost',
+    '--database',
+    'demo',
+    '--username',
+    'readonly',
+    '--password',
+    'raw-secret',
+    '--table',
+    'user_order',
+    '--format',
+    'json'
+  ], failIo, async () => ({
+    ok: false,
+    status: 500,
+    json: async () => ({
+      message: 'comment plan failed token=plain-secret jdbc:postgresql://db.internal/app password=raw-secret Authorization: Basic raw-basic-secret'
+    })
+  }))
+
+  assert.equal(failCode, 2)
+  assert.match(failIo.stderr, /DataSpecError/)
+  assert.doesNotMatch(failIo.stderr, /plain-secret|raw-secret|jdbc:postgresql|db\.internal|raw-basic-secret/)
+})
+
+test('comment-plan preview rejects invalid metadata cache mode before server calls', async () => {
+  const io = createIo()
+  const code = await runCli([
+    'comment-plan',
+    'preview',
+    '--project',
+    '7',
+    '--database-type',
+    'postgresql',
+    '--host',
+    'localhost',
+    '--database',
+    'demo',
+    '--username',
+    'readonly',
+    '--table',
+    'user_order',
+    '--metadata-cache-mode',
+    'refreshh',
+    '--format',
+    'json'
+  ], io, async () => {
+    throw new Error('fetch should not be called')
+  })
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /metadata-cache-mode/)
+})
+
 test('cli ai contract keeps stable json fields while allowing additive fields', async () => {
   const io = createIo('CREATE TABLE UserOrder (id bigint);')
   const fetchFn = async (url, options) => {

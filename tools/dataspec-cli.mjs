@@ -183,6 +183,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'schema-plan') {
       return await runSchemaPlan(rest, io, fetchFn)
     }
+    if (command === 'comment-plan') {
+      return await runCommentPlan(rest, io, fetchFn)
+    }
     if (command === 'init') {
       return await runInit(rest, io, fetchFn)
     }
@@ -2081,7 +2084,7 @@ async function runSchemaPlan(args, io, fetchFn) {
     tableNames
   }
   if (options['metadata-cache-mode'] !== undefined) {
-    req.metadataCacheMode = options['metadata-cache-mode']
+    req.metadataCacheMode = optionalMetadataCacheMode(options['metadata-cache-mode'], 'schema-plan')
   }
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
@@ -2093,6 +2096,71 @@ async function runSchemaPlan(args, io, fetchFn) {
   const payload = await readJsonResponse(response)
   const result = unwrapResponse(payload)
   io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  return 0
+}
+
+async function runCommentPlan(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'preview') {
+    throw new Error(`comment-plan 仅支持 preview 子命令: ${subcommand ?? ''}`.trim())
+  }
+  const { positional, options } = parseArgs(rest, [
+    'project',
+    'database-type',
+    'host',
+    'port',
+    'database',
+    'database-name',
+    'schema',
+    'username',
+    'password',
+    'password-env',
+    'table',
+    'metadata-cache-mode',
+    'format',
+    'server',
+    'dataspec-token'
+  ], [], ['table'])
+  const config = loadDataSpecConfig(cliCwd(io))
+  if (positional.length > 0) {
+    throw new Error(`comment-plan preview 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const projectId = parseProjectId(options.project ?? config.projectId)
+  const format = options.format ?? 'json'
+  if (format !== 'json' && format !== 'text') {
+    throw new Error('comment-plan preview 仅支持 --format json|text')
+  }
+  const databaseName = options.database ?? options['database-name']
+  const tableNames = Array.isArray(options.table) ? options.table : options.table ? [options.table] : []
+  if (tableNames.length === 0) {
+    throw new Error('comment-plan preview 需要至少提供一个 --table <name>')
+  }
+  const req = {
+    projectId,
+    databaseType: requiredOption(options['database-type'], 'database-type', 'comment-plan preview'),
+    host: requiredOption(options.host, 'host', 'comment-plan preview'),
+    port: options.port === undefined ? undefined : parsePositiveInteger(options.port, 'database port'),
+    databaseName: requiredOption(databaseName, 'database', 'comment-plan preview'),
+    schemaName: options.schema,
+    username: requiredOption(options.username, 'username', 'comment-plan preview'),
+    password: resolveDatabasePassword(options, 'comment-plan preview'),
+    tableNames
+  }
+  if (options['metadata-cache-mode'] !== undefined) {
+    req.metadataCacheMode = optionalMetadataCacheMode(options['metadata-cache-mode'], 'comment-plan preview')
+  }
+  const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
+  const response = await fetchFn(`${server}/api/reverse-import/database/comment-plan`, {
+    method: 'POST',
+    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(removeUndefinedValues(req))
+  })
+  const payload = await readJsonResponse(response)
+  const result = unwrapResponse(payload)
+  io.writeOut(format === 'json'
+    ? `${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`
+    : formatCommentPlanPreviewText(result))
   return 0
 }
 
@@ -2724,16 +2792,27 @@ function optionValues(value) {
   return Array.isArray(value) ? value : [value]
 }
 
-function requiredOption(value, name) {
+function requiredOption(value, name, commandName = 'schema-plan') {
   if (value === undefined || value === null || String(value).trim() === '') {
-    throw new Error(`schema-plan 需要提供 --${name}`)
+    throw new Error(`${commandName} 需要提供 --${name}`)
   }
   return value
 }
 
-function resolveDatabasePassword(options) {
+function optionalMetadataCacheMode(value, commandName) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return undefined
+  }
+  const normalized = String(value).trim().toUpperCase()
+  if (!['AUTO', 'REFRESH', 'BYPASS'].includes(normalized)) {
+    throw new Error(`${commandName} 的 --metadata-cache-mode 仅支持 AUTO、REFRESH 或 BYPASS`)
+  }
+  return normalized
+}
+
+function resolveDatabasePassword(options, commandName = 'schema-plan') {
   if (options.password !== undefined && options['password-env'] !== undefined) {
-    throw new Error('schema-plan 的 --password 和 --password-env 不能同时使用')
+    throw new Error(`${commandName} 的 --password 和 --password-env 不能同时使用`)
   }
   if (options['password-env'] !== undefined) {
     const envName = options['password-env']
@@ -4406,6 +4485,33 @@ function formatContractImportPreviewText(result) {
     .length
   lines.push(`reviewRequired: ${reviewRequired}`)
   lines.push(`mergeExisting: ${mergeExisting}`)
+  appendTextList(lines, 'next actions', (result.nextActions ?? []).map((item) => redactSecrets(item)))
+  return `${lines.join('\n')}\n`
+}
+
+function formatCommentPlanPreviewText(result) {
+  const summary = result.summary ?? {}
+  const executableChangeCount = Number(summary.executableChangeCount ?? 0)
+  const dryRunSqlText = typeof result.dryRunSql === 'string' ? result.dryRunSql.trim() : ''
+  const hasExecutableDryRunSql = executableChangeCount > 0 && dryRunSqlText !== ''
+  const lines = [
+    'DataSpec COMMENT patch plan',
+    `risk=${redactSecrets(result.riskLevel ?? '-')}`,
+    `totalChanges=${executableChangeCount}`,
+    `unsupported=${summary.unsupportedCount ?? 0}`,
+    `dryRunSql=${hasExecutableDryRunSql ? 'yes' : 'no'}`,
+    `metadataFingerprint=${redactSecrets(String(result.metadataFingerprint ?? '-').slice(0, 12))}`,
+    `planHash=${redactSecrets(String(result.planHash ?? '-').slice(0, 12))}`
+  ]
+  if (result.dialectSupport) {
+    lines.push(
+      `tableCommentSqlSupported=${Boolean(result.dialectSupport.tableCommentSqlSupported)}`,
+      `columnCommentSqlSupported=${Boolean(result.dialectSupport.columnCommentSqlSupported)}`
+    )
+  }
+  if (result.rollbackHint) {
+    lines.push(`rollbackHint=${redactSecrets(result.rollbackHint)}`)
+  }
   appendTextList(lines, 'next actions', (result.nextActions ?? []).map((item) => redactSecrets(item)))
   return `${lines.join('\n')}\n`
 }
@@ -6414,6 +6520,7 @@ Usage:
   node tools/dataspec-cli.mjs synthetic-examples generate [--project <id>] --scenario <user|order|payment|audit> [--max-cases <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract-import preview [--project <id>] --source-kind <openapi|json-schema|protobuf> --input <path> [--max-candidates <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs schema-plan [--project <id>] --database-type <postgresql|mysql> --host <host> [--port <n>] --database <name> [--schema <schema>] --username <user> [--password-env <env>|--password <value>] --table <name> [--table <name> ...] --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs comment-plan preview [--project <id>] --database-type <postgresql|mysql> --host <host> [--port <n>] --database <name> [--schema <schema>] --username <user> [--password-env <env>|--password <value>] --table <name> [--table <name> ...] [--metadata-cache-mode AUTO|REFRESH|BYPASS] --format text|json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs init --project <id> [--server <url>] [--default-path <path> ...] [--with-agents] [--force] [--format text|json]
   node tools/dataspec-cli.mjs bootstrap [--project <id>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs doctor [--project <id>] [--profile <id>|--task-type <type>] [--format text|json] [--server <url>] [--dataspec-token <token>] [--check-openapi]
@@ -6459,6 +6566,7 @@ Options:
   synthetic-examples generate 只读生成合成标准样例包，可作为 fixture、Prompt 评测或人工审核草案；不会写入项目标准或调用外部 LLM
   contract-import preview 只读读取本地 OpenAPI/JSON Schema/Protobuf 契约并生成候选预览；不会自动写入标准字段或候选 Inbox
   schema-plan 只生成数据库 schema change plan 预览，不执行迁移；推荐使用 --password-env 读取数据库密码
+  comment-plan preview 只生成数据库 COMMENT 回写计划预览，不执行 SQL；text 输出仅供阅读，json 输出保留稳定字段
   init 默认不覆盖已有文件，传 --force 才覆盖 DataSpec 管理文件；不会写入明文 API token
   bootstrap 是 AI 新会话第一跳；服务可达时读取后端启动包，服务不可达时仍输出本地 BLOCKED JSON 和 nextActions
   doctor 默认做轻量 OpenAPI 状态和 AI Context 缓存检查；传 --check-openapi 时执行完整 schema 漂移检查

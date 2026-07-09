@@ -277,6 +277,19 @@
       "successExample": { "command": "DATASPEC_DB_PASSWORD=*** node tools/dataspec-cli.mjs schema-plan --project 1 --database-type postgresql --host localhost --database demo --schema public --username readonly --password-env DATASPEC_DB_PASSWORD --table user_order --format json", "output": { "kind": "dataspec-database-schema-change-plan", "riskLevel": "BLOCKED", "changeSet": [] } },
       "failureExample": { "exitCode": 2, "diagnostic": { "code": "DATASPEC_REQUEST_FAILED" } },
       "recommendedNextActions": ["Use --password-env instead of --password for real connections.", "Treat DROP_CANDIDATE and blockedReasons as a stop sign for human review."]
+    },
+    {
+      "id": "comment-plan-preview",
+      "command": "comment-plan preview --project <id> --database-type <postgresql|mysql> --host <host> --database <name> --username <user> --table <name> --format json",
+      "description": "Preview a read-only database COMMENT patch plan with safe dry-run SQL, risk, evidence, unsupported items, and next actions.",
+      "requiredOptions": ["project", "database-type", "host", "database", "username", "table"],
+      "optionalOptions": ["port", "schema", "password-env", "password", "metadata-cache-mode", "format", "server", "dataspec-token"],
+      "outputShape": ["kind", "schemaVersion", "projectId", "databaseType", "metadataFingerprint", "planHash", "riskLevel", "summary", "summary.executableChangeCount", "summary.unsupportedCount", "items[]", "items[].commentDiff", "items[].dryRunSql", "dryRunSql", "dialectSupport", "dialectSupport.columnCommentSqlSupported", "rollbackHint", "evidence", "safety", "safety.readOnly", "nextActions[]"],
+      "exitCodes": { "0": "COMMENT patch plan printed as JSON or text", "2": "argument, missing table, unsupported database type, or request error" },
+      "safety": { "readOnly": true, "writesProject": false, "writesSourceDatabase": false, "requiresDryRun": true, "requiresIdempotencyKey": false, "sensitiveInputs": ["databasePassword", "dataspec-token"], "nextActions": ["Use --password-env instead of --password for real connections.", "Review dry-run SQL and unsupported items before creating a migration file."] },
+      "successExample": { "command": "DATASPEC_DB_PASSWORD=*** node tools/dataspec-cli.mjs comment-plan preview --project 1 --database-type postgresql --host localhost --database demo --schema public --username readonly --password-env DATASPEC_DB_PASSWORD --table user_order --format json", "output": { "kind": "dataspec-database-comment-patch-plan", "riskLevel": "LOW", "summary": { "executableChangeCount": 1, "unsupportedCount": 0 }, "items": [{ "objectType": "COLUMN", "commentDiff": "当前数据库 COMMENT 为空，目标为：手机号。", "dryRunSql": "COMMENT ON COLUMN \"public\".\"user_order\".\"phone\" IS '手机号';" }], "dialectSupport": { "columnCommentSqlSupported": true }, "safety": { "readOnly": true } } },
+      "failureExample": { "exitCode": 2, "diagnostic": { "code": "COMMENT_PLAN_TABLE_REQUIRED", "message": "comment-plan preview 需要至少提供一个 --table <name>" } },
+      "recommendedNextActions": ["Prefer --password-env for real database credentials.", "Review dry-run SQL, rollbackHint, evidence, and unsupported items before manual apply.", "Do not execute SQL from text output without migration review."]
     }
   ],
   "mcpTools": [

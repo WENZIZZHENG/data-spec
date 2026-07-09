@@ -34,7 +34,8 @@ const REQUIRED_CLI_COMMANDS = [
   'generate-ddl',
   'synthetic-examples-generate',
   'contract-import-preview',
-  'schema-plan'
+  'schema-plan',
+  'comment-plan-preview'
 ]
 
 const REQUIRED_MCP_TOOLS = [
@@ -561,6 +562,8 @@ function looksLikeRawSecret(value) {
     /\bhttps?:\/\/(?!\[REDACTED\]@|<)[^\s/?#@]+@/i,
     /\b(?:postgres(?:ql)?|mysql|mariadb|sqlserver|oracle|mongodb|redis):\/\/(?!\[REDACTED\]|<)[^\s"',;}&]+/i,
     /(authorization\s*[:=]\s*bearer\s+)(?!<|\[REDACTED\]|\*\*\*)[^\s,;]+/i,
+    /(authorization\s*[:=]\s*(?:basic|apikey|api-key|token|digest)\s+)(?!<|\[REDACTED\]|\*\*\*)[^\s"',;}&]+/i,
+    /(authorization\s*[:=]\s*)(?!<|\[REDACTED\]|\*\*\*|bearer\s+|basic\s+|apikey\s+|api-key\s+|token\s+|digest\s+)[^\s"',;}&]+/i,
     /--dataspec-token\s+(?!<|\[REDACTED\]|\$\{|\*\*\*)[^\s,;]+/i,
     /(?:password|passwd|pwd|token|api[_-]?token|dataspec[_-]?token|api[_-]?key|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|dsn)\s*[:=]\s*(?!<|\[REDACTED\]|\*\*\*)[^\s"',;}&]+/i
   ].some((pattern) => pattern.test(value))

@@ -88,6 +88,17 @@ export class ReverseImportPage {
     await expect(this.page.getByTestId(stableTestIds.reverseImport.previewTabs)).toBeVisible()
   }
 
+  /** 生成只读 COMMENT 回写计划并等待结果面板。 */
+  async generateCommentPlan() {
+    await this.page.getByTestId(stableTestIds.reverseImport.commentPlanButton).click()
+    await expect(this.page.getByTestId(stableTestIds.reverseImport.commentPlanPanel)).toBeVisible()
+  }
+
+  /** 断言 COMMENT 回写计划面板包含安全审阅所需内容。 */
+  async expectCommentPlan(content: RegExp | string) {
+    await expect(this.page.getByTestId(stableTestIds.reverseImport.commentPlanPanel)).toContainText(content)
+  }
+
   /** 切换到字段候选结果页签。 */
   async openFieldCandidates() {
     await this.page.getByTestId(stableTestIds.reverseImport.fieldCandidatesTab).click()

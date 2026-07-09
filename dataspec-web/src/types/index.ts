@@ -1611,6 +1611,152 @@ export interface DatabaseSchemaChangePlan {
   metadataCache?: DatabaseMetadataCacheInfo
 }
 
+export type DatabaseCommentPlanStatus = 'NO_OP' | 'MISSING' | 'CHANGED' | 'UNSUPPORTED' | (string & {})
+export type DatabaseCommentObjectType = 'TABLE' | 'COLUMN' | (string & {})
+export type DatabaseCommentRiskLevel = 'SAFE' | 'LOW' | 'MEDIUM' | 'HIGH' | (string & {})
+
+/** COMMENT 回写计划聚合统计；只描述差异范围，不代表 SQL 已执行。 */
+export interface DatabaseCommentPatchPlanSummary {
+  /** 本次计划覆盖的表数量。 */
+  tableCount?: number
+  /** 本次计划读取的字段数量。 */
+  columnCount?: number
+  /** 计划项总数，包含 no-op 和 unsupported。 */
+  itemCount?: number
+  /** 可生成 dry-run SQL 的变更数量。 */
+  executableChangeCount?: number
+  /** 已一致、无需生成 SQL 的项数量。 */
+  noOpCount?: number
+  /** 当前注释为空但存在目标注释的项数量。 */
+  missingCount?: number
+  /** 当前注释与目标注释不同的项数量。 */
+  changedCount?: number
+  /** 因方言或证据不足不能安全生成 SQL 的项数量。 */
+  unsupportedCount?: number
+  /** 带阻塞原因、不得自动执行的项数量。 */
+  blockedCount?: number
+}
+
+/** COMMENT SQL 方言支持摘要，前端据此展示 unsupported 和人工处理边界。 */
+export interface DatabaseCommentDialectSupport {
+  /** 数据库类型，如 POSTGRESQL 或 MYSQL。 */
+  databaseType?: string
+  /** true 表示可安全生成表 COMMENT dry-run SQL。 */
+  tableCommentSqlSupported?: boolean
+  /** true 表示可安全生成列 COMMENT dry-run SQL。 */
+  columnCommentSqlSupported?: boolean
+  /** 不支持或需人工处理的原因；文本应已脱敏。 */
+  unsupportedReasons?: string[]
+  /** 方言相关补充说明。 */
+  notes?: string[]
+}
+
+/** COMMENT patch plan 证据摘要；只包含 schema-only 范围和标准引用。 */
+export interface DatabaseCommentPatchPlanEvidence {
+  /** schema/database 范围摘要，不包含 JDBC URL。 */
+  schemaScope?: string
+  /** 本次选择的表范围。 */
+  tableScope?: string[]
+  /** schema-only metadata fingerprint。 */
+  metadataFingerprint?: string
+  /** 参与计划判断的标准引用，如 template:<key> 或 field:<name>。 */
+  standardReferences?: string[]
+  /** 脱敏请求摘要，便于复制给 AI 或评审。 */
+  normalizedInputSummary?: string
+  /** 安全标记，如 readOnly、schemaOnly、noSourceWrites。 */
+  safetyFlags?: string[]
+}
+
+/** COMMENT patch plan 安全边界，说明该响应仅用于 dry-run 审阅。 */
+export interface DatabaseCommentPatchPlanSafety {
+  /** true 表示计划生成只读取 schema metadata。 */
+  readOnly?: boolean
+  /** true 表示服务端会写源数据库；COMMENT plan 应保持 false。 */
+  writesSourceDatabase?: boolean
+  /** true 表示服务端会写 DataSpec 项目状态；COMMENT plan 应保持 false。 */
+  writesProject?: boolean
+  /** true 表示需要人工审阅后再进入迁移流程。 */
+  requiresManualApply?: boolean
+  /** true 表示响应可复制给 AI 辅助审阅。 */
+  safeForAiCopy?: boolean
+  /** true 表示自由文本已经经过敏感信息脱敏。 */
+  sensitiveRedaction?: boolean
+}
+
+/** COMMENT 回写计划的单个表或字段注释差异项。 */
+export interface DatabaseCommentPatchPlanItem {
+  /** 对象类型：TABLE 或 COLUMN。 */
+  objectType?: DatabaseCommentObjectType
+  /** 来源 schema 名；MySQL 场景可能为空。 */
+  schemaName?: string
+  /** 来源表名；来自 schema metadata，不包含连接串或业务数据行。 */
+  tableName?: string
+  /** 来源字段名；TABLE 项为空。 */
+  columnName?: string
+  /** 命中的 DataSpec 标准字段名；表项或未命中时为空。 */
+  standardFieldName?: string
+  /** 差异状态：NO_OP、MISSING、CHANGED 或 UNSUPPORTED。 */
+  status?: DatabaseCommentPlanStatus
+  /** 当前数据库 COMMENT；应为脱敏文本。 */
+  currentComment?: string
+  /** 目标 DataSpec COMMENT；应为脱敏文本。 */
+  targetComment?: string
+  /** 面向用户和 AI 的注释差异说明。 */
+  commentDiff?: string
+  /** 单项 dry-run SQL；unsupported/no-op 项为空。 */
+  dryRunSql?: string
+  /** 当前项的方言支持摘要。 */
+  dialectSupport?: string
+  /** 单项风险：LOW、MEDIUM 或 HIGH。 */
+  riskLevel?: DatabaseCommentRiskLevel
+  /** 本项回滚提示。 */
+  rollbackHint?: string
+  /** 证据引用，如 template:<tablePrefix> 或 field:<fieldName>。 */
+  evidenceRefs?: string[]
+  /** 需要人工处理的检查点。 */
+  manualChecks?: string[]
+  /** 阻止生成可执行 SQL 的原因。 */
+  blockedReasons?: string[]
+}
+
+/** 数据库 COMMENT 回写计划响应；只用于预览、复制和审阅，不执行源库写入。 */
+export interface DatabaseCommentPatchPlan {
+  /** 响应类型标识，供 CLI、前端和 AI 判断 JSON 语义。 */
+  kind?: string
+  /** 响应 schema 版本。 */
+  schemaVersion?: number
+  /** DataSpec 项目 ID。 */
+  projectId?: number
+  /** 数据库类型，如 POSTGRESQL 或 MYSQL。 */
+  databaseType?: string
+  /** 数据库名；不得包含完整 JDBC URL 或 DSN。 */
+  databaseName?: string
+  /** schema 名；MySQL 场景可能为空。 */
+  schemaName?: string
+  /** schema-only metadata fingerprint；不包含凭据或业务数据行。 */
+  metadataFingerprint?: string
+  /** 当前 COMMENT 计划内容 hash。 */
+  planHash?: string
+  /** 计划聚合统计。 */
+  summary?: DatabaseCommentPatchPlanSummary
+  /** 表/字段 COMMENT 差异项。 */
+  items?: DatabaseCommentPatchPlanItem[]
+  /** 合并后的 dry-run SQL 草案。 */
+  dryRunSql?: string
+  /** 当前方言对表/列 COMMENT SQL 的支持情况。 */
+  dialectSupport?: DatabaseCommentDialectSupport
+  /** 整体风险等级。 */
+  riskLevel?: DatabaseCommentRiskLevel
+  /** 整体回滚提示。 */
+  rollbackHint?: string
+  /** 计划生成证据。 */
+  evidence?: DatabaseCommentPatchPlanEvidence
+  /** 只读安全边界。 */
+  safety?: DatabaseCommentPatchPlanSafety
+  /** 面向用户和 AI 的后续动作建议。 */
+  nextActions?: string[]
+}
+
 export type DatabaseMetadataCacheMode = 'AUTO' | 'REFRESH' | 'BYPASS' | (string & {})
 
 export interface DatabaseConnectionReq {
