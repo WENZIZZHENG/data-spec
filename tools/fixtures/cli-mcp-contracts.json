@@ -148,6 +148,19 @@
       "recommendedNextActions": ["Configure defaultPaths or pass --path before scanning.", "Treat HIGH renameRisk as a stop sign for human review."]
     },
     {
+      "id": "code-patch-plan",
+      "command": "code-patch plan --field <name> --to-field <new> --format json",
+      "description": "Generate a read-only dry-run business code Patch Plan for a standard field rename, type change, or enum change.",
+      "requiredOptions": ["field"],
+      "optionalOptions": ["to-field", "from-type", "to-type", "enum-change", "alias", "path", "format"],
+      "outputShape": ["kind", "schemaVersion", "change", "change.fieldName", "change.changeTypes[]", "scanSummary", "candidateEdits[]", "candidateEdits[].id", "candidateEdits[].changeType", "candidateEdits[].fileRef", "candidateEdits[].reference", "candidateEdits[].riskLevel", "candidateEdits[].confidence", "candidateEdits[].suggestedEdit", "candidateEdits[].dryRunDiff", "candidateEdits[].requiresHumanReview", "candidateEdits[].reason", "manualSteps[]", "riskLevel", "dryRunResult", "dryRunResult.willWrite", "verificationCommands[]", "rollbackHint", "safety", "safety.readOnly", "safety.writesProject", "safety.requiresDryRun", "safety.externalNetworkUsed", "safety.externalLlmUsed", "diagnostics[]", "nextActions[]"],
+      "exitCodes": { "0": "dry-run patch plan printed", "2": "argument error, missing change intent, missing field, missing bounded paths, or scan error" },
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": true, "requiresIdempotencyKey": false, "externalNetworkUsed": false, "externalLlmUsed": false, "sensitiveInputs": ["businessRepositoryFiles"], "nextActions": ["Review candidate edits manually before changing business code.", "Do not auto-apply the dry-run diff."] },
+      "successExample": { "command": "node tools/dataspec-cli.mjs code-patch plan --field phone --to-field mobile_phone --path src --format json", "output": { "kind": "dataspec.code-field.patch-plan", "riskLevel": "HIGH", "dryRunResult": { "willWrite": false }, "candidateEdits": [] } },
+      "failureExample": { "exitCode": 2, "diagnostic": { "code": "DATASPEC_DEFAULT_PATHS_MISSING", "category": "CONFIGURATION" } },
+      "recommendedNextActions": ["review HIGH risk candidates manually before editing.", "把接受的候选修改转成业务仓库 OpenSpec 或代码任务。", "Run verificationCommands after manual edits."]
+    },
+    {
       "id": "install-hook",
       "command": "install-hook --hook pre-commit --format json",
       "description": "Install DataSpec-managed local SQL check hooks and optional VS Code task files in the current business repository.",

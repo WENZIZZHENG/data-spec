@@ -25,6 +25,7 @@ const REQUIRED_CLI_COMMANDS = [
   'lint',
   'fixed-sql-patch',
   'index-refs',
+  'code-patch-plan',
   'install-hook',
   'export-context',
   'context-budget-plan',

@@ -389,7 +389,7 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function sanitizeSecretText(value) {
+export function sanitizeSecretText(value) {
   if (value === undefined || value === null) {
     return value
   }

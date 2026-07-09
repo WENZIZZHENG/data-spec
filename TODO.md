@@ -4,7 +4,7 @@
 
 ## 下一步顺序
 
-1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90、P6-91、P6-92、P6-93、P6-186 已完成第一版；P6-78、P6-82、P6-88、P6-90、P6-93、P6-186 对应 OpenSpec change 均已归档。
+1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90、P6-91、P6-92、P6-93、P6-179、P6-186 已完成第一版；P6-78、P6-82、P6-88、P6-90、P6-93、P6-179、P6-186 对应 OpenSpec change 均已归档。
 2. 近期优先行动项已清空，后续开发由用户从 P6-94 以后候选池或新需求中选择，不再从 P6-71 到 P6-188 全量顺扫。
 3. 效率优先顺序：真实数据库集成测试已作为可选 Docker profile，不默认阻塞小任务；下一项开工前按任务类型重新判断快速/常规/SDD。
 4. 暂缓池：P6-94 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
@@ -1784,13 +1784,13 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不做云端长期记忆，不跨用户同步，不把会话状态当权限依据。
 
 ### P6-179：标准字段到业务代码 Patch Plan
-- 状态：待办。
+- 状态：已完成第一版，已新增本地只读 `code-patch plan` CLI 和 Patch Plan 工具 API。
 - 为什么做：字段标准变更后，仅知道影响哪些文件还不够，AI 需要一个可审查的 Patch Plan 来判断哪些实体、DTO、SQL、迁移脚本和测试可能要改。
 - 已有基础：已有业务代码字段引用索引、标准变更迁移 Recipe、编辑器提示、业务仓库合规分、字段影响分析和 fixedSql 文件补丁待办。
-- 缺口：缺少 patchPlan、candidateEdit、fileRef、riskLevel、dryRunDiff、manualStep 和 rollbackHint；当前还不能把标准变化转成可审查的代码修改计划。
+- 已完成能力：`code-patch plan` 支持字段重命名、类型变化和枚举变化，输出 `patchPlan`、`candidateEdits[]`、`fileRef`、`riskLevel`、`dryRunDiff`、`manualSteps[]`、`verificationCommands[]`、`rollbackHint`、`safety`、`diagnostics[]` 和 `nextActions[]`；默认只读 dry-run，不写业务文件，未配置 `defaultPaths` 且未传 `--path` 时返回 `DATASPEC_DEFAULT_PATHS_MISSING`。
 - 参考项目：`openrewrite/rewrite` 的迁移 recipe、`codemod-com/codemod` 的代码修改计划和 `ast-grep/ast-grep` 的结构化匹配；只借鉴 patch planning，不默认改写业务仓库。
-- 落地产物：新增字段变更到业务代码 Patch Plan 的 CLI/API；基于引用索引和规则生成候选修改、风险等级、验证命令和人工确认点；可导出 Markdown/JSON。
-- 验收标准：字段重命名、类型变化或枚举变化时能列出候选文件和建议修改；默认 dry-run，不写业务文件；AI 可据此逐项确认并生成后续 OpenSpec 或代码任务。
+- 落地产物：新增字段变更到业务代码 Patch Plan 的 CLI 和本地工具 API；基于引用索引和规则生成候选修改、风险等级、验证命令和人工确认点；可导出 Markdown/JSON；CLI/MCP 契约 fixture 已记录 `code-patch-plan` 的输出 shape 与安全 metadata。
+- 验证证据：`node --test tools/*.test.mjs` 370 tests、368 pass、2 skipped；`node tools/dataspec-cli-mcp-contract-check.mjs --format json` `ok=true` 且 0 diagnostics；`openspec validate add-code-field-patch-plan --strict` valid；`openspec archive add-code-field-patch-plan --yes` 已同步 `cli-mcp-contract-fixtures`、`code-field-patch-plan`、`dataspec-cli` 主规格并归档；独立评审 agent `019f45e5-5ef6-7452-9d86-d538117d6574` 的 2 个 Important 和 1 个 Minor finding 均已修复并关闭 agent。
 - 边界：不自动应用补丁，不保证识别所有动态 SQL；第一版聚焦 Java/SQL/JSON 等项目已有高频文件类型。
 
 ### P6-180：数据库直连采集作业断点续扫与限速保护

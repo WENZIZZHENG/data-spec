@@ -24,6 +24,10 @@ import {
   buildCodeFieldReferenceIndex,
   formatCodeFieldReferenceIndexText
 } from './dataspec-code-refs.mjs'
+import {
+  buildCodeFieldPatchPlan,
+  formatCodeFieldPatchPlanMarkdown
+} from './dataspec-code-patch-plan.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const CLI_VERSION = '0.1.0'
@@ -145,6 +149,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'index-refs') {
       return await runIndexRefs(rest, io)
+    }
+    if (command === 'code-patch' || command === 'codepatch') {
+      return await runCodePatch(rest, io)
     }
     if (command === 'review-pr') {
       return await runReviewPr(rest, io, fetchFn)
@@ -1124,6 +1131,67 @@ async function runIndexRefs(args, io) {
     io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
   } else {
     io.writeOut(formatCodeFieldReferenceIndexText(output))
+  }
+  return 0
+}
+
+async function runCodePatch(args, io) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'plan') {
+    throw new Error(`code-patch 仅支持 plan 子命令: ${subcommand ?? ''}`.trim())
+  }
+  const { positional, options } = parseArgs(rest, [
+    'field',
+    'to-field',
+    'from-type',
+    'to-type',
+    'enum-change',
+    'alias',
+    'path',
+    'format'
+  ], [], ['enum-change', 'alias', 'path'])
+  if (positional.length > 0) {
+    throw new Error(`code-patch plan 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const format = options.format ?? 'json'
+  if (!['json', 'markdown'].includes(format)) {
+    throw new Error('code-patch plan 仅支持 --format json|markdown')
+  }
+  const config = loadDataSpecConfig(cliCwd(io))
+  const explicitPaths = optionValues(options.path)
+  const scanPaths = explicitPaths.length > 0 ? explicitPaths : resolveDefaultPaths(config)
+  if (scanPaths.length === 0) {
+    throw new DataSpecCliError('未配置 .dataspec/config.json 的 defaultPaths，已停止以避免扫描整个业务仓库。', {
+      code: 'DATASPEC_DEFAULT_PATHS_MISSING',
+      category: 'CONFIGURATION',
+      severity: 'WARNING',
+      retryable: true,
+      suggestedAction: '传入 --path <file|dir>，或运行 dataspec init --default-path <path> 配置 defaultPaths 后重试。'
+    })
+  }
+  let output
+  try {
+    output = await buildCodeFieldPatchPlan({
+      fieldName: options.field,
+      aliases: optionValues(options.alias),
+      renameTo: options['to-field'],
+      fromType: options['from-type'],
+      toType: options['to-type'],
+      enumChanges: optionValues(options['enum-change']),
+      scanPaths,
+      rootDir: explicitPaths.length > 0 ? cliCwd(io) : config.rootDir,
+      outputRootDir: config.configPath ? config.rootDir : cliCwd(io)
+    })
+  } catch (error) {
+    if (error?.diagnostic) {
+      throw new DataSpecCliError(error.message, error.diagnostic)
+    }
+    throw error
+  }
+  if (format === 'json') {
+    io.writeOut(`${JSON.stringify(output, null, 2)}\n`)
+  } else {
+    io.writeOut(formatCodeFieldPatchPlanMarkdown(output))
   }
   return 0
 }
@@ -6335,6 +6403,7 @@ Usage:
   node tools/dataspec-cli.mjs lint-changed [--project <id>] [--profile <id>|--task-type <type>] --format text|json [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs install-hook [--hook pre-commit] [--with-vscode] [--format text|json]
   node tools/dataspec-cli.mjs index-refs --field <name> [--alias <name|field=alias> ...] [--path <file|dir> ...] [--format text|json]
+  node tools/dataspec-cli.mjs code-patch plan --field <name> [--to-field <new>] [--from-type <type>] [--to-type <type>] [--enum-change <old=new> ...] [--alias <alias> ...] [--path <file|dir> ...] [--format json|markdown]
   node tools/dataspec-cli.mjs review-pr <path...> --project <id> --repo <owner/name> --pr <number> --token <token> [--format text|json] [--server <url>] [--dataspec-token <token>] [--idempotency-key <key>]
   node tools/dataspec-cli.mjs export-context [--project <id>] [--profile <id>|--task-type <type>] [--output <zip>] [--cache] [--cache-ttl-days <days>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--snapshot-id <id>|--snapshot-version <version>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs context-budget plan [--project <id>] --token-budget <n> [--profile <id>|--task-type <type>] [--scope all|field|domain|tag|table|changed] [--query <text>] [--status <status>] [--limit <n>] [--target-table <name>] [--target-file <path>] [--format text|json] [--server <url>] [--dataspec-token <token>]
@@ -6382,6 +6451,7 @@ Options:
   lint-changed 只对 changed 发现的 SQL 文件调用 lint；json 适合 AI 读取，text 输出 file:line:column 行格式供 IDE Problem Matcher 跳转；无 SQL 变更时返回诊断且不调用服务端
   install-hook 显式安装 DataSpec 管理的本地 pre-commit hook；--with-vscode 会生成 VS Code task/problem matcher；不会覆盖非 DataSpec 管理的用户文件
   index-refs 只读扫描 defaultPaths 或 --path 内字段引用，输出重命名风险；多字段扫描时 --alias 使用 field=alias 明确归属；不会调用服务端或修改业务代码
+  code-patch plan 基于字段引用索引生成字段变更 Patch Plan；默认 dry-run，只输出候选修改、人工步骤、验证命令和回滚提示，不写业务仓库
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   context-budget plan 是导出前只读预算预检；只调用后端 planner，不下载、不缓存、不写入 AI Context 文件
   context-quality check 是本地只读质量检查；读取已导出的目录、zip 或预算 plan JSON，不调用后端、不写缓存、不修改项目状态

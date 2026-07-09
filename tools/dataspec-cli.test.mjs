@@ -1997,6 +1997,178 @@ test('index-refs stops without scanning the whole repository when paths are miss
   }
 })
 
+test('code-patch plan creates rename dry-run JSON without changing business files', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-code-patch-rename-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await mkdir(path.join(dir, 'src'), { recursive: true })
+    await mkdir(path.join(dir, 'db', 'migration'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({ projectId: 7, defaultPaths: ['src', 'db'] }),
+      'utf8'
+    )
+    const dtoPath = path.join(dir, 'src', 'UserDto.java')
+    const migrationPath = path.join(dir, 'db', 'migration', 'V1__user.sql')
+    const dtoContent = 'class UserDto { String phone; String mobile; String dsn = "jdbc:postgresql://localhost/demo"; String password = "secret"; }\n'
+    const migrationContent = 'ALTER TABLE user_account ADD COLUMN phone varchar(20);\n'
+    await writeFile(dtoPath, dtoContent, 'utf8')
+    await writeFile(migrationPath, migrationContent, 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'code-patch',
+      'plan',
+      '--field',
+      'phone',
+      '--to-field',
+      'mobile_phone',
+      '--alias',
+      'mobile',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(io.stderr, '')
+    assert.equal(await readFile(dtoPath, 'utf8'), dtoContent)
+    assert.equal(await readFile(migrationPath, 'utf8'), migrationContent)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.kind, 'dataspec.code-field.patch-plan')
+    assert.equal(output.schemaVersion, 1)
+    assert.equal(output.change.fieldName, 'phone')
+    assert.equal(output.change.renameTo, 'mobile_phone')
+    assert.equal(output.riskLevel, 'HIGH')
+    assert.equal(output.dryRunResult.willWrite, false)
+    assert.equal(output.safety.readOnly, true)
+    assert.equal(output.safety.writesProject, false)
+    assert.equal(output.safety.externalNetworkUsed, false)
+    assert.ok(output.candidateEdits.some((item) =>
+      item.fileRef.path === 'db/migration/V1__user.sql'
+        && item.riskLevel === 'HIGH'
+        && item.suggestedEdit.replacement === 'mobile_phone'
+        && item.dryRunDiff.includes('mobile_phone')
+    ))
+    assert.ok(output.candidateEdits.every((item) => item.requiresHumanReview))
+    assert.ok(output.verificationCommands.some((item) =>
+      item.command.includes('code-patch plan') && item.command.includes('--alias mobile')
+    ))
+    assert.ok(output.verificationCommands.some((item) => item.command.includes('index-refs')))
+    assert.doesNotMatch(JSON.stringify(output), /secret|jdbc:postgresql/i)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('code-patch plan redacts user-controlled secrets from JSON output', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-code-patch-redact-'))
+  try {
+    await mkdir(path.join(dir, 'src'), { recursive: true })
+    await writeFile(path.join(dir, 'src', 'UserDto.java'), 'class UserDto { String phone; }\n', 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'code-patch',
+      'plan',
+      '--field',
+      'phone',
+      '--to-field',
+      'token=raw-secret',
+      '--from-type',
+      'password=old-secret',
+      '--to-type',
+      'dsn=postgresql://admin:secret-pass@localhost/demo',
+      '--enum-change',
+      'DRAFT=api_key=enum-secret',
+      '--path',
+      'src',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    const outputText = io.stdout
+    assert.doesNotMatch(outputText, /raw-secret|old-secret|secret-pass|enum-secret/i)
+    const output = JSON.parse(outputText)
+    assert.match(output.change.renameTo, /token=\*\*\*/)
+    assert.ok(output.verificationCommands.every((item) => !/raw-secret|old-secret|secret-pass|enum-secret/i.test(item.command)))
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('code-patch plan prints markdown for type and enum review steps', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-code-patch-markdown-'))
+  try {
+    await mkdir(path.join(dir, 'src'), { recursive: true })
+    await writeFile(path.join(dir, 'src', 'OrderStatus.java'), 'enum OrderStatus { DRAFT } class Order { String order_status; }\n', 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'code-patch',
+      'plan',
+      '--field',
+      'order_status',
+      '--from-type',
+      'varchar',
+      '--to-type',
+      'enum',
+      '--enum-change',
+      'DRAFT=PENDING',
+      '--path',
+      'src',
+      '--format',
+      'markdown'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(io.stderr, '')
+    assert.match(io.stdout, /DataSpec Code Patch Plan/)
+    assert.match(io.stdout, /Risk: MEDIUM/)
+    assert.match(io.stdout, /Manual steps/)
+    assert.match(io.stdout, /DRAFT=PENDING/)
+    assert.match(io.stdout, /OrderStatus\.java/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('code-patch plan rejects missing change intent and missing bounded paths', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-code-patch-errors-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(path.join(dir, '.dataspec', 'config.json'), JSON.stringify({ projectId: 7, defaultPaths: [] }), 'utf8')
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+    const noIntentIo = createIo('', dir)
+
+    const noIntentCode = await runCli(['code-patch', 'plan', '--field', 'phone', '--path', '.', '--format', 'json'], noIntentIo, fetchFn)
+
+    assert.equal(noIntentCode, 2)
+    assert.equal(noIntentIo.stdout, '')
+    assert.match(noIntentIo.stderr, /CODE_PATCH_CHANGE_REQUIRED/)
+    const missingPathsIo = createIo('', dir)
+
+    const missingPathsCode = await runCli(['code-patch', 'plan', '--field', 'phone', '--to-field', 'mobile_phone', '--format', 'json'], missingPathsIo, fetchFn)
+
+    assert.equal(missingPathsCode, 2)
+    assert.equal(missingPathsIo.stdout, '')
+    assert.match(missingPathsIo.stderr, /DATASPEC_DEFAULT_PATHS_MISSING/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('review-pr posts markdown comment and returns 1 when lint has errors', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-'))
   try {

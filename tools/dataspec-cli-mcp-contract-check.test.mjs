@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -70,6 +70,36 @@ test('bundled fixtures include index-refs readonly contract', async () => {
   assert.ok(command.successExample.command.includes('phone=mobile_phone'))
   assert.equal(command.failureExample.diagnostic.code, 'DATASPEC_DEFAULT_PATHS_MISSING')
   assert.ok(command.recommendedNextActions.some((item) => item.includes('defaultPaths') || item.includes('--path')))
+})
+
+test('bundled fixtures include code-patch plan readonly contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'code-patch-plan')
+
+  assert.ok(command)
+  assert.equal(command.command, 'code-patch plan --field <name> --to-field <new> --format json')
+  assert.ok(command.outputShape.includes('candidateEdits[]'))
+  assert.ok(command.outputShape.includes('candidateEdits[].id'))
+  assert.ok(command.outputShape.includes('candidateEdits[].changeType'))
+  assert.ok(command.outputShape.includes('candidateEdits[].reference'))
+  assert.ok(command.outputShape.includes('candidateEdits[].riskLevel'))
+  assert.ok(command.outputShape.includes('candidateEdits[].confidence'))
+  assert.ok(command.outputShape.includes('candidateEdits[].requiresHumanReview'))
+  assert.ok(command.outputShape.includes('candidateEdits[].reason'))
+  assert.ok(command.outputShape.includes('manualSteps[]'))
+  assert.ok(command.outputShape.includes('dryRunResult.willWrite'))
+  assert.ok(command.outputShape.includes('safety.readOnly'))
+  assert.ok(command.outputShape.includes('safety.writesProject'))
+  assert.ok(command.outputShape.includes('safety.requiresDryRun'))
+  assert.ok(command.outputShape.includes('safety.externalNetworkUsed'))
+  assert.equal(command.safety.readOnly, true)
+  assert.equal(command.safety.writesProject, false)
+  assert.equal(command.safety.requiresDryRun, true)
+  assert.equal(command.safety.requiresIdempotencyKey, false)
+  assert.equal(command.safety.externalNetworkUsed, false)
+  assert.equal(command.safety.externalLlmUsed, false)
+  assert.equal(command.failureExample.diagnostic.code, 'DATASPEC_DEFAULT_PATHS_MISSING')
+  assert.ok(command.recommendedNextActions.some((item) => item.includes('review') || item.includes('人工')))
 })
 
 test('bundled fixtures include context-budget plan readonly contract', async () => {
@@ -244,6 +274,43 @@ test('fixed SQL patch fixture matches actual dry-run json shape', async () => {
     assert.equal(typeof output.lintOriginalSha256, 'string')
     assert.equal(typeof output.planHash, 'string')
     assert.ok(command.outputShape.every((field) => hasFixtureShapeField(output, field)))
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('code-patch plan fixture matches actual dry-run json shape', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'code-patch-plan')
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'dataspec-code-patch-fixture-'))
+  try {
+    await mkdir(path.join(tempDir, 'src'), { recursive: true })
+    await writeFile(path.join(tempDir, 'src', 'User.java'), 'class User { String phone; }\n', 'utf8')
+    const io = createIo()
+    io.cwd = () => tempDir
+
+    const code = await runCli([
+      'code-patch',
+      'plan',
+      '--field',
+      'phone',
+      '--to-field',
+      'mobile_phone',
+      '--path',
+      'src',
+      '--format',
+      'json'
+    ], io)
+
+    assert.equal(code, 0)
+    const output = JSON.parse(io.stdout)
+    for (const shape of command.outputShape) {
+      assert.ok(hasFixtureShapeField(output, shape), `missing output shape: ${shape}`)
+    }
+    assert.equal(output.kind, 'dataspec.code-field.patch-plan')
+    assert.equal(output.safety.readOnly, true)
+    assert.equal(output.safety.writesProject, false)
+    assert.equal(output.dryRunResult.willWrite, false)
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }
@@ -516,11 +583,20 @@ function createIo() {
 }
 
 function hasFixtureShapeField(output, field) {
-  return field
-    .replace(/\[\]/g, '')
-    .split('.')
-    .every((part, index, parts) => {
-      const target = parts.slice(0, index + 1).reduce((value, key) => value?.[key], output)
-      return target !== undefined
-    })
+  return hasFixtureShapePath(output, field.split('.'))
+}
+
+function hasFixtureShapePath(value, parts) {
+  if (parts.length === 0) {
+    return value !== undefined
+  }
+  const [part, ...rest] = parts
+  if (part.endsWith('[]')) {
+    const arrayValue = value?.[part.slice(0, -2)]
+    if (!Array.isArray(arrayValue)) {
+      return false
+    }
+    return rest.length === 0 || arrayValue.some((item) => hasFixtureShapePath(item, rest))
+  }
+  return hasFixtureShapePath(value?.[part], rest)
 }
