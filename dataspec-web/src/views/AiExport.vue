@@ -1,5 +1,5 @@
 <template>
-  <div class="ai-export-page">
+  <div class="ai-export-page" :data-testid="stableTestIds.aiContext.page">
     <div class="page-header">
       <div>
         <h2>AI Context</h2>
@@ -29,7 +29,7 @@
     </el-empty>
 
     <template v-else>
-      <div class="scope-toolbar">
+      <div class="scope-toolbar" :data-testid="stableTestIds.aiContext.scopeToolbar">
         <el-segmented v-model="scopeForm.scope" :options="scopeOptions" />
         <el-input
           v-model="scopeForm.query"
@@ -191,14 +191,27 @@
         </div>
       </div>
 
-      <el-tabs v-model="activeTab" class="preview-tabs">
-        <el-tab-pane label="DATABASE_RULES.md" name="databaseRules">
+      <el-tabs
+        v-model="activeTab"
+        class="preview-tabs"
+        :data-testid="stableTestIds.aiContext.previewTabs"
+      >
+        <el-tab-pane name="databaseRules">
+          <template #label>
+            <span :data-testid="stableTestIds.aiContext.databaseRulesTab">DATABASE_RULES.md</span>
+          </template>
           <pre class="preview-code">{{ databaseRules || '暂无预览' }}</pre>
         </el-tab-pane>
-        <el-tab-pane label="field-catalog.json" name="fieldCatalog">
+        <el-tab-pane name="fieldCatalog">
+          <template #label>
+            <span :data-testid="stableTestIds.aiContext.fieldCatalogTab">field-catalog.json</span>
+          </template>
           <pre class="preview-code">{{ fieldCatalog || '暂无预览' }}</pre>
         </el-tab-pane>
-        <el-tab-pane label="rules.yaml" name="rulesYaml">
+        <el-tab-pane name="rulesYaml">
+          <template #label>
+            <span :data-testid="stableTestIds.aiContext.rulesYamlTab">rules.yaml</span>
+          </template>
           <pre class="preview-code">{{ rulesYaml || '暂无预览' }}</pre>
         </el-tab-pane>
       </el-tabs>
@@ -233,6 +246,7 @@ import {
   buildBudgetPlanSummary,
   formatEstimatedTokens
 } from '@/utils/aiContextBudgetPlan'
+import { stableTestIds } from '@/utils/stableTestIds'
 
 const projectStore = useProjectStore()
 const activeTab = ref<'databaseRules' | 'fieldCatalog' | 'rulesYaml'>('databaseRules')

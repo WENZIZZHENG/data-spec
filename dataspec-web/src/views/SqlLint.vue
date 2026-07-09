@@ -1,9 +1,14 @@
 <template>
-  <div class="sql-lint-page">
+  <div class="sql-lint-page" :data-testid="stableTestIds.sqlLint.page">
     <div class="page-header">
       <h2>SQL 校验</h2>
       <div class="header-actions">
-        <el-button type="primary" :loading="linting" @click="handleLint">
+        <el-button
+          type="primary"
+          :loading="linting"
+          :data-testid="stableTestIds.sqlLint.runButton"
+          @click="handleLint"
+        >
           <el-icon><CaretRight /></el-icon>
           执行校验
         </el-button>
@@ -294,7 +299,11 @@
               </el-table>
             </div>
 
-            <div v-if="lintResult.fixedSql" class="fixed-sql-panel">
+            <div
+              v-if="lintResult.fixedSql"
+              class="fixed-sql-panel"
+              :data-testid="stableTestIds.sqlLint.fixedSqlPanel"
+            >
               <div class="fixed-sql-header">
                 <span>修正 SQL</span>
                 <el-button size="small" text type="primary" @click="handleCopySql">
@@ -360,11 +369,11 @@
       </div>
     </div>
 
-    <div class="history-panel">
+    <div class="history-panel" :data-testid="stableTestIds.sqlLint.historyPanel">
       <el-collapse v-model="historyActiveNames">
         <el-collapse-item name="records">
           <template #title>
-            <div class="history-title">
+            <div class="history-title" :data-testid="stableTestIds.sqlLint.historyToggle">
               <span>最近检查记录</span>
               <el-tag size="small" type="info">{{ recordTotal }} 条</el-tag>
             </div>
@@ -404,6 +413,7 @@
               :data="records"
               stripe
               class="record-table"
+              :data-testid="stableTestIds.sqlLint.recordTable"
               empty-text="暂无检查记录"
             >
               <el-table-column label="检查时间" min-width="180">
@@ -421,6 +431,7 @@
                     text
                     type="primary"
                     :loading="recordDetailLoading && loadingRecordId === row.id"
+                    :data-testid="stableTestIds.sqlLint.recordDetailButton"
                     @click="handleViewRecord(row.id)"
                   >
                     查看详情
@@ -446,7 +457,11 @@
     </div>
 
     <el-dialog v-model="recordDialogVisible" title="检查记录详情" width="860px">
-      <div v-if="activeRecord?.record" class="record-detail">
+      <div
+        v-if="activeRecord?.record"
+        class="record-detail"
+        :data-testid="stableTestIds.sqlLint.recordDialog"
+      >
         <div class="summary-row">
           <el-tag type="danger">错误 {{ activeRecord.record.errorCount ?? 0 }}</el-tag>
           <el-tag type="warning">警告 {{ activeRecord.record.warningCount ?? 0 }}</el-tag>
@@ -601,6 +616,7 @@ import {
   diagnosticTagType,
   dialectSummary
 } from '@/utils/dialectDiagnostics'
+import { stableTestIds } from '@/utils/stableTestIds'
 import { copyRouteUrl, readPositiveIntQuery, replaceRouteQuery } from '@/utils/urlState'
 import type {
   AiTaskProfile,

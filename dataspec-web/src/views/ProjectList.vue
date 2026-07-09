@@ -1,12 +1,12 @@
 <template>
-  <div class="project-page">
+  <div class="project-page" :data-testid="stableTestIds.projects.page">
     <div class="page-header">
       <h2>项目列表</h2>
       <div class="header-actions">
         <el-button :loading="demoLoading" @click="handleCreateDemoProject">
           演示项目
         </el-button>
-        <el-button type="primary" @click="openCreateDialog">
+        <el-button type="primary" :data-testid="stableTestIds.projects.newProjectButton" @click="openCreateDialog">
           <el-icon><Plus /></el-icon>
           新建项目
         </el-button>
@@ -18,6 +18,7 @@
       :data="projectStore.projects"
       stripe
       class="project-table"
+      :data-testid="stableTestIds.projects.table"
       empty-text="暂无项目"
       @row-click="handleSelectProject"
     >
@@ -51,9 +52,11 @@
     </el-table>
 
     <el-dialog v-model="dialogVisible" :title="editingProject ? '编辑项目' : '新建项目'" width="460px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
-        <el-form-item label="项目名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入项目名称" />
+        <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
+          <el-form-item label="项目名称" prop="name">
+          <div class="full-width" :data-testid="stableTestIds.projects.projectNameInput">
+            <el-input v-model="form.name" placeholder="请输入项目名称" />
+          </div>
         </el-form-item>
         <el-form-item label="数据库类型" prop="dbType">
           <el-select v-model="form.dbType" placeholder="请选择数据库类型" class="full-width">
@@ -62,12 +65,14 @@
           </el-select>
         </el-form-item>
         <el-form-item label="描述">
-          <el-input
-            v-model="form.description"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入项目描述"
-          />
+          <div class="full-width" :data-testid="stableTestIds.projects.projectDescriptionInput">
+            <el-input
+              v-model="form.description"
+              type="textarea"
+              :rows="3"
+              placeholder="请输入项目描述"
+            />
+          </div>
         </el-form-item>
         <el-form-item v-if="!editingProject" label="初始化">
           <el-switch
@@ -98,7 +103,12 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">
+        <el-button
+          type="primary"
+          :loading="submitting"
+          :data-testid="stableTestIds.projects.saveProjectButton"
+          @click="handleSubmit"
+        >
           保存
         </el-button>
       </template>
@@ -195,6 +205,7 @@ import type {
   StarterKitDefinition,
   StarterKitInstallationInfo
 } from '@/types'
+import { stableTestIds } from '@/utils/stableTestIds'
 
 const projectStore = useProjectStore()
 const dialogVisible = ref(false)

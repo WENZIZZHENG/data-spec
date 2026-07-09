@@ -1,5 +1,5 @@
 <template>
-  <div class="field-page">
+  <div class="field-page" :data-testid="stableTestIds.fields.page">
     <div class="page-header">
       <div>
         <h2>标准字段库</h2>
@@ -24,13 +24,15 @@
     </el-empty>
 
     <template v-else>
-      <div class="field-toolbar">
-        <el-input
-          v-model="fieldKeyword"
-          :prefix-icon="Search"
-          clearable
-          placeholder="搜索字段名、显示名、别名、分类、注释或替代说明"
-        />
+      <div class="field-toolbar" :data-testid="stableTestIds.fields.toolbar">
+        <div class="field-search-control" :data-testid="stableTestIds.fields.searchInput">
+          <el-input
+            v-model="fieldKeyword"
+            :prefix-icon="Search"
+            clearable
+            placeholder="搜索字段名、显示名、别名、分类、注释或替代说明"
+          />
+        </div>
         <el-select v-model="fieldStatusFilter" clearable class="status-filter" placeholder="全部状态">
           <el-option
             v-for="option in lifecycleStatusOptions"
@@ -54,7 +56,11 @@
         </div>
       </div>
 
-      <div v-if="hasFieldSearchConditions" class="search-insight">
+      <div
+        v-if="hasFieldSearchConditions"
+        class="search-insight"
+        :data-testid="stableTestIds.fields.searchInsight"
+      >
         <div class="search-insight-main">
           <span class="search-insight-label">字段标准检索</span>
           <span>
@@ -91,6 +97,7 @@
           row-key="id"
           stripe
           class="field-table"
+          :data-testid="stableTestIds.fields.table"
           empty-text="暂无标准字段"
           @selection-change="handleSelectionChange"
         >
@@ -799,6 +806,7 @@ import {
   standardChangeConfirmMessage,
   standardChangeRiskText
 } from '@/utils/standardChangeDisplay'
+import { stableTestIds } from '@/utils/stableTestIds'
 import {
   copyRouteUrl,
   readPositiveIntQuery,

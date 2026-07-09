@@ -4,7 +4,7 @@
 
 ## 下一步顺序
 
-1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90、P6-91、P6-92、P6-93、P6-179、P6-186 已完成第一版；P6-78、P6-82、P6-88、P6-90、P6-93、P6-179、P6-186 对应 OpenSpec change 均已归档。
+1. 当前状态：P6-1 到 P6-73、P6-75、P6-78、P6-79、P6-81、P6-82、P6-87、P6-88、P6-89、P6-90、P6-91、P6-92、P6-93、P6-179、P6-181、P6-182、P6-186 已完成第一版；P6-78、P6-82、P6-88、P6-90、P6-93、P6-179、P6-181、P6-186 对应 OpenSpec change 均已归档。
 2. 近期优先行动项已清空，后续开发由用户从 P6-94 以后候选池或新需求中选择，不再从 P6-71 到 P6-188 全量顺扫。
 3. 效率优先顺序：真实数据库集成测试已作为可选 Docker profile，不默认阻塞小任务；下一项开工前按任务类型重新判断快速/常规/SDD。
 4. 暂缓池：P6-94 以后保留为候选池，未进入近期队列前不作为默认下一步；新增想法先合并到已有主题，避免继续追加 P6-189。
@@ -1817,13 +1817,13 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不自动批量采纳、合并、忽略或编辑标准字段，不持久化 workflow instance，不做后台任务调度；第一版只生成可复制、可验证、可恢复的 dry-run 计划。
 
 ### P6-182：前端页面对象模型与稳定测试选择器
-- 状态：待办。
+- 状态：已完成第一版，已新增共享稳定选择器、AI action 名称、Playwright page object、route harness 和 POM 驱动的核心浏览器流程。
 - 为什么做：前端页面越来越多，若 E2E 只靠文本和 CSS 选择器，页面微调会导致测试脆弱；AI browser automation 也需要稳定的页面对象和操作语义。
 - 已有基础：已有前端源码级 smoke、浏览器级 E2E、端到端上手引导、前端操作录制、组件状态样例库和可访问性基线待办。
-- 缺口：缺少 pageObject、dataTestIdPolicy、stableSelectors、testFixtures、routeHarness 和 aiActionNames；测试和 AI 自动化难以复用同一套页面动作。
+- 已完成能力：`stableTestIds` 统一声明 `data-testid` 策略和核心页面选择器；项目列表、字段库、SQL 校验、反向导入和 AI Context 页已接入稳定标识；`tests/e2e/pages` 提供 page object，`tests/e2e/support/routeHarness.ts` 提供可复用 API fixture；POM 用例通过 actionNames 完成核心流程并保留失败 URL、截图、视频和 trace。
 - 参考项目：`microsoft/playwright` 的 Page Object Model、`testing-library/testing-library-docs` 的用户语义选择器和 `cypress-io/cypress` 的端到端测试组织；只借鉴测试结构，不重写前端框架。
 - 落地产物：新增前端页面对象目录、稳定选择器约定和核心页面 fixture；覆盖项目选择、字段库、SQL 校验、反向导入、AI Context 等高频页面。
-- 验收标准：E2E 用例能通过页面对象完成核心流程；页面文案调整不破坏选择器；AI 自动化脚本能复用 page object 输出的动作名称和失败截图。
+- 验收标准：E2E 用例能通过页面对象完成核心流程；页面文案调整不破坏选择器；AI 自动化脚本能复用 page object 输出的动作名称和失败截图。已通过 `pnpm test`、`pnpm build` 和 `pnpm exec playwright test` 验证；独立评审子 agent `019f46d4-d3bd-7c33-afc6-2b5a8e576df0` 发现的稳定选择器和 TSDoc 问题已修复并关闭。
 - 边界：不做全量视觉回归，不要求所有组件立刻补选择器；第一版先覆盖主路径和高频故障页。
 
 ### P6-183：标准字段到数据库 COMMENT 回写计划

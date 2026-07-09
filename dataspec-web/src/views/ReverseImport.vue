@@ -1,5 +1,5 @@
 <template>
-  <div class="reverse-page">
+  <div class="reverse-page" :data-testid="stableTestIds.reverseImport.page">
     <div class="page-header">
       <div>
         <h2>反向导入</h2>
@@ -10,7 +10,13 @@
           <el-icon><Link /></el-icon>
           复制链接
         </el-button>
-        <el-button type="primary" :disabled="!canGeneratePreview" :loading="previewLoading" @click="handleGeneratePreview">
+        <el-button
+          type="primary"
+          :disabled="!canGeneratePreview"
+          :loading="previewLoading"
+          :data-testid="stableTestIds.reverseImport.generatePreviewButton"
+          @click="handleGeneratePreview"
+        >
           <el-icon><View /></el-icon>
           生成预览
         </el-button>
@@ -63,7 +69,10 @@
           </section>
         </el-tab-pane>
 
-        <el-tab-pane label="数据库直连" name="database">
+        <el-tab-pane name="database">
+          <template #label>
+            <span :data-testid="stableTestIds.reverseImport.databaseModeTab">数据库直连</span>
+          </template>
           <section class="input-section database-flow">
             <el-steps :active="databaseStep" align-center finish-status="success" class="db-steps">
               <el-step title="连接信息" />
@@ -127,13 +136,27 @@
                     <el-input-number v-model="dbForm.port" class="form-control number-input" :min="1" :max="65535" />
                   </el-form-item>
                   <el-form-item label="数据库名">
-                    <el-input v-model="dbForm.databaseName" class="form-control" placeholder="dataspec_demo" />
+                    <div :data-testid="stableTestIds.reverseImport.databaseNameInput">
+                      <el-input
+                        v-model="dbForm.databaseName"
+                        class="form-control"
+                        placeholder="dataspec_demo"
+                      />
+                    </div>
                   </el-form-item>
                   <el-form-item label="Schema">
-                    <el-input v-model="dbForm.schemaName" class="form-control" placeholder="public / database" />
+                    <div :data-testid="stableTestIds.reverseImport.schemaNameInput">
+                      <el-input
+                        v-model="dbForm.schemaName"
+                        class="form-control"
+                        placeholder="public / database"
+                      />
+                    </div>
                   </el-form-item>
                   <el-form-item label="用户名">
-                    <el-input v-model="dbForm.username" class="form-control" autocomplete="off" />
+                    <div :data-testid="stableTestIds.reverseImport.usernameInput">
+                      <el-input v-model="dbForm.username" class="form-control" autocomplete="off" />
+                    </div>
                   </el-form-item>
                   <el-form-item label="密码">
                     <el-input v-model="dbForm.password" class="form-control" type="password" show-password autocomplete="new-password" />
@@ -145,7 +168,12 @@
                     <el-icon><Connection /></el-icon>
                     测试连接
                   </el-button>
-                  <el-button :disabled="!canUseDatabaseConnection" :loading="tableLoading" @click="handleLoadTables">
+                  <el-button
+                    :disabled="!canUseDatabaseConnection"
+                    :loading="tableLoading"
+                    :data-testid="stableTestIds.reverseImport.loadTablesButton"
+                    @click="handleLoadTables"
+                  >
                     <el-icon><Refresh /></el-icon>
                     加载表
                   </el-button>
@@ -153,7 +181,12 @@
                     <el-icon><Refresh /></el-icon>
                     分页扫描
                   </el-button>
-                  <el-button :disabled="!canBrowseMetadata" :loading="metadataLoading" @click="handleBrowseMetadata">
+                  <el-button
+                    :disabled="!canBrowseMetadata"
+                    :loading="metadataLoading"
+                    :data-testid="stableTestIds.reverseImport.browseMetadataButton"
+                    @click="handleBrowseMetadata"
+                  >
                     <el-icon><View /></el-icon>
                     浏览元数据
                   </el-button>
@@ -312,12 +345,18 @@
                 </div>
                 <el-empty v-if="databaseTables.length === 0 && selectedTableCount === 0" class="small-empty" description="暂无表，请先加载" />
                 <el-empty v-else-if="databaseTables.length > 0 && filteredDatabaseTables.length === 0" class="small-empty" description="没有匹配的表" />
-                <el-checkbox-group v-else-if="databaseTables.length > 0" v-model="dbForm.tableNames" class="table-check-list">
+                <el-checkbox-group
+                  v-else-if="databaseTables.length > 0"
+                  v-model="dbForm.tableNames"
+                  class="table-check-list"
+                  :data-testid="stableTestIds.reverseImport.tableChecklist"
+                >
                   <el-checkbox
                     v-for="table in filteredDatabaseTables"
                     :key="tableKey(table)"
                     :value="table.tableName || ''"
                     :disabled="!table.tableName || isScanTableDisabled(table.tableName)"
+                    :data-testid="reverseImportTableOptionTestId(table.schemaName, table.tableName)"
                     class="table-check-item"
                   >
                     <span class="table-title">{{ tableLabel(table) }}</span>
@@ -327,7 +366,11 @@
               </div>
             </div>
 
-            <div v-if="metadataBrowser" class="metadata-browser">
+            <div
+              v-if="metadataBrowser"
+              class="metadata-browser"
+              :data-testid="stableTestIds.reverseImport.metadataBrowserPanel"
+            >
               <div class="section-header compact-header">
                 <h3>元数据浏览</h3>
                 <div class="inline-actions">
@@ -729,8 +772,11 @@
           </div>
         </div>
 
-        <el-tabs class="result-tabs">
-          <el-tab-pane label="字段候选">
+        <el-tabs class="result-tabs" :data-testid="stableTestIds.reverseImport.previewTabs">
+          <el-tab-pane>
+            <template #label>
+              <span :data-testid="stableTestIds.reverseImport.fieldCandidatesTab">字段候选</span>
+            </template>
             <template v-if="activeMode === 'database'">
               <div class="candidate-toolbar">
                 <span>已选 {{ selectedCandidateCount }} / {{ candidateTotal }}</span>
@@ -918,6 +964,7 @@ import {
   schemaRiskLabel,
   schemaRiskTagType
 } from '@/utils/databaseSchemaPlan'
+import { reverseImportTableOptionTestId, stableTestIds } from '@/utils/stableTestIds'
 import { copyRouteUrl, readEnumQuery, readPositiveIntQuery, readStringQuery, replaceRouteQuery } from '@/utils/urlState'
 import type {
   DatabaseConnectionReq,
