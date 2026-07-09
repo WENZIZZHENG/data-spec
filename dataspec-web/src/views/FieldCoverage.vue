@@ -200,7 +200,7 @@
         :next-actions="reportState.nextActions.value"
         :docs-ref="reportState.docsRef.value"
         action-text="重试"
-        @action="handleGenerateReport"
+        @action="handleRetryGenerateReport"
       />
 
       <section v-else-if="report" class="result-section">
@@ -232,6 +232,21 @@
             <span v-if="report.metadataCache.metadataFingerprint">fingerprint={{ coverageMetadataFingerprint }}</span>
             <span v-if="report.metadataCache.lastSeenAt">lastSeenAt={{ report.metadataCache.lastSeenAt }}</span>
             <span v-if="report.metadataCache.expiresAt">expiresAt={{ report.metadataCache.expiresAt }}</span>
+          </div>
+        </div>
+        <div v-if="report.inputStatus && report.inputStatus !== 'COMPLETE'" class="partial-coverage-panel">
+          <div class="metadata-cache-header">
+            <el-tag type="warning" effect="plain">不完整采集结果</el-tag>
+            <span>{{ partialCoverageInputStatusText }}</span>
+          </div>
+          <div class="metadata-cache-meta">
+            <span>失败表 {{ report.failedTableCount ?? 0 }}</span>
+            <span>{{ partialCoverageSkippedText }}</span>
+          </div>
+          <div v-if="partialCoverageNextActions.length" class="security-list">
+            <div v-for="action in partialCoverageNextActions" :key="action" class="security-line muted">
+              {{ action }}
+            </div>
           </div>
         </div>
 
@@ -339,11 +354,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Connection, DataAnalysis, Link, Refresh, Search } from '@element-plus/icons-vue'
-import { reportDatabaseCoverage, reportSqlCoverage } from '@/api/coverage'
+import { reportDatabaseCoverage, reportScanPartialCoverage, reportSqlCoverage } from '@/api/coverage'
 import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
 import { listDatabaseTables, testDatabaseConnection } from '@/api/reverseImport'
 import ProjectRequired from '@/components/ProjectRequired.vue'
@@ -364,6 +379,7 @@ import {
   filterDatabaseTables,
   mergeSelectedTableNames
 } from '@/utils/reverseImportSelection'
+import { readScanPartialCoveragePayload } from '@/utils/scanPartialCoverage'
 import {
   capabilitySupportLabel,
   connectionStatusLabel,
@@ -411,6 +427,7 @@ const connectionStatus = ref<ConnectionStatus>('idle')
 const connectionMessage = ref('')
 const connectionSecurity = ref<DatabaseConnectionSecurityDiagnostic | null>(null)
 const connectionHealth = ref<DatabaseConnectionHealthDiagnostic | null>(null)
+const consumedScanPartialId = ref<string | null>(null)
 const dbForm = reactive<DatabaseConnectionReq>({
   databaseType: 'postgresql',
   host: 'localhost',
@@ -501,8 +518,37 @@ const coverageMetadataCacheTagType = computed(() => {
   }
   return cache.stale ? 'warning' : 'info'
 })
+const partialCoverageInputStatusText = computed(() => {
+  const status = report.value?.inputStatus ?? 'COMPLETE'
+  switch (status) {
+    case 'PARTIAL':
+      return '覆盖率只包含采集作业 successful partial tables，失败或未扫描表不会视为已覆盖。'
+    case 'CANCELLED':
+      return '采集作业已取消，覆盖率只包含取消前成功读取的表。'
+    case 'FAILED':
+      return '采集作业存在失败，覆盖率只包含成功读取的表。'
+    default:
+      return '覆盖率报告输入完整。'
+  }
+})
+const partialCoverageNextActions = computed(() =>
+  (report.value?.nextActions ?? []).filter(Boolean)
+)
+const partialCoverageSkippedText = computed(() => {
+  const skippedCount = report.value?.skippedTableCount ?? 0
+  if (report.value?.inputStatus === 'PARTIAL') {
+    return skippedCount > 0
+      ? `跳过 ${skippedCount}，存在失败、跳过或未扫描表（数量见采集作业进度）`
+      : '存在失败、跳过或未扫描表（数量见采集作业进度）'
+  }
+  return `跳过/未扫描 ${skippedCount}`
+})
 
 applyCoverageUrlState()
+
+onMounted(() => {
+  void handleGenerateScanPartialReport()
+})
 
 watch(
   () => projectStore.currentProjectId,
@@ -517,6 +563,13 @@ watch(activeMode, () => resetReport())
 watch(
   () => [route.query.table, route.query.status],
   () => applyCoverageUrlState()
+)
+
+watch(
+  () => route.query.scanPartialId,
+  () => {
+    void handleGenerateScanPartialReport()
+  }
 )
 
 watch([tableFilter, statusFilter], () => {
@@ -592,6 +645,36 @@ async function handleRefreshMetadataReport() {
     applyCoverageUrlState()
   } catch {
     // 页面内 StateBlock 会展示可重试状态，避免只留下全局消息。
+  }
+}
+
+async function handleRetryGenerateReport() {
+  if (readStringQuery(route.query, 'scanPartialId')) {
+    await handleGenerateScanPartialReport()
+    return
+  }
+  await handleGenerateReport()
+}
+
+async function handleGenerateScanPartialReport() {
+  const scanPartialId = readStringQuery(route.query, 'scanPartialId')
+  if (!scanPartialId || consumedScanPartialId.value === scanPartialId) {
+    return
+  }
+  const payload = readScanPartialCoveragePayload(scanPartialId)
+  consumedScanPartialId.value = scanPartialId
+  if (!payload) {
+    ElMessage.warning('采集作业部分结果已失效，请从反向导入页重新生成覆盖率')
+    await syncCoverageUrlState({ scanPartialId: null })
+    return
+  }
+  activeMode.value = 'database'
+  try {
+    await reportState.run(() => reportScanPartialCoverage(payload))
+    await syncCoverageUrlState({ scanPartialId: null })
+  } catch {
+    consumedScanPartialId.value = null
+    // 页面内 StateBlock 会展示可重试状态，保留 scanPartialId 让重试仍走部分结果接口。
   }
 }
 
@@ -1004,6 +1087,19 @@ function goToReverseImport() {
   border-radius: 6px;
   background: #f8fafc;
   color: #334155;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.partial-coverage-panel {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #92400e;
   font-size: 12px;
   line-height: 1.5;
 }

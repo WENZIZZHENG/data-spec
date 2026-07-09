@@ -14,12 +14,17 @@ import com.dataspec.reverseimport.model.DatabaseImportReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataCacheMode;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanEvidence;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanFailureSummary;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanRateLimit;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
 import com.dataspec.reverseimport.model.DatabaseSchemaDumpReq;
 import com.dataspec.reverseimport.model.DatabaseSchemaChangeAction;
 import com.dataspec.reverseimport.model.DatabaseSchemaChangeItem;
 import com.dataspec.reverseimport.model.DatabaseSchemaChangePlan;
 import com.dataspec.reverseimport.model.DatabaseSchemaChangeSummary;
+import com.dataspec.reverseimport.model.DatabaseSchemaDump;
+import com.dataspec.reverseimport.model.DatabaseSchemaTable;
 import com.dataspec.reverseimport.model.DatabaseTableInfo;
 import com.dataspec.reverseimport.model.FieldCandidate;
 import com.dataspec.reverseimport.model.ReverseImportCompareResult;
@@ -27,6 +32,7 @@ import com.dataspec.reverseimport.model.ReverseImportFieldStatus;
 import com.dataspec.reverseimport.model.ReverseImportPreview;
 import com.dataspec.reverseimport.entity.DatabaseMetadataCacheEntry;
 import com.dataspec.reverseimport.repository.DatabaseMetadataCacheRepository;
+import com.dataspec.reverseimport.service.DatabaseMetadataAdapter;
 import com.dataspec.reverseimport.service.impl.DatabaseMetadataCacheServiceImpl;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
 import com.dataspec.reverseimport.service.impl.DatabaseReverseImportServiceImpl;
@@ -590,23 +596,66 @@ class DatabaseReverseImportServiceTest {
         assertThat(firstPage.getEstimatedTableCount()).isEqualTo(123);
         assertThat(firstPage.getTables()).hasSize(40);
         assertThat(firstPage.getTables().get(0).tableName()).isEqualTo("SCAN_TABLE_001");
+        assertThat(firstPage.getScanJobId()).isEqualTo(firstPage.getScanId());
+        assertThat(firstPage.getStatus()).isEqualTo("PARTIAL");
+        assertThat(firstPage.getResumeCursor()).isEqualTo("40");
+        assertThat(firstPage.getCancelToken()).startsWith("cancel-");
+        assertThat(firstPage.getPageSize()).isEqualTo(40);
+        assertThat(firstPage.getRateLimit().getEffectivePageSize()).isEqualTo(40);
+        assertThat(firstPage.getSourcePressureHint().getLevel()).isEqualTo("INFO");
+        assertThat(firstPage.getRetryPolicy().isRetryable()).isTrue();
+        assertThat(firstPage.getPartialResult().getSuccessfulTables()).hasSize(40);
+        assertThat(firstPage.getPartialResult().getSuccessfulTableNames()).contains("SCAN_TABLE_001", "SCAN_TABLE_040");
+        assertThat(firstPage.getPartialResult().isComplete()).isFalse();
+        assertThat(firstPage.getFailureSummary().getFailedTableCount()).isZero();
+        assertThat(firstPage.getEvidence().getScanJobId()).isEqualTo(firstPage.getScanJobId());
+        assertThat(firstPage.getEvidence().isSchemaOnly()).isTrue();
+        assertThat(firstPage.getEvidence().isNoSourceWrites()).isTrue();
+        assertThat(firstPage.getEvidence().isNoStandardWrites()).isTrue();
         assertThat(firstPage.getProgress().getProcessedTableCount()).isEqualTo(40);
         assertThat(firstPage.getProgress().getRemainingTableEstimate()).isEqualTo(83);
         assertThat(firstPage.getProgress().isHasMore()).isTrue();
         assertThat(firstPage.getCursor()).isEqualTo("40");
-        assertThat(firstPage.getResumeCommand()).contains("cursor=40", "pageSize=40");
+        assertThat(firstPage.getResumeCommand()).contains("scanJobId=", "resumeCursor=40", "pageSize=40");
         assertThat(firstPage.getMetadataCache().getRefreshMode()).isEqualTo(DatabaseMetadataCacheMode.AUTO.name());
         assertThat(firstPage.getMetadataCache()).isNotNull();
         assertThat(firstPage.getResumeCommand()).doesNotContain("top-secret", "jdbc:");
 
-        req.setScanId(firstPage.getScanId());
-        req.setCursor(firstPage.getCursor());
+        req.setScanJobId(firstPage.getScanJobId());
+        req.setResumeCursor(firstPage.getResumeCursor());
         DatabaseMetadataScanResult secondPage = service.scan(req);
 
         assertThat(secondPage.getScanId()).isEqualTo(firstPage.getScanId());
+        assertThat(secondPage.getScanJobId()).isEqualTo(firstPage.getScanJobId());
         assertThat(secondPage.getTables()).hasSize(40);
         assertThat(secondPage.getTables().get(0).tableName()).isEqualTo("SCAN_TABLE_041");
         assertThat(secondPage.getProgress().getProcessedTableCount()).isEqualTo(80);
+        verify(fieldService, never()).create(any(Field.class));
+    }
+
+    @Test
+    void scanMetadata_appliesRateLimitCapAndExplainsSourcePressure() throws Exception {
+        prepareLargeMetadataDatabase(150);
+        FieldService fieldService = mock(FieldService.class);
+        DatabaseReverseImportServiceImpl service = service(fieldService, ignored -> openLargeMetadataConnection());
+        DatabaseMetadataScanReq req = scanReq();
+        DatabaseMetadataScanRateLimit rateLimit = new DatabaseMetadataScanRateLimit();
+        rateLimit.setMaxTablesPerPage(25);
+        rateLimit.setMinDelayMs(250);
+        req.setPageSize(500);
+        req.setRateLimit(rateLimit);
+
+        DatabaseMetadataScanResult result = service.scan(req);
+
+        assertThat(result.getPageSize()).isEqualTo(25);
+        assertThat(result.getTables()).hasSize(25);
+        assertThat(result.getRateLimit().getRequestedPageSize()).isEqualTo(500);
+        assertThat(result.getRateLimit().getRequestedMaxTablesPerPage()).isEqualTo(25);
+        assertThat(result.getRateLimit().getMinDelayMs()).isEqualTo(250);
+        assertThat(result.getSourcePressureHint().getLevel()).isEqualTo("WARNING");
+        assertThat(result.getSourcePressureHint().getMessage()).contains("25");
+        assertThat(result.getRetryPolicy().getRetryAfterMs()).isEqualTo(250);
+        assertThat(result.getRetryPolicy().isLowerPageSizeRecommended()).isTrue();
         verify(fieldService, never()).create(any(Field.class));
     }
 
@@ -635,20 +684,55 @@ class DatabaseReverseImportServiceTest {
     }
 
     @Test
+    void scanMetadata_refreshModeUsesCurrentPageForCacheRefreshWhenRequestContainsMoreTables() throws Exception {
+        prepareLargeMetadataDatabase(5);
+        FieldService fieldService = mock(FieldService.class);
+        InMemoryDatabaseMetadataCacheRepository repository = new InMemoryDatabaseMetadataCacheRepository();
+        DatabaseReverseImportServiceImpl service = service(
+                fieldService,
+                ignored -> openLargeMetadataConnection(),
+                cacheService(repository));
+        DatabaseMetadataScanReq req = scanReq();
+        req.setPageSize(2);
+        req.setTableNames(List.of(
+                "SCAN_TABLE_001",
+                "SCAN_TABLE_002",
+                "SCAN_TABLE_003",
+                "SCAN_TABLE_004",
+                "SCAN_TABLE_005"));
+        req.setMetadataCacheMode(DatabaseMetadataCacheMode.REFRESH.name());
+
+        DatabaseMetadataScanResult result = service.scan(req);
+
+        assertThat(result.getTables()).extracting(DatabaseTableInfo::tableName)
+                .containsExactly("SCAN_TABLE_001", "SCAN_TABLE_002");
+        assertThat(result.getMetadataCache().getRefreshMode()).isEqualTo(DatabaseMetadataCacheMode.REFRESH.name());
+        assertThat(repository.entries.values()).extracting(DatabaseMetadataCacheEntry::getTableName)
+                .containsExactlyInAnyOrder("SCAN_TABLE_001", "SCAN_TABLE_002");
+        assertThat(repository.entries).hasSize(2);
+        verify(fieldService, never()).create(any(Field.class));
+    }
+
+    @Test
     void scanMetadata_cancelStopsPageAndDoesNotWriteStandardLibrary() throws Exception {
         prepareLargeMetadataDatabase(12);
         FieldService fieldService = mock(FieldService.class);
         DatabaseReverseImportServiceImpl service = service(fieldService, ignored -> openLargeMetadataConnection());
         DatabaseMetadataScanReq req = scanReq();
-        req.setScanId("scan-demo");
-        req.setCursor("5");
-        req.setCancel(true);
+        req.setScanJobId("scan-demo");
+        req.setResumeCursor("5");
+        req.setCancelToken("cancel-demo");
 
         DatabaseMetadataScanResult result = service.scan(req);
 
         assertThat(result.isCancelled()).isTrue();
         assertThat(result.getScanId()).isEqualTo("scan-demo");
+        assertThat(result.getScanJobId()).isEqualTo("scan-demo");
+        assertThat(result.getStatus()).isEqualTo("CANCELLED");
         assertThat(result.getTables()).isEmpty();
+        assertThat(result.getPartialResult().getSuccessfulTables()).isEmpty();
+        assertThat(result.getEvidence().isNoSourceWrites()).isTrue();
+        assertThat(result.getEvidence().isNoStandardWrites()).isTrue();
         assertThat(result.getProgress().isHasMore()).isFalse();
         assertThat(result.getNextActions()).anyMatch(action -> action.contains("已取消"));
         verify(fieldService, never()).create(any(Field.class));
@@ -667,6 +751,52 @@ class DatabaseReverseImportServiceTest {
 
         assertThat(error.getMessage()).contains("读取数据库表失败");
         assertThat(error.getMessage()).doesNotContain("top-secret", "jdbc:postgresql://", "Bearer token123");
+        verify(fieldService, never()).create(any(Field.class));
+    }
+
+    @Test
+    void scanMetadata_keepsPartialResultWhenSingleTableMetadataFails() throws Exception {
+        FieldService fieldService = mock(FieldService.class);
+        Connection connection = mock(Connection.class);
+        DatabaseMetadataAdapter adapter = mock(DatabaseMetadataAdapter.class);
+        when(adapter.listTables(eq(connection), any(DatabaseConnectionReq.class))).thenReturn(List.of(
+                new DatabaseTableInfo("PUBLIC", "SCAN_OK", "TABLE", "ok"),
+                new DatabaseTableInfo("PUBLIC", "BROKEN_TABLE", "TABLE", "password=top-secret jdbc:postgresql://localhost/demo"),
+                new DatabaseTableInfo("PUBLIC", "SCAN_NEXT", "TABLE", "next")));
+        when(adapter.exportDump(eq(connection), any(DatabaseConnectionReq.class))).thenAnswer(invocation -> {
+            DatabaseConnectionReq request = invocation.getArgument(1, DatabaseConnectionReq.class);
+            if (request.getTableNames().contains("BROKEN_TABLE")) {
+                throw new SQLException("permission denied on BROKEN_TABLE password=top-secret jdbc:postgresql://localhost/demo");
+            }
+            return dumpForTables(request);
+        });
+        DatabaseReverseImportServiceImpl service = new DatabaseReverseImportServiceImpl(
+                new ReverseImportServiceImpl(
+                        new com.dataspec.lint.engine.SqlParserService(),
+                        fieldService,
+                        mock(ReverseImportSourceService.class)),
+                new FieldCoverageServiceImpl(fieldService, new com.dataspec.lint.engine.SqlParserService()),
+                ignored -> connection,
+                adapter,
+                null);
+        DatabaseMetadataScanReq req = scanReq();
+        req.setPageSize(3);
+        req.setPassword("top-secret");
+
+        DatabaseMetadataScanResult result = service.scan(req);
+
+        assertThat(result.getStatus()).isEqualTo("PARTIAL");
+        assertThat(result.getPartialResult().getSuccessfulTableNames()).containsExactly("SCAN_NEXT", "SCAN_OK");
+        assertThat(result.getPartialResult().getFailedTableNames()).containsExactly("BROKEN_TABLE");
+        assertThat(result.getPartialResult().isComplete()).isFalse();
+        assertThat(result.getFailureSummary().getFailedTableCount()).isEqualTo(1);
+        assertThat(result.getFailureSummary().getFailedTables()).hasSize(1);
+        assertThat(result.getFailureSummary().getFailedTables().get(0).getTableName()).isEqualTo("BROKEN_TABLE");
+        assertThat(result.getFailureSummary().getFailedTables().get(0).getMessage())
+                .doesNotContain("top-secret", "jdbc:postgresql://");
+        assertThat(result.getFailureSummary().getSafeNextActions()).anyMatch(action -> action.contains("降低 pageSize"));
+        assertThat(result.getEvidence().getFailedTableCount()).isEqualTo(1);
+        assertThat(result.getResumeCommand()).doesNotContain("top-secret", "jdbc:postgresql://");
         verify(fieldService, never()).create(any(Field.class));
     }
 
@@ -969,6 +1099,20 @@ class DatabaseReverseImportServiceTest {
     }
 
     @Test
+    void databaseMetadataScanJobModelsExposeOpenApiDescriptions() throws Exception {
+        assertSchemaDescription(DatabaseMetadataScanReq.class, "scanJobId");
+        assertSchemaDescription(DatabaseMetadataScanReq.class, "resumeCursor");
+        assertSchemaDescription(DatabaseMetadataScanReq.class, "cancelToken");
+        assertSchemaDescription(DatabaseMetadataScanReq.class, "rateLimit");
+        assertSchemaDescription(DatabaseMetadataScanResult.class, "status");
+        assertSchemaDescription(DatabaseMetadataScanResult.class, "partialResult");
+        assertSchemaDescription(DatabaseMetadataScanResult.class, "failureSummary");
+        assertSchemaDescription(DatabaseMetadataScanResult.class, "evidence");
+        assertSchemaDescription(DatabaseMetadataScanFailureSummary.class, "failedTables");
+        assertSchemaDescription(DatabaseMetadataScanEvidence.class, "safeForAiCopy");
+    }
+
+    @Test
     void coverage_readsMetadataAndBuildsFieldCoverageReport() throws Exception {
         prepareMetadataDatabase();
         FieldService fieldService = mock(FieldService.class);
@@ -1251,6 +1395,22 @@ class DatabaseReverseImportServiceTest {
         req.setUsername("sa");
         req.setPassword("");
         return req;
+    }
+
+    private DatabaseSchemaDump dumpForTables(DatabaseConnectionReq req) {
+        DatabaseSchemaDump dump = new DatabaseSchemaDump();
+        dump.setProjectId(req.getProjectId());
+        dump.setDatabaseType(req.getDatabaseType().toUpperCase(Locale.ROOT));
+        dump.setDatabaseName(req.getDatabaseName());
+        dump.setSchemaName(req.getSchemaName());
+        for (String tableName : req.getTableNames()) {
+            DatabaseSchemaTable table = new DatabaseSchemaTable();
+            table.setSchemaName(req.getSchemaName());
+            table.setTableName(tableName);
+            table.setTableType("TABLE");
+            dump.getTables().add(table);
+        }
+        return dump;
     }
 
     private Field standardField(String name, String aliases) {

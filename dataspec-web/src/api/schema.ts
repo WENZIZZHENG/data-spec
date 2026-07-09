@@ -1204,6 +1204,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/coverage/scan-partial": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reportScanPartial"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/contract-import/preview": {
         parameters: {
             query?: never;
@@ -4198,10 +4214,14 @@ export interface components {
             metadataCacheMode?: string;
             tableNames?: string[];
             scanId?: string;
+            scanJobId?: string;
             cursor?: string;
+            resumeCursor?: string;
             /** Format: int32 */
             pageSize?: number;
             cancel?: boolean;
+            cancelToken?: string;
+            rateLimit?: components["schemas"]["DatabaseMetadataScanRateLimit"];
         };
         DatabaseMetadataScanProgress: {
             /** Format: int32 */
@@ -4211,6 +4231,77 @@ export interface components {
             /** Format: int32 */
             pageSize?: number;
             hasMore?: boolean;
+        };
+        DatabaseMetadataScanRateLimit: {
+            /** Format: int32 */
+            maxTablesPerPage?: number;
+            /** Format: int32 */
+            minDelayMs?: number;
+            /** Format: int32 */
+            requestedPageSize?: number;
+            /** Format: int32 */
+            requestedMaxTablesPerPage?: number;
+            /** Format: int32 */
+            maxPageSize?: number;
+            /** Format: int32 */
+            effectivePageSize?: number;
+        };
+        DatabaseMetadataScanSourcePressureHint: {
+            level?: string;
+            message?: string;
+            boundedByServerLimit?: boolean;
+            /** Format: int32 */
+            suggestedPageSize?: number;
+            safeNextActions?: string[];
+        };
+        DatabaseMetadataScanRetryPolicy: {
+            retryable?: boolean;
+            /** Format: int32 */
+            retryAfterMs?: number;
+            /** Format: int32 */
+            maxRetryAttempts?: number;
+            lowerPageSizeRecommended?: boolean;
+            useMetadataCacheRecommended?: boolean;
+        };
+        DatabaseMetadataScanPartialResult: {
+            successfulTables?: components["schemas"]["DatabaseSchemaTable"][];
+            successfulTableNames?: string[];
+            failedTableNames?: string[];
+            skippedTableNames?: string[];
+            completeForPreview?: boolean;
+            completeForCoverage?: boolean;
+            complete?: boolean;
+        };
+        DatabaseMetadataScanFailureItem: {
+            schemaName?: string;
+            tableName?: string;
+            category?: string;
+            retryable?: boolean;
+            message?: string;
+        };
+        DatabaseMetadataScanFailureSummary: {
+            /** Format: int32 */
+            failedTableCount?: number;
+            failedTables?: components["schemas"]["DatabaseMetadataScanFailureItem"][];
+            failureCategories?: string[];
+            retryable?: boolean;
+            safeNextActions?: string[];
+        };
+        DatabaseMetadataScanEvidence: {
+            scanJobId?: string;
+            status?: string;
+            /** Format: int32 */
+            processedTableCount?: number;
+            /** Format: int32 */
+            failedTableCount?: number;
+            schemaScope?: string;
+            tableScope?: string[];
+            metadataFingerprint?: string;
+            schemaOnly?: boolean;
+            noSourceWrites?: boolean;
+            noStandardWrites?: boolean;
+            safeForAiCopy?: boolean;
+            nextActions?: string[];
         };
         DatabaseMetadataScanResult: {
             kind?: string;
@@ -4222,16 +4313,28 @@ export interface components {
             databaseName?: string;
             schemaName?: string;
             scanId?: string;
+            scanJobId?: string;
+            status?: string;
             /** Format: int32 */
             estimatedTableCount?: number;
             cursor?: string;
+            resumeCursor?: string;
+            cancelToken?: string;
+            /** Format: int32 */
+            pageSize?: number;
             tables?: components["schemas"]["DatabaseTableInfo"][];
+            rateLimit?: components["schemas"]["DatabaseMetadataScanRateLimit"];
+            sourcePressureHint?: components["schemas"]["DatabaseMetadataScanSourcePressureHint"];
+            retryPolicy?: components["schemas"]["DatabaseMetadataScanRetryPolicy"];
+            partialResult?: components["schemas"]["DatabaseMetadataScanPartialResult"];
+            failureSummary?: components["schemas"]["DatabaseMetadataScanFailureSummary"];
             progress?: components["schemas"]["DatabaseMetadataScanProgress"];
             partialSummary?: components["schemas"]["DatabaseMetadataScanSummary"];
             resumeCommand?: string;
             cancelled?: boolean;
             nextActions?: string[];
             metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
+            evidence?: components["schemas"]["DatabaseMetadataScanEvidence"];
         };
         DatabaseMetadataScanSummary: {
             /** Format: int32 */
@@ -4378,6 +4481,12 @@ export interface components {
         };
         FieldCoverageReport: {
             summary?: components["schemas"]["FieldCoverageSummary"];
+            inputStatus?: string;
+            /** Format: int32 */
+            failedTableCount?: number;
+            /** Format: int32 */
+            skippedTableCount?: number;
+            nextActions?: string[];
             tables?: components["schemas"]["FieldCoverageTable"][];
             unmanagedRankings?: components["schemas"]["UnmanagedFieldRanking"][];
             metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];
@@ -5424,6 +5533,13 @@ export interface components {
             /** Format: int64 */
             projectId: number;
             sql: string;
+        };
+        ScanPartialCoverageReq: {
+            /** Format: int64 */
+            projectId: number;
+            partialResult: components["schemas"]["DatabaseMetadataScanPartialResult"];
+            failureSummary?: components["schemas"]["DatabaseMetadataScanFailureSummary"];
+            scanStatus?: string;
         };
         RFieldCoverageReport: {
             /** Format: int32 */
@@ -10333,6 +10449,30 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DatabaseConnectionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldCoverageReport"];
+                };
+            };
+        };
+    };
+    reportScanPartial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanPartialCoverageReq"];
             };
         };
         responses: {

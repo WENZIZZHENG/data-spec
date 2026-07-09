@@ -1794,13 +1794,14 @@ P0-P4 的详细背景、方案和验收已归档到 [docs/archive/todo-completed
 - 边界：不自动应用补丁，不保证识别所有动态 SQL；第一版聚焦 Java/SQL/JSON 等项目已有高频文件类型。
 
 ### P6-180：数据库直连采集作业断点续扫与限速保护
-- 状态：待办。
+- 状态：已完成（2026-07-09）。
 - 为什么做：大库反向导入、覆盖率和元数据浏览会遇到表多、网络慢、权限不一致或连接中断；一次性拉取失败后重来，会浪费时间也增加源库压力。
 - 已有基础：已有数据库 schema dump、连接健康探测、大库扫描计划、元数据增量缓存、连接器能力探测和数据库直连只读安全诊断。
-- 缺口：缺少 scanJobId、resumeCursor、pageSize、rateLimit、partialResult、cancelToken、retryPolicy 和 sourcePressureHint；当前更多是同步式操作和局部分页。
+- 已完成能力：`/api/reverse-import/database/scan` 已兼容扩展 `scanJobId`、`status`、`resumeCursor`、`cancelToken`、`pageSize`、`rateLimit`、`retryPolicy`、`sourcePressureHint`、`partialResult`、`failureSummary`、`evidence` 和安全 `nextActions`；前端反向导入页支持分页扫描、继续、取消、失败摘要、只读 evidence、成功 partial tables 选择边界，并可通过短 `scanPartialId` 跳转覆盖率页生成部分覆盖率报告。
 - 参考项目：`airbytehq/airbyte` 的连接器同步状态、`dagster-io/dagster` 的作业运行视图和 `singer-io/getting-started` 的 tap/state 思路；只借鉴断点与状态，不做后台数据同步平台。
 - 落地产物：新增数据库 metadata 采集作业模型/API/前端进度视图；支持分页扫描、取消、恢复、限速、失败摘要和只读证据包。
 - 验收标准：上千张表的元数据扫描可分批完成；中断后能从 cursor 恢复；取消或失败不会写入部分标准字段；所有连接信息继续遵守脱敏和最小权限边界。
+- 验证证据：`mvn "-Dtest=FieldCoverageServiceImplTest,FieldCoverageControllerTest,DatabaseReverseImportServiceTest" test` 39/39 pass；`mvn test` 559/559 pass；`pnpm test` 164/164 pass；`pnpm build` 通过（保留既有 `@vueuse/core` pure annotation、chunk size、plugin timing warnings）；`openspec archive add-db-metadata-scan-jobs --yes` 已同步 4 个主规格并归档；`openspec validate --all` 122/122 pass；独立评审 agent `019f4667-53c9-7fd0-bc79-ee55c4d0689b` 和 `019f4674-704e-7b00-8033-1c7f3fec490e` 的 Critical/Important findings 已处理并关闭 agent。
 - 边界：不扫描业务数据行，不做定时同步，不绕过源库权限；第一版只服务反向导入、覆盖率和元数据浏览。
 
 ### P6-181：标准维护 Inbox 到可执行工作流

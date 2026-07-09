@@ -1534,12 +1534,20 @@ export interface DatabaseTableInfo {
 export interface DatabaseMetadataScanReq extends DatabaseConnectionReq {
   /** 一轮扫描标识；为空时由服务端生成，不代表持久后台任务。 */
   scanId?: string
+  /** 新版采集作业标识；兼容 scanId，不包含凭据。 */
+  scanJobId?: string
   /** 短期分页游标，第一版使用已读取表数量偏移。 */
   cursor?: string
+  /** 新版恢复 cursor；兼容 cursor，不包含凭据。 */
+  resumeCursor?: string
   /** 每页表数量，服务端限制在 1 到 100。 */
   pageSize?: number
   /** true 表示停止继续扫描，不写源库或标准库。 */
   cancel?: boolean
+  /** 新版取消令牌；只用于显式取消动作，不包含连接密码或 DSN。 */
+  cancelToken?: string
+  /** 请求方限速偏好；服务端仍会应用全局上限。 */
+  rateLimit?: DatabaseMetadataScanRateLimit
 }
 
 /** 数据库 metadata 分页扫描进度。 */
@@ -1564,6 +1572,158 @@ export interface DatabaseMetadataScanSummary {
   estimatedTableCount?: number
 }
 
+/** 采集作业限速边界。 */
+export interface DatabaseMetadataScanRateLimit {
+  /** 请求方希望单页最多读取的表数量。 */
+  maxTablesPerPage?: number
+  /** 建议客户端两次继续扫描之间等待的毫秒数。 */
+  minDelayMs?: number
+  /** 原始请求 pageSize，由服务端回填。 */
+  requestedPageSize?: number
+  /** 请求方传入的 maxTablesPerPage，由服务端回填。 */
+  requestedMaxTablesPerPage?: number
+  /** 服务端全局允许的最大单页表数量。 */
+  maxPageSize?: number
+  /** 本次请求实际采用的 pageSize。 */
+  effectivePageSize?: number
+}
+
+/** 源库压力提示；文本必须脱敏。 */
+export interface DatabaseMetadataScanSourcePressureHint {
+  /** 压力等级：INFO/WARNING/DANGER。 */
+  level?: string
+  /** 可读提示，不包含 JDBC URL、DSN、token 或 password。 */
+  message?: string
+  /** true 表示请求 pageSize 被降限。 */
+  boundedByServerLimit?: boolean
+  /** 建议下一次继续扫描采用的 pageSize。 */
+  suggestedPageSize?: number
+  /** 安全下一步动作。 */
+  safeNextActions?: string[]
+}
+
+/** 采集作业重试策略。 */
+export interface DatabaseMetadataScanRetryPolicy {
+  /** true 表示可由用户或 AI 显式继续/重试。 */
+  retryable?: boolean
+  /** 建议重试等待毫秒数。 */
+  retryAfterMs?: number
+  /** 建议最大重试次数。 */
+  maxRetryAttempts?: number
+  /** true 表示建议降低 pageSize。 */
+  lowerPageSizeRecommended?: boolean
+  /** true 表示建议优先使用 metadata cache。 */
+  useMetadataCacheRecommended?: boolean
+}
+
+/** schema-only dump 的列结构。 */
+export interface DatabaseSchemaColumn {
+  /** 字段名。 */
+  columnName?: string
+  /** 数据库字段类型。 */
+  dataType?: string
+  /** true 表示字段可空。 */
+  nullable?: boolean
+  /** 默认值。 */
+  defaultValue?: string
+  /** 字段注释。 */
+  comment?: string
+  /** 字段序号。 */
+  ordinalPosition?: number
+}
+
+/** schema-only dump 的表结构。 */
+export interface DatabaseSchemaTable {
+  /** 表所在 schema；MySQL 场景可能为空。 */
+  schemaName?: string
+  /** 表名。 */
+  tableName?: string
+  /** 表类型。 */
+  tableType?: string
+  /** 表注释。 */
+  comment?: string
+  /** 列 metadata；不包含业务数据行。 */
+  columns?: DatabaseSchemaColumn[]
+  /** 索引 metadata。 */
+  indexes?: DatabaseSchemaIndex[]
+  /** 表级警告。 */
+  warnings?: string[]
+}
+
+/** 当前页可复用的成功/失败部分结果。 */
+export interface DatabaseMetadataScanPartialResult {
+  /** 成功读取 schema metadata 的表结构。 */
+  successfulTables?: DatabaseSchemaTable[]
+  /** 成功读取 metadata 的表名。 */
+  successfulTableNames?: string[]
+  /** 失败表名；不得静默导入。 */
+  failedTableNames?: string[]
+  /** 跳过表名。 */
+  skippedTableNames?: string[]
+  /** true 表示成功表足以生成预览。 */
+  completeForPreview?: boolean
+  /** true 表示成功表足以生成覆盖率。 */
+  completeForCoverage?: boolean
+  /** true 表示整个扫描范围已完成且无失败。 */
+  complete?: boolean
+}
+
+/** 单表失败脱敏摘要。 */
+export interface DatabaseMetadataScanFailureItem {
+  /** 失败表所在 schema。 */
+  schemaName?: string
+  /** 失败表名。 */
+  tableName?: string
+  /** 失败类别。 */
+  category?: string
+  /** true 表示可重试。 */
+  retryable?: boolean
+  /** 脱敏错误摘要。 */
+  message?: string
+}
+
+/** 当前页 bounded 失败摘要。 */
+export interface DatabaseMetadataScanFailureSummary {
+  /** 本页失败表数量。 */
+  failedTableCount?: number
+  /** bounded 失败表示例。 */
+  failedTables?: DatabaseMetadataScanFailureItem[]
+  /** 本页失败类别。 */
+  failureCategories?: string[]
+  /** true 表示至少一个失败项可重试。 */
+  retryable?: boolean
+  /** 安全下一步动作。 */
+  safeNextActions?: string[]
+}
+
+/** 可复制给 AI 的 scan evidence。 */
+export interface DatabaseMetadataScanEvidence {
+  /** 采集作业标识。 */
+  scanJobId?: string
+  /** 作业状态。 */
+  status?: string
+  /** 已处理表数量。 */
+  processedTableCount?: number
+  /** 失败表数量。 */
+  failedTableCount?: number
+  /** schema 范围摘要。 */
+  schemaScope?: string
+  /** 表范围摘要。 */
+  tableScope?: string[]
+  /** metadata cache fingerprint。 */
+  metadataFingerprint?: string
+  /** true 表示只读取 schema metadata。 */
+  schemaOnly?: boolean
+  /** true 表示不会写源库。 */
+  noSourceWrites?: boolean
+  /** true 表示不会写标准字段库。 */
+  noStandardWrites?: boolean
+  /** true 表示 evidence 可复制给 AI。 */
+  safeForAiCopy?: boolean
+  /** 安全下一步动作。 */
+  nextActions?: string[]
+}
+
 /** 数据库 metadata 分页扫描响应；只包含表级 metadata、进度和脱敏恢复信息。 */
 export interface DatabaseMetadataScanResult {
   /** 响应类型标识。 */
@@ -1580,12 +1740,32 @@ export interface DatabaseMetadataScanResult {
   schemaName?: string
   /** 一轮扫描标识；不承诺持久化生命周期。 */
   scanId?: string
+  /** 新版采集作业 ID；与 scanId 兼容。 */
+  scanJobId?: string
+  /** 作业状态：RUNNING/PARTIAL/COMPLETED/CANCELLED/FAILED。 */
+  status?: string
   /** 当前连接可见表数量估算。 */
   estimatedTableCount?: number
   /** 下一批 cursor；为空表示无后续批次。 */
   cursor?: string | null
+  /** 新版恢复 cursor；为空表示无后续批次。 */
+  resumeCursor?: string | null
+  /** 新版取消令牌；仅用于显式取消动作。 */
+  cancelToken?: string
+  /** 本次请求实际采用的 pageSize。 */
+  pageSize?: number
   /** 当前页表级 metadata，不包含列 metadata 或业务数据行。 */
   tables?: DatabaseTableInfo[]
+  /** 本次扫描应用后的限速边界。 */
+  rateLimit?: DatabaseMetadataScanRateLimit
+  /** 源库压力提示和安全下一步。 */
+  sourcePressureHint?: DatabaseMetadataScanSourcePressureHint
+  /** 重试/继续扫描建议。 */
+  retryPolicy?: DatabaseMetadataScanRetryPolicy
+  /** 当前页 schema-only 部分结果。 */
+  partialResult?: DatabaseMetadataScanPartialResult
+  /** 当前页失败摘要。 */
+  failureSummary?: DatabaseMetadataScanFailureSummary
   /** 当前扫描页和下一批状态。 */
   progress?: DatabaseMetadataScanProgress
   /** 当前扫描页轻量汇总。 */
@@ -1596,6 +1776,8 @@ export interface DatabaseMetadataScanResult {
   cancelled?: boolean
   /** 当前扫描页关联的 metadata cache 证据。 */
   metadataCache?: DatabaseMetadataCacheInfo
+  /** 可复制给 AI 的只读证据摘要。 */
+  evidence?: DatabaseMetadataScanEvidence
   /** 扫描后的建议动作，不代表自动写入。 */
   nextActions?: string[]
 }
@@ -1847,8 +2029,27 @@ export interface UnmanagedFieldRanking {
 
 export interface FieldCoverageReport {
   summary?: FieldCoverageSummary
+  /** 输入完整性状态；PARTIAL/CANCELLED/FAILED 表示报告只覆盖成功采集到的表。 */
+  inputStatus?: 'COMPLETE' | 'PARTIAL' | 'CANCELLED' | 'FAILED' | string
+  /** 未纳入覆盖率计算的失败表数量。 */
+  failedTableCount?: number
+  /** 未纳入覆盖率计算的跳过或未扫描表数量。 */
+  skippedTableCount?: number
+  /** partial/cancelled/failed 输入的安全下一步。 */
+  nextActions?: string[]
   /** 覆盖率报告关联的 metadata cache 证据，用于判断报告所基于的结构版本。 */
   metadataCache?: DatabaseMetadataCacheInfo
   tables?: FieldCoverageTable[]
   unmanagedRankings?: UnmanagedFieldRanking[]
+}
+
+export interface ScanPartialCoverageReq {
+  /** DataSpec 项目 ID。 */
+  projectId: number
+  /** metadata scan job 返回的 schema-only partialResult；覆盖率只统计 successfulTables。 */
+  partialResult: DatabaseMetadataScanPartialResult
+  /** metadata scan job 返回的失败摘要。 */
+  failureSummary?: DatabaseMetadataScanFailureSummary
+  /** metadata scan job 状态，如 PARTIAL/CANCELLED/FAILED/COMPLETED。 */
+  scanStatus?: string
 }

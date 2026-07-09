@@ -21,10 +21,17 @@ import com.dataspec.reverseimport.model.DatabaseMetadataBrowser;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowserColumn;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowserSummary;
 import com.dataspec.reverseimport.model.DatabaseMetadataBrowserTable;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanEvidence;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanFailureItem;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanFailureSummary;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanPartialResult;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanProgress;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanRateLimit;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanReq;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanResult;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanRetryPolicy;
 import com.dataspec.reverseimport.model.DatabaseMetadataScanSummary;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanSourcePressureHint;
 import com.dataspec.reverseimport.model.DatabaseSchemaChangeAction;
 import com.dataspec.reverseimport.model.DatabaseSchemaChangeItem;
 import com.dataspec.reverseimport.model.DatabaseSchemaChangePlan;
@@ -172,10 +179,10 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     @Override
     public DatabaseMetadataScanResult scan(DatabaseMetadataScanReq req) {
         validateConnectionReq(req);
-        int pageSize = scanPageSize(req.getPageSize());
-        int offset = scanOffset(req.getCursor());
+        int pageSize = scanPageSize(req);
+        int offset = scanOffset(scanCursor(req));
         String scanId = scanId(req);
-        if (Boolean.TRUE.equals(req.getCancel())) {
+        if (isCancelRequested(req)) {
             return cancelledScanResult(req, scanId, pageSize, offset);
         }
 
@@ -192,13 +199,19 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         result.setEstimatedTableCount(total);
         result.setTables(page);
         result.setCursor(toIndex < total ? String.valueOf(toIndex) : null);
+        result.setResumeCursor(result.getCursor());
         result.setProgress(scanProgress(toIndex, total, pageSize, toIndex < total));
         result.setPartialSummary(scanSummary(page.size(), total, req));
         result.setMetadataCache(scanMetadataCache(req, page));
+        fillScanPartialResult(req, result, page, toIndex >= total);
+        result.setStatus(scanStatus(result, toIndex < total));
+        result.setSourcePressureHint(scanSourcePressureHint(req, pageSize));
+        result.setRetryPolicy(scanRetryPolicy(req, result, toIndex < total));
         result.setResumeCommand(buildScanResumeCommand(req, result));
         result.getNextActions().add(toIndex < total
-                ? "可使用 cursor 继续加载下一批表，或选择当前批次生成部分 metadata browser。"
-                : "已到最后一批，可选择表生成 metadata browser 或反向导入预览。");
+                ? "可使用 scanJobId/resumeCursor 继续加载下一批表，或选择当前成功表生成部分 metadata browser。"
+                : "已到最后一批，可选择成功表生成 metadata browser 或反向导入预览。");
+        result.setEvidence(scanEvidence(req, result, page));
         return result;
     }
 
@@ -212,12 +225,190 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     }
 
     private List<String> scanCacheTableNames(DatabaseMetadataScanReq req, List<DatabaseTableInfo> page) {
-        if (req.getTableNames() != null && !req.getTableNames().isEmpty()) {
-            return req.getTableNames();
-        }
+        // scan 作业的 cache evidence 必须跟当前页边界一致，避免 REFRESH 借请求 tableNames 绕过 pageSize 限速。
         return page.stream()
                 .map(DatabaseTableInfo::tableName)
                 .toList();
+    }
+
+    private void fillScanPartialResult(DatabaseMetadataScanReq req,
+                                       DatabaseMetadataScanResult result,
+                                       List<DatabaseTableInfo> page,
+                                       boolean completeScan) {
+        DatabaseMetadataScanPartialResult partial = new DatabaseMetadataScanPartialResult();
+        DatabaseMetadataScanFailureSummary failureSummary = new DatabaseMetadataScanFailureSummary();
+        if (page.isEmpty()) {
+            partial.setComplete(completeScan);
+            result.setPartialResult(partial);
+            result.setFailureSummary(failureSummary);
+            return;
+        }
+
+        List<String> pageTableNames = page.stream()
+                .map(DatabaseTableInfo::tableName)
+                .toList();
+        try {
+            DatabaseSchemaDump dump = readDatabaseDump(copyConnectionReq(req, pageTableNames));
+            fillSuccessfulTables(partial, dump.getTables());
+        } catch (BizException e) {
+            // 整页读取失败时降级到逐表读取，保留成功表并输出 bounded 失败摘要，避免一个表拖垮整批。
+            for (DatabaseTableInfo table : page) {
+                try {
+                    DatabaseSchemaDump tableDump = readDatabaseDump(copyConnectionReq(req, List.of(table.tableName())));
+                    fillSuccessfulTables(partial, tableDump.getTables());
+                } catch (BizException tableError) {
+                    addScanFailure(req, failureSummary, partial, table, tableError);
+                }
+            }
+        }
+
+        partial.setComplete(completeScan && failureSummary.getFailedTableCount() == 0);
+        partial.setCompleteForPreview(!partial.getSuccessfulTables().isEmpty());
+        partial.setCompleteForCoverage(!partial.getSuccessfulTables().isEmpty());
+        result.setPartialResult(partial);
+        result.setFailureSummary(failureSummary);
+    }
+
+    private void fillSuccessfulTables(DatabaseMetadataScanPartialResult partial, List<DatabaseSchemaTable> tables) {
+        if (tables == null) {
+            return;
+        }
+        for (DatabaseSchemaTable table : tables) {
+            if (table == null || isBlank(table.getTableName())) {
+                continue;
+            }
+            partial.getSuccessfulTables().add(table);
+            partial.getSuccessfulTableNames().add(table.getTableName());
+        }
+    }
+
+    private void addScanFailure(DatabaseMetadataScanReq req,
+                                DatabaseMetadataScanFailureSummary summary,
+                                DatabaseMetadataScanPartialResult partial,
+                                DatabaseTableInfo table,
+                                BizException error) {
+        String tableName = sanitizeMetadataText(table.tableName(), req);
+        partial.getFailedTableNames().add(tableName);
+        summary.setFailedTableCount(summary.getFailedTableCount() + 1);
+        String category = scanFailureCategory(error.getMessage());
+        if (!summary.getFailureCategories().contains(category)) {
+            summary.getFailureCategories().add(category);
+        }
+        boolean retryable = scanFailureRetryable(category);
+        summary.setRetryable(summary.isRetryable() || retryable);
+        if (summary.getFailedTables().size() < 10) {
+            DatabaseMetadataScanFailureItem item = new DatabaseMetadataScanFailureItem();
+            item.setSchemaName(sanitizeMetadataText(table.schemaName(), req));
+            item.setTableName(tableName);
+            item.setCategory(category);
+            item.setRetryable(retryable);
+            item.setMessage(sanitizeMetadataText(error.getMessage(), req));
+            summary.getFailedTables().add(item);
+        }
+        if (summary.getSafeNextActions().isEmpty()) {
+            summary.getSafeNextActions().add("降低 pageSize 后重试失败表，或使用 metadata cache 复用已成功表。");
+            summary.getSafeNextActions().add("仅对 successfulTableNames 生成预览或覆盖率，失败表不得静默导入。");
+        }
+    }
+
+    private String scanFailureCategory(String message) {
+        String normalized = message == null ? "" : message.toLowerCase(Locale.ROOT);
+        if (normalized.contains("permission") || normalized.contains("privilege") || normalized.contains("denied")) {
+            return "PERMISSION_DENIED";
+        }
+        if (normalized.contains("timeout") || normalized.contains("timed out")) {
+            return "TIMEOUT";
+        }
+        if (normalized.contains("connect") || normalized.contains("network")) {
+            return "CONNECTION";
+        }
+        return "UNKNOWN";
+    }
+
+    private boolean scanFailureRetryable(String category) {
+        return !"PERMISSION_DENIED".equals(category);
+    }
+
+    private String scanStatus(DatabaseMetadataScanResult result, boolean hasMore) {
+        if (result.isCancelled()) {
+            return "CANCELLED";
+        }
+        if (hasMore || result.getFailureSummary().getFailedTableCount() > 0) {
+            return "PARTIAL";
+        }
+        return "COMPLETED";
+    }
+
+    private DatabaseMetadataScanRateLimit scanRateLimit(DatabaseMetadataScanReq req, int effectivePageSize) {
+        DatabaseMetadataScanRateLimit limit = new DatabaseMetadataScanRateLimit();
+        DatabaseMetadataScanRateLimit requested = req.getRateLimit();
+        limit.setRequestedPageSize(req.getPageSize());
+        limit.setRequestedMaxTablesPerPage(requested == null ? null : requested.getMaxTablesPerPage());
+        limit.setMinDelayMs(requested == null ? null : requested.getMinDelayMs());
+        limit.setMaxPageSize(MAX_SCAN_PAGE_SIZE);
+        limit.setEffectivePageSize(effectivePageSize);
+        return limit;
+    }
+
+    private DatabaseMetadataScanSourcePressureHint scanSourcePressureHint(DatabaseMetadataScanReq req, int effectivePageSize) {
+        int requestedPageSize = req.getPageSize() == null ? DEFAULT_SCAN_PAGE_SIZE : req.getPageSize();
+        Integer requestedRateLimit = req.getRateLimit() == null ? null : req.getRateLimit().getMaxTablesPerPage();
+        boolean bounded = requestedPageSize > effectivePageSize
+                || (requestedRateLimit != null && requestedRateLimit > effectivePageSize);
+        DatabaseMetadataScanSourcePressureHint hint = new DatabaseMetadataScanSourcePressureHint();
+        hint.setBoundedByServerLimit(bounded);
+        hint.setSuggestedPageSize(effectivePageSize);
+        hint.setLevel(bounded ? "WARNING" : "INFO");
+        hint.setMessage(sanitizeMetadataText(bounded
+                ? "请求 pageSize 已限制为 " + effectivePageSize + "，避免一次性读取过多 schema metadata。"
+                : "当前 pageSize 未触发服务端降限，可继续按 resumeCursor 分批扫描。", req));
+        hint.getSafeNextActions().add("按 resumeCursor 继续下一批，只读取 schema metadata。");
+        if (bounded) {
+            hint.getSafeNextActions().add("后续请求可降低 pageSize 或设置 rateLimit.maxTablesPerPage。");
+        }
+        return hint;
+    }
+
+    private DatabaseMetadataScanRetryPolicy scanRetryPolicy(DatabaseMetadataScanReq req,
+                                                            DatabaseMetadataScanResult result,
+                                                            boolean hasMore) {
+        DatabaseMetadataScanRetryPolicy policy = new DatabaseMetadataScanRetryPolicy();
+        boolean hasFailures = result.getFailureSummary().getFailedTableCount() > 0;
+        policy.setRetryable(hasMore || result.isCancelled() || result.getFailureSummary().isRetryable());
+        policy.setRetryAfterMs(req.getRateLimit() == null || req.getRateLimit().getMinDelayMs() == null
+                ? 0
+                : Math.max(0, req.getRateLimit().getMinDelayMs()));
+        policy.setMaxRetryAttempts(hasFailures ? 3 : 1);
+        policy.setLowerPageSizeRecommended(result.getSourcePressureHint() != null
+                && (result.getSourcePressureHint().isBoundedByServerLimit() || hasFailures));
+        policy.setUseMetadataCacheRecommended(result.getMetadataCache() != null);
+        return policy;
+    }
+
+    private DatabaseMetadataScanEvidence scanEvidence(DatabaseMetadataScanReq req,
+                                                       DatabaseMetadataScanResult result,
+                                                       List<DatabaseTableInfo> page) {
+        DatabaseMetadataScanEvidence evidence = new DatabaseMetadataScanEvidence();
+        evidence.setScanJobId(result.getScanJobId());
+        evidence.setStatus(result.getStatus());
+        evidence.setProcessedTableCount(result.getProgress().getProcessedTableCount());
+        evidence.setFailedTableCount(result.getFailureSummary().getFailedTableCount());
+        evidence.setSchemaScope(sanitizeMetadataText(nullToDash(req.getSchemaName()), req));
+        evidence.setTableScope(page.stream()
+                .map(DatabaseTableInfo::tableName)
+                .map(tableName -> sanitizeMetadataText(tableName, req))
+                .toList());
+        if (result.getMetadataCache() != null) {
+            evidence.setMetadataFingerprint(result.getMetadataCache().getMetadataFingerprint());
+        }
+        evidence.setSchemaOnly(true);
+        evidence.setNoSourceWrites(true);
+        evidence.setNoStandardWrites(true);
+        evidence.setSafeForAiCopy(true);
+        evidence.getNextActions().addAll(result.getNextActions().stream()
+                .map(action -> sanitizeMetadataText(action, req))
+                .toList());
+        return evidence;
     }
 
     private DatabaseConnectionReq copyConnectionReq(DatabaseConnectionReq source, List<String> tableNames) {
@@ -1028,6 +1219,13 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
         result.setDatabaseName(sanitizeMetadataText(req.getDatabaseName(), req));
         result.setSchemaName(sanitizeMetadataText(req.getSchemaName(), req));
         result.setScanId(scanId);
+        result.setScanJobId(scanId);
+        result.setStatus("RUNNING");
+        result.setCancelToken(cancelToken(scanId));
+        result.setPageSize(pageSize);
+        result.setRateLimit(scanRateLimit(req, pageSize));
+        result.setSourcePressureHint(scanSourcePressureHint(req, pageSize));
+        result.setRetryPolicy(new DatabaseMetadataScanRetryPolicy());
         result.setProgress(scanProgress(0, 0, pageSize, false));
         result.setPartialSummary(scanSummary(0, 0, req));
         return result;
@@ -1039,10 +1237,14 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
                                                            int processedCount) {
         DatabaseMetadataScanResult result = baseScanResult(req, scanId, pageSize);
         result.setCancelled(true);
+        result.setStatus("CANCELLED");
         result.setCursor(null);
+        result.setResumeCursor(null);
         result.setProgress(scanProgress(processedCount, processedCount, pageSize, false));
-        result.setResumeCommand(buildScanResumeCommand(req, result));
         result.getNextActions().add("扫描已取消；不会继续读取后续批次，也不会写入源库或标准字段库。");
+        result.setRetryPolicy(scanRetryPolicy(req, result, false));
+        result.setEvidence(scanEvidence(req, result, List.of()));
+        result.setResumeCommand(buildScanResumeCommand(req, result));
         return result;
     }
 
@@ -1067,15 +1269,17 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     }
 
     private String buildScanResumeCommand(DatabaseMetadataScanReq req, DatabaseMetadataScanResult result) {
-        String cursor = result.getCursor() == null ? "DONE" : result.getCursor();
+        String cursor = result.getResumeCursor() == null ? "DONE" : result.getResumeCursor();
         String command = "POST /api/reverse-import/database/scan"
                 + " projectId=" + req.getProjectId()
                 + " databaseType=" + databaseType(req)
                 + " databaseName=" + req.getDatabaseName()
                 + " schemaName=" + nullToDash(req.getSchemaName())
+                + " scanJobId=" + result.getScanJobId()
+                + " resumeCursor=" + cursor
                 + " scanId=" + result.getScanId()
                 + " cursor=" + cursor
-                + " pageSize=" + result.getProgress().getPageSize();
+                + " pageSize=" + result.getPageSize();
         if (result.getMetadataCache() != null && result.getMetadataCache().getMetadataFingerprint() != null) {
             command += " metadataFingerprint=" + result.getMetadataCache().getMetadataFingerprint();
         }
@@ -1083,19 +1287,41 @@ public class DatabaseReverseImportServiceImpl implements DatabaseReverseImportSe
     }
 
     private String scanId(DatabaseMetadataScanReq req) {
-        return isBlank(req.getScanId())
+        String requested = isBlank(req.getScanJobId()) ? req.getScanId() : req.getScanJobId();
+        return isBlank(requested)
                 ? "scan-" + UUID.randomUUID()
-                : sanitizeMetadataText(req.getScanId(), req);
+                : sanitizeMetadataText(requested, req);
     }
 
-    private int scanPageSize(Integer value) {
+    private String cancelToken(String scanId) {
+        return "cancel-" + scanId.replaceFirst("^scan-", "");
+    }
+
+    private boolean isCancelRequested(DatabaseMetadataScanReq req) {
+        return Boolean.TRUE.equals(req.getCancel()) || !isBlank(req.getCancelToken());
+    }
+
+    private String scanCursor(DatabaseMetadataScanReq req) {
+        return isBlank(req.getResumeCursor()) ? req.getCursor() : req.getResumeCursor();
+    }
+
+    private int scanPageSize(DatabaseMetadataScanReq req) {
+        Integer value = req.getPageSize();
         if (value == null) {
-            return DEFAULT_SCAN_PAGE_SIZE;
+            value = DEFAULT_SCAN_PAGE_SIZE;
         }
         if (value < 1) {
             throw new BizException("分页大小不能小于 1");
         }
-        return Math.min(value, MAX_SCAN_PAGE_SIZE);
+        int effective = Math.min(value, MAX_SCAN_PAGE_SIZE);
+        if (req.getRateLimit() != null && req.getRateLimit().getMaxTablesPerPage() != null) {
+            int requestedLimit = req.getRateLimit().getMaxTablesPerPage();
+            if (requestedLimit < 1) {
+                throw new BizException("限速 pageSize 不能小于 1");
+            }
+            effective = Math.min(effective, requestedLimit);
+        }
+        return effective;
     }
 
     private int scanOffset(String cursor) {

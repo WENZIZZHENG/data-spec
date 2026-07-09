@@ -1,18 +1,29 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  buildScanEvidenceSummary,
+  buildScanFailureSummary,
   buildScanResumeSummary,
+  buildSourcePressureHintText,
   buildMetadataCacheSummary,
   currentScanTableNames,
+  currentSuccessfulScanTableNames,
   mergeScanTableNames,
   metadataCacheStatusLabel,
+  selectSuccessfulPartialTableNames,
+  scanJobStatusLabel,
   scanProgressLabel
 } from '../src/utils/databaseMetadataScan.ts'
 
 const scanResult = {
   scanId: 'scan-demo',
+  scanJobId: 'scan-job-demo',
+  status: 'PARTIAL',
   estimatedTableCount: 120,
   cursor: '40',
+  resumeCursor: '40',
+  cancelToken: 'cancel-demo',
+  pageSize: 40,
   tables: [
     { schemaName: 'public', tableName: 'user_order', comment: '用户订单' },
     { schemaName: 'public', tableName: 'payment_bill', comment: '支付账单' }
@@ -23,7 +34,49 @@ const scanResult = {
     pageSize: 40,
     hasMore: true
   },
-  resumeCommand: '继续 cursor=40 pageSize=40 password=secret jdbc:postgresql://localhost/demo',
+  sourcePressureHint: {
+    level: 'WARNING',
+    message: '请求 pageSize=500，已限制为 40，dsn=postgres://secret@localhost/demo Authorization=Bearer abc',
+    suggestedPageSize: 40,
+    safeNextActions: ['降低 pageSize 后使用 resumeCursor=40 继续']
+  },
+  partialResult: {
+    successfulTableNames: ['user_order'],
+    failedTableNames: ['payment_bill'],
+    skippedTableNames: ['audit_log'],
+    completeForPreview: true,
+    completeForCoverage: true,
+    complete: false
+  },
+  failureSummary: {
+    failedTableCount: 1,
+    retryable: true,
+    failedTables: [
+      {
+        schemaName: 'public',
+        tableName: 'payment_bill',
+        category: 'PERMISSION_DENIED',
+        retryable: true,
+        message: 'permission denied password=secret Authorization: Bearer abc jdbc:postgresql://localhost/demo'
+      }
+    ],
+    safeNextActions: ['降低 pageSize 后重试']
+  },
+  evidence: {
+    scanJobId: 'scan-job-demo',
+    status: 'PARTIAL',
+    processedTableCount: 40,
+    failedTableCount: 1,
+    schemaScope: 'public',
+    tableScope: ['user_order', 'payment_bill'],
+    metadataFingerprint: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+    schemaOnly: true,
+    noSourceWrites: true,
+    noStandardWrites: true,
+    safeForAiCopy: true,
+    nextActions: ['继续 resumeCursor=40 Authorization: Bearer abc']
+  },
+  resumeCommand: '继续 scanJobId=scan-job-demo resumeCursor=40 pageSize=40 password=secret jdbc:postgresql://localhost/demo',
   metadataCache: {
     metadataFingerprint: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
     cacheHit: true,
@@ -46,11 +99,69 @@ test('reads current scan table names and ignores nameless rows', () => {
   assert.deepEqual(currentScanTableNames({ tables: [{ tableName: '' }, { tableName: 'audit_log' }] }), ['audit_log'])
 })
 
+test('reads only successful partial tables for preview and coverage', () => {
+  assert.deepEqual(currentSuccessfulScanTableNames(scanResult), ['user_order'])
+  assert.deepEqual(currentSuccessfulScanTableNames({ tables: [{ tableName: 'fallback_table' }] }), ['fallback_table'])
+})
+
+test('selects only successful partial tables after a scan boundary exists', () => {
+  assert.deepEqual(
+    selectSuccessfulPartialTableNames(['user_order', 'payment_bill'], scanResult),
+    ['user_order']
+  )
+  assert.deepEqual(
+    selectSuccessfulPartialTableNames(['user_order'], {
+      status: 'CANCELLED',
+      partialResult: {
+        successfulTableNames: [],
+        failedTableNames: ['user_order'],
+        skippedTableNames: [],
+        completeForPreview: false,
+        completeForCoverage: false,
+        complete: false
+      }
+    }),
+    []
+  )
+  assert.deepEqual(
+    selectSuccessfulPartialTableNames(['fallback_table'], { tables: [{ tableName: 'fallback_table' }] }),
+    ['fallback_table']
+  )
+  assert.deepEqual(
+    selectSuccessfulPartialTableNames(
+      ['legacy_success', 'payment_bill'],
+      {
+        status: 'CANCELLED',
+        partialResult: {
+          successfulTableNames: [],
+          failedTableNames: ['payment_bill'],
+          skippedTableNames: [],
+          completeForPreview: false,
+          completeForCoverage: false,
+          complete: false
+        }
+      },
+      ['legacy_success']
+    ),
+    ['legacy_success']
+  )
+})
+
 test('merges scan table names without dropping previous selections', () => {
   assert.deepEqual(
     mergeScanTableNames(['legacy_table', 'user_order'], scanResult),
-    ['legacy_table', 'user_order', 'payment_bill']
+    ['legacy_table', 'user_order']
   )
+})
+
+test('formats scan job status and source pressure without credentials', () => {
+  assert.equal(scanJobStatusLabel(scanResult), '部分完成')
+
+  const pressure = buildSourcePressureHintText(scanResult)
+
+  assert.match(pressure, /限制为 40/)
+  assert.doesNotMatch(pressure, /dsn=postgres/)
+  assert.doesNotMatch(pressure, /Authorization=/)
 })
 
 test('formats scan progress for large database batches', () => {
@@ -64,10 +175,26 @@ test('formats scan progress for large database batches', () => {
 test('builds safe resume summary without credentials', () => {
   const summary = buildScanResumeSummary(scanResult)
 
-  assert.match(summary, /cursor=40/)
+  assert.match(summary, /scanJobId=scan-job-demo/)
+  assert.match(summary, /resumeCursor=40/)
   assert.match(summary, /pageSize=40/)
   assert.doesNotMatch(summary, /password=secret/)
   assert.doesNotMatch(summary, /jdbc:postgresql/)
+})
+
+test('formats failure summary and evidence without credentials', () => {
+  const failure = buildScanFailureSummary(scanResult)
+  const evidence = buildScanEvidenceSummary(scanResult)
+
+  assert.match(failure, /payment_bill/)
+  assert.match(failure, /PERMISSION_DENIED/)
+  assert.doesNotMatch(failure, /password=secret/)
+  assert.doesNotMatch(failure, /Authorization/)
+  assert.doesNotMatch(failure, /jdbc:postgresql/)
+  assert.match(evidence, /scan-job-demo/)
+  assert.match(evidence, /failed=1/)
+  assert.match(evidence, /safeForAiCopy=true/)
+  assert.doesNotMatch(evidence, /Authorization/)
 })
 
 test('formats metadata cache status and summary without credentials', () => {

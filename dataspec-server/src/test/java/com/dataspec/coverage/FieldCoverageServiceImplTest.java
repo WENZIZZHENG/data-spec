@@ -10,6 +10,10 @@ import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.model.ColumnDef;
 import com.dataspec.lint.model.TableDef;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanFailureSummary;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanPartialResult;
+import com.dataspec.reverseimport.model.DatabaseSchemaColumn;
+import com.dataspec.reverseimport.model.DatabaseSchemaTable;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -80,6 +84,38 @@ class FieldCoverageServiceImplTest {
         assertTrue(ex.getMessage().contains("未读取到可分析的表结构"));
     }
 
+    @Test
+    void reportScanPartial_marksPartialBoundaryAndIgnoresFailedOrSkippedTables() {
+        FieldService fieldService = mock(FieldService.class);
+        when(fieldService.listByProject(1L)).thenReturn(List.of(field("user_id", "用户ID", "bigint", "")));
+        FieldCoverageServiceImpl service = new FieldCoverageServiceImpl(fieldService, mock(SqlParserService.class));
+        DatabaseMetadataScanPartialResult partial = new DatabaseMetadataScanPartialResult();
+        partial.getSuccessfulTables().add(schemaTable("user_order", "user_id"));
+        partial.getSuccessfulTableNames().add("user_order");
+        partial.getFailedTableNames().add("payment_bill");
+        partial.getSkippedTableNames().add("audit_log");
+        partial.setCompleteForCoverage(true);
+        partial.setComplete(false);
+        DatabaseMetadataScanFailureSummary failureSummary = new DatabaseMetadataScanFailureSummary();
+        failureSummary.setFailedTableCount(1);
+        failureSummary.getSafeNextActions().add("降低 pageSize 后使用 resumeCursor 继续扫描失败表。");
+        failureSummary.getSafeNextActions().add("不要复制 password=secret jdbc:postgresql://localhost/demo Authorization: Bearer abc");
+
+        FieldCoverageReport report = service.reportScanPartial(1L, partial, failureSummary, "PARTIAL");
+
+        assertEquals("PARTIAL", report.getInputStatus());
+        assertEquals(1, report.getFailedTableCount());
+        assertEquals(1, report.getSkippedTableCount());
+        assertTrue(report.getNextActions().stream().anyMatch(action -> action.contains("覆盖率只包含 successful partial tables")));
+        assertTrue(report.getNextActions().stream().noneMatch(action -> action.contains("secret")
+                || action.contains("jdbc:postgresql")
+                || action.contains("Authorization")));
+        assertEquals(1, report.getSummary().getTableCount());
+        assertEquals(1, report.getSummary().getColumnCount());
+        assertEquals(1, report.getSummary().getCoveredCount());
+        assertEquals(List.of("user_order"), report.getTables().stream().map(table -> table.getTableName()).toList());
+    }
+
     private Field field(String name, String displayName, String dataType, String aliases) {
         Field field = new Field();
         field.setName(name);
@@ -97,5 +133,17 @@ class FieldCoverageServiceImplTest {
                 .comment(comment)
                 .nullable(true)
                 .build();
+    }
+
+    private DatabaseSchemaTable schemaTable(String tableName, String columnName) {
+        DatabaseSchemaTable table = new DatabaseSchemaTable();
+        table.setTableName(tableName);
+        DatabaseSchemaColumn column = new DatabaseSchemaColumn();
+        column.setColumnName(columnName);
+        column.setDataType("bigint");
+        column.setComment("用户ID");
+        column.setNullable(false);
+        table.getColumns().add(column);
+        return table;
     }
 }

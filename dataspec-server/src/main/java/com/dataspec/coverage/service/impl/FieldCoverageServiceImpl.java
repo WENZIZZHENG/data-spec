@@ -1,6 +1,7 @@
 package com.dataspec.coverage.service.impl;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.coverage.model.FieldCoverageItem;
 import com.dataspec.coverage.model.FieldCoverageReport;
 import com.dataspec.coverage.model.FieldCoverageStatus;
@@ -14,15 +15,21 @@ import com.dataspec.field.service.FieldService;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.model.ColumnDef;
 import com.dataspec.lint.model.TableDef;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanFailureSummary;
+import com.dataspec.reverseimport.model.DatabaseMetadataScanPartialResult;
+import com.dataspec.reverseimport.model.DatabaseSchemaColumn;
+import com.dataspec.reverseimport.model.DatabaseSchemaTable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 即时字段覆盖率报告实现。
@@ -64,6 +71,102 @@ public class FieldCoverageServiceImpl implements FieldCoverageService {
         report.getSummary().setCoverageRate(coverageRate(report.getSummary().getCoveredCount(), report.getSummary().getColumnCount()));
         report.setUnmanagedRankings(ranking.toRankings());
         return report;
+    }
+
+    @Override
+    public FieldCoverageReport reportScanPartial(Long projectId,
+                                                 DatabaseMetadataScanPartialResult partialResult,
+                                                 DatabaseMetadataScanFailureSummary failureSummary,
+                                                 String scanStatus) {
+        if (projectId == null) {
+            throw new BizException("项目ID不能为空");
+        }
+        if (partialResult == null) {
+            throw new BizException("采集作业部分结果不能为空");
+        }
+        List<DatabaseSchemaTable> successfulTables = partialResult.getSuccessfulTables() == null
+                ? List.of()
+                : partialResult.getSuccessfulTables();
+        if (successfulTables.isEmpty()) {
+            throw new BizException("未读取到可分析的成功表结构");
+        }
+
+        FieldCoverageReport report = reportTables(projectId, successfulTables.stream()
+                .map(this::toTableDef)
+                .toList());
+        int failedCount = failedTableCount(partialResult, failureSummary);
+        int skippedCount = partialResult.getSkippedTableNames() == null ? 0 : partialResult.getSkippedTableNames().size();
+        report.setFailedTableCount(failedCount);
+        report.setSkippedTableCount(skippedCount);
+        report.setInputStatus(coverageInputStatus(scanStatus, partialResult, failedCount, skippedCount));
+        if (!"COMPLETE".equals(report.getInputStatus())) {
+            // partial coverage 的核心约束：只统计 successful tables，失败/跳过/未扫描表不能被误认为已覆盖。
+            report.getNextActions().add("覆盖率只包含 successful partial tables；failed/skipped/not-yet-scanned 表不会视为已覆盖。");
+        }
+        if (failureSummary != null && failureSummary.getSafeNextActions() != null) {
+            for (String action : failureSummary.getSafeNextActions()) {
+                report.getNextActions().add(sanitizeCoverageAction(action));
+            }
+        }
+        deduplicateNextActions(report);
+        return report;
+    }
+
+    private TableDef toTableDef(DatabaseSchemaTable table) {
+        List<DatabaseSchemaColumn> columns = table.getColumns() == null ? List.of() : table.getColumns();
+        return TableDef.builder()
+                .name(table.getTableName())
+                .comment(table.getComment())
+                .columns(columns.stream()
+                        .map(column -> ColumnDef.builder()
+                                .name(column.getColumnName())
+                                .dataType(column.getDataType())
+                                .nullable(Boolean.TRUE.equals(column.getNullable()))
+                                .defaultValue(column.getDefaultValue())
+                                .comment(column.getComment())
+                                .build())
+                        .toList())
+                .build();
+    }
+
+    private int failedTableCount(DatabaseMetadataScanPartialResult partialResult,
+                                 DatabaseMetadataScanFailureSummary failureSummary) {
+        if (failureSummary != null && failureSummary.getFailedTableCount() > 0) {
+            return failureSummary.getFailedTableCount();
+        }
+        return partialResult.getFailedTableNames() == null ? 0 : partialResult.getFailedTableNames().size();
+    }
+
+    private String coverageInputStatus(String scanStatus,
+                                       DatabaseMetadataScanPartialResult partialResult,
+                                       int failedCount,
+                                       int skippedCount) {
+        String normalized = normalize(scanStatus).toUpperCase(Locale.ROOT);
+        if ("CANCELLED".equals(normalized) || "FAILED".equals(normalized)) {
+            return normalized;
+        }
+        if (!partialResult.isComplete() || failedCount > 0 || skippedCount > 0 || "PARTIAL".equals(normalized)) {
+            return "PARTIAL";
+        }
+        return "COMPLETE";
+    }
+
+    private void deduplicateNextActions(FieldCoverageReport report) {
+        Set<String> actions = new LinkedHashSet<>();
+        for (String action : report.getNextActions()) {
+            if (!isBlank(action)) {
+                actions.add(action);
+            }
+        }
+        report.setNextActions(List.copyOf(actions));
+    }
+
+    private String sanitizeCoverageAction(String action) {
+        if (action == null) {
+            return null;
+        }
+        return SensitiveDataSanitizer.redactText(action)
+                .replaceAll("(?i)authorization\\s*[:=]\\s*[^\\s,;]+(?:\\s+[^\\s,;]+)?", "[REDACTED]");
     }
 
     private FieldCoverageTable analyzeTable(

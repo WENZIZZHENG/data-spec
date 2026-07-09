@@ -253,16 +253,47 @@
                 <div v-if="scanResult" class="scan-panel">
                   <div class="scan-row">
                     <span>{{ scanProgressText }}</span>
-                    <el-tag v-if="scanResult.cancelled" type="warning" effect="plain">已取消</el-tag>
-                    <el-tag v-else-if="scanResult.progress?.hasMore" type="info" effect="plain">可继续</el-tag>
-                    <el-tag v-else type="success" effect="plain">已完成</el-tag>
+                    <div class="scan-tags">
+                      <el-tag v-if="scanResult.cancelled" type="warning" effect="plain">已取消</el-tag>
+                      <el-tag v-else-if="scanResult.progress?.hasMore" type="info" effect="plain">可继续</el-tag>
+                      <el-tag v-else type="success" effect="plain">已完成</el-tag>
+                      <el-tag type="info" effect="plain">{{ scanStatusText }}</el-tag>
+                      <el-tag v-if="scanResult.pageSize || scanResult.progress?.pageSize" type="info" effect="plain">
+                        pageSize {{ scanResult.pageSize ?? scanResult.progress?.pageSize }}
+                      </el-tag>
+                    </div>
                   </div>
                   <div class="scan-row scan-actions">
                     <el-button size="small" :disabled="!canContinueScan" :loading="scanLoading" @click="handleContinueMetadataScan">
                       下一批
                     </el-button>
                     <el-button size="small" :disabled="!canCancelScan" @click="handleCancelMetadataScan">取消扫描</el-button>
+                    <el-button size="small" type="primary" plain :disabled="!canGenerateScanPartialCoverage" @click="handleGenerateScanPartialCoverage">
+                      <el-icon><DataAnalysis /></el-icon>
+                      生成部分覆盖率
+                    </el-button>
                     <span class="muted-text">{{ scanResumeText }}</span>
+                  </div>
+                  <div v-if="scanSourcePressureText" class="scan-row metadata-cache-row">
+                    <el-tag type="warning" effect="plain">源库压力</el-tag>
+                    <span>{{ scanSourcePressureText }}</span>
+                  </div>
+                  <div v-if="scanFailureText" class="scan-row metadata-cache-row">
+                    <el-tag type="danger" effect="plain">失败摘要</el-tag>
+                    <span>{{ scanFailureText }}</span>
+                  </div>
+                  <div v-if="scanResult.partialResult" class="scan-row metadata-cache-row">
+                    <el-tag type="success" effect="plain">成功 {{ scanResult.partialResult.successfulTableNames?.length ?? 0 }}</el-tag>
+                    <el-tag v-if="scanResult.partialResult.failedTableNames?.length" type="danger" effect="plain">
+                      失败 {{ scanResult.partialResult.failedTableNames.length }}
+                    </el-tag>
+                    <el-tag v-if="scanResult.partialResult.skippedTableNames?.length" type="info" effect="plain">
+                      跳过 {{ scanResult.partialResult.skippedTableNames.length }}
+                    </el-tag>
+                  </div>
+                  <div v-if="scanEvidenceText" class="scan-row metadata-cache-row">
+                    <el-tag type="info" effect="plain">Evidence</el-tag>
+                    <span>{{ scanEvidenceText }}</span>
                   </div>
                   <div v-if="scanResult.metadataCache" class="scan-row metadata-cache-row">
                     <el-tag :type="metadataCacheTagType" effect="plain">{{ metadataCacheStatusLabel(scanResult.metadataCache) }}</el-tag>
@@ -286,7 +317,7 @@
                     v-for="table in filteredDatabaseTables"
                     :key="tableKey(table)"
                     :value="table.tableName || ''"
-                    :disabled="!table.tableName"
+                    :disabled="!table.tableName || isScanTableDisabled(table.tableName)"
                     class="table-check-item"
                   >
                     <span class="table-title">{{ tableLabel(table) }}</span>
@@ -798,7 +829,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
-import { Check, Connection, Link, Refresh, Search, Upload, View } from '@element-plus/icons-vue'
+import { Check, Connection, DataAnalysis, Link, Refresh, Search, Upload, View } from '@element-plus/icons-vue'
 import {
   createDatabaseConnectionPreset,
   listDatabaseConnectionPresets
@@ -837,12 +868,19 @@ import {
   type DatabaseMetadataBrowserRow
 } from '@/utils/databaseMetadataBrowser'
 import {
+  buildScanEvidenceSummary,
+  buildScanFailureSummary,
   buildMetadataCacheSummary,
   buildScanResumeSummary,
+  buildSourcePressureHintText,
+  currentSuccessfulScanTableNames,
   mergeScanTableNames,
   metadataCacheStatusLabel,
+  selectSuccessfulPartialTableNames,
+  scanJobStatusLabel,
   scanProgressLabel
 } from '@/utils/databaseMetadataScan'
+import { saveScanPartialCoveragePayload } from '@/utils/scanPartialCoverage'
 import {
   fieldLibraryQueryForImportResult,
   loadReverseImportMemory,
@@ -940,6 +978,7 @@ const restoringMemory = ref(false)
 const databaseTables = ref<DatabaseTableInfo[]>([])
 const metadataBrowser = ref<DatabaseMetadataBrowser | null>(null)
 const scanResult = ref<DatabaseMetadataScanResult | null>(null)
+const successfulScanTableNames = ref<Set<string>>(new Set())
 const tableSearch = ref('')
 const metadataSearch = ref('')
 const scanPageSize = ref(50)
@@ -985,7 +1024,7 @@ const canSavePreset = computed(() =>
   canOpenPresetDialog.value && Boolean(presetForm.name.trim())
 )
 const canPreviewDatabase = computed(() =>
-  canUseDatabaseConnection.value && Boolean(dbForm.tableNames?.length)
+  canUseDatabaseConnection.value && selectedSuccessfulTableCount.value > 0
 )
 const canGeneratePreview = computed(() =>
   activeMode.value === 'sql' ? canPreviewSql.value : canPreviewDatabase.value
@@ -1002,12 +1041,21 @@ const canScanMetadata = computed(() =>
 const canContinueScan = computed(() =>
   canScanMetadata.value
   && Boolean(scanResult.value?.progress?.hasMore)
-  && Boolean(scanResult.value?.cursor)
+  && Boolean(scanResult.value?.resumeCursor ?? scanResult.value?.cursor)
   && !scanResult.value?.cancelled
 )
 const canCancelScan = computed(() =>
-  canContinueScan.value
+  canScanMetadata.value
+  && Boolean(scanResult.value?.cancelToken ?? scanResult.value?.scanJobId ?? scanResult.value?.scanId)
+  && !scanResult.value?.cancelled
+  && scanResult.value?.status !== 'COMPLETED'
 )
+const canGenerateScanPartialCoverage = computed(() => {
+  const partial = scanResult.value?.partialResult
+  return activeMode.value === 'database'
+    && hasProject.value
+    && Boolean(partial?.completeForCoverage || partial?.successfulTableNames?.length)
+})
 const canBrowseMetadata = computed(() =>
   activeMode.value === 'database' && canPreviewDatabase.value
 )
@@ -1030,6 +1078,7 @@ const currentPresetSummary = computed(() =>
   presetConnectionSummary(presetPayload())
 )
 const selectedTableCount = computed(() => dbForm.tableNames?.length ?? 0)
+const selectedSuccessfulTableCount = computed(() => selectedSuccessfulTableNames().length)
 const currentPageSelectedTableCount = computed(() =>
   countSelectedVisibleTableNames(dbForm.tableNames, databaseTables.value)
 )
@@ -1130,8 +1179,20 @@ const metadataCacheTagType = computed(() => {
 const scanProgressText = computed(() =>
   scanProgressLabel(scanResult.value)
 )
+const scanStatusText = computed(() =>
+  scanJobStatusLabel(scanResult.value)
+)
 const scanResumeText = computed(() =>
   buildScanResumeSummary(scanResult.value)
+)
+const scanSourcePressureText = computed(() =>
+  buildSourcePressureHintText(scanResult.value)
+)
+const scanFailureText = computed(() =>
+  buildScanFailureSummary(scanResult.value)
+)
+const scanEvidenceText = computed(() =>
+  buildScanEvidenceSummary(scanResult.value)
 )
 const previewDialectDiagnostics = computed(() => preview.value?.dialectDiagnostics ?? [])
 const compareSummaryItems = computed(() => [
@@ -1212,6 +1273,7 @@ watch(
     resetResults()
     databaseTables.value = []
     dbForm.tableNames = []
+    successfulScanTableNames.value = new Set()
     tableSearch.value = ''
     metadataSearch.value = ''
     presetId.value = null
@@ -1257,6 +1319,7 @@ watch(
     resetConnectionStatus()
     databaseTables.value = []
     dbForm.tableNames = []
+    successfulScanTableNames.value = new Set()
     tableSearch.value = ''
     metadataSearch.value = ''
     resetResults()
@@ -1432,12 +1495,16 @@ function defaultPresetName() {
   return database || [dbForm.host, dbForm.port].filter(Boolean).join(':') || '数据库连接'
 }
 
-function databaseRequest(metadataCacheMode = 'AUTO'): DatabaseConnectionReq {
+function selectedSuccessfulTableNames(): string[] {
+  return selectSuccessfulPartialTableNames(dbForm.tableNames, scanResult.value, successfulScanTableNames.value)
+}
+
+function databaseRequest(metadataCacheMode = 'AUTO', tableNames: string[] = selectedSuccessfulTableNames()): DatabaseConnectionReq {
   return {
     ...dbForm,
     projectId: projectStore.currentProjectId ?? undefined,
     presetId: presetId.value ?? undefined,
-    tableNames: [...(dbForm.tableNames ?? [])],
+    tableNames: [...tableNames],
     metadataCacheMode: metadataCacheMode as DatabaseMetadataCacheMode
   }
 }
@@ -1540,6 +1607,7 @@ async function handleLoadTables() {
     const previousSelection = new Set(dbForm.tableNames ?? [])
     databaseTables.value = await listDatabaseTables(databaseRequest())
     scanResult.value = null
+    successfulScanTableNames.value = new Set()
     const availableTables = new Set(
       databaseTables.value
         .map((table) => table.tableName)
@@ -1560,6 +1628,7 @@ async function handleLoadTables() {
 }
 
 async function handleStartMetadataScan() {
+  successfulScanTableNames.value = new Set()
   await runMetadataScan({ cursor: null, resetTables: true })
 }
 
@@ -1567,14 +1636,28 @@ async function handleContinueMetadataScan() {
   if (!canContinueScan.value) {
     return
   }
-  await runMetadataScan({ cursor: scanResult.value?.cursor ?? null, resetTables: false })
+  await runMetadataScan({ cursor: scanResult.value?.resumeCursor ?? scanResult.value?.cursor ?? null, resetTables: false })
 }
 
 async function handleCancelMetadataScan() {
   if (!canCancelScan.value) {
     return
   }
-  await runMetadataScan({ cursor: scanResult.value?.cursor ?? null, resetTables: false, cancel: true })
+  await runMetadataScan({ cursor: scanResult.value?.resumeCursor ?? scanResult.value?.cursor ?? null, resetTables: false, cancel: true })
+}
+
+async function handleGenerateScanPartialCoverage() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId || !scanResult.value?.partialResult || !canGenerateScanPartialCoverage.value) {
+    return
+  }
+  const scanPartialId = saveScanPartialCoveragePayload({
+    projectId,
+    partialResult: scanResult.value.partialResult,
+    failureSummary: scanResult.value.failureSummary,
+    scanStatus: scanResult.value.status
+  })
+  await router.push({ path: '/field-coverage', query: { projectId, scanPartialId } })
 }
 
 async function runMetadataScan(options: { cursor: string | null; resetTables: boolean; cancel?: boolean }) {
@@ -1594,6 +1677,9 @@ async function runMetadataScan(options: { cursor: string | null; resetTables: bo
     if (options.resetTables) {
       tableSearch.value = ''
     }
+    for (const tableName of currentSuccessfulScanTableNames(result)) {
+      successfulScanTableNames.value.add(tableName)
+    }
     dbForm.tableNames = mergeScanTableNames(dbForm.tableNames, result)
     connectionStatus.value = 'success'
     connectionMessage.value = `已扫描 ${result.progress?.processedTableCount ?? 0} / ${result.estimatedTableCount ?? 0} 张表`
@@ -1606,11 +1692,17 @@ async function runMetadataScan(options: { cursor: string | null; resetTables: bo
 
 function scanRequest(cursor: string | null, cancel: boolean, metadataCacheMode: DatabaseMetadataCacheMode = 'AUTO'): DatabaseMetadataScanReq {
   return {
-    ...databaseRequest(metadataCacheMode),
+    ...databaseRequest(metadataCacheMode, [...(dbForm.tableNames ?? [])]),
     scanId: scanResult.value?.scanId,
+    scanJobId: scanResult.value?.scanJobId ?? scanResult.value?.scanId,
     cursor: cursor ?? undefined,
+    resumeCursor: cursor ?? undefined,
     pageSize: scanPageSize.value,
-    cancel
+    cancel,
+    cancelToken: cancel ? scanResult.value?.cancelToken : undefined,
+    rateLimit: {
+      maxTablesPerPage: scanPageSize.value
+    }
   }
 }
 
@@ -1720,11 +1812,27 @@ function tableLabel(table: DatabaseTableInfo) {
 }
 
 function selectVisibleTables() {
-  dbForm.tableNames = mergeSelectedTableNames(dbForm.tableNames, filteredDatabaseTables.value)
+  dbForm.tableNames = mergeSelectedTableNames(
+    dbForm.tableNames,
+    filteredDatabaseTables.value.filter((table) => table.tableName && !isScanTableDisabled(table.tableName))
+  )
 }
 
 function clearSelectedTables() {
   dbForm.tableNames = []
+}
+
+function isScanTableDisabled(tableName?: string) {
+  if (!tableName || !scanResult.value?.partialResult) {
+    return false
+  }
+  const partial = scanResult.value.partialResult
+  const successful = new Set(partial.successfulTableNames ?? [])
+  const failed = new Set([...(partial.failedTableNames ?? []), ...(partial.skippedTableNames ?? [])])
+  if (failed.has(tableName)) {
+    return true
+  }
+  return successful.size > 0 && !successful.has(tableName)
 }
 
 function selectAllCandidates() {
@@ -2336,6 +2444,13 @@ function browserStorage() {
   gap: 10px;
   color: #374151;
   font-size: 13px;
+}
+
+.scan-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
 }
 
 .scan-actions {

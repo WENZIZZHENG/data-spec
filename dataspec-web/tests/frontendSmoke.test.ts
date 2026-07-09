@@ -1077,18 +1077,34 @@ test('keeps database reverse import and comparison flow wired', () => {
     'loadReverseImportMemory',
     'saveReverseImportMemory',
     'buildMetadataCacheSummary',
+    'buildScanEvidenceSummary',
+    'buildScanFailureSummary',
+    'buildSourcePressureHintText',
+    'currentSuccessfulScanTableNames',
+    'selectSuccessfulPartialTableNames',
+    'saveScanPartialCoveragePayload',
     'metadataCacheStatusLabel',
+    'scanJobStatusLabel',
     'projectStore.currentProjectId',
     'async function handleLoadTables()',
     'async function handleStartMetadataScan()',
     'async function handleContinueMetadataScan()',
     'async function handleCancelMetadataScan()',
+    'async function handleGenerateScanPartialCoverage()',
+    'canGenerateScanPartialCoverage',
+    'saveScanPartialCoveragePayload({',
+    'partialResult: scanResult.value.partialResult',
+    'failureSummary: scanResult.value.failureSummary',
+    "router.push({ path: '/field-coverage', query: { projectId, scanPartialId } })",
     "async function handleRefreshMetadata()",
     "function databaseRequest(metadataCacheMode = 'AUTO'",
+    'function selectedSuccessfulTableNames()',
+    'return selectSuccessfulPartialTableNames',
+    'selectedSuccessfulTableCount',
     "metadataCacheMode: metadataCacheMode",
     'countSelectedVisibleTableNames(dbForm.tableNames, databaseTables.value)',
     'const canCancelScan = computed(() =>',
-    'canContinueScan.value',
+    'scanResult.value?.cancelToken',
     '当前页已选',
     '累计 {{ selectedTableCount }}',
     'async function handleBrowseMetadata(metadataCacheMode',
@@ -1115,7 +1131,20 @@ test('keeps database reverse import and comparison flow wired', () => {
     '连接健康画像',
     '分页扫描',
     'scanProgressText',
+    'scanStatusText',
     'scanResumeText',
+    'scanSourcePressureText',
+    'scanFailureText',
+    'scanEvidenceText',
+    'successfulScanTableNames.value.add(tableName)',
+    'scanJobId: scanResult.value?.scanJobId',
+    'resumeCursor: cursor ?? undefined',
+    'cancelToken: cancel ? scanResult.value?.cancelToken',
+    'isScanTableDisabled(table.tableName)',
+    '源库压力',
+    '失败摘要',
+    'Evidence',
+    '生成部分覆盖率',
     'metadataCacheSummaryText',
     'activeMetadataCache?.metadataFingerprint',
     '刷新元数据',
@@ -1165,7 +1194,17 @@ test('keeps database reverse import and comparison flow wired', () => {
     'manualChecks?: string[]',
     'migrationSql?: string',
     'export interface DatabaseMetadataCacheInfo',
-    'metadataCache?: DatabaseMetadataCacheInfo'
+    'metadataCache?: DatabaseMetadataCacheInfo',
+    'export interface DatabaseMetadataScanRateLimit',
+    'export interface DatabaseMetadataScanPartialResult',
+    'export interface DatabaseMetadataScanFailureSummary',
+    'export interface DatabaseMetadataScanEvidence',
+    'scanJobId?: string',
+    'resumeCursor?: string',
+    'cancelToken?: string',
+    'partialResult?: DatabaseMetadataScanPartialResult',
+    'failureSummary?: DatabaseMetadataScanFailureSummary',
+    'evidence?: DatabaseMetadataScanEvidence'
   ], 'reverse import types')
 
   assertContains(schema, [
@@ -1180,7 +1219,17 @@ test('keeps database reverse import and comparison flow wired', () => {
     '/** @description 全局阻塞原因',
     'blockedReasons?: string[];',
     'DatabaseMetadataCacheInfo: {',
-    'metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];'
+    'metadataCache?: components["schemas"]["DatabaseMetadataCacheInfo"];',
+    'DatabaseMetadataScanRateLimit: {',
+    'DatabaseMetadataScanPartialResult: {',
+    'DatabaseMetadataScanFailureSummary: {',
+    'DatabaseMetadataScanEvidence: {',
+    'scanJobId?: string;',
+    'resumeCursor?: string;',
+    'cancelToken?: string;',
+    'partialResult?: components["schemas"]["DatabaseMetadataScanPartialResult"];',
+    'failureSummary?: components["schemas"]["DatabaseMetadataScanFailureSummary"];',
+    'evidence?: components["schemas"]["DatabaseMetadataScanEvidence"];'
   ], 'reverse import schema')
 })
 
@@ -1395,19 +1444,30 @@ test('keeps project backup export and restore workflow wired', () => {
 test('keeps coverage and AI replay supporting flows wired', () => {
   const coverage = readSource('src/views/FieldCoverage.vue')
   const coverageApi = readSource('src/api/coverage.ts')
+  const packageJson = readSource('package.json')
   const replay = readSource('src/views/AiReplay.vue')
   const replayApi = readSource('src/api/aiJob.ts')
+  const types = readSource('src/types/index.ts')
 
   assertContains(coverage, [
     "import ProjectRequired from '@/components/ProjectRequired.vue'",
     "import StateBlock from '@/components/StateBlock.vue'",
     "import { useRequestState } from '@/composables/useRequestState'",
+    'reportScanPartialCoverage',
+    'readScanPartialCoveragePayload',
     'projectStore.currentProjectId',
     'reportSqlCoverage(projectStore.currentProjectId as number, sqlText.value)',
     'reportDatabaseCoverage(databaseRequest())',
     'reportDatabaseCoverage(databaseRequest(\'REFRESH\'))',
+    'reportScanPartialCoverage(payload)',
     'buildMetadataCacheSummary',
     'metadataCacheStatusLabel',
+    'partialCoverageInputStatusText',
+    'partialCoverageNextActions',
+    'partialCoverageSkippedText',
+    'report.value?.inputStatus',
+    '不完整采集结果',
+    '存在失败、跳过或未扫描表（数量见采集作业进度）',
     "function databaseRequest(metadataCacheMode = 'AUTO'",
     "metadataCacheMode: metadataCacheMode",
     'coverageMetadataCacheSummary',
@@ -1425,12 +1485,27 @@ test('keeps coverage and AI replay supporting flows wired', () => {
     'securityRiskLabel(connectionSecurity.riskLevel)',
     'connectionSecurity.recommendedSql',
     '只读安全诊断',
-    'handleGenerateReport'
+    'handleGenerateReport',
+    'handleRetryGenerateReport',
+    'handleGenerateScanPartialReport',
+    "readStringQuery(route.query, 'scanPartialId')",
+    'if (readStringQuery(route.query, \'scanPartialId\'))',
+    '@action="handleRetryGenerateReport"',
+    "syncCoverageUrlState({ scanPartialId: null })"
   ], 'FieldCoverage.vue')
   assertContains(coverageApi, [
     "request.post<unknown, FieldCoverageReport>('/coverage/sql'",
-    "request.post<unknown, FieldCoverageReport>('/coverage/database'"
+    "request.post<unknown, FieldCoverageReport>('/coverage/database'",
+    "request.post<unknown, FieldCoverageReport>('/coverage/scan-partial'"
   ], 'coverage api')
+  assertContains(types, [
+    'export interface ScanPartialCoverageReq',
+    'projectId: number',
+    'partialResult: DatabaseMetadataScanPartialResult'
+  ], 'coverage partial types')
+  assertContains(packageJson, [
+    'tests/scanPartialCoverage.test.ts'
+  ], 'scan partial coverage test script')
 
   assertContains(replay, [
     'projectStore.currentProjectId',
