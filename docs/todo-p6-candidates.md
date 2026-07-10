@@ -1,10 +1,10 @@
 # DataSpec P6 候选池
 
-更新时间：2026-07-09
+更新时间：2026-07-10
 
 本文件承接根 TODO.md 中尚未完成的 P6 候选详情。后续开发先读根 TODO.md、候选评审和时间评估，再按任务范围读取本文件对应条目；不要默认线性顺扫全部候选。
 
-- 未完成候选数量：73
+- 未完成候选数量：71
 - 本轮已归档为现有能力覆盖：6 项，详见 [archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
 - 本轮已删除独立候选：9 项，详见 [archive/todo-removed-p6-candidates.md](archive/todo-removed-p6-candidates.md)
 - 已完成 P5/P6 详情：[archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
@@ -83,8 +83,6 @@
 - P6-161：AI 可读字段知识卡片
 - P6-162：规则/标准 A/B 评测与回归数据集
 - P6-163：连接器能力探测与方言 Profile
-- P6-165：标准对象稳定标识与引用别名层
-- P6-166：AI 输出后置校验与幻觉引用拦截
 - P6-167：标准查询 DSL 与可组合筛选协议
 - P6-168：MCP Resource 游标分页与大字段库分片导出
 - P6-171：标准规则向数据质量测试导出
@@ -709,26 +707,6 @@
 - 落地产物：连接数据库后生成能力探测报告；AI Context、反向导入 plan 和 SQL 校验结果携带方言 profile；前端连接诊断页展示不支持项和替代建议。
 - 验收标准：同一个任务在 MySQL/PostgreSQL 等连接下能获得不同方言提示；不支持的能力会提前警告；探测过程只读且不保存密码。
 - 边界：不承诺覆盖所有数据库第一版，不自动安装驱动；优先 PostgreSQL/MySQL 和当前已支持路径。
-
-### P6-165：标准对象稳定标识与引用别名层
-- 状态：待办。
-- 为什么做：AI、CLI、MCP 和业务仓库长期引用字段标准时，如果只引用可变的字段名或显示名，字段重命名、合并或废弃后很容易引用漂移；需要一个稳定标识和别名解析层，让 AI 知道“这是同一个标准对象的历史名称”。
-- 已有基础：已有标准快照、Schema Registry、字段生命周期、字段影响分析、变更日志、标准包 lockfile、标准消费端 SDK 和 AI 输出引用证据待办。
-- 缺口：缺少 fieldStableId、aliasHistory、canonicalRef、deprecatedRefs 和 referenceResolutionResult；当前 Context、证据包、SDK 或业务仓库扫描结果难以统一判断旧引用是否仍有效。
-- 参考项目：`datahub-project/datahub` 的实体 urn、`open-metadata/OpenMetadata` 的资产标识和 `bufbuild/buf` 的 breaking change 检查；只借鉴稳定引用和兼容检查，不做组织级元数据平台。
-- 落地产物：为字段、枚举、规则、模板等标准对象定义稳定引用格式；导出 Context、SDK、证据包和问答结果时同时携带 stableRef 与当前 displayName；新增别名解析 API/CLI，支持把历史字段名解析到当前标准对象。
-- 验收标准：字段重命名后，历史 SQL 检查记录、AI 证据包和业务仓库引用仍能解析到同一标准对象；废弃或合并的引用会给出替代建议；解析结果有契约测试覆盖。
-- 边界：不强制重写历史记录，不把 stableRef 暴露成用户必须手填的字段；第一版优先覆盖字段和枚举。
-
-### P6-166：AI 输出后置校验与幻觉引用拦截
-- 状态：待办。
-- 为什么做：即使 AI 能读取标准，它仍可能在 SQL、DDL、文档或修复说明里引用不存在的字段、过期枚举或错误规则；需要在 AI 产物生成后做一次确定性校验，避免“看起来引用了标准，实际引用错了”。
-- 已有基础：已有 SQL lint、fixedSql、DDL 生成、AI 回放、AI 输出契约稳定性、引用证据与 Explain Trace、规则/标准 A/B 评测和执行证据包。
-- 缺口：缺少 postGenerationCheck、unknownStandardRefs、staleRefs、unsupportedClaims 和 confidenceThreshold；AI 输出中的字段名、枚举值、规则说明和证据引用无法统一二次验证。
-- 参考项目：`promptfoo/promptfoo` 的输出断言、`great-expectations/great_expectations` 的验证结果和 `Schemathesis/schemathesis` 的契约回归；只做本地确定性检查，不依赖外部 LLM 评判。
-- 落地产物：新增 AI 产物校验 API/CLI/MCP；支持粘贴文本或选择 AI job 输出，校验 SQL/DDL/Markdown/JSON 中的字段、枚举、规则、快照和证据引用，输出 PASS/WARN/FAIL、missingRefs、staleRefs、unsafeClaims、suggestedFixes 和 evidenceLinks；前端在复制或下载 AI 产物前显示校验摘要。
-- 验收标准：AI 输出引用不存在字段时能被拦截或明确警告；过期字段能提示替代字段；缺少证据或引用旧快照时能给出 nextAction；校验结果可进入执行证据包和回放记录。
-- 边界：不判断自然语言内容的全部事实正确性，不自动调用外部模型改写；第一版聚焦 DataSpec 可确定验证的字段、枚举、规则和快照引用。
 
 ### P6-167：标准查询 DSL 与可组合筛选协议
 - 状态：待办。

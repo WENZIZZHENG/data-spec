@@ -18,6 +18,7 @@ const DEFAULT_SERVER = 'http://localhost:8090'
 const SERVER_NAME = 'dataspec-mcp'
 const MCP_VERSION = '0.1.0'
 const EVIDENCE_SOURCE_TYPES = ['AI_JOB', 'SQL_CHECK', 'COVERAGE_REPORT', 'AI_BATCH_RUN', 'AI_TASK_RUN']
+const AI_OUTPUT_POST_CHECK_CONTENT_TYPES = ['SQL', 'DDL', 'MARKDOWN', 'JSON', 'TEXT']
 
 const READ_ONLY_TOOL_SAFETY = {
   readOnly: true,
@@ -46,6 +47,16 @@ const TOOL_SAFETY = {
   get_field_catalog: READ_ONLY_TOOL_SAFETY,
   search_field_catalog: READ_ONLY_TOOL_SAFETY,
   search_fields: READ_ONLY_TOOL_SAFETY,
+  resolve_standard_refs: {
+    ...READ_ONLY_TOOL_SAFETY,
+    sensitiveInputs: ['refs'],
+    nextActions: ['在采纳 AI 输出前先解析 stableRef/canonicalRef，遇到 UNKNOWN 或 AMBIGUOUS 时停止并让用户确认。']
+  },
+  check_ai_output: {
+    ...READ_ONLY_TOOL_SAFETY,
+    sensitiveInputs: ['content'],
+    nextActions: ['PASS 后再复制或执行 AI 产物；WARN/FAIL 时先查看 blocking refs、replacement refs 和 nextActions。']
+  },
   suggest_fields: READ_ONLY_TOOL_SAFETY,
   generate_table_ddl: {
     readOnly: false,
@@ -1143,6 +1154,61 @@ function listTools() {
         }
       },
       {
+        name: 'resolve_standard_refs',
+        description: 'Resolve project-scoped DataSpec standard references; this tool is read-only and does not write standards, business files, or databases.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            refType: {
+              type: 'string',
+              enum: ['FIELD', 'ENUM', 'RULE', 'SNAPSHOT'],
+              description: '引用对象类型：FIELD 字段、ENUM 枚举代码集、RULE 标准规则、SNAPSHOT 标准快照。'
+            },
+            refs: {
+              type: 'array',
+              description: '待解析引用列表，可包含 stableRef、当前名称、别名或历史名称；不得包含 token/password/JDBC URL/Authorization 等明文秘密。',
+              items: {
+                type: 'string',
+                description: '单个待解析引用。'
+              },
+              minItems: 1
+            }
+          },
+          required: ['refType', 'refs']
+        }
+      },
+      {
+        name: 'check_ai_output',
+        description: 'Run deterministic DataSpec post-check on AI output; this tool is read-only and does not write standards, business files, or databases.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            contentType: {
+              type: 'string',
+              enum: AI_OUTPUT_POST_CHECK_CONTENT_TYPES,
+              description: 'AI 产物类型，用于选择确定性引用提取规则；TEXT 是稳定纯文本值，兼容旧 PLAIN_TEXT 输入并按 TEXT 发送。'
+            },
+            content: {
+              type: 'string',
+              description: '待校验 AI 产物正文；工具只读传给后端 post-check，返回前会保留结构化结果并依赖后端/本地脱敏保护秘密。'
+            },
+            snapshotRef: {
+              type: 'string',
+              description: '可选标准快照 stableRef，用于判断输出是否引用旧快照或当前标准。'
+            }
+          },
+          required: ['contentType', 'content']
+        }
+      },
+      {
         name: 'suggest_fields',
         description: '根据业务描述推荐 DataSpec 标准字段候选。',
         inputSchema: {
@@ -1290,6 +1356,12 @@ async function callTool(params, context) {
   if (name === 'search_fields') {
     return await callSearchFields(args, context)
   }
+  if (name === 'resolve_standard_refs') {
+    return await callResolveStandardRefs(args, context)
+  }
+  if (name === 'check_ai_output') {
+    return await callCheckAiOutput(args, context)
+  }
   if (name === 'suggest_fields') {
     return await callSuggestFields(args, context)
   }
@@ -1415,6 +1487,45 @@ async function callSearchFields(args, context) {
   })
   const result = await readDataSpecJson(response)
   return toolJsonResult(result)
+}
+
+async function callResolveStandardRefs(args, context) {
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  const refType = stringArg(args.refType, 'resolve_standard_refs 需要 refType')
+  const refs = Array.isArray(args.refs)
+    ? args.refs.map((item) => String(item).trim()).filter(Boolean)
+    : []
+  if (refs.length === 0) {
+    throw new JsonRpcError(-32602, 'resolve_standard_refs 需要至少一个 refs[] 引用')
+  }
+  const response = await context.fetchFn(`${context.server}/api/standard-references/resolve`, {
+    method: 'POST',
+    headers: dataSpecHeaders(context.apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ projectId, refType, refs })
+  })
+  const result = await readDataSpecJson(response)
+  return toolJsonResult(sanitizeSecretValue(result))
+}
+
+async function callCheckAiOutput(args, context) {
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  const contentType = normalizeAiOutputPostCheckContentType(stringArg(args.contentType, 'check_ai_output 需要 contentType'))
+  const content = stringArg(args.content, 'check_ai_output 需要非空 content')
+  const body = {
+    projectId,
+    contentType,
+    content
+  }
+  if (args.snapshotRef !== undefined && args.snapshotRef !== null && String(args.snapshotRef).trim() !== '') {
+    body.snapshotRef = String(args.snapshotRef).trim()
+  }
+  const response = await context.fetchFn(`${context.server}/api/ai-output/check`, {
+    method: 'POST',
+    headers: dataSpecHeaders(context.apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body)
+  })
+  const result = await readDataSpecJson(response)
+  return toolJsonResult(sanitizeSecretValue(result))
 }
 
 async function callSuggestFields(args, context) {
@@ -1989,6 +2100,13 @@ function optionalLimit(value, fallback) {
   return parsePositiveInteger(value, 'limit')
 }
 
+function stringArg(value, message) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new JsonRpcError(-32602, message)
+  }
+  return value
+}
+
 function parseOptionalBoolean(value, label) {
   if (typeof value === 'boolean') {
     return value
@@ -2021,6 +2139,11 @@ function parsePositiveInteger(value, label) {
 function normalizeServer(server = DEFAULT_SERVER) {
   const normalized = String(server || DEFAULT_SERVER).replace(/\/+$/, '')
   return normalized || DEFAULT_SERVER
+}
+
+function normalizeAiOutputPostCheckContentType(value) {
+  const normalized = String(value ?? '').trim().toUpperCase()
+  return normalized === 'PLAIN_TEXT' ? 'TEXT' : normalized
 }
 
 function normalizeApiToken(value) {

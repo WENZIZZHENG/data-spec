@@ -171,6 +171,12 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'search-fields') {
       return await runSearchFields(rest, io, fetchFn)
     }
+    if (command === 'ref' || command === 'refs') {
+      return await runRef(rest, io, fetchFn)
+    }
+    if (command === 'ai-output' || command === 'aioutput') {
+      return await runAiOutput(rest, io, fetchFn)
+    }
     if (command === 'generate-ddl') {
       return await runGenerateDdl(rest, io, fetchFn)
     }
@@ -1904,6 +1910,91 @@ async function runSearchFields(args, io, fetchFn) {
   const result = unwrapResponse(payload)
   io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
   return 0
+}
+
+async function runRef(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'resolve') {
+    throw new Error('未知 ref 子命令。支持: resolve')
+  }
+  const { positional, options } = parseArgs(
+    rest,
+    ['project', 'type', 'ref', 'format', 'server', 'dataspec-token'],
+    [],
+    ['ref']
+  )
+  if (positional.length > 0) {
+    throw new Error(`ref resolve 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const config = loadDataSpecConfig(cliCwd(io))
+  const projectId = parseProjectId(options.project ?? config.projectId)
+  const refType = requiredOption(options.type, 'type', 'ref resolve')
+  const refs = optionValues(options.ref).map((item) => String(item).trim()).filter(Boolean)
+  if (refs.length === 0) {
+    throw new Error('ref resolve 需要至少提供一个 --ref <value>')
+  }
+  const format = options.format ?? 'json'
+  if (format !== 'json') {
+    throw new Error('ref resolve 当前仅支持 --format json')
+  }
+  const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
+  const response = await fetchFn(`${server}/api/standard-references/resolve`, {
+    method: 'POST',
+    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ projectId, refType, refs })
+  })
+  const payload = await readJsonResponse(response)
+  const result = unwrapResponse(payload)
+  io.writeOut(`${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`)
+  return 0
+}
+
+async function runAiOutput(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'check') {
+    throw new Error('未知 ai-output 子命令。支持: check')
+  }
+  const { positional, options } = parseArgs(
+    rest,
+    ['project', 'type', 'file', 'snapshot-ref', 'snapshotRef', 'format', 'server', 'dataspec-token'],
+    ['stdin']
+  )
+  if (positional.length > 0) {
+    throw new Error(`ai-output check 不接受位置参数: ${positional.join(', ')}`)
+  }
+  if (options.file && options.stdin) {
+    throw new Error('ai-output check 的 --file 和 --stdin 只能选择一个')
+  }
+  if (!options.file && !options.stdin) {
+    throw new Error('ai-output check 需要提供 --file <path> 或 --stdin')
+  }
+  const config = loadDataSpecConfig(cliCwd(io))
+  const projectId = parseProjectId(options.project ?? config.projectId)
+  const contentType = normalizeAiOutputPostCheckContentType(requiredOption(options.type, 'type', 'ai-output check'))
+  const format = options.format ?? 'json'
+  if (format !== 'json') {
+    throw new Error('ai-output check 当前仅支持 --format json')
+  }
+  const content = options.stdin
+    ? await io.readStdin()
+    : await readFile(path.resolve(cliCwd(io), options.file), 'utf8')
+  const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
+  const response = await fetchFn(`${server}/api/ai-output/check`, {
+    method: 'POST',
+    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(removeUndefinedValues({
+      projectId,
+      contentType,
+      content,
+      snapshotRef: options.snapshotRef ?? options['snapshot-ref']
+    }))
+  })
+  const payload = await readJsonResponse(response)
+  const result = unwrapResponse(payload)
+  io.writeOut(`${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`)
+  return result?.status === 'PASS' ? 0 : 1
 }
 
 async function runGenerateDdl(args, io, fetchFn) {
@@ -6356,6 +6447,11 @@ function normalizeServer(server = DEFAULT_SERVER) {
   return server.replace(/\/+$/, '')
 }
 
+function normalizeAiOutputPostCheckContentType(value) {
+  const normalized = String(value ?? '').trim().toUpperCase()
+  return normalized === 'PLAIN_TEXT' ? 'TEXT' : normalized
+}
+
 function resolveDataSpecToken(options, config) {
   return options['dataspec-token'] ?? process.env.DATASPEC_TOKEN ?? config.apiToken
 }
@@ -6516,6 +6612,8 @@ Usage:
   node tools/dataspec-cli.mjs context-quality check [--context-dir <dir>|--context-zip <zip>|--budget-plan <json>] [--format text|json]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs ref resolve --project <id> --type <FIELD|ENUM|RULE|SNAPSHOT> --ref <value> [--ref <value> ...] --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs ai-output check --project <id> --type <SQL|DDL|MARKDOWN|JSON|TEXT> (--file <path>|--stdin) [--snapshot-ref <ref>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs synthetic-examples generate [--project <id>] --scenario <user|order|payment|audit> [--max-cases <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract-import preview [--project <id>] --source-kind <openapi|json-schema|protobuf> --input <path> [--max-candidates <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
@@ -6563,6 +6661,8 @@ Options:
   context-budget plan 是导出前只读预算预检；只调用后端 planner，不下载、不缓存、不写入 AI Context 文件
   context-quality check 是本地只读质量检查；读取已导出的目录、zip 或预算 plan JSON，不调用后端、不写缓存、不修改项目状态
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
+  ref resolve 只读解析字段、枚举、规则或快照引用，返回 stableRef/canonicalRef、生命周期状态和替代引用建议
+  ai-output check 只读校验 AI 产物中的标准引用；PASS 返回 0，WARN/FAIL 返回 1，参数、配置或 API 错误返回 2
   synthetic-examples generate 只读生成合成标准样例包，可作为 fixture、Prompt 评测或人工审核草案；不会写入项目标准或调用外部 LLM
   contract-import preview 只读读取本地 OpenAPI/JSON Schema/Protobuf 契约并生成候选预览；不会自动写入标准字段或候选 Inbox
   schema-plan 只生成数据库 schema change plan 预览，不执行迁移；推荐使用 --password-env 读取数据库密码

@@ -245,14 +245,14 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 稳定字段：
 
-- `AiEvidencePackage`: `kind`、`schemaVersion`、`packageId`、`projectId`、`generatedAt`、`source`、`standardSnapshot`、`inputsSummary`、`outputsSummary`、`validationSummary`、`artifacts[]`、`nextActions[]`、`suggestedCommands[]`、`diagnostics[]`。
+- `AiEvidencePackage`: `kind`、`schemaVersion`、`packageId`、`projectId`、`generatedAt`、`source`、`standardSnapshot`、`inputsSummary`、`outputsSummary`、`validationSummary`、`postCheckSummary`、`artifacts[]`、`nextActions[]`、`suggestedCommands[]`、`diagnostics[]`。
 - `AiEvidenceSource`: `sourceType`、`sourceId`、`sourceTitle`、`status`、`persisted`。
 - `AiEvidenceStandardSnapshot`: `snapshotId`、`specVersion`、`specHash`、`versioned`。
 - `AiEvidenceArtifact`: `artifactType`、`title`、`format`、`summary`。
 - `AiEvidenceDiagnostic`: `level`、`code`、`message`。
-- `AiEvidencePackageReq`: `projectId`、`sourceType`、`sourceId`、`sourceTitle`、`coverageReport`、`standardSnapshot`、`payloadSummary`。
+- `AiEvidencePackageReq`: `projectId`、`sourceType`、`sourceId`、`sourceTitle`、`coverageReport`、`standardSnapshot`、`payloadSummary`、`postCheckSummary`。`postCheckSummary` 仅记录脱敏 post-check 摘要，不存储 raw output。
 
-稳定来源类型：`AI_JOB`、`SQL_CHECK`、`COVERAGE_REPORT`、`AI_BATCH_RUN`。`COVERAGE_REPORT` 可以是 payload source，`persisted=false` 表示当前报告不是服务端长期记录。
+稳定来源类型：`AI_JOB`、`SQL_CHECK`、`COVERAGE_REPORT`、`AI_BATCH_RUN`、`AI_TASK_RUN`。`COVERAGE_REPORT` 可以是 payload source，`persisted=false` 表示当前报告不是服务端长期记录。
 
 证据包不得暴露 token、password、Authorization header、完整 JDBC URL 或业务数据行。AI 可以使用 evidence package 继续修复、复盘或生成交付说明，但不得把 evidence package 视为企业审计记录、审批结果或写入授权。
 

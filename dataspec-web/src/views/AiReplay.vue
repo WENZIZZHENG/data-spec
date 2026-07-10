@@ -89,10 +89,68 @@
             <el-tag size="small" type="info" effect="plain">建议 {{ lintSummary.suggestionCount }}</el-tag>
           </div>
 
+          <div
+            v-if="postCheckResult || postCheckError"
+            class="post-check-panel"
+            role="status"
+            aria-live="polite"
+          >
+            <div class="post-check-heading">
+              <span class="post-check-title">Post-check</span>
+              <el-tag
+                v-if="postCheckResult"
+                size="small"
+                :type="aiOutputPostCheckTagType(postCheckResult.status)"
+                effect="plain"
+              >
+                {{ postCheckResult.status || 'UNKNOWN' }}
+              </el-tag>
+              <span v-if="postCheckResult" class="post-check-summary">
+                {{ aiOutputPostCheckSummary(postCheckResult) }}
+              </span>
+            </div>
+            <p v-if="postCheckError" class="post-check-error">{{ postCheckError }}</p>
+            <template v-if="postCheckResult">
+              <div class="post-check-row">
+                <span class="post-check-label">safeToUse</span>
+                <strong>{{ postCheckResult.safeToUse ? 'true' : 'false' }}</strong>
+              </div>
+              <div v-if="blockingRefs.length" class="post-check-tags">
+                <span class="post-check-label">Blocking refs</span>
+                <el-tag
+                  v-for="refValue in blockingRefs"
+                  :key="`blocking-${refValue}`"
+                  size="small"
+                  type="danger"
+                  effect="plain"
+                >
+                  {{ refValue }}
+                </el-tag>
+              </div>
+              <div v-if="replacementRefs.length" class="post-check-tags">
+                <span class="post-check-label">Replacement refs</span>
+                <el-tag
+                  v-for="refValue in replacementRefs"
+                  :key="`replacement-${refValue}`"
+                  size="small"
+                  type="warning"
+                  effect="plain"
+                >
+                  {{ refValue }}
+                </el-tag>
+              </div>
+              <ul v-if="postCheckResult.nextActions?.length" class="post-check-next">
+                <li v-for="action in postCheckResult.nextActions" :key="action">{{ action }}</li>
+              </ul>
+            </template>
+          </div>
+
           <div class="detail-actions">
             <el-button size="small" @click="copyReplayLink">复制链接</el-button>
             <el-button size="small" @click="copyText(activeDetail.replayCommand || '')">复制命令</el-button>
-            <el-button size="small" type="primary" @click="copyText(replayJson)">复制 JSON</el-button>
+            <el-button size="small" type="primary" :loading="postCheckLoading" @click="handleCopyReplayJson">
+              校验并复制 JSON
+            </el-button>
           </div>
 
           <el-tabs class="detail-tabs">
@@ -119,6 +177,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
+import { checkAiOutput, type AiOutputPostCheckResult } from '@/api/aiOutputPostCheck'
 import { getAiJobDetail, listAiJobs } from '@/api/aiJob'
 import { useProjectStore } from '@/stores/project'
 import {
@@ -127,6 +186,14 @@ import {
   buildReplayJson,
   formatAiJobTime
 } from '@/utils/aiReplayDisplay'
+import {
+  aiOutputPostCheckSummary,
+  aiOutputPostCheckTagType,
+  blockingPostCheckRefs,
+  buildPostCheckInputFromPayload,
+  buildSnapshotRef,
+  replacementPostCheckRefs
+} from '@/utils/aiOutputPostCheckDisplay'
 import { copyRouteUrl, readEnumQuery, readPositiveIntQuery, replaceRouteQuery } from '@/utils/urlState'
 import type { AiJobRecord, AiJobRecordDetail, AiJobRecordListItem } from '@/types'
 
@@ -147,6 +214,9 @@ const loading = ref(false)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
 const activeDetail = ref<AiJobRecordDetail | null>(null)
+const postCheckLoading = ref(false)
+const postCheckResult = ref<AiOutputPostCheckResult | null>(null)
+const postCheckError = ref('')
 const jobTypeFilter = ref('')
 const jobTypeOptions = [
   { label: '建表 Prompt', value: 'CREATE_TABLE_PROMPT' },
@@ -163,6 +233,8 @@ const replayJson = computed(() => buildReplayJson(activeDetail.value?.replayPayl
 const lintSummary = computed(
   () => extractLintSummary(activeDetail.value?.outputPayload) ?? extractLintSummary(activeDetail.value?.inputPayload)
 )
+const blockingRefs = computed(() => blockingPostCheckRefs(postCheckResult.value))
+const replacementRefs = computed(() => replacementPostCheckRefs(postCheckResult.value))
 
 onMounted(() => {
   applyReplayUrlState()
@@ -199,6 +271,11 @@ watch(detailVisible, (visible) => {
     activeDetail.value = null
     void syncReplayUrlState({ aiJobId: null })
   }
+})
+
+watch(activeDetail, () => {
+  postCheckResult.value = null
+  postCheckError.value = ''
 })
 
 async function loadJobs() {
@@ -304,6 +381,48 @@ async function copyReplayLink() {
   }
 }
 
+async function handleCopyReplayJson() {
+  if (!replayJson.value) {
+    return
+  }
+  const result = await runPostCheckForReplay()
+  if (result?.safeToUse) {
+    await copyText(replayJson.value, '已校验并复制')
+    return
+  }
+  ElMessage.warning('Post-check 未通过，JSON 未复制')
+}
+
+async function runPostCheckForReplay() {
+  const projectId = activeRecord.value?.projectId ?? projectStore.currentProjectId
+  if (!projectId || !activeDetail.value) {
+    ElMessage.warning('请先选择项目和 AI 回放记录')
+    return null
+  }
+  postCheckLoading.value = true
+  postCheckError.value = ''
+  try {
+    const input = buildPostCheckInputFromPayload(activeDetail.value.outputPayload ?? activeDetail.value.replayPayload)
+    const snapshotRef = buildSnapshotRef(
+      projectId,
+      activeRecord.value?.standardSnapshotId,
+      activeRecord.value?.standardSnapshotVersion
+    )
+    postCheckResult.value = await checkAiOutput({
+      projectId,
+      ...input,
+      snapshotRef
+    })
+    return postCheckResult.value
+  } catch {
+    postCheckResult.value = null
+    postCheckError.value = '后置校验失败，JSON 未复制'
+    return null
+  } finally {
+    postCheckLoading.value = false
+  }
+}
+
 function snapshotText(record?: AiJobRecord | AiJobRecordListItem) {
   if (!record) {
     return '-'
@@ -342,12 +461,12 @@ function toNumber(value: unknown) {
   return typeof value === 'number' ? value : 0
 }
 
-async function copyText(text: string) {
+async function copyText(text: string, successMessage = '已复制') {
   if (!text) {
     return
   }
   await navigator.clipboard.writeText(text)
-  ElMessage.success('已复制')
+  ElMessage.success(successMessage)
 }
 </script>
 
@@ -416,6 +535,58 @@ async function copyText(text: string) {
   color: #475569;
   font-size: 13px;
   font-weight: 600;
+}
+
+.post-check-panel {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #f8fafc;
+}
+
+.post-check-heading,
+.post-check-row,
+.post-check-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.post-check-heading {
+  margin-bottom: 8px;
+}
+
+.post-check-title,
+.post-check-label {
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.post-check-summary,
+.post-check-row strong {
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.post-check-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.post-check-tags {
+  margin-top: 8px;
+}
+
+.post-check-next {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .detail-actions {

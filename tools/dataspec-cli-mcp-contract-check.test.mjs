@@ -169,6 +169,42 @@ test('bundled fixtures include context-quality check readonly contract', async (
   assert.ok(command.recommendedNextActions.some((item) => item.includes('budget-plan') || item.includes('export-context')))
 })
 
+test('bundled fixtures include stable reference and post-check contracts', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const refCommand = fixture.cliCommands.find((item) => item.id === 'ref-resolve')
+  const checkCommand = fixture.cliCommands.find((item) => item.id === 'ai-output-check')
+  const refTool = fixture.mcpTools.find((item) => item.name === 'resolve_standard_refs')
+  const checkTool = fixture.mcpTools.find((item) => item.name === 'check_ai_output')
+
+  assert.ok(refCommand)
+  assert.equal(refCommand.safety.readOnly, true)
+  assert.equal(refCommand.safety.writesProject, false)
+  assert.ok(refCommand.outputShape.includes('results[].stableRef'))
+  assert.ok(refCommand.outputShape.includes('results[].canonicalRef'))
+
+  assert.ok(checkCommand)
+  assert.equal(checkCommand.exitCodes['1'], 'post-check status WARN or FAIL')
+  assert.deepEqual(checkCommand.contentTypeValues, ['SQL', 'DDL', 'MARKDOWN', 'JSON', 'TEXT'])
+  assert.deepEqual(checkCommand.compatibilityAliases.contentType, { PLAIN_TEXT: 'TEXT' })
+  assert.ok(checkCommand.outputShape.includes('status'))
+  assert.ok(checkCommand.outputShape.includes('safeToUse'))
+  assert.ok(checkCommand.oneOfRequiredOptions.includes('file'))
+  assert.ok(checkCommand.oneOfRequiredOptions.includes('stdin'))
+
+  assert.ok(refTool)
+  assert.deepEqual(refTool.requiredInputs, ['refType', 'refs'])
+  assert.equal(refTool.safety.readOnly, true)
+  assert.equal(refTool.safety.sensitiveInputs.includes('refs'), true)
+  assert.ok(refTool.outputShape.includes('structuredContent.results[].stableRef'))
+
+  assert.ok(checkTool)
+  assert.deepEqual(checkTool.requiredInputs, ['contentType', 'content'])
+  assert.deepEqual(checkTool.contentTypeValues, ['SQL', 'DDL', 'MARKDOWN', 'JSON', 'TEXT'])
+  assert.deepEqual(checkTool.compatibilityAliases.contentType, { PLAIN_TEXT: 'TEXT' })
+  assert.equal(checkTool.safety.sensitiveInputs.includes('content'), true)
+  assert.ok(checkTool.outputShape.includes('structuredContent.safeToUse'))
+})
+
 test('bundled fixtures include synthetic examples readonly contract', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'synthetic-examples-generate')

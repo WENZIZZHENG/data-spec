@@ -118,6 +118,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 inputs,
                 outputs,
                 validation,
+                req.postCheckSummary(),
                 artifacts,
                 List.of("查看 fixedSqlDiff 和 issueSamples 后再决定是否应用修复。", "如标准已变化，先重新运行 lint 或导出最新 AI Context。"),
                 List.of("dataspec lint <path|-> --project " + projectId + " --format json"),
@@ -153,6 +154,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 inputs,
                 outputs,
                 validation,
+                req.postCheckSummary(),
                 artifacts,
                 List.of("需要复现时使用 replayCommand，并确认当前标准快照是否一致。"),
                 List.of(firstText(detail.replayCommand(), "dataspec replay ai-job --id " + sourceId)),
@@ -188,6 +190,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 inputs,
                 outputs,
                 validation,
+                req.postCheckSummary(),
                 artifacts,
                 deliveryPackage != null && deliveryPackage.nextActions() != null ? sanitizeStringList(deliveryPackage.nextActions()) : List.of("查看失败项并按需重试。"),
                 List.of("dataspec evidence export --source-type AI_BATCH_RUN --source-id " + sourceId + " --format json"),
@@ -232,6 +235,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 inputs,
                 outputs,
                 validation,
+                req.postCheckSummary(),
                 artifacts,
                 List.of(firstText(detail.nextAction(), "查看任务状态后决定是否重试。")),
                 suggestedCommands,
@@ -268,6 +272,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 inputs,
                 outputs,
                 validation,
+                req.postCheckSummary(),
                 List.of(new AiEvidenceArtifact("coverage-report", "字段覆盖率报告摘要", "json", outputs)),
                 List.of("优先处理 unmanagedRankingSamples 中出现频次最高的字段。", "需要写入标准字段前先进入候选或反向导入确认流程。"),
                 List.of("dataspec coverage report --project " + projectId + " --format json"),
@@ -281,6 +286,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                                     Map<String, Object> inputs,
                                     Map<String, Object> outputs,
                                     Map<String, Object> validation,
+                                    Map<String, Object> postCheckSummary,
                                     List<AiEvidenceArtifact> artifacts,
                                     List<String> nextActions,
                                     List<String> suggestedCommands,
@@ -297,6 +303,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 sanitizeToMap(inputs),
                 sanitizeToMap(outputs),
                 sanitizeToMap(validation),
+                sanitizePostCheckSummary(postCheckSummary, projectId),
                 artifacts == null ? List.of() : artifacts.stream()
                         .map(item -> new AiEvidenceArtifact(item.artifactType(), sanitizeText(item.title()), item.format(), sanitizeToMap(item.summary())))
                         .toList(),
@@ -372,6 +379,31 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 "keys", new ArrayList<>(map.keySet()).stream().limit(LIST_PREVIEW_LIMIT).toList(),
                 "preview", map
         );
+    }
+
+    private Map<String, Object> sanitizePostCheckSummary(Map<String, Object> value, Long projectId) {
+        if (value == null || value.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        copyPostCheckValue(result, value, "status");
+        copyPostCheckValue(result, value, "safeToUse");
+        copyPostCheckValue(result, value, "issueCounts");
+        copyPostCheckValue(result, value, "blockingRefs");
+        copyPostCheckValue(result, value, "replacementRefs");
+        copyPostCheckValue(result, value, "evidenceLinks");
+        copyPostCheckValue(result, value, "nextActions");
+        Object command = value.get("suggestedCheckCommand");
+        result.put("suggestedCheckCommand", command instanceof String text && hasText(text)
+                ? preview(text)
+                : "dataspec ai-output check --project " + projectId + " --type <contentType> --file <path> --format json");
+        return result;
+    }
+
+    private void copyPostCheckValue(Map<String, Object> target, Map<String, Object> source, String key) {
+        if (source.containsKey(key)) {
+            target.put(key, sanitizeValue(source.get(key), 0));
+        }
     }
 
     private Map<String, Object> sanitizeToMap(Object value) {

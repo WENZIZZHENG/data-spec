@@ -324,6 +324,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/standard-references/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/standard-maintenance/workflows/plan": {
         parameters: {
             query?: never;
@@ -1262,6 +1278,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["preview_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai-output/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["check"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3437,6 +3469,89 @@ export interface components {
             message?: string;
             data?: components["schemas"]["StandardReusePackPlan"];
             error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 标准引用解析请求；只读解析 refs，不修改标准、业务文件或数据库。 */
+        StandardReferenceResolveRequest: {
+            /**
+             * Format: int64
+             * @description 当前项目 ID；所有解析都限制在该项目内，跨项目 stableRef 不会暴露目标对象信息。
+             * @example 1
+             */
+            projectId: number;
+            /**
+             * @description 标准对象引用类型；用于限定 stableRef、字段名、别名或版本号应解析到哪类项目内标准对象。
+             * @enum {string}
+             */
+            refType: "FIELD" | "ENUM" | "RULE" | "SNAPSHOT";
+            refs: string[];
+        };
+        RStandardReferenceResolveResponse: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardReferenceResolveResponse"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 单条标准引用解析结果；所有可复制文本均经过 secret-safe 脱敏。 */
+        StandardReferenceResolutionResult: {
+            /** @description 脱敏后的原始输入引用。 */
+            inputRef?: string;
+            /**
+             * @description 标准对象引用类型；用于限定 stableRef、字段名、别名或版本号应解析到哪类项目内标准对象。
+             * @enum {string}
+             */
+            refType?: "FIELD" | "ENUM" | "RULE" | "SNAPSHOT";
+            /**
+             * @description 标准引用解析状态；调用方不得在 AMBIGUOUS、UNKNOWN 或 CROSS_PROJECT 时猜测 canonical 对象。
+             * @enum {string}
+             */
+            resolutionStatus?: "CURRENT" | "STALE" | "AMBIGUOUS" | "UNKNOWN" | "CROSS_PROJECT";
+            /** @description 命中的 project-scoped stableRef；未命中或不可暴露时为空。 */
+            stableRef?: string;
+            /** @description 当前推荐 canonical stableRef；歧义、未知或跨项目时为空。 */
+            canonicalRef?: string;
+            /**
+             * Format: int64
+             * @description 当前项目对象 ID；规则或不可暴露对象可为空。
+             */
+            objectId?: number;
+            /** @description 当前标准对象名称、编码、规则码或快照版本。 */
+            currentName?: string;
+            /** @description 命中的别名、历史名或版本别名。 */
+            matchedAlias?: string;
+            /** @description 字段生命周期或对象可用状态。 */
+            lifecycleStatus?: string;
+            /** @description 替代对象 stableRef；仅废弃、停用或被替代对象需要。 */
+            replacementRef?: string;
+            /**
+             * @description 标准引用解析置信度；stableRef 和精确名称通常为 HIGH，派生别名或文本提示可降为 MEDIUM/LOW。
+             * @enum {string}
+             */
+            confidence?: "HIGH" | "MEDIUM" | "LOW";
+            evidenceLinks?: string[];
+            warnings?: string[];
+        };
+        /** @description 标准引用解析响应；保持请求顺序，且不会写入任何项目状态。 */
+        StandardReferenceResolveResponse: {
+            /**
+             * @description 稳定响应类型标识。
+             * @example dataspec-standard-reference-resolution
+             */
+            kind?: string;
+            /**
+             * Format: int32
+             * @description 响应 schema 版本。
+             * @example 1
+             */
+            schemaVersion?: number;
+            /**
+             * Format: int64
+             * @description 当前项目 ID。
+             * @example 1
+             */
+            projectId?: number;
+            results?: components["schemas"]["StandardReferenceResolutionResult"][];
+            warnings?: string[];
         };
         /** @description 标准维护 workflow dry-run 计划请求；只携带来源筛选和页面上下文，不触发写入。 */
         StandardMaintenanceWorkflowPlanReq: {
@@ -5924,6 +6039,9 @@ export interface components {
             payloadSummary?: {
                 [key: string]: Record<string, never>;
             };
+            postCheckSummary?: {
+                [key: string]: Record<string, never>;
+            };
         };
         AiEvidenceStandardSnapshot: {
             /** Format: int64 */
@@ -5963,6 +6081,9 @@ export interface components {
                 [key: string]: Record<string, never>;
             };
             validationSummary?: {
+                [key: string]: Record<string, never>;
+            };
+            postCheckSummary?: {
                 [key: string]: Record<string, never>;
             };
             artifacts?: components["schemas"]["AiEvidenceArtifact"][];
@@ -6153,6 +6274,127 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["ContractCandidatePreviewPackage"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description AI 输出后置校验请求；校验过程只读，不修改标准、AI job、业务文件或数据库。 */
+        AiOutputPostCheckRequest: {
+            /**
+             * Format: int64
+             * @description 当前项目 ID；引用解析严格限制在该项目内。
+             * @example 1
+             */
+            projectId: number;
+            /**
+             * @description AI 输出后置校验的内容类型；决定字段、stableRef、规则和证据引用的确定性提取方式。
+             * @enum {string}
+             */
+            contentType: "SQL" | "DDL" | "MARKDOWN" | "JSON" | "TEXT" | "PLAIN_TEXT";
+            /** @description 待校验 AI 输出文本；结果只返回有界脱敏 excerpt，不保存 raw content。 */
+            content: string;
+            /** @description 可选标准快照引用，如 snapshot:<projectId>:<snapshotId|version>；用于识别旧快照或快照漂移。 */
+            snapshotRef?: string;
+        };
+        /** @description AI 输出后置校验问题；所有文本字段均必须 secret-safe。 */
+        AiOutputPostCheckIssue: {
+            /** @description 稳定问题码。 */
+            code?: string;
+            /**
+             * @description AI 输出后置校验问题级别；FAIL 会使整体 status=FAIL，WARN 会使整体 status 至少为 WARN。
+             * @enum {string}
+             */
+            severity?: "FAIL" | "WARN";
+            /**
+             * @description 标准对象引用类型；用于限定 stableRef、字段名、别名或版本号应解析到哪类项目内标准对象。
+             * @enum {string}
+             */
+            refType?: "FIELD" | "ENUM" | "RULE" | "SNAPSHOT";
+            /** @description 脱敏后的输入引用。 */
+            inputRef?: string;
+            /** @description 脱敏诊断说明。 */
+            message?: string;
+            /** @description 有界脱敏原文片段。 */
+            excerpt?: string;
+            /** @description 可用替代 stableRef。 */
+            replacementRef?: string;
+            evidenceLinks?: string[];
+            nextActions?: string[];
+        };
+        /** @description AI 输出后置校验结果；只读、确定性、bounded 且 secret-safe。 */
+        AiOutputPostCheckResult: {
+            /**
+             * @description 稳定响应类型标识。
+             * @example dataspec-ai-output-postcheck
+             */
+            kind?: string;
+            /**
+             * Format: int32
+             * @description 结果 schema 版本。
+             * @example 1
+             */
+            schemaVersion?: number;
+            /**
+             * Format: int64
+             * @description 当前项目 ID。
+             * @example 1
+             */
+            projectId?: number;
+            /**
+             * @description AI 输出后置校验状态；PASS 才表示 safeToUse=true，WARN/FAIL 默认需要人工或 AI 修复。
+             * @enum {string}
+             */
+            status?: "PASS" | "WARN" | "FAIL";
+            /** @description 是否可直接使用该 AI 产物；只有 PASS 为 true。 */
+            safeToUse?: boolean;
+            summary?: components["schemas"]["AiOutputPostCheckSummary"];
+            issues?: components["schemas"]["AiOutputPostCheckIssue"][];
+            resolvedRefs?: components["schemas"]["StandardReferenceResolutionResult"][];
+            suggestedFixes?: string[];
+            evidenceLinks?: string[];
+            nextActions?: string[];
+        };
+        /** @description AI 输出后置校验摘要，用于 AI/CLI/MCP 快速判断阻断和风险规模。 */
+        AiOutputPostCheckSummary: {
+            /**
+             * Format: int32
+             * @description 提取到并进入标准解析的引用总数。
+             */
+            totalRefCount?: number;
+            /**
+             * Format: int32
+             * @description 当前可用标准对象引用数。
+             */
+            currentCount?: number;
+            /**
+             * Format: int32
+             * @description 废弃、停用或替代对象引用数。
+             */
+            staleCount?: number;
+            /**
+             * Format: int32
+             * @description 未知引用数。
+             */
+            unknownCount?: number;
+            /**
+             * Format: int32
+             * @description 歧义引用数。
+             */
+            ambiguousCount?: number;
+            /**
+             * Format: int32
+             * @description 跨项目引用数。
+             */
+            crossProjectCount?: number;
+            /**
+             * Format: int32
+             * @description 问题总数，包含证据缺口。
+             */
+            issueCount?: number;
+        };
+        RAiOutputPostCheckResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["AiOutputPostCheckResult"];
             error?: components["schemas"]["ErrorDetail"];
         };
         FixSqlPromptReq: {
@@ -7206,6 +7448,14 @@ export interface components {
             usageContractSummary?: string[];
             nextActions?: string[];
             evidence?: components["schemas"]["ExplainTrace"][];
+            /** @description 项目内稳定字段引用，格式为 field:<projectId>:<fieldId>；供 AI/CLI/MCP 在字段改名后继续定位同一标准字段。 */
+            stableRef?: string;
+            /** @description 当前推荐 canonical 字段引用；废弃或停用字段存在有效 replacementFieldId 时指向替代字段 stableRef。 */
+            canonicalRef?: string;
+            /** @description 字段生命周期状态，如 enabled、draft、deprecated 或 disabled。 */
+            lifecycleStatus?: string;
+            /** @description 本次搜索命中的别名或历史名；非别名命中时为空。 */
+            matchedAlias?: string;
         };
         FieldSearchResult: {
             /** Format: int64 */
@@ -9321,6 +9571,30 @@ export interface operations {
             };
         };
     };
+    resolve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardReferenceResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardReferenceResolveResponse"];
+                };
+            };
+        };
+    };
     plan: {
         parameters: {
             query?: never;
@@ -11018,6 +11292,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RContractCandidatePreviewPackage"];
+                };
+            };
+        };
+    };
+    check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiOutputPostCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RAiOutputPostCheckResult"];
                 };
             };
         };

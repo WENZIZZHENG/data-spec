@@ -1201,6 +1201,53 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void search_aliasResultIncludesStableReferenceMetadata() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field current = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone,mobile_phone", "enabled");
+        current.setId(10L);
+        Field replacement = field("user_mobile_no", "用户手机号", "varchar(20)", "用户手机号", "", "enabled");
+        replacement.setId(12L);
+        Field legacy = field("old_mobile_no", "旧手机号", "varchar(20)", "历史手机号", "legacy_phone", "deprecated");
+        legacy.setId(11L);
+        legacy.setReplacementFieldId(12L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(current, legacy));
+        when(repository.findById(12L)).thenReturn(Optional.of(replacement));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult aliasResult = service.search(new FieldSearchReq(
+                1L, "mobile_phone", null, null, null, null, null, 10));
+        FieldSearchItem aliasItem = aliasResult.items().getFirst();
+        assertEquals("field:1:10", aliasItem.stableRef());
+        assertEquals("field:1:10", aliasItem.canonicalRef());
+        assertEquals("enabled", aliasItem.lifecycleStatus());
+        assertEquals("mobile_phone", aliasItem.matchedAlias());
+
+        FieldSearchResult legacyResult = service.search(new FieldSearchReq(
+                1L, "legacy_phone", null, null, "deprecated", null, null, 10));
+        FieldSearchItem legacyItem = legacyResult.items().getFirst();
+        assertEquals("field:1:11", legacyItem.stableRef());
+        assertEquals("field:1:12", legacyItem.canonicalRef());
+        assertEquals("deprecated", legacyItem.lifecycleStatus());
+        assertEquals("legacy_phone", legacyItem.matchedAlias());
+    }
+
+    @Test
+    void search_redactsSecretLikeMatchedAlias() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field current = field("debug_token", "调试令牌", "varchar(200)", "调试字段", "token=raw-secret-123", "enabled");
+        current.setId(10L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(current));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "token", null, null, null, null, null, 10));
+
+        FieldSearchItem item = result.items().getFirst();
+        assertEquals("token=[REDACTED]", item.matchedAlias());
+        assertFalse(item.matchedAlias().contains("raw-secret-123"));
+    }
+
+    @Test
     void suggest_returnsFallbackSnakeCaseNameWhenNoExistingFieldMatches() {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.findAllByProjectId(1L)).thenReturn(List.of());

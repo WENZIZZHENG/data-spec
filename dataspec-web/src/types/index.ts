@@ -931,8 +931,9 @@ export type AiEvidenceStandardSnapshot = Schemas['AiEvidenceStandardSnapshot']
 export type AiEvidenceArtifact = Schemas['AiEvidenceArtifact']
 export type AiEvidenceDiagnostic = Schemas['AiEvidenceDiagnostic']
 export type AiEvidencePackage = Schemas['AiEvidencePackage']
-export type AiEvidencePackageReq = Omit<Schemas['AiEvidencePackageReq'], 'payloadSummary'> & {
+export type AiEvidencePackageReq = Omit<Schemas['AiEvidencePackageReq'], 'payloadSummary' | 'postCheckSummary'> & {
   payloadSummary?: Record<string, unknown>
+  postCheckSummary?: Record<string, unknown>
 }
 export type AuthMe = Schemas['AuthMe']
 export type DdlGenerateResult = Schemas['DdlGenerateResult']

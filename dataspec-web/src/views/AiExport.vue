@@ -69,6 +69,11 @@
         <el-button @click="handleResetScope">重置</el-button>
       </div>
 
+      <div class="post-check-guidance">
+        <span class="budget-section-label">Post-check</span>
+        <code>{{ postCheckCommand }}</code>
+      </div>
+
       <div class="budget-preview">
         <div class="budget-controls">
           <div class="budget-heading">
@@ -246,6 +251,10 @@ import {
   buildBudgetPlanSummary,
   formatEstimatedTokens
 } from '@/utils/aiContextBudgetPlan'
+import {
+  buildAiOutputPostCheckCommand,
+  buildSnapshotRef
+} from '@/utils/aiOutputPostCheckDisplay'
 import { stableTestIds } from '@/utils/stableTestIds'
 
 const projectStore = useProjectStore()
@@ -311,6 +320,16 @@ const snapshotOptions = computed(() =>
   snapshots.value.filter((snapshot): snapshot is StandardSnapshotInfo & { snapshotId: number } =>
     typeof snapshot.snapshotId === 'number'
   )
+)
+const postCheckCommand = computed(() =>
+  buildAiOutputPostCheckCommand({
+    projectId: projectStore.currentProjectId,
+    contentType: 'SQL',
+    snapshotRef: buildSnapshotRef(
+      projectStore.currentProjectId,
+      scopeForm.snapshotId && scopeForm.snapshotId > 0 ? scopeForm.snapshotId : undefined
+    )
+  })
 )
 
 onMounted(async () => {
@@ -555,6 +574,26 @@ function isAiContextScope(scope?: AiContextRecommendedExportParams['scope']): sc
   width: 230px;
 }
 
+.post-check-guidance {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #f8fafc;
+}
+
+.post-check-guidance code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #1f2937;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .budget-preview {
   margin-top: 12px;
   padding: 12px;
@@ -718,6 +757,11 @@ function isAiContextScope(scope?: AiContextRecommendedExportParams['scope']): sc
   .snapshot-select,
   .budget-token-input {
     width: 100%;
+  }
+
+  .post-check-guidance {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .budget-controls,

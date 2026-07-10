@@ -25,7 +25,7 @@ class SchemaRegistryServiceImplTest {
 
         assertEquals("dataspec-schema-registry", catalog.getKind());
         assertEquals(1, catalog.getSchemaVersion());
-        assertEquals("2026.07.05", catalog.getRegistryVersion());
+        assertEquals("2026.07.10", catalog.getRegistryVersion());
         assertNotNull(catalog.getCompatibilityPolicy());
         assertTrue(catalog.getCompatibilityPolicy().getBreakingChangePolicy().contains("schemaVersion"));
 
@@ -45,7 +45,9 @@ class SchemaRegistryServiceImplTest {
                 "ai-evidence-package",
                 "ai-context-manifest",
                 "ai-context-field-catalog",
-                "ai-task-profile"
+                "ai-task-profile",
+                "standard-reference-resolution",
+                "ai-output-post-check-result"
         )));
         assertTrue(catalog.getContracts().stream().allMatch(item -> item.getJsonSchemaRef().startsWith("dataspec://contracts/")));
         assertTrue(catalog.getContracts().stream().allMatch(item -> item.getStableFields() != null && !item.getStableFields().isEmpty()));
@@ -72,11 +74,24 @@ class SchemaRegistryServiceImplTest {
 
         SchemaContract evidence = service.getContract("ai-evidence-package");
         assertTrue(evidence.getStableFields().contains("validationSummary"));
+        assertTrue(evidence.getStableFields().contains("postCheckSummary"));
+        assertTrue(evidence.getStableFields().contains("postCheckSummary.blockingRefs[]"));
+        assertTrue(evidence.getJsonSchema().get("properties").toString().contains("postCheckSummary"));
         assertTrue(evidence.getStableFields().contains("suggestedCommands[]"));
+
+        SchemaContract field = service.getContract("field");
+        assertTrue(field.getStableFields().contains("stableRef"));
+        assertTrue(field.getStableFields().contains("canonicalRef"));
+        assertTrue(field.getStableFields().contains("aliasHistory[]"));
+        assertTrue(field.getStableFields().contains("replacementRef"));
 
         SchemaContract fieldCatalog = service.getContract("ai-context-field-catalog");
         assertTrue(fieldCatalog.getStableFields().contains("usageExamples[]"));
         assertTrue(fieldCatalog.getStableFields().contains("usageExampleSummary"));
+        assertTrue(fieldCatalog.getStableFields().contains("fields[].stableRef"));
+        assertTrue(fieldCatalog.getStableFields().contains("fields[].canonicalRef"));
+        assertTrue(fieldCatalog.getStableFields().contains("fields[].aliasHistory[]"));
+        assertTrue(fieldCatalog.getStableFields().contains("enums[].stableRef"));
         assertTrue(fieldCatalog.getJsonSchema().get("properties").toString().contains("usageExamples"));
 
         SchemaContract merge = service.getContract("standard-field-merge");
@@ -88,6 +103,73 @@ class SchemaRegistryServiceImplTest {
         assertTrue(merge.getJsonSchema().get("properties").toString().contains("applied"));
         assertTrue(merge.getJsonSchema().get("properties").toString().contains("preview"));
         assertTrue(merge.getExamples().toString().contains("standard_field_merge_result"));
+    }
+
+    @Test
+    void detailDescribesStableReferenceAndPostCheckContracts() {
+        SchemaContract reference = service.getContract("standard-reference-resolution");
+        assertEquals("standard-reference-resolution", reference.getContractId());
+        assertTrue(reference.getStableFields().contains("results[].resolutionStatus"));
+        assertTrue(reference.getStableFields().contains("results[].stableRef"));
+        assertTrue(reference.getStableFields().contains("results[].canonicalRef"));
+        assertTrue(reference.getJsonSchema().get("properties").toString().contains("resolutionStatus"));
+        assertTrue(reference.getJsonSchema().get("properties").toString().contains("CURRENT"));
+        assertTrue(reference.getJsonSchema().get("properties").toString().contains("CROSS_PROJECT"));
+        assertTrue(reference.getJsonSchema().get("properties").toString().contains("secret-safe"));
+        assertTrue(reference.getExamples().toString().contains("field:1:100"));
+
+        SchemaContract postCheck = service.getContract("ai-output-post-check-result");
+        assertEquals("ai-output-post-check-result", postCheck.getContractId());
+        assertTrue(postCheck.getStableFields().contains("status"));
+        assertTrue(postCheck.getStableFields().contains("safeToUse"));
+        assertTrue(postCheck.getStableFields().contains("issues[].severity"));
+        assertTrue(postCheck.getStableFields().contains("resolvedRefs[]"));
+        assertTrue(postCheck.getStableFields().contains("nextActions[]"));
+        assertTrue(postCheck.getJsonSchema().get("properties").toString().contains("PASS"));
+        assertTrue(postCheck.getJsonSchema().get("properties").toString().contains("WARN"));
+        assertTrue(postCheck.getJsonSchema().get("properties").toString().contains("FAIL"));
+        assertTrue(postCheck.getJsonSchema().get("properties").toString().contains("safeToUse"));
+        assertTrue(postCheck.getJsonSchema().get("properties").toString().contains("secret-safe"));
+        assertTrue(postCheck.getExamples().toString().contains("safeToUse"));
+    }
+
+    @Test
+    void detailUsesActualStableReferenceAndPostCheckEnums() {
+        String referenceSchema = service.getContract("standard-reference-resolution")
+                .getJsonSchema()
+                .get("properties")
+                .toString();
+        assertTrue(referenceSchema.contains("HIGH"));
+        assertTrue(referenceSchema.contains("MEDIUM"));
+        assertTrue(referenceSchema.contains("LOW"));
+        assertFalse(referenceSchema.contains("EXACT"));
+        assertFalse(referenceSchema.contains("DERIVED"));
+        assertFalse(referenceSchema.contains("NONE"));
+
+        String postCheckSchema = service.getContract("ai-output-post-check-result")
+                .getJsonSchema()
+                .get("properties")
+                .toString();
+        assertTrue(postCheckSchema.contains("totalRefCount"));
+        assertTrue(postCheckSchema.contains("currentCount"));
+        assertTrue(postCheckSchema.contains("staleCount"));
+        assertTrue(postCheckSchema.contains("unknownCount"));
+        assertTrue(postCheckSchema.contains("ambiguousCount"));
+        assertTrue(postCheckSchema.contains("crossProjectCount"));
+        assertTrue(postCheckSchema.contains("issueCount"));
+        assertFalse(postCheckSchema.contains("totalRefs"));
+        assertFalse(postCheckSchema.contains("blockingIssueCount"));
+        assertFalse(postCheckSchema.contains("INFO"));
+    }
+
+    @Test
+    void evidenceContractIncludesAiTaskRunSourceTypeAndPostCheckSummary() {
+        SchemaContract evidence = service.getContract("ai-evidence-package");
+        String schema = evidence.getJsonSchema().get("properties").toString();
+
+        assertTrue(schema.contains("AI_TASK_RUN"));
+        assertTrue(evidence.getStableFields().contains("postCheckSummary"));
+        assertTrue(evidence.getStableFields().contains("postCheckSummary.suggestedCheckCommand"));
     }
 
     @Test
@@ -105,7 +187,7 @@ class SchemaRegistryServiceImplTest {
         var summary = service.manifestSummary();
 
         assertEquals(1, summary.get("schemaVersion"));
-        assertEquals("2026.07.05", summary.get("registryVersion"));
+        assertEquals("2026.07.10", summary.get("registryVersion"));
         assertEquals(".dataspec/schema-registry.json", summary.get("file"));
         assertEquals(service.requiredContractIds(), summary.get("contractIds"));
     }

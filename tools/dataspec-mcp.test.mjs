@@ -749,6 +749,147 @@ test('lint_sql tool forwards configured and explicit profile hints', async () =>
   })
 })
 
+test('standard reference and ai output check tools are listed as readonly', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async () => {
+    throw new Error('tools/list must not call backend')
+  })
+
+  const response = await handler({ jsonrpc: '2.0', id: 62, method: 'tools/list' })
+  const resolveTool = response.result.tools.find((tool) => tool.name === 'resolve_standard_refs')
+  const checkTool = response.result.tools.find((tool) => tool.name === 'check_ai_output')
+
+  assert.ok(resolveTool)
+  assert.ok(resolveTool.inputSchema.properties.refs.description)
+  assert.equal(resolveTool.safety.readOnly, true)
+  assert.equal(resolveTool.safety.writesProject, false)
+  assert.ok(checkTool)
+  assert.ok(checkTool.description.includes('does not write') || checkTool.description.includes('不写入'))
+  assert.ok(checkTool.inputSchema.properties.content.description)
+  assert.equal(checkTool.safety.readOnly, true)
+  assert.equal(checkTool.safety.writesProject, false)
+})
+
+test('resolve_standard_refs tool returns structured resolution json', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url, options) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: {
+        kind: 'dataspec-standard-reference-resolution',
+        schemaVersion: 1,
+        projectId: 7,
+        results: [{ inputRef: 'phone', refType: 'FIELD', resolutionStatus: 'CURRENT', stableRef: 'field:7:100' }],
+        warnings: []
+      }
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 63,
+    method: 'tools/call',
+    params: {
+      name: 'resolve_standard_refs',
+      arguments: { projectId: 8, refType: 'FIELD', refs: ['phone'] }
+    }
+  })
+
+  assert.equal(calls[0].url, 'http://dataspec.local/api/standard-references/resolve')
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    projectId: 8,
+    refType: 'FIELD',
+    refs: ['phone']
+  })
+  assert.equal(response.result.structuredContent.results[0].stableRef, 'field:7:100')
+  assert.equal(JSON.parse(response.result.content[0].text).kind, 'dataspec-standard-reference-resolution')
+})
+
+test('check_ai_output tool returns structured post-check json', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url, options) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: {
+        kind: 'dataspec-ai-output-postcheck',
+        schemaVersion: 1,
+        projectId: 7,
+        status: 'FAIL',
+        safeToUse: false,
+        summary: { totalRefs: 1 },
+        issues: [{ code: 'UNKNOWN_STANDARD_REFERENCE', severity: 'FAIL', inputRef: 'missing_field' }],
+        resolvedRefs: [],
+        suggestedFixes: [],
+        evidenceLinks: [],
+        nextActions: ['停止执行']
+      }
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 64,
+    method: 'tools/call',
+    params: {
+      name: 'check_ai_output',
+      arguments: { projectId: 7, contentType: 'SQL', content: 'select missing_field from users;', snapshotRef: 'snapshot:7:v1' }
+    }
+  })
+
+  assert.equal(calls[0].url, 'http://dataspec.local/api/ai-output/check')
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    projectId: 7,
+    contentType: 'SQL',
+    content: 'select missing_field from users;',
+    snapshotRef: 'snapshot:7:v1'
+  })
+  assert.equal(response.result.structuredContent.status, 'FAIL')
+  assert.equal(JSON.parse(response.result.content[0].text).safeToUse, false)
+})
+
+test('check_ai_output tool keeps stable TEXT body and accepts legacy PLAIN_TEXT type', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url, options) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: {
+        kind: 'dataspec-ai-output-postcheck',
+        schemaVersion: 1,
+        projectId: 7,
+        status: 'PASS',
+        safeToUse: true,
+        issues: []
+      }
+    })
+  })
+
+  const textResponse = await handler({
+    jsonrpc: '2.0',
+    id: 641,
+    method: 'tools/call',
+    params: {
+      name: 'check_ai_output',
+      arguments: { projectId: 7, contentType: 'TEXT', content: 'plain ai answer' }
+    }
+  })
+  const legacyResponse = await handler({
+    jsonrpc: '2.0',
+    id: 642,
+    method: 'tools/call',
+    params: {
+      name: 'check_ai_output',
+      arguments: { projectId: 7, contentType: 'PLAIN_TEXT', content: 'legacy plain ai answer' }
+    }
+  })
+
+  assert.equal(textResponse.result.structuredContent.status, 'PASS')
+  assert.equal(legacyResponse.result.structuredContent.status, 'PASS')
+  assert.equal(JSON.parse(calls[0].options.body).contentType, 'TEXT')
+  assert.equal(JSON.parse(calls[1].options.body).contentType, 'TEXT')
+})
+
 test('get_session_bootstrap tool returns structured bootstrap package', async () => {
   const calls = []
   const handler = createMcpHandler({

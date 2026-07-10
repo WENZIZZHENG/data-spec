@@ -96,6 +96,19 @@ test('keeps field usage contract editing and evidence display wired', () => {
   ], 'OpenAPI schema usage contract types')
 })
 
+test('keeps stable reference and ai output post-check OpenAPI contracts generated', () => {
+  const schema = readSource('src/api/schema.ts')
+
+  assertContains(schema, [
+    '"/api/standard-references/resolve"',
+    '"/api/ai-output/check"',
+    'StandardReferenceResolveRequest',
+    'StandardReferenceResolveResponse',
+    'AiOutputPostCheckRequest',
+    'AiOutputPostCheckResult'
+  ], 'stable reference and post-check OpenAPI schema')
+})
+
 test('keeps field conflict naming risk view wired', () => {
   const view = readSource('src/views/FieldConflicts.vue')
   const utils = readSource('src/utils/fieldConflictDisplay.ts')
@@ -412,7 +425,8 @@ test('keeps AI evidence package actions wired on high frequency result pages', (
   assertContains(types, [
     "export type EvidenceSourceType = NonNullable<Schemas['AiEvidencePackageReq']['sourceType']>",
     "export type AiEvidencePackage = Schemas['AiEvidencePackage']",
-    "export type AiEvidencePackageReq = Omit<Schemas['AiEvidencePackageReq'], 'payloadSummary'>"
+    "export type AiEvidencePackageReq = Omit<Schemas['AiEvidencePackageReq'], 'payloadSummary' | 'postCheckSummary'>",
+    'postCheckSummary?: Record<string, unknown>'
   ], 'evidence types')
 
   assertContains(schema, [
@@ -422,6 +436,8 @@ test('keeps AI evidence package actions wired on high frequency result pages', (
     'operations["download"]',
     'AiEvidencePackage',
     'AiEvidencePackageReq',
+    'postCheckSummary?:',
+    'sourceType: "AI_JOB" | "SQL_CHECK" | "COVERAGE_REPORT" | "AI_BATCH_RUN" | "AI_TASK_RUN"',
     'RAiEvidencePackage'
   ], 'evidence schema')
 
@@ -1517,7 +1533,12 @@ test('keeps coverage and AI replay supporting flows wired', () => {
     'getAiJobDetail(id)',
     'buildReplayJson',
     'copyText(activeDetail.replayCommand || \'\')',
-    'copyText(replayJson)'
+    '@click="handleCopyReplayJson"',
+    '校验并复制 JSON',
+    'const postCheckResult = ref<AiOutputPostCheckResult | null>(null)',
+    'postCheckResult.value = await checkAiOutput({',
+    "copyText(replayJson.value, '已校验并复制')",
+    "ElMessage.warning('Post-check 未通过，JSON 未复制')"
   ], 'AiReplay.vue')
   assertContains(replayApi, [
     "request.get<unknown, PageResult<AiJobRecordListItem>>('/ai-jobs'",

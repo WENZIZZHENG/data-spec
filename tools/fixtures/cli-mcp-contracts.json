@@ -227,6 +227,35 @@
       "recommendedNextActions": ["Read matchReasons before choosing a field."]
     },
     {
+      "id": "ref-resolve",
+      "command": "ref resolve --project <id> --type <FIELD|ENUM|RULE|SNAPSHOT> --ref <value> --format json",
+      "description": "Resolve project-scoped standard references into stableRef, canonicalRef, lifecycle status, replacement refs, and evidence links.",
+      "requiredOptions": ["project", "type", "ref"],
+      "optionalOptions": ["format", "server", "dataspec-token"],
+      "outputShape": ["kind", "schemaVersion", "projectId", "results[]", "results[].inputRef", "results[].refType", "results[].resolutionStatus", "results[].stableRef", "results[].canonicalRef", "results[].objectId", "results[].currentName", "results[].matchedAlias", "results[].lifecycleStatus", "results[].replacementRef", "results[].confidence", "results[].evidenceLinks[]", "results[].warnings[]", "warnings[]"],
+      "exitCodes": { "0": "resolution JSON printed", "2": "argument, config, or request error" },
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": ["dataspec-token", "refs"], "nextActions": ["Treat UNKNOWN or AMBIGUOUS references as a stop signal before using AI output.", "Prefer canonicalRef or replacementRef when lifecycleStatus is stale."] },
+      "successExample": { "command": "node tools/dataspec-cli.mjs ref resolve --project 1 --type FIELD --ref phone --format json", "output": { "kind": "dataspec-standard-reference-resolution", "results": [{ "inputRef": "phone", "refType": "FIELD", "resolutionStatus": "CURRENT", "stableRef": "field:1:100", "canonicalRef": "field:1:100" }] } },
+      "failureExample": { "exitCode": 2, "diagnostic": { "code": "DATASPEC_REQUEST_FAILED" } },
+      "recommendedNextActions": ["Use ref resolve before accepting historical names, aliases, or stableRef values from AI output.", "Ask for human confirmation when resolutionStatus is UNKNOWN, AMBIGUOUS, or CROSS_PROJECT."]
+    },
+    {
+      "id": "ai-output-check",
+      "command": "ai-output check --project <id> --type <SQL|DDL|MARKDOWN|JSON|TEXT> --file <path> --format json",
+      "description": "Run deterministic post-check for AI output before copying, applying, or executing generated artifacts.",
+      "requiredOptions": ["project", "type"],
+      "oneOfRequiredOptions": ["file", "stdin"],
+      "contentTypeValues": ["SQL", "DDL", "MARKDOWN", "JSON", "TEXT"],
+      "compatibilityAliases": { "contentType": { "PLAIN_TEXT": "TEXT" } },
+      "optionalOptions": ["file", "stdin", "snapshot-ref", "format", "server", "dataspec-token"],
+      "outputShape": ["kind", "schemaVersion", "projectId", "status", "safeToUse", "summary", "issues[]", "issues[].code", "issues[].severity", "issues[].inputRef", "resolvedRefs[]", "suggestedFixes[]", "evidenceLinks[]", "nextActions[]"],
+      "exitCodes": { "0": "post-check status PASS", "1": "post-check status WARN or FAIL", "2": "argument, config, or request error" },
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": ["content", "file", "stdin", "dataspec-token"], "nextActions": ["Only copy, apply, or execute AI output after PASS.", "For WARN or FAIL, inspect issues, replacement refs, evidence links, and nextActions first."] },
+      "successExample": { "command": "node tools/dataspec-cli.mjs ai-output check --project 1 --type SQL --file ai.sql --format json", "output": { "kind": "dataspec-ai-output-postcheck", "status": "PASS", "safeToUse": true, "issues": [] } },
+      "failureExample": { "exitCode": 1, "diagnostic": { "code": "AI_OUTPUT_POSTCHECK_FAILED", "status": "FAIL" } },
+      "recommendedNextActions": ["Run this command before accepting AI generated SQL, DDL, Markdown, JSON, or text artifacts.", "Do not treat WARN or FAIL output as safe without human review."]
+    },
+    {
       "id": "generate-ddl",
       "command": "generate-ddl --project <id> --template <id> --table <name> --format json",
       "description": "Generate PostgreSQL DDL from a DataSpec template.",
@@ -358,6 +387,30 @@
       "successExample": { "arguments": { "query": "手机号", "projectId": 1 }, "output": { "items": [] } },
       "failureExample": { "diagnostic": { "code": "DATASPEC_SERVER_UNAVAILABLE" } },
       "recommendedNextActions": ["Use match reasons to justify field choices."]
+    },
+    {
+      "name": "resolve_standard_refs",
+      "description": "Resolve project-scoped DataSpec standard references.",
+      "inputProperties": ["projectId", "refType", "refs"],
+      "requiredInputs": ["refType", "refs"],
+      "outputShape": ["structuredContent", "structuredContent.results[]", "structuredContent.results[].stableRef", "structuredContent.results[].canonicalRef", "content[0].text"],
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "supportsUndo": false, "requiresIdempotencyKey": false, "sensitiveInputs": ["refs"], "nextActions": ["在采纳 AI 输出前先解析 stableRef/canonicalRef，遇到 UNKNOWN 或 AMBIGUOUS 时停止并让用户确认。"] },
+      "successExample": { "arguments": { "projectId": 1, "refType": "FIELD", "refs": ["phone"] }, "output": { "kind": "dataspec-standard-reference-resolution", "results": [{ "inputRef": "phone", "stableRef": "field:1:100" }] } },
+      "failureExample": { "diagnostic": { "code": "DATASPEC_REQUEST_FAILED" } },
+      "recommendedNextActions": ["Stop on UNKNOWN, AMBIGUOUS, or CROSS_PROJECT resolution status before using AI output."]
+    },
+    {
+      "name": "check_ai_output",
+      "description": "Run deterministic DataSpec post-check on AI output.",
+      "inputProperties": ["projectId", "contentType", "content", "snapshotRef"],
+      "requiredInputs": ["contentType", "content"],
+      "contentTypeValues": ["SQL", "DDL", "MARKDOWN", "JSON", "TEXT"],
+      "compatibilityAliases": { "contentType": { "PLAIN_TEXT": "TEXT" } },
+      "outputShape": ["structuredContent", "structuredContent.status", "structuredContent.safeToUse", "structuredContent.issues[]", "structuredContent.resolvedRefs[]", "structuredContent.suggestedFixes[]", "structuredContent.evidenceLinks[]", "structuredContent.nextActions[]", "content[0].text"],
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "supportsUndo": false, "requiresIdempotencyKey": false, "sensitiveInputs": ["content"], "nextActions": ["PASS 后再复制或执行 AI 产物；WARN/FAIL 时先查看 blocking refs、replacement refs 和 nextActions。"] },
+      "successExample": { "arguments": { "projectId": 1, "contentType": "SQL", "content": "select user_id from user_account;" }, "output": { "kind": "dataspec-ai-output-postcheck", "status": "PASS", "safeToUse": true } },
+      "failureExample": { "diagnostic": { "code": "AI_OUTPUT_INVALID" } },
+      "recommendedNextActions": ["Use this tool before copying, applying, or executing AI-generated artifacts.", "Treat WARN or FAIL as unsafe until reviewed."]
     },
     {
       "name": "suggest_fields",

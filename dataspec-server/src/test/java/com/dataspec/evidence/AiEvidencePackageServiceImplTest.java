@@ -122,6 +122,111 @@ class AiEvidencePackageServiceImplTest {
     }
 
     @Test
+    void includesRedactedPostCheckSummaryWithoutRawAiOutput() {
+        AiEvidencePackage pkg = service.generate(new AiEvidencePackageReq(
+                null,
+                EvidenceSourceType.AI_JOB,
+                21L,
+                null,
+                null,
+                null,
+                null,
+                Map.of(
+                        "status", "FAIL",
+                        "safeToUse", false,
+                        "issueCounts", Map.of("FAIL", 1, "WARN", 1),
+                        "blockingRefs", List.of("field:7:99 password=secret123"),
+                        "replacementRefs", List.of("field:7:100"),
+                        "evidenceLinks", List.of("dataspec://fields/100?token=ds_token_raw"),
+                        "suggestedCheckCommand", "dataspec ai-output check --project 7 --type SQL --file output.sql --format json",
+                        "rawOutput", "select password from users where token='ds_token_raw'"
+                )
+        ));
+
+        JsonNode json = objectMapper.valueToTree(pkg);
+        JsonNode postCheck = json.path("postCheckSummary");
+        assertEquals("FAIL", postCheck.path("status").asText());
+        assertFalse(postCheck.path("safeToUse").asBoolean());
+        assertEquals(1, postCheck.path("issueCounts").path("FAIL").asInt());
+        assertEquals("field:7:99 password=[REDACTED]", postCheck.path("blockingRefs").get(0).asText());
+        assertEquals("field:7:100", postCheck.path("replacementRefs").get(0).asText());
+        assertTrue(postCheck.path("suggestedCheckCommand").asText().contains("ai-output check"));
+        assertFalse(postCheck.has("rawOutput"));
+        assertFalse(json.toString().contains("secret123"));
+        assertFalse(json.toString().contains("ds_token_raw"));
+    }
+
+    @Test
+    void carriesPostCheckSummaryForAiTaskRunAndPayloadSource() {
+        Map<String, Object> postCheckSummary = Map.of(
+                "status", "WARN",
+                "safeToUse", false,
+                "issueCounts", Map.of("WARN", 1),
+                "blockingRefs", List.of("field:7:99"),
+                "replacementRefs", List.of("field:7:100"),
+                "nextActions", List.of("先复核 replacementRef")
+        );
+
+        AiEvidencePackage taskRun = service.generate(new AiEvidencePackageReq(
+                7L,
+                EvidenceSourceType.AI_TASK_RUN,
+                41L,
+                null,
+                null,
+                null,
+                null,
+                postCheckSummary
+        ));
+        assertEquals("WARN", taskRun.postCheckSummary().get("status"));
+        assertEquals(List.of("field:7:99"), taskRun.postCheckSummary().get("blockingRefs"));
+
+        AiEvidencePackage coverage = service.generate(new AiEvidencePackageReq(
+                7L,
+                EvidenceSourceType.COVERAGE_REPORT,
+                null,
+                "即时覆盖率报告",
+                coverageReport(),
+                null,
+                Map.of("mode", "payload"),
+                postCheckSummary
+        ));
+        assertEquals(EvidenceSourceType.COVERAGE_REPORT, coverage.source().sourceType());
+        assertEquals("WARN", coverage.postCheckSummary().get("status"));
+        assertEquals(List.of("field:7:100"), coverage.postCheckSummary().get("replacementRefs"));
+    }
+
+    @Test
+    void postCheckSummaryDefaultsSuggestedCheckCommandAndDropsUnsafeRawFields() {
+        AiEvidencePackage pkg = service.generate(new AiEvidencePackageReq(
+                null,
+                EvidenceSourceType.AI_JOB,
+                21L,
+                null,
+                null,
+                null,
+                null,
+                Map.of(
+                        "status", "FAIL",
+                        "safeToUse", false,
+                        "content", "select password from users",
+                        "issues", List.of(Map.of("excerpt", "token=ds_token_raw")),
+                        "rawOutput", "Authorization: Bearer raw-secret",
+                        "blockingRefs", List.of("field:7:99 token=ds_token_raw")
+                )
+        ));
+
+        Map<String, Object> summary = pkg.postCheckSummary();
+        assertEquals("FAIL", summary.get("status"));
+        assertTrue(String.valueOf(summary.get("suggestedCheckCommand")).contains("ai-output check --project 7"));
+        assertFalse(summary.containsKey("rawOutput"));
+        assertFalse(summary.containsKey("content"));
+        assertFalse(summary.containsKey("issues"));
+        JsonNode json = objectMapper.valueToTree(pkg);
+        assertFalse(json.toString().contains("raw-secret"));
+        assertFalse(json.toString().contains("ds_token_raw"));
+    }
+
+    @Test
     void zipContainsStableFilesAndRedactedEvidenceJson() throws Exception {
         byte[] zip = service.generateZip(new AiEvidencePackageReq(null, EvidenceSourceType.SQL_CHECK, 11L, null, null, null, null));
         Map<String, String> entries = unzip(zip);

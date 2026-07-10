@@ -263,6 +263,195 @@ test('lint-debug returns 2 when server request fails and redacts diagnostics', a
   assert.doesNotMatch(io.stderr, /db\.internal/)
 })
 
+test('ref resolve posts references and prints stable json', async () => {
+  const calls = []
+  const fetchFn = async (url, options) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          kind: 'dataspec-standard-reference-resolution',
+          schemaVersion: 1,
+          projectId: 7,
+          results: [{ inputRef: 'phone', refType: 'FIELD', resolutionStatus: 'CURRENT', stableRef: 'field:7:100' }],
+          warnings: []
+        }
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'ref',
+    'resolve',
+    '--project',
+    '7',
+    '--type',
+    'FIELD',
+    '--ref',
+    'phone',
+    '--ref',
+    'field:7:100',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.equal(calls[0].url, 'http://dataspec.local/api/standard-references/resolve')
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    projectId: 7,
+    refType: 'FIELD',
+    refs: ['phone', 'field:7:100']
+  })
+  assert.equal(JSON.parse(io.stdout).results[0].stableRef, 'field:7:100')
+  assert.equal(io.stderr, '')
+})
+
+test('ai-output check reads file returns 1 for WARN and redacts diagnostics', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-ai-output-check-'))
+  try {
+    const outputPath = path.join(dir, 'ai.sql')
+    await writeFile(outputPath, 'select old_mobile_no from users;', 'utf8')
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            kind: 'dataspec-ai-output-postcheck',
+            schemaVersion: 1,
+            projectId: 7,
+            status: 'WARN',
+            safeToUse: false,
+            summary: { totalRefs: 1 },
+            issues: [{ code: 'STALE_STANDARD_REFERENCE', severity: 'WARN', inputRef: 'old_mobile_no' }],
+            resolvedRefs: [],
+            suggestedFixes: [],
+            evidenceLinks: [],
+            nextActions: ['替换 canonicalRef']
+          }
+        })
+      }
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'ai-output',
+      'check',
+      '--project',
+      '7',
+      '--type',
+      'SQL',
+      '--file',
+      'ai.sql',
+      '--snapshot-ref',
+      'snapshot:7:v1',
+      '--format',
+      'json',
+      '--server',
+      'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 1)
+    assert.equal(calls[0].url, 'http://dataspec.local/api/ai-output/check')
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      projectId: 7,
+      contentType: 'SQL',
+      content: 'select old_mobile_no from users;',
+      snapshotRef: 'snapshot:7:v1'
+    })
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.status, 'WARN')
+    assert.equal(output.safeToUse, false)
+    assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('ai-output check keeps stable TEXT body and accepts legacy PLAIN_TEXT type', async () => {
+  const calls = []
+  const fetchFn = async (url, options) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          kind: 'dataspec-ai-output-postcheck',
+          schemaVersion: 1,
+          projectId: 7,
+          status: 'PASS',
+          safeToUse: true,
+          issues: []
+        }
+      })
+    }
+  }
+
+  const textIo = createIo('plain ai answer')
+  const textCode = await runCli([
+    'ai-output',
+    'check',
+    '--project',
+    '7',
+    '--type',
+    'TEXT',
+    '--stdin',
+    '--format',
+    'json'
+  ], textIo, fetchFn)
+
+  const legacyIo = createIo('legacy plain ai answer')
+  const legacyCode = await runCli([
+    'ai-output',
+    'check',
+    '--project',
+    '7',
+    '--type',
+    'PLAIN_TEXT',
+    '--stdin',
+    '--format',
+    'json'
+  ], legacyIo, fetchFn)
+
+  assert.equal(textCode, 0)
+  assert.equal(legacyCode, 0)
+  assert.equal(JSON.parse(calls[0].options.body).contentType, 'TEXT')
+  assert.equal(JSON.parse(calls[1].options.body).contentType, 'TEXT')
+})
+
+test('ai-output check returns 2 on api errors and redacts secret-like diagnostics', async () => {
+  const fetchFn = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({
+      message: 'post-check failed token=plain-secret jdbc:postgresql://db.internal/app',
+      error: {
+        code: 'AI_OUTPUT_INVALID',
+        category: 'VALIDATION',
+        suggestedAction: '检查 Authorization: Bearer raw-secret'
+      }
+    })
+  })
+  const io = createIo('select token from users;')
+
+  const code = await runCli(['ai-output', 'check', '--project', '7', '--type', 'SQL', '--stdin', '--format', 'json'], io, fetchFn)
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /DataSpecError/)
+  assert.doesNotMatch(io.stderr, /plain-secret|raw-secret|db\.internal/)
+})
+
 test('buildFixedSqlPatchPlan creates dry-run plan without changing target content', () => {
   const originalSql = 'CREATE TABLE UserOrder (userId bigint);\n'
   const fixedSql = 'CREATE TABLE user_order (user_id bigint);\n'

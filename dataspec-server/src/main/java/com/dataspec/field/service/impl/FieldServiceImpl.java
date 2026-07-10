@@ -29,6 +29,7 @@ import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.security.context.ProjectAccessGuard;
+import com.dataspec.standardref.service.StandardReferenceFormatter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -529,7 +530,11 @@ public class FieldServiceImpl implements FieldService {
                 recommendedUse(field, contractContradiction),
                 usageContractSummary(field),
                 itemNextActions(field, contractContradiction),
-                List.of(fieldEvidence(field, score, String.join("；", reasons))));
+                List.of(fieldEvidence(field, score, String.join("；", reasons))),
+                fieldStableRef(field),
+                fieldCanonicalRef(field),
+                normalizeStatus(field.getStatus()),
+                matchedAlias(field, criteria.queryCompact(), criteria.queryTokens()));
     }
 
     private ExplainTrace fieldEvidence(Field field, int score, String reason) {
@@ -594,6 +599,40 @@ public class FieldServiceImpl implements FieldService {
             return replacementReason;
         }
         return "尚未配置替代字段或替代说明，先确认历史兼容原因。";
+    }
+
+    private String fieldStableRef(Field field) {
+        if (field.getProjectId() == null || field.getId() == null) {
+            return null;
+        }
+        return StandardReferenceFormatter.fieldRef(field.getProjectId(), field.getId());
+    }
+
+    private String fieldCanonicalRef(Field field) {
+        Long replacementFieldId = field.getReplacementFieldId();
+        if (replacementFieldId == null) {
+            return fieldStableRef(field);
+        }
+        return fieldRepository.findById(replacementFieldId)
+                .filter(replacement -> Objects.equals(field.getProjectId(), replacement.getProjectId()))
+                .map(replacement -> StandardReferenceFormatter.fieldRef(replacement.getProjectId(), replacement.getId()))
+                .orElseGet(() -> fieldStableRef(field));
+    }
+
+    private String matchedAlias(Field field, String queryCompact, Set<String> queryTokens) {
+        if (queryCompact == null || queryCompact.isBlank()) {
+            return null;
+        }
+        String bestAlias = null;
+        int bestScore = 0;
+        for (String alias : splitCsv(field.getAliases())) {
+            int score = scoreText("别名", alias, queryCompact, queryTokens, 98, 82, 32).score();
+            if (score > bestScore) {
+                bestScore = score;
+                bestAlias = alias;
+            }
+        }
+        return SensitiveDataSanitizer.redactText(bestAlias);
     }
 
     private List<String> itemNextActions(Field field, boolean contractContradiction) {

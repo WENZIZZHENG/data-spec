@@ -1,11 +1,11 @@
 # DataSpec 已完成待办归档（P5/P6）
 
-归档日期：2026-07-09
+归档日期：2026-07-10
 
 本文件从根 TODO.md 机械迁移已完成的 P5/P6 待办详情，根待办只保留入口和当前候选池。每个条目保留原始状态、已完成能力、验证证据、产物、后续增强和边界；原条目未记录 commit 的地方不补猜。
 
-- 完成项数量：115
-- 当前未完成候选：73，详见 [P6 候选池](../todo-p6-candidates.md)
+- 完成项数量：117
+- 当前未完成候选：71，详见 [P6 候选池](../todo-p6-candidates.md)
 - P0-P4 已完成归档：[todo-completed-p0-p4.md](todo-completed-p0-p4.md)
 
 ## 历史追加记录（已降级为背景）
@@ -998,6 +998,20 @@
 - 已完成能力：`.dataspec/config.json` 支持可选 `securityProfile`，CLI/MCP 配置加载会规范 `redactionStrictness`、`sensitiveFieldPolicy`、`allowedAiTools`、`neverExportPatterns`、`localOnlyPaths`、`samplePolicy` 和 `credentialPolicy`；MCP `session-state` 只输出 profile presence、policy names 和数组计数，不输出 raw pattern、local path 或 secret-like 值。
 - 验证证据：`tools/dataspec-config.test.mjs` 覆盖合法 profile 和非法类型诊断；`tools/dataspec-mcp.test.mjs` 覆盖 session-state 安全摘要不泄漏 raw pattern/token/password/JDBC/local path；tools 目标测试 52 pass，CLI/MCP 契约扩展测试 184 pass、2 个 symlink skip。
 - 后续增强：本轮不做前端配置页和 `.dataspec/security.json` 独立 schema；后续如需要可从配置 schema、doctor 诊断或安全红线 UI 单独开任务。
+
+### P6-165：标准对象稳定标识与引用别名层
+- 状态：已完成第一版，OpenSpec change `add-stable-standard-refs-and-ai-output-checks` 当前按项目约定保留为 active change，不自动 archive。
+- 已完成能力：新增 project-scoped stableRef/canonicalRef 语义和 `StandardReferenceResolutionService`，字段搜索、字段模型、AI Context、Schema Registry、Evidence、CLI `ref resolve`、MCP `resolve_standard_refs`、CLI/MCP 契约 fixtures 均可读取稳定引用、生命周期状态、replacementRef、aliasHistory 和 secret-safe 解析结果。
+- 验证证据：`mvn test` 593 pass；后端复评目标测试 63 pass；`node --test tools/*.test.mjs` 387 pass、2 个 symlink skip；`pnpm test` 176 pass；`pnpm build` 通过，保留既有 `@vueuse/core` pure annotation 和 chunk size warning；`pnpm check:api` 确认 schema 最新；`openspec validate add-stable-standard-refs-and-ai-output-checks --strict` valid；`openspec validate --all` 126 passed；`git diff --check` 通过，仅 LF/CRLF warning。
+- 评审证据：评审 agent `019f4ca0-6769-72c3-bed6-077c7cdb9f88`（Locke）提出 4 个 Important 和 2 个 Minor，全部修复并关闭；复评 agent `019f4cc7-e682-7f50-9624-77f780f99da2`（Kepler）确认原 findings 均关闭，无 Critical/Important，`Ready to commit: Yes`，其 summary fallback 字段 Minor 已修复，agent 已关闭。
+- 后续增强：第一版不新增稳定 ID 数据库列，不强制改写历史记录；跨项目 stableRef 映射、严格 alias history 表和消费端兼容套件可承接后续 P6-167/P6-176。
+
+### P6-166：AI 输出后置校验与幻觉引用拦截
+- 状态：已完成第一版，随 `add-stable-standard-refs-and-ai-output-checks` 交付。
+- 已完成能力：新增只读 AI output post-check API、CLI `ai-output check`、MCP `check_ai_output`、前端 AI Replay 复制前 PASS/WARN/FAIL 门禁、AI Export CLI 命令提示、Evidence Package postCheckSummary、Schema Registry post-check contract 和 fixture drift 检查；校验 SQL/DDL/Markdown/JSON/plain text 中可确定的字段、枚举、规则、快照和 evidence refs，并输出 resolvedRefs、issues、replacementRefs、evidenceLinks、nextActions 和 safeToUse。
+- 验证证据：`AiOutputPostCheckServiceImplTest`、`AiOutputPostCheckControllerTest`、`dataspec-cli.test.mjs`、`dataspec-mcp.test.mjs`、`dataspec-cli-mcp-contract-check.test.mjs` 和 `dataspec-web/tests/aiOutputPostCheckDisplay.test.ts` 均已接入统一验证；完整命令结果同 P6-165 验证证据。`node tools/dataspec-status-check.mjs --format json` 仅 `OPENSPEC_ACTIVE_CHANGE_PRESENT` warning，符合两个 active change 暂保留约定。
+- 评审证据：同 P6-165；独立复评已确认 SQL 隐式 alias、JSON enum 字段顺序、MCP sensitive input、OpenAPI schema 和前端 replacementRef 展示均已关闭回归风险。
+- 后续增强：第一版只做 DataSpec 可确定的引用校验，不判断自然语言全部事实，不自动调用外部 LLM 改写；后续可在查询 DSL、测试数据包和消费端兼容套件中扩展覆盖。
 
 ## 本轮候选覆盖归档（2026-07-09）
 
