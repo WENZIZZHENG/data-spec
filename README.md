@@ -19,7 +19,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 ### 标准维护
 
 - 项目空间管理，创建项目时可导入内置 standards，可选择用户账号、订单交易、支付金额、库存商品和审计日志等领域 Starter Kit，并支持一键创建演示项目。
-- 标准字段库，支持别名、分类、代码集关联、敏感标记、生命周期状态、替代字段/说明、示例值、分组筛选、批量归组、批量维护、标准字段合并向导和字段标准检索命中原因展示。
+- 标准字段库，支持别名、分类、代码集关联、敏感标记、生命周期状态、替代字段/说明、示例值、命名翻译偏好、字段语义规则摘要、分组筛选、批量归组、批量维护、字段知识卡只读查看、标准字段合并向导和字段标准检索命中原因展示。
 - 业务术语表，支持项目级术语、同义词、英文词根、拼音/历史缩写、禁用词、canonical 字段、适用范围和示例字段维护；冲突检测会提示重复术语、禁用词冲突和不可用 canonical 字段。
 - 标准候选 Inbox，支持手动创建候选、按状态/来源/关键词筛选、采纳为新字段、合并到已有字段、忽略或延后处理。
 - 字段质量评分，按注释、别名、示例、分类、敏感标识、代码集和废弃说明识别低质量字段。
@@ -60,7 +60,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 
 ### AI 与自动化
 
-- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、项目级业务术语表、表结构标准、规则、项目规则例外、标准使用示例/反例、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、业务对象、表模板、状态和关键词导出按需包，也支持按历史标准快照导出可复现上下文，并可写入业务仓库 `.dataspec/context/` 离线缓存。字段目录会导出生命周期状态和可选替代字段/说明；`.dataspec/table-standards.json` 会导出业务对象、模板结构标准、关系 edge、主键/唯一键/索引/外键和策略摘要；来自 Starter Kit 的字段会暴露 kit key/version 来源，来自标准复用包的字段会暴露 pack key/basePackVersion 来源，manifest 会携带最近标准包应用摘要和漂移计数。
+- AI Context zip 导出，包含 `.dataspec/` 目录、字段目录 JSON Schema、项目级业务术语表、表结构标准、字段语义规则、字段知识卡、指标口径、规则、项目规则例外、标准使用示例/反例、prompt、workflow recipes、示例 SQL 和 `AGENTS.md.fragment`；支持按字段、数据域、标签、表、业务对象、表模板、状态和关键词导出按需包，也支持按历史标准快照导出可复现上下文，并可写入业务仓库 `.dataspec/context/` 离线缓存。字段目录会导出生命周期状态、可选替代字段/说明、命名翻译偏好和枚举生命周期摘要；`.dataspec/table-standards.json` 会导出业务对象、模板结构标准、关系 edge、主键/唯一键/索引/外键和策略摘要；`.dataspec/field-knowledge-cards.json`、`.dataspec/field-semantics.json` 和 `.dataspec/metrics.json` 只作为 metadata guidance，不执行真实计算或 SQL；manifest 会携带最近标准包应用摘要、漂移计数和新增语义 artifact 的 count/truncation。
 - AI 会话启动包，提供只读 `/api/bootstrap/session`、CLI `bootstrap` 和 MCP `session-bootstrap` resource/tool，聚合 projectId、server、authMode、specVersion、availableCapabilities、recommendedCommands、knownRisks、docsRefs 和结构化 nextActions；服务不可达时 CLI 仍返回本地 BLOCKED JSON。
 - MCP 会话状态记忆，提供只读 `session-state` resource 和 `get_session_state` tool，聚合本地 `.dataspec/config.json`、上下文缓存元数据、当前 profile、最近 task run 入口、安全默认值和 nextActions；不写会话文件、不读取业务数据行、不把状态当权限依据。
 - AI 任务卡，提供本地 `dataspec-ai-task-card` JSON/Markdown 协议、CLI `task-card create/show/update`、MCP `create_task_card/render_task_card` 和前端展示工具，用于记录 goal、currentStep、allowedActions、artifacts、resumeCommand、validationCommands 和 stopConditions。
@@ -79,7 +79,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI 交接证据看板，按项目聚合 AI task run、AI job、SQL 检查和 AI 批量任务，标红失败或未验证项，并可直接生成、复制或下载脱敏 evidence package。
 - AI/CLI 写入保护，标准快照、反向导入确认、AI 批量 SQL lint、项目恢复 apply 和 AI job 回放记录已接入单机轻量 idempotency key、项目级 operation lock 和可重试冲突诊断。
 - 自然语言需求草案 API 和前端入口，基于字段推荐/检索、业务术语表和表模板，把建表描述拆成 matchedFields、missingCandidates、ambiguousTerms、recommendedTemplate、nextActions 和可复制 Prompt；字段、候选和模板会展示 Explain Trace 证据来源；第一版只读，不自动写入候选或字段库。
-- 字段推荐与字段标准检索 API/CLI/MCP；启用的业务术语表会参与“会员手机号”“订单费用”等自然语言 query 的确定性匹配，并在命中原因中标记 `术语表`；推荐和检索结果包含轻量 evidence 数组，便于 AI 读取来源、置信度和文档引用。
+- 字段推荐、字段标准检索和字段语义知识 API/CLI/MCP；启用的业务术语表、命名翻译、禁用翻译、字段语义规则、枚举 lifecycle 和指标口径会参与“会员手机号”“订单费用”等自然语言 query 的确定性匹配或风险提示；推荐和检索结果包含轻量 evidence/semanticSummary 数组，便于 AI 读取来源、置信度、字段边界和文档引用。
 - DDL 生成 API/CLI/MCP，保留 `structureSummary` 结构标准摘要，供 AI 判断哪些约束已应用、哪些提示被跳过、哪些策略需要人工确认。
 - 合成标准样例生成 API/CLI：`/api/synthetic-examples/generate` 和 `synthetic-examples generate` 可按用户、订单、支付、审计场景生成只读样例包，包含 good/bad SQL、DDL preview 输入、字段推荐问题、标准问答案例、预期诊断、`specHash`、生成参数和安全 metadata。
 - 多源契约候选导入预览 API/CLI：`POST /api/contract-import/preview` 和 `contract-import preview` 可从 OpenAPI、JSON Schema、Protobuf `.proto` / descriptor 风格输入抽取字段候选，输出 `candidateFields`、`contractHash`、`diagnostics`、`safety`、`nextActions` 和可复用候选审核流程的 `inboxPayload`；第一版只读，不自动写入候选 Inbox 或正式字段。
@@ -185,7 +185,7 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1&scope
 curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1&snapshotId=42" -o dataspec-ai-context-snapshot-42.zip
 ```
 
-解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/table-standards.json`、`.dataspec/schema-registry.json`、`.dataspec/capabilities.json`、`.dataspec/usage-examples.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/workflows.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前先读取能力清单、字段标准、表结构标准、使用示例/反例、契约和规则。`.dataspec/capabilities.json` 会包含 `standard-evidence`，离线 agent 可据此发现 `GET /api/standard-evidence`；该文件只描述入口，不包含字段证据结果、raw SQL、AI payload、候选 raw evidence、raw source metadata 或凭据。
+解压后包含 `.dataspec/DATABASE_RULES.md`、`.dataspec/field-catalog.json`、`.dataspec/field-catalog.schema.json`、`.dataspec/table-standards.json`、`.dataspec/field-knowledge-cards.json`、`.dataspec/field-semantics.json`、`.dataspec/metrics.json`、`.dataspec/schema-registry.json`、`.dataspec/capabilities.json`、`.dataspec/usage-examples.json`、`.dataspec/rules.yaml`、`.dataspec/prompts.md`、`.dataspec/workflows.md`、`.dataspec/examples/good.sql`、`.dataspec/examples/bad.sql` 和 `AGENTS.md.fragment`。可将这些文件复制到业务项目，让 Codex/Cursor/Claude Code 等 agent 在建表或评审 SQL 前先读取能力清单、字段标准、表结构标准、字段语义证据、使用示例/反例、契约和规则。`.dataspec/capabilities.json` 会包含 `standard-evidence`，离线 agent 可据此发现 `GET /api/standard-evidence`；该文件只描述入口，不包含字段证据结果、raw SQL、AI payload、候选 raw evidence、raw source metadata 或凭据。
 
 导出包的 `.dataspec/manifest.json`、`.dataspec/field-catalog.json` 和 `.dataspec/rules.yaml` 会包含 `specVersion` / `specHash` / `source` 元数据。若项目尚未创建标准快照，版本显示为 `unversioned`，不阻断导出；创建快照后，后续 SQL 检查记录和 DDL 生成结果会记录当前快照 ID、版本和 hash。需要复现历史任务时，可传 `snapshotId` 或 `snapshotVersion` 从已保存 payload 导出历史字段目录、规则和 zip 包；CLI 等价命令为 `node tools/dataspec-cli.mjs export-context --project 1 --snapshot-id 42 --output dataspec-ai-context-snapshot-42.zip`。
 
@@ -194,6 +194,8 @@ curl -L "http://localhost:8090/api/ai-context/package/download?projectId=1&snaps
 导出前可先做 AI Context 预算计划：`POST /api/ai-context/budget/plan` 和 CLI `context-budget plan` 会基于 `projectId`、`tokenBudget`、可选 `scope/query/status/limit`、任务类型或目标表/文件提示，返回 `selectedArtifacts`、`droppedArtifacts`、`estimation.selectedEstimatedTokens`、`estimation.totalEstimatedTokens`、`qualityRisk`、`fallbackSteps`、`recommendedExportParams` 和 `recommendedNextActions`。预算计划是只读 preflight：不生成 zip、不写 `.dataspec/context/` 缓存、不修改项目状态、不调用外部 LLM 或 tokenizer，也不会返回 raw token、password、Authorization、完整 JDBC URL、DSN、连接串或业务数据行。CLI `context-quality check` 可本地读取已导出的 `.dataspec/context/`、AI Context zip 或预算 plan JSON，输出 `contextQualityScore`、`qualityLevel`、缺失关键资源、截断资源、分类覆盖、任务适配提示和下一步动作；第一版不新增后端 API、不调用外部 LLM、不写缓存。前端“AI Context”页面可查看预算预览，并且只有点击“一键填充”时才会应用推荐导出参数。
 
 字段目录中的每个字段可选输出 `format` 对象，包含 `type`、`pattern`、`unit`、`precision`、`timezone`、`nullPolicy`、`validExamples`、`invalidExamples` 和 `notes`。这让 AI 在生成 DDL、SQL、DTO 或校验建议前能直接读取“金额按分存储”“手机号正则”“时间戳使用 UTC”“JSON 结构说明”等约束；第一版只导出人工维护的格式元数据，不扫描真实业务数据行，也不执行正则或 JSON Schema 校验。
+
+字段语义主题包会额外导出字段命名翻译、派生/单位/时间粒度/聚合口径、枚举值 lifecycle、字段知识卡和指标定义映射。`.dataspec/field-knowledge-cards.json` 聚合字段身份、格式、usage contract、语义规则、枚举提示、命名证据、指标引用和风险说明；`.dataspec/field-semantics.json` 记录 source-of-truth、禁用翻译、推荐使用场景和反例；`.dataspec/metrics.json` 记录 metricKey、定义、measure/dimension 字段、过滤、聚合、时间粒度和示例 SQL 摘要。示例 SQL 永远是说明性文本，不连接业务数据库、不验证计算结果、不自动改生产 SQL。
 
 导出包还会包含 `.dataspec/usage-examples.json`，按优先级裁剪项目中启用的标准使用示例与反例。完整包会导出少量高价值 `FIELD/RULE/TEMPLATE/GENERAL` 示例；按需包会优先保留匹配字段的 `FIELD` 示例，并只带入命中 query 的通用、规则或模板示例。AI 应优先模仿 `GOOD` 示例，避开同 scope 的 `BAD` 反模式；历史快照导出仍使用当前项目的示例库元数据，并在文件中标记 `snapshotBound=false`。
 
@@ -790,6 +792,12 @@ node tools/dataspec-cli.mjs suggest-field "用户手机号" --project 1 --format
 node tools/dataspec-cli.mjs search-fields "用户手机号" --project 1 --limit 20 --format json
 node tools/dataspec-cli.mjs search-fields --project 1 --category user --status enabled --format json
 
+# 读取字段语义知识卡、语义规则和指标口径；只读，不执行 SQL 或真实计算
+node tools/dataspec-cli.mjs field-knowledge list --project 1 --query "订单金额" --format json
+node tools/dataspec-cli.mjs field-knowledge show --project 1 --field-id 10 --format json
+node tools/dataspec-cli.mjs field-semantics list --project 1 --field-id 10 --format json
+node tools/dataspec-cli.mjs metric-definitions list --project 1 --field-id 10 --format json
+
 # 基于表模板生成 DDL，并返回 lint 自检结果
 node tools/dataspec-cli.mjs generate-ddl --project 1 --template 1 --table user_order --format json
 
@@ -859,10 +867,10 @@ node tools/dataspec-mcp.mjs
 
 可在 MCP client 中按本地 stdio server 配置。当前暴露能力：
 
-- resources：`version-compatibility`、`capability-catalog`、`session-bootstrap`、`session-state`、`field-catalog`、`table-standards`、`database-rules`、`rules-yaml`、`workflow-recipes`、`agent-guidance-pack`、`ai-task-profiles`、`schema-registry`、`ai-task-runs`，URI 形如 `dataspec://project/1/session-bootstrap`；也支持只读全局版本兼容握手 `dataspec://version-compatibility` 和全局能力清单 `dataspec://capability-catalog`。
+- resources：`version-compatibility`、`capability-catalog`、`session-bootstrap`、`session-state`、`field-catalog`、`table-standards`、`field-knowledge-cards`、`field-semantics`、`metric-definitions`、`database-rules`、`rules-yaml`、`workflow-recipes`、`agent-guidance-pack`、`ai-task-profiles`、`schema-registry`、`ai-task-runs`，URI 形如 `dataspec://project/1/session-bootstrap`；也支持只读全局版本兼容握手 `dataspec://version-compatibility` 和全局能力清单 `dataspec://capability-catalog`。
 - resource templates：`resources/templates/list` 返回 `dataspec://project/{projectId}/...` 模板，覆盖 session bootstrap、session state、capability catalog、schema registry、field catalog、workflow recipes、AI task profiles 和 agent guidance pack，便于未固定项目的 MCP client 先发现可读资源。
 - prompts：`create_table_with_dataspec`、`review_sql_with_dataspec`、`reverse_import_standards`、`answer_field_standard_question` 作为一等化 agent prompt，在 descriptor 中返回 safety、requiredInputs、safeDefaults、resourceSequence、toolSequence、stopConditions 和 evidenceRequirements；兼容保留 `dataspec_create_table`、`dataspec_review_sql`、`dataspec_design_fields`，并提示 agent 先读取 capability catalog、schema registry 和 profile resource，再选择稳定字段名、兼容策略、上下文范围、fixedSql 模式和输出格式。
-- tools：`get_session_bootstrap`、`get_session_state`、`create_task_card`、`render_task_card`、`lint_sql`、`get_field_catalog`、`get_table_standards`、`search_field_catalog`、`suggest_fields`、`search_fields`、`generate_table_ddl`、`get_ai_task_run`、`export_evidence_package`；`tools/list` 会在每个工具描述中暴露本地 `safety` metadata，MCP client 可先判断只读、写项目、dry-run、幂等 key 和敏感输入边界；`get_session_state` 只读聚合本地配置、context cache 元数据、当前 profile、最近 task run 入口和安全默认值，projectless 时返回 `BLOCKED` 并提示提供 `projectId` 或更新 `.dataspec/config.json`；`get_session_bootstrap` 返回与 API/CLI 一致的启动包，未配置默认项目时也可先返回 `SELECT_PROJECT` nextAction；`create_task_card` 和 `render_task_card` 只生成或渲染本地任务卡，不执行 workflow；`lint_sql`、`get_field_catalog`、`get_table_standards` 和 `search_field_catalog` 可接收 `profileId/taskType` hint，显式工具参数仍优先于默认 profile；`get_field_catalog` 可传 `scope/query/status/limit`，`get_table_standards` 可按业务对象或表模板读取只读表结构标准，`search_field_catalog` 默认按当前关键词读取较小字段目录，`search_fields` 调用 `/api/fields/search` 并返回字段、分数、命中原因和下一步建议；`generate_table_ddl` 会保留后端返回的 `structureSummary`；`get_ai_task_run` 按项目读取任务详情和恢复命令；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功；`export_evidence_package` 返回 `structuredContent` 与可解析 JSON text，用于交付前导出只读证据包。
+- tools：`get_session_bootstrap`、`get_session_state`、`create_task_card`、`render_task_card`、`lint_sql`、`get_field_catalog`、`get_table_standards`、`get_field_knowledge_cards`、`get_field_semantics`、`get_metric_definitions`、`search_field_catalog`、`suggest_fields`、`search_fields`、`generate_table_ddl`、`get_ai_task_run`、`export_evidence_package`；`tools/list` 会在每个工具描述中暴露本地 `safety` metadata，MCP client 可先判断只读、写项目、dry-run、幂等 key 和敏感输入边界；`get_session_state` 只读聚合本地配置、context cache 元数据、当前 profile、最近 task run 入口和安全默认值，projectless 时返回 `BLOCKED` 并提示提供 `projectId` 或更新 `.dataspec/config.json`；`get_session_bootstrap` 返回与 API/CLI 一致的启动包，未配置默认项目时也可先返回 `SELECT_PROJECT` nextAction；`create_task_card` 和 `render_task_card` 只生成或渲染本地任务卡，不执行 workflow；`lint_sql`、`get_field_catalog`、`get_table_standards`、`get_field_knowledge_cards`、`get_field_semantics`、`get_metric_definitions` 和 `search_field_catalog` 可接收 `profileId/taskType` hint，显式工具参数仍优先于默认 profile；`get_field_catalog` 可传 `scope/query/status/limit`，`get_table_standards` 可按业务对象或表模板读取只读表结构标准，字段语义工具只读返回知识卡、语义规则和指标口径 metadata guidance，不执行 SQL 或真实计算，`search_field_catalog` 默认按当前关键词读取较小字段目录，`search_fields` 调用 `/api/fields/search` 并返回字段、分数、命中原因和下一步建议；`generate_table_ddl` 会保留后端返回的 `structureSummary`；`get_ai_task_run` 按项目读取任务详情和恢复命令；`lint_sql` 返回结构化 lint 结果，SQL 存在 ERROR 时仍视为工具调用成功；`export_evidence_package` 返回 `structuredContent` 与可解析 JSON text，用于交付前导出只读证据包。
 
 ## CLI/MCP 契约 Fixture
 
@@ -1103,6 +1111,7 @@ data-spec/
 - [x] 字段影响分析，支持模板、导入来源、SQL 检查记录、标准快照和代码集影响提示
 - [x] 大字段库性能基线和慢操作 warning，覆盖字段分组/推荐、AI Context 字段目录和反向导入 compare
 - [x] 字段推荐与字段标准检索 API/CLI/MCP，字段库可展示检索命中原因和下一步建议，并输出 Explain Trace evidence
+- [x] 字段语义、枚举生命周期、字段知识卡、指标口径和命名翻译辅助第一版，支持后端维护 API、前端维护/只读入口、AI Context 三个语义 artifact、Schema Registry、CLI/MCP 只读查询和 secret-safe 边界
 - [x] 业务对象与表结构标准第一版，支持表模板关联、主键/唯一键/索引/外键/策略摘要、AI Context table standards 和只读关系摘要
 - [x] DDL 生成 API/CLI/MCP 和前端预览下载，包含结构标准 `structureSummary` 摘要
 - [x] AI Context zip 导出、按需裁剪、历史快照导出、离线 `.dataspec/context/` 缓存、分组摘要、workflow recipes 和业务项目 `.dataspec/` 约定

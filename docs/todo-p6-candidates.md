@@ -4,7 +4,8 @@
 
 本文件承接根 TODO.md 中尚未完成的 P6 候选详情。后续开发先读根 TODO.md、候选评审和时间评估，再按任务范围读取本文件对应条目；不要默认线性顺扫全部候选。
 
-- 未完成候选数量：68
+- 未完成候选数量：63
+- 本轮已完成主题包归档：5 项，详见 [archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
 - 本轮已归档为现有能力覆盖：6 项，详见 [archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
 - 本轮已删除独立候选：9 项，详见 [archive/todo-removed-p6-candidates.md](archive/todo-removed-p6-candidates.md)
 - 已完成 P5/P6 详情：[archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
@@ -16,7 +17,6 @@
 ### 早期遗留候选
 
 - P6-74：标准变更演练沙箱与样例回归
-- P6-77：派生字段、单位换算与口径规则
 - P6-80：规则与模板变更 diff 包
 - P6-84：前端可访问性与键盘操作基线
 - P6-85：本地数据清理、重置与演示项目重建
@@ -31,7 +31,6 @@
 - P6-102：数据源连接器能力注册与插件化边界
 - P6-103：本地运行观测、慢请求与诊断包
 - P6-104：标准决策理由库与字段 ADR 记录
-- P6-107：代码集与枚举值生命周期
 - P6-108：业务仓库迁移交付包
 - P6-109：AI 能力边界模拟与安全预检
 - P6-110：文档与需求材料反向提取标准候选
@@ -78,19 +77,16 @@
 - P6-157：个人单机分发包与离线启动预案
 - P6-159：AI 任务状态机与断点续跑
 - P6-160：标准变更影响预演与候选修复单
-- P6-161：AI 可读字段知识卡片
 - P6-162：规则/标准 A/B 评测与回归数据集
 - P6-163：连接器能力探测与方言 Profile
 - P6-168：MCP Resource 游标分页与大字段库分片导出
 - P6-171：标准规则向数据质量测试导出
 - P6-173：编辑器提示与 Code Action 轻量包
 - P6-174：跨协议 Schema 导出与标准适配层
-- P6-175：指标口径与字段标准映射层
 - P6-176：标准消费端兼容验收套件
 
-### 新近候选 P6-184 到 P6-185
+### 新近候选 P6-185
 
-- P6-184：字段标准中英文命名与翻译辅助
 - P6-185：标准驱动测试数据与边界用例包
 
 ## 候选详情
@@ -103,15 +99,6 @@
 - 落地产物：新增标准草案演练入口；支持选择字段/规则/模板草案和样例集，运行 lint、DDL preview、Prompt preview、Context diff，并输出风险、收益和建议保存步骤。
 - 验收标准：用户在保存规则或字段变更前能看到对 good/bad SQL、模板 DDL 和 AI Context 的影响；AI 可读取演练报告决定是否继续修改；演练不写入正式标准。
 - 边界：不做多人审批发布，不替代完整 CI；第一版只覆盖项目内 fixture、历史检查记录和用户手动粘贴样例。
-
-### P6-77：派生字段、单位换算与口径规则
-- 状态：待办。
-- 为什么做：很多标准字段不是孤立存在的，例如 `amount_cent` 与 `amount_yuan`、`paid_at` 与 `paid_date`、`status_code` 与状态枚举；AI 如果不知道派生关系和单位口径，容易生成混用字段。
-- 已有基础：已有字段值格式与校验样例库待办、枚举/码表、字段质量评分、AI Context、DDL 生成和字段推荐。
-- 缺口：字段之间缺少 derivedFrom、unitConversion、aggregationRule、timeGranularity 和 sourceOfTruth 等结构化关系；质量检查也无法提示口径混用。
-- 落地产物：新增派生字段规则模型或字段扩展；支持源字段、转换表达式说明、单位、精度、时间粒度、枚举映射、推荐使用场景和反例；导出到 AI Context 并纳入质量评分。
-- 验收标准：AI 能区分金额分/元、日期/时间戳、编码/展示名、原始值/派生值；DDL/Prompt 生成会提示首选字段和转换口径；测试覆盖典型金额和时间字段。
-- 边界：不执行真实数据计算，不替代数据血缘平台，不强制所有字段配置派生规则。
 
 ### P6-80：规则与模板变更 diff 包
 - 状态：待办。
@@ -215,16 +202,6 @@
 - 落地产物：新增标准决策 note 或字段 ADR；可关联字段、别名、规则、模板、分组或业务术语，记录决策背景、采用方案、拒绝方案、证据链接、适用范围和过期条件；导出到 AI Context 和标准问答证据。
 - 验收标准：AI 能回答“为什么这里用 `user_id` 而不是 `uid`”“金额单位为什么用分”“某字段为什么废弃”；字段合并或规则调整时能引用历史决策，避免重复争论。
 - 边界：不做多人审批，不要求所有历史字段补齐 ADR，不把决策理由当成不可变法规；第一版从高冲突字段和规则开始补。
-
-### P6-107：代码集与枚举值生命周期
-- 状态：待办。
-- 为什么做：状态、类型、渠道、来源等枚举字段是 AI 最容易写错的地方；仅有字段名还不够，需要知道允许值、显示名、废弃值、替代值和不同系统间映射。
-- 已有基础：已有数据字典、字段格式约束、字段生命周期、DDL 生成、SQL lint、标准问答和 AI Context。
-- 缺口：代码集缺少生命周期、别名映射、版本、冲突检测和 AI 可读约束；SQL 修复也无法判断 `status = '1'` 与 `status = 'PAID'` 哪个是当前标准。
-- 参考项目：`open-metadata/OpenMetadata` 和 `datahub-project/datahub` 的 glossary/tag 组织方式，以及 `great-expectations/great_expectations` 的枚举值校验思路；只借鉴约束和证据表达，不引入数据质量平台。
-- 落地产物：增强代码集模型/API/前端；支持 enumValue、displayName、aliases、status、replacementValue、validFrom、validTo、sourceEvidence、mappingHints 和 contextExport；SQL lint 可对枚举 literal 给出建议。
-- 验收标准：AI 查询或生成状态字段时能读取允许值和废弃值；SQL 检查能发现明显非法枚举 literal；枚举变更能进入标准快照和变更说明。
-- 边界：不连接真实业务数据做分布统计，不自动替换生产 SQL；第一版优先覆盖人工维护代码集和反向导入可见约束。
 
 ### P6-108：业务仓库迁移交付包
 - 状态：待办。
@@ -656,16 +633,6 @@
 - 验收标准：变更一个字段、枚举、规则或模板时能看到 DataSpec 内部引用、数据库 COMMENT 回写草案、业务代码引用风险、建议验证命令和证据包入口；用户确认后再保存；AI 可把修复单转成后续任务。
 - 边界：不强制所有保存都阻断，不直接连接生产仓库写补丁；第一版覆盖字段、枚举和默认规则。
 
-### P6-161：AI 可读字段知识卡片
-- 状态：待办。
-- 为什么做：AI 使用字段标准时，单纯字段列表还不够；它需要每个字段的使用场景、禁止写法、示例、相关字段和常见误用，才能在建表、修 SQL 和问答时少走弯路。
-- 已有基础：已有字段标准、数据字典、标准问答入口、业务术语表、示例反例库、自然语言标准候选和字段推荐质量增强。
-- 缺口：缺少可直接嵌入 AI Context 的 FieldKnowledgeCard，无法稳定表达 aliases、antiPatterns、usageExamples、relatedFields、enumHints、riskNotes 和 lastVerifiedAt。
-- 参考项目：`backstage/backstage` 的 catalog 实体页面、`facebook/docusaurus` 的结构化文档组织和 `great-expectations/great_expectations` 的规则说明；只生成轻量知识卡，不做复杂知识图谱。
-- 落地产物：为字段标准生成 AI 可读知识卡；支持前端查看、CLI 导出和 MCP resource 读取；聚合字段元数据、usage examples、反例、冲突、来源、问答证据、规则命中和用户反馈。
-- 验收标准：AI 针对单个字段能拿到完整、短小、可引用的标准说明；卡片能说明何时使用、何时不要用、如何命名、关联哪些字段以及有哪些常见误用；高频、敏感、金额、状态和时间字段优先覆盖；变更后有版本或更新时间。
-- 边界：不把知识卡当审批文档，不要求每个字段一次性补齐长文案；第一版优先覆盖高频字段和敏感字段。
-
 ### P6-162：规则/标准 A/B 评测与回归数据集
 - 状态：待办。
 - 为什么做：优化规则、推荐权重或 AI prompt 后，需要知道新版本是否真的更好；否则容易靠感觉改标准，导致误报、漏报或 AI 输出变差。
@@ -726,16 +693,6 @@
 - 验收标准：同一字段标准可导出多个协议的结构化草稿；枚举、必填、敏感标记、格式和注释能被保留或明确标记为降级；导出结果有 fixture 快照测试。
 - 边界：第一版不自动改业务仓库代码，不保证复杂协议特性完全等价；以“AI 可读、人工可审”的草稿和映射报告为主。
 
-### P6-175：指标口径与字段标准映射层
-- 状态：待办。
-- 为什么做：AI 生成报表 SQL 或数据产品说明时，经常把字段名、指标名和业务口径混在一起；需要把“订单金额”“支付成功率”“活跃用户数”这类指标口径映射到标准字段、过滤条件和聚合规则。
-- 已有基础：已有派生字段、单位换算与口径规则待办、业务对象关系图、字段知识卡、业务术语表、标准问答入口和数据模型契约待办。
-- 缺口：缺少 metricDefinition、measureFields、dimensionFields、filterRule、aggregationRule、timeGrain 和 ownerNotes；AI 无法区分字段标准和指标口径，也无法解释查询结果的业务边界。
-- 参考项目：`dbt-labs/metricflow` 的语义指标模型、`cube-js/cube` 的 metrics layer 和 `datahub-project/datahub` 的 glossary/metric 元数据；只借鉴指标口径表达，不做 BI 平台。
-- 落地产物：新增轻量指标口径模型/API/前端维护入口；支持把指标关联到标准字段、枚举过滤、时间粒度、聚合方式和示例 SQL；AI Context 和标准问答可按需导出指标摘要。
-- 验收标准：AI 查询“订单金额口径”或生成报表 SQL 时能引用明确 metricDefinition；口径变更可追溯到快照和决策理由；典型金额、数量、转化率指标有 fixture 覆盖。
-- 边界：不接管真实指标计算平台，不自动校验数据结果正确性；第一版只沉淀口径元数据和可解释查询建议。
-
 ### P6-176：标准消费端兼容验收套件
 - 状态：待办。
 - 为什么做：DataSpec 会被前端、CLI、MCP、SDK、业务仓库和 AI 工具共同消费；仅后端测试通过不代表消费端解析稳定，需要一套可复用的兼容样例，防止字段改名或契约变更悄悄破坏外部使用。
@@ -745,16 +702,6 @@
 - 落地产物：新增标准消费端兼容套件目录和 CLI `compat check`；在现有 CLI/MCP contract fixture 基础上扩展字段、规则、枚举、Context、MCP resource、CLI JSON、API schema registry 和 schema export 的 golden payload；输出 breaking/compatible/deprecated 结果。
 - 验收标准：修改核心 DTO、API 字段或导出格式时能一键检查主要消费端契约；失败结果包含破坏字段、影响入口和迁移建议；自有消费端、关键 AI 入口和示例 adapter 有 golden 覆盖；CI/本地验证入口可复用。
 - 边界：不要求所有第三方工具接入，不阻止个人本地实验性变更；第一版覆盖 DataSpec 自有消费端和示例 adapter。
-
-### P6-184：字段标准中英文命名与翻译辅助
-- 状态：待办。
-- 为什么做：项目里常见“用户/会员/account/user”“手机号/mobile/phone”等中英文混用；如果没有结构化命名映射，AI 生成字段、搜索标准或解释差异时容易把翻译偏好当成猜测。
-- 已有基础：已有字段 displayName/name、aliases、业务术语表、字段检索、字段推荐、数据字典、AI Context 和 Prompt 生成。
-- 缺口：缺少 localizedNames、preferredEnglishName、forbiddenTranslations、translationAliases、translationConfidence 和 exampleMappings；当前别名能粗略匹配，但不能表达“推荐翻译”和“不要这样翻译”。
-- 参考项目：`open-metadata/OpenMetadata` 的 glossary/term 管理、`datahub-project/datahub` 的元数据标签和 `i18next/i18next` 的 key/value 资源组织；只借鉴命名映射，不做完整 UI 国际化。
-- 落地产物：扩展字段或术语模型，支持中文名、英文推荐名、禁用翻译、别名和示例映射；字段推荐、标准搜索、AI Context 和数据字典导出可返回 translationReason。
-- 验收标准：AI 查询“会员手机号”或生成用户表字段时，能明确知道推荐字段名、可接受别名和禁用翻译；冲突翻译能在术语表或字段库中被提示。
-- 边界：不接入外部机器翻译服务，不自动覆盖已有字段名；第一版只维护项目级命名映射和 AI 可读说明。
 
 ### P6-185：标准驱动测试数据与边界用例包
 - 状态：待办。

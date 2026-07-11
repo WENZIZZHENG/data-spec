@@ -123,6 +123,31 @@
             </template>
           </el-table-column>
           <el-table-column prop="displayName" label="显示名" min-width="120" />
+          <el-table-column label="命名翻译 / 语义" min-width="260">
+            <template #default="{ row }">
+              <div v-if="fieldNamingSummary(row).length" class="semantic-summary">
+                <div
+                  v-for="item in fieldNamingSummary(row)"
+                  :key="`naming-${row.id}-${item}`"
+                  class="semantic-line"
+                >
+                  {{ item }}
+                </div>
+              </div>
+              <div v-if="fieldSemanticSummary(row).length" class="semantic-summary secondary">
+                <div
+                  v-for="item in fieldSemanticSummary(row)"
+                  :key="`semantic-${row.id}-${item}`"
+                  class="semantic-line"
+                >
+                  {{ item }}
+                </div>
+              </div>
+              <span v-if="!fieldNamingSummary(row).length && !fieldSemanticSummary(row).length" class="muted-text">
+                -
+              </span>
+            </template>
+          </el-table-column>
           <el-table-column label="类型" min-width="150">
             <template #default="{ row }">
               <span>{{ formatDataType(row) }}</span>
@@ -167,12 +192,13 @@
             </template>
           </el-table-column>
           <el-table-column prop="comment" label="注释" min-width="220" show-overflow-tooltip />
-          <el-table-column label="操作" width="350" fixed="right">
+          <el-table-column label="操作" width="410" fixed="right">
             <template #default="{ row }">
               <el-button text type="primary" @click="openImpactDialog(row)">影响</el-button>
               <el-button text type="primary" @click="openSourceDialog(row)">来源</el-button>
               <el-button text type="primary" @click="openChangeLogDialog(row)">变更</el-button>
               <el-button text type="primary" @click="openMergeDialog(row)">合并</el-button>
+              <el-button text type="primary" @click="openKnowledgeCardDrawer(row)">知识卡</el-button>
               <el-button text type="primary" @click="openEditDialog(row)">编辑</el-button>
               <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
@@ -340,6 +366,70 @@
         </el-form-item>
         <el-form-item label="字段注释">
           <el-input v-model="form.comment" type="textarea" :rows="3" placeholder="请输入字段注释" />
+        </el-form-item>
+
+        <div class="format-section-title">命名翻译与语义</div>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="推荐英文名">
+              <el-input v-model="form.preferredEnglishName" placeholder="mobile_no / paid_amount_cent" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="翻译置信度">
+              <el-select v-model="form.translationConfidence" clearable class="full-width">
+                <el-option label="high" value="high" />
+                <el-option label="medium" value="medium" />
+                <el-option label="low" value="low" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="命名翻译">
+              <el-input
+                v-model="form.localizedNamesJson"
+                type="textarea"
+                :rows="2"
+                placeholder='{"zh-CN":"手机号","en":"mobile number"}'
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="翻译别名">
+              <el-input
+                v-model="form.translationAliasesJson"
+                type="textarea"
+                :rows="2"
+                placeholder='["phone","mobile","contact phone"]'
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="禁用翻译">
+          <el-input
+            v-model="form.forbiddenTranslationsJson"
+            type="textarea"
+            :rows="2"
+            placeholder='["tel_no","telephone"]'
+          />
+        </el-form-item>
+        <el-form-item label="语义摘要">
+          <el-input
+            v-model="form.semanticSummary"
+            type="textarea"
+            :rows="2"
+            placeholder="说明单位、source of truth、指标边界或常见误用；只做 AI guidance"
+          />
+        </el-form-item>
+        <el-form-item label="翻译说明">
+          <el-input
+            v-model="form.translationNotes"
+            type="textarea"
+            :rows="2"
+            placeholder="说明命名来源、禁用原因或兼容边界"
+          />
         </el-form-item>
 
         <div class="format-section-title">值格式与样例</div>
@@ -774,6 +864,91 @@
       :initial-target-id="mergeInitialTargetId"
       @applied="handleMergeApplied"
     />
+
+    <el-drawer v-model="knowledgeCardDrawerVisible" :title="knowledgeCardTitle" size="540px">
+      <el-skeleton v-if="knowledgeCardLoading" :rows="7" animated />
+      <template v-else-if="knowledgeCard">
+        <section class="knowledge-section">
+          <h3>{{ knowledgeCard.name || '-' }}</h3>
+          <p class="page-subtitle">
+            {{ knowledgeCard.displayName || '未设置显示名' }} / {{ knowledgeCard.dataType || '-' }}
+          </p>
+          <div class="knowledge-tags">
+            <el-tag size="small" :type="statusTagType(knowledgeCard.lifecycleStatus)">
+              {{ statusText(knowledgeCard.lifecycleStatus) }}
+            </el-tag>
+            <el-tag v-if="knowledgeCard.stableRef" size="small" type="info" effect="plain">
+              {{ knowledgeCard.stableRef }}
+            </el-tag>
+          </div>
+        </section>
+
+        <section
+          v-for="section in knowledgeCardSections"
+          :key="section.title"
+          class="knowledge-section"
+        >
+          <h4>{{ section.title }}</h4>
+          <ul v-if="section.items.length" class="knowledge-list">
+            <li v-for="item in section.items" :key="item">{{ item }}</li>
+          </ul>
+          <span v-else class="muted-text">暂无</span>
+        </section>
+
+        <section class="knowledge-section">
+          <h4>字段语义规则</h4>
+          <el-table
+            :data="knowledgeCard.semanticRules ?? []"
+            size="small"
+            stripe
+            empty-text="暂无语义规则"
+          >
+            <el-table-column prop="ruleType" label="类型" width="130" show-overflow-tooltip />
+            <el-table-column label="说明" min-width="240" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ semanticRuleSummary(row) || '-' }}
+              </template>
+            </el-table-column>
+          </el-table>
+        </section>
+
+        <section class="knowledge-section">
+          <h4>枚举生命周期</h4>
+          <el-table
+            :data="knowledgeCard.enumHints ?? []"
+            size="small"
+            stripe
+            empty-text="暂无枚举提示"
+          >
+            <el-table-column prop="value" label="值" width="110" show-overflow-tooltip />
+            <el-table-column prop="label" label="标签" width="110" show-overflow-tooltip />
+            <el-table-column label="状态" width="92">
+              <template #default="{ row }">
+                <el-tag size="small" :type="statusTagType(row.status)">
+                  {{ statusText(row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="replacementValue" label="替代值" min-width="120" show-overflow-tooltip />
+          </el-table>
+        </section>
+
+        <section class="knowledge-section">
+          <h4>指标引用</h4>
+          <el-table
+            :data="knowledgeCard.metricReferences ?? []"
+            size="small"
+            stripe
+            empty-text="暂无指标引用"
+          >
+            <el-table-column prop="metricKey" label="metricKey" width="150" show-overflow-tooltip />
+            <el-table-column prop="displayName" label="名称" width="130" show-overflow-tooltip />
+            <el-table-column prop="aggregationRule" label="聚合" min-width="150" show-overflow-tooltip />
+          </el-table>
+        </section>
+      </template>
+      <el-empty v-else description="暂无字段知识卡" />
+    </el-drawer>
   </div>
 </template>
 
@@ -800,6 +975,8 @@ import {
   undoFieldChange,
   updateField
 } from '@/api/field'
+import { getFieldKnowledgeCard } from '@/api/fieldKnowledge'
+import { listFieldSemanticRules } from '@/api/fieldSemantic'
 import { previewFieldChange } from '@/api/standardChange'
 import { useProjectStore } from '@/stores/project'
 import {
@@ -828,11 +1005,13 @@ import type {
   FieldGroupingBatchUpdateReq,
   FieldGroupSummary,
   FieldImpactReport,
+  FieldKnowledgeCardResp,
   FieldReq,
   FieldSearchItem,
   FieldSearchReq,
   FieldSearchSummary,
   FieldSourceDetail,
+  FieldSemanticRuleResp,
   StandardChangePreview,
   StandardChangeLog,
   StandardFieldMergeOption
@@ -862,15 +1041,20 @@ const sourceDialogVisible = ref(false)
 const impactDialogVisible = ref(false)
 const changeLogDialogVisible = ref(false)
 const mergeDialogVisible = ref(false)
+const knowledgeCardDrawerVisible = ref(false)
 const editingField = ref<Field | null>(null)
 const sourceField = ref<Field | null>(null)
 const impactField = ref<Field | null>(null)
 const changeLogField = ref<Field | null>(null)
+const knowledgeCardField = ref<Field | null>(null)
 const fieldSources = ref<FieldSourceDetail[]>([])
+const fieldSemanticRules = ref<FieldSemanticRuleResp[]>([])
 const sourceLoading = ref(false)
 const impactLoading = ref(false)
 const changeLogLoading = ref(false)
+const knowledgeCardLoading = ref(false)
 const impactReport = ref<FieldImpactReport | null>(null)
+const knowledgeCard = ref<FieldKnowledgeCardResp | null>(null)
 const bulkPreview = ref<FieldBulkUpdatePreview | null>(null)
 const changeLogs = ref<StandardChangeLog[]>([])
 const undoSubmitting = ref<number | null>(null)
@@ -1012,6 +1196,9 @@ const impactDialogTitle = computed(() =>
 const changeLogDialogTitle = computed(() =>
   changeLogField.value?.name ? `字段变更：${changeLogField.value.name}` : '字段变更'
 )
+const knowledgeCardTitle = computed(() =>
+  knowledgeCardField.value?.name ? `字段知识卡：${knowledgeCardField.value.name}` : '字段知识卡'
+)
 const groupOptions = computed(() => [
   {
     optionKey: 'all',
@@ -1057,6 +1244,33 @@ const fieldSearchItemByFieldId = computed(() => {
     }
   }
   return items
+})
+const semanticRulesByFieldId = computed(() => {
+  const items = new Map<number, FieldSemanticRuleResp[]>()
+  for (const rule of fieldSemanticRules.value) {
+    const id = rule.fieldId
+    if (typeof id === 'number') {
+      const existing = items.get(id) ?? []
+      existing.push(rule)
+      items.set(id, existing)
+    }
+  }
+  return items
+})
+const knowledgeCardSections = computed(() => {
+  const card = knowledgeCard.value
+  if (!card) {
+    return []
+  }
+  return [
+    { title: '格式约束', items: card.formatSummary ?? [] },
+    { title: '使用契约', items: card.usageContractSummary ?? [] },
+    { title: '命名翻译', items: card.namingGuidance ?? [] },
+    { title: '风险说明', items: card.riskNotes ?? [] },
+    { title: '证据引用', items: card.evidenceRefs ?? [] },
+    { title: '相关字段', items: card.relatedFieldRefs ?? [] },
+    { title: '使用示例', items: card.usageExamples ?? [] }
+  ]
 })
 const filteredFields = computed(() => {
   const keyword = fieldKeyword.value.trim().toLowerCase()
@@ -1181,6 +1395,7 @@ async function loadFields() {
     fieldSearchItems.value = []
     fieldSearchSummary.value = null
     fieldSearchNextActions.value = []
+    fieldSemanticRules.value = []
     loading.value = false
     return
   }
@@ -1212,6 +1427,7 @@ async function loadFields() {
     }
     groupSummary.value = summary
     domains.value = domainList ?? []
+    fieldSemanticRules.value = await listFieldSemanticRules({ projectId })
     selectedFields.value = []
     ensureActiveGroupExists()
     await openFieldFromRoute()
@@ -1480,6 +1696,13 @@ function resetForm(field?: Field) {
   form.aggregationHints = field?.aggregationHints ?? ''
   form.replacementGuidance = field?.replacementGuidance ?? ''
   form.misuseExamples = field?.misuseExamples ?? ''
+  form.localizedNamesJson = field?.localizedNamesJson ?? ''
+  form.preferredEnglishName = field?.preferredEnglishName ?? ''
+  form.forbiddenTranslationsJson = field?.forbiddenTranslationsJson ?? ''
+  form.translationAliasesJson = field?.translationAliasesJson ?? ''
+  form.translationConfidence = field?.translationConfidence ?? ''
+  form.translationNotes = field?.translationNotes ?? ''
+  form.semanticSummary = field?.semanticSummary ?? ''
   formatExamplesForm.validExamplesText = examplesJsonToLines(field?.validExamplesJson)
   formatExamplesForm.invalidExamplesText = examplesJsonToLines(field?.invalidExamplesJson)
   formRef.value?.clearValidate()
@@ -1596,6 +1819,22 @@ async function openChangeLogDialog(field: Field) {
   changeLogCurrent.value = 1
   changeLogDialogVisible.value = true
   await loadChangeLogs()
+}
+
+async function openKnowledgeCardDrawer(field: Field) {
+  const projectId = projectStore.currentProjectId
+  if (!projectId || !field.id) {
+    return
+  }
+  knowledgeCardField.value = field
+  knowledgeCard.value = null
+  knowledgeCardDrawerVisible.value = true
+  knowledgeCardLoading.value = true
+  try {
+    knowledgeCard.value = await getFieldKnowledgeCard(projectId, field.id)
+  } finally {
+    knowledgeCardLoading.value = false
+  }
 }
 
 async function loadChangeLogs() {
@@ -1871,6 +2110,38 @@ function fieldUsageContractSummary(field: Field) {
   ].filter(Boolean)
 }
 
+function fieldNamingSummary(field: Field) {
+  return [
+    formatPart('推荐英文名', field.preferredEnglishName),
+    formatPart('翻译别名', jsonArrayPreview(field.translationAliasesJson)),
+    formatPart('禁用翻译', jsonArrayPreview(field.forbiddenTranslationsJson)),
+    formatPart('置信度', field.translationConfidence),
+    formatPart('命名说明', field.translationNotes)
+  ].filter(Boolean).slice(0, 4)
+}
+
+function fieldSemanticSummary(field: Field) {
+  const fieldRules = typeof field.id === 'number'
+    ? semanticRulesByFieldId.value.get(field.id) ?? []
+    : []
+  return [
+    formatPart('语义摘要', field.semanticSummary),
+    ...fieldRules.slice(0, 2).map(semanticRuleSummary)
+  ].filter(Boolean).slice(0, 3)
+}
+
+function semanticRuleSummary(rule: FieldSemanticRuleResp) {
+  return [
+    rule.ruleType,
+    rule.sourceOfTruth,
+    rule.unitConversion,
+    rule.aggregationRule,
+    rule.timeGranularity,
+    rule.recommendedUse,
+    rule.antiPatterns
+  ].filter(Boolean).join(' / ')
+}
+
 function formatPart(label: string, value?: string | null) {
   return value?.trim() ? `${label} ${value.trim()}` : ''
 }
@@ -1882,6 +2153,15 @@ function examplesJsonPreview(value?: string | null) {
   }
   const visible = examples.slice(0, 2).map(formatExampleForPreview).join(', ')
   return examples.length > 2 ? `${visible} 等 ${examples.length} 个` : visible
+}
+
+function jsonArrayPreview(value?: string | null) {
+  const items = parseJsonStringArray(value)
+  if (items.length === 0) {
+    return ''
+  }
+  const visible = items.slice(0, 3).join(', ')
+  return items.length > 3 ? `${visible} 等 ${items.length} 个` : visible
 }
 
 function formatExampleForPreview(value: string) {
@@ -1925,6 +2205,20 @@ function parseExamplesJson(value?: string | null) {
       : []
   } catch {
     return []
+  }
+}
+
+function parseJsonStringArray(value?: string | null) {
+  if (!value?.trim()) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed)
+      ? parsed.map((item) => String(item).trim()).filter(Boolean)
+      : []
+  } catch {
+    return value.split(/[,，]/).map((item) => item.trim()).filter(Boolean)
   }
 }
 
@@ -2033,7 +2327,14 @@ function bulkAttributeText(attribute?: string) {
     defaultFilters: '默认过滤',
     aggregationHints: '聚合提示',
     replacementGuidance: '替代指导',
-    misuseExamples: '误用样例'
+    misuseExamples: '误用样例',
+    localizedNamesJson: '命名翻译',
+    preferredEnglishName: '推荐英文名',
+    forbiddenTranslationsJson: '禁用翻译',
+    translationAliasesJson: '翻译别名',
+    translationConfidence: '翻译置信度',
+    translationNotes: '翻译说明',
+    semanticSummary: '语义摘要'
   }
   return attribute ? labels[attribute] ?? attribute : '-'
 }
@@ -2124,7 +2425,14 @@ function changeLogSummary(log: StandardChangeLog) {
     'defaultFilters',
     'aggregationHints',
     'replacementGuidance',
-    'misuseExamples'
+    'misuseExamples',
+    'localizedNamesJson',
+    'preferredEnglishName',
+    'forbiddenTranslationsJson',
+    'translationAliasesJson',
+    'translationConfidence',
+    'translationNotes',
+    'semanticSummary'
   ]
   const changedLabels = keys
     .filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
@@ -2242,6 +2550,23 @@ function routeFieldId() {
   color: #8a5a00;
   font-size: 12px;
   line-height: 1.45;
+  word-break: break-word;
+}
+
+.semantic-summary {
+  display: grid;
+  gap: 3px;
+  color: #374151;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.semantic-summary.secondary {
+  margin-top: 4px;
+  color: #047857;
+}
+
+.semantic-line {
   word-break: break-word;
 }
 
@@ -2383,6 +2708,31 @@ function routeFieldId() {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.knowledge-section {
+  margin-bottom: 16px;
+}
+
+.knowledge-section h3,
+.knowledge-section h4 {
+  margin: 0 0 8px;
+  color: #303133;
+}
+
+.knowledge-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.knowledge-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .bulk-input {

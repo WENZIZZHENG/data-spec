@@ -1177,6 +1177,72 @@ class AiContextExportServiceTest {
     }
 
     @Test
+    void generateAiContextPackage_scopedSemanticArtifactsUseRelatedFieldQueries() throws Exception {
+        Field mobile = sampleField("mobile_no", "手机号", "contact", "pii", "phone");
+        Field amount = sampleField("order_amount", "订单金额", "money", "order", "amount");
+        amount.setId(101L);
+        com.dataspec.fieldsemantic.service.FieldSemanticRuleService semanticRuleService =
+                mock(com.dataspec.fieldsemantic.service.FieldSemanticRuleService.class);
+        com.dataspec.metric.service.MetricDefinitionService metricDefinitionService =
+                mock(com.dataspec.metric.service.MetricDefinitionService.class);
+        com.dataspec.fieldsemantic.model.FieldSemanticRuleResp semanticRule =
+                new com.dataspec.fieldsemantic.model.FieldSemanticRuleResp(
+                        9L,
+                        PROJECT_ID,
+                        101L,
+                        100L,
+                        "SOURCE_OF_TRUTH",
+                        null,
+                        null,
+                        "day",
+                        "订单金额以支付明细为准",
+                        "统计金额",
+                        null,
+                        List.of("semantic-doc:order-amount"),
+                        "enabled",
+                        null,
+                        null);
+        com.dataspec.metric.model.MetricDefinitionResp metric =
+                new com.dataspec.metric.model.MetricDefinitionResp(
+                        8L,
+                        PROJECT_ID,
+                        "order_amount",
+                        "订单金额",
+                        "支付成功订单金额",
+                        List.of(101L),
+                        List.of(),
+                        "status = 'PAID'",
+                        "sum(order_amount)",
+                        "day",
+                        null,
+                        "SELECT sum(order_amount) FROM orders",
+                        List.of("metric-doc:order-amount"),
+                        "enabled",
+                        null,
+                        null);
+        when(semanticRuleService.listRelatedToFields(PROJECT_ID, List.of(101L), 81)).thenReturn(List.of(semanticRule));
+        when(metricDefinitionService.listRelatedToFields(PROJECT_ID, List.of(101L), 81)).thenReturn(List.of(metric));
+        when(semanticRuleService.listRelatedToFields(PROJECT_ID, List.of(101L), 21)).thenReturn(List.of(semanticRule));
+        when(metricDefinitionService.listRelatedToFields(PROJECT_ID, List.of(101L), 21)).thenReturn(List.of(metric));
+
+        Map<String, String> entries = unzipTextEntries(createService(
+                List.of(mobile, amount),
+                semanticRuleService,
+                metricDefinitionService).generateAiContextPackage(
+                PROJECT_ID,
+                new AiContextScopeOptions("field", "订单金额", null, 1)));
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode semantics = mapper.readTree(entries.get(".dataspec/field-semantics.json"));
+        JsonNode metrics = mapper.readTree(entries.get(".dataspec/metrics.json"));
+        assertEquals(9L, semantics.path("semanticRules").get(0).path("id").asLong());
+        assertEquals("order_amount", metrics.path("metrics").get(0).path("metricKey").asText());
+        assertTrue(entries.get(".dataspec/DATABASE_RULES.md").contains("订单金额以支付明细为准"));
+        org.mockito.Mockito.verify(semanticRuleService).listRelatedToFields(PROJECT_ID, List.of(101L), 81);
+        org.mockito.Mockito.verify(metricDefinitionService).listRelatedToFields(PROJECT_ID, List.of(101L), 81);
+    }
+
+    @Test
     void generateAiContextPackage_profileSuppliesScopeDefaultsAndManifestMetadata() throws Exception {
         AiTaskProfileService profileService = mock(AiTaskProfileService.class);
         when(profileService.findProfile("minimal-context")).thenReturn(Optional.of(AiTaskProfile.builder()
@@ -1289,6 +1355,28 @@ class AiContextExportServiceTest {
         StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
         when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
         return createService(standardSnapshotService, new NoopAiJobRecordService(), fields);
+    }
+
+    private AiContextExportService createService(
+            List<Field> fields,
+            com.dataspec.fieldsemantic.service.FieldSemanticRuleService fieldSemanticRuleService,
+            com.dataspec.metric.service.MetricDefinitionService metricDefinitionService) {
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(standardSnapshotService.getCurrentSnapshot(PROJECT_ID)).thenReturn(snapshotInfo("v2026.06.24", "hash123"));
+        when(glossaryService.contextExport(PROJECT_ID, 200)).thenReturn(BusinessGlossaryContextExport.empty());
+        return createService(
+                standardSnapshotService,
+                new NoopAiJobRecordService(),
+                fields,
+                mock(RuleExemptionService.class),
+                null,
+                glossaryService,
+                new NoopStandardUsageExampleService(),
+                mock(StandardReusePackService.class),
+                List.of(),
+                fieldSemanticRuleService,
+                metricDefinitionService);
     }
 
     private AiContextExportService createService(List<Field> fields, StandardReusePackService standardReusePackService) {
@@ -1488,6 +1576,31 @@ class AiContextExportServiceTest {
                                                  StandardUsageExampleService usageExampleService,
                                                  StandardReusePackService standardReusePackService,
                                                  List<RuleConfig> ruleConfigs) {
+        return createService(
+                standardSnapshotService,
+                aiJobRecordService,
+                fields,
+                ruleExemptionService,
+                aiTaskProfileService,
+                glossaryService,
+                usageExampleService,
+                standardReusePackService,
+                ruleConfigs,
+                null,
+                null);
+    }
+
+    private AiContextExportService createService(StandardSnapshotService standardSnapshotService,
+                                                 AiJobRecordService aiJobRecordService,
+                                                 List<Field> fields,
+                                                 RuleExemptionService ruleExemptionService,
+                                                 AiTaskProfileService aiTaskProfileService,
+                                                 BusinessGlossaryService glossaryService,
+                                                 StandardUsageExampleService usageExampleService,
+                                                 StandardReusePackService standardReusePackService,
+                                                 List<RuleConfig> ruleConfigs,
+                                                 com.dataspec.fieldsemantic.service.FieldSemanticRuleService customFieldSemanticRuleService,
+                                                 com.dataspec.metric.service.MetricDefinitionService customMetricDefinitionService) {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
         FieldService fieldService = mock(FieldService.class);
@@ -1513,6 +1626,68 @@ class AiContextExportServiceTest {
         EnumDict customerStatus = sampleEnumDict();
         when(enumDictService.listByProject(PROJECT_ID)).thenReturn(List.of(customerStatus));
         when(enumDictService.listValues(customerStatus.getId())).thenReturn(List.of(sampleEnumValue()));
+        com.dataspec.fieldknowledge.service.FieldKnowledgeCardService fieldKnowledgeCardService =
+                mock(com.dataspec.fieldknowledge.service.FieldKnowledgeCardService.class);
+        when(fieldKnowledgeCardService.get(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong()))
+                .thenAnswer(invocation -> new com.dataspec.fieldknowledge.model.FieldKnowledgeCardResp(
+                        invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        "field:" + invocation.getArgument(0) + ":" + invocation.getArgument(1),
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        null));
+        com.dataspec.fieldsemantic.service.FieldSemanticRuleService fieldSemanticRuleService =
+                customFieldSemanticRuleService == null
+                        ? mock(com.dataspec.fieldsemantic.service.FieldSemanticRuleService.class)
+                        : customFieldSemanticRuleService;
+        if (customFieldSemanticRuleService == null) {
+            when(fieldSemanticRuleService.list(
+                    org.mockito.ArgumentMatchers.anyLong(),
+                    org.mockito.ArgumentMatchers.nullable(Long.class),
+                    org.mockito.ArgumentMatchers.nullable(String.class),
+                    org.mockito.ArgumentMatchers.nullable(String.class),
+                    org.mockito.ArgumentMatchers.nullable(Integer.class)))
+                    .thenReturn(List.of());
+            when(fieldSemanticRuleService.listRelatedToFields(
+                    org.mockito.ArgumentMatchers.anyLong(),
+                    org.mockito.ArgumentMatchers.anyList(),
+                    org.mockito.ArgumentMatchers.nullable(Integer.class)))
+                    .thenReturn(List.of());
+        }
+        com.dataspec.metric.service.MetricDefinitionService metricDefinitionService =
+                customMetricDefinitionService == null
+                        ? mock(com.dataspec.metric.service.MetricDefinitionService.class)
+                        : customMetricDefinitionService;
+        if (customMetricDefinitionService == null) {
+            when(metricDefinitionService.list(
+                    org.mockito.ArgumentMatchers.anyLong(),
+                    org.mockito.ArgumentMatchers.nullable(String.class),
+                    org.mockito.ArgumentMatchers.nullable(String.class),
+                    org.mockito.ArgumentMatchers.nullable(Long.class),
+                    org.mockito.ArgumentMatchers.nullable(String.class),
+                    org.mockito.ArgumentMatchers.nullable(Integer.class)))
+                    .thenReturn(List.of());
+            when(metricDefinitionService.listRelatedToFields(
+                    org.mockito.ArgumentMatchers.anyLong(),
+                    org.mockito.ArgumentMatchers.anyList(),
+                    org.mockito.ArgumentMatchers.nullable(Integer.class)))
+                    .thenReturn(List.of());
+        }
 
         SqlLintService sqlLintService = new SqlLintService(
                 new SqlParserService(),
@@ -1545,7 +1720,10 @@ class AiContextExportServiceTest {
                 usageExampleService,
                 standardReusePackService,
                 standardQueryService(fields, fieldSourceRepository),
-                emptyTableStandardsContextProvider()
+                emptyTableStandardsContextProvider(),
+                fieldKnowledgeCardService,
+                fieldSemanticRuleService,
+                metricDefinitionService
         );
     }
 
@@ -1589,12 +1767,32 @@ class AiContextExportServiceTest {
         BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
         when(glossaryService.match(org.mockito.ArgumentMatchers.eq(PROJECT_ID), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(List.of());
+        com.dataspec.fieldsemantic.service.FieldSemanticRuleService semanticRuleService =
+                mock(com.dataspec.fieldsemantic.service.FieldSemanticRuleService.class);
+        when(semanticRuleService.list(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.nullable(Long.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class)))
+                .thenReturn(List.of());
+        com.dataspec.metric.service.MetricDefinitionService metricDefinitionService =
+                mock(com.dataspec.metric.service.MetricDefinitionService.class);
+        when(metricDefinitionService.list(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(Long.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(Integer.class)))
+                .thenReturn(List.of());
         FieldService searchFieldService = new FieldServiceImpl(
                 fieldRepository,
                 fieldSourceRepository,
                 mock(com.dataspec.changelog.service.StandardChangeLogService.class),
                 new ObjectMapper(),
-                glossaryService);
+                glossaryService,
+                semanticRuleService,
+                metricDefinitionService);
         return new StandardQueryServiceImpl(searchFieldService);
     }
 

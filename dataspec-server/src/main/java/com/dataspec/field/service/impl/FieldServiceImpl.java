@@ -27,6 +27,10 @@ import com.dataspec.field.model.FieldSearchSummary;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.fieldsemantic.model.FieldSemanticRuleResp;
+import com.dataspec.fieldsemantic.service.FieldSemanticRuleService;
+import com.dataspec.metric.model.MetricDefinitionResp;
+import com.dataspec.metric.service.MetricDefinitionService;
 import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.security.context.ProjectAccessGuard;
 import com.dataspec.standardref.service.StandardReferenceFormatter;
@@ -65,6 +69,7 @@ public class FieldServiceImpl implements FieldService {
     private static final String STATUS_DISABLED = "disabled";
     private static final String DEFAULT_STATUS = STATUS_ENABLED;
     private static final Set<String> ALLOWED_STATUSES = Set.of(STATUS_DRAFT, STATUS_ENABLED, STATUS_DEPRECATED, STATUS_DISABLED);
+    private static final Set<String> ALLOWED_TRANSLATION_CONFIDENCE = Set.of("high", "medium", "low");
     private static final int DEFAULT_SUGGEST_LIMIT = 5;
     private static final int MAX_SUGGEST_LIMIT = 20;
     private static final int DEFAULT_SEARCH_LIMIT = 20;
@@ -89,6 +94,8 @@ public class FieldServiceImpl implements FieldService {
     private final StandardChangeLogService changeLogService;
     private final ObjectMapper objectMapper;
     private final BusinessGlossaryService businessGlossaryService;
+    private final FieldSemanticRuleService fieldSemanticRuleService;
+    private final MetricDefinitionService metricDefinitionService;
 
     @Override
     public IPage<Field> page(Long projectId, int current, int size) {
@@ -236,6 +243,10 @@ public class FieldServiceImpl implements FieldService {
         applyFieldFormatDefaults(existing);
         copyUsageContract(field, existing);
         applyUsageContractDefaults(existing);
+        if (hasSemanticMetadataInput(field)) {
+            copySemanticMetadata(field, existing);
+            applySemanticMetadataDefaults(existing);
+        }
         validateLifecycleReplacement(existing, id);
         fieldRepository.update(existing);
         changeLogService.recordChange(
@@ -407,12 +418,21 @@ public class FieldServiceImpl implements FieldService {
             if (!isEnabledStatus(field.getStatus())) {
                 continue;
             }
+            if (forbiddenTranslationMatches(field, queryCompact, queryTokens)) {
+                if (blockedScore < 1) {
+                    blockedScore = 1;
+                    blockedByUsageContract = forbiddenTranslationBlockedSuggestion(field, query);
+                }
+                continue;
+            }
             ScoredMatch match = scoreFieldWithGlossary(field, queryCompact, queryTokens, querySemanticGroups, glossaryMatches);
             if (match.score() <= 0) {
                 continue;
             }
             int score = match.score();
-            String reason = appendReason(match.reason(), Boolean.TRUE.equals(field.getSensitive()) ? "敏感字段" : "");
+            String reason = appendReason(
+                    appendReason(match.reason(), Boolean.TRUE.equals(field.getSensitive()) ? "敏感字段" : ""),
+                    semanticCautionReason(field));
             if (usageContractContradictsScenario(field, query)) {
                 if (score > blockedScore) {
                     blockedScore = score;
@@ -465,6 +485,22 @@ public class FieldServiceImpl implements FieldService {
                 generateFallbackName(query),
                 false,
                 List.of(fieldEvidence(field, score, appendReason(reason, "字段使用契约禁用场景需人工确认"))));
+    }
+
+    private FieldSuggestion forbiddenTranslationBlockedSuggestion(Field field, String query) {
+        String preferredName = FieldGroupingSummaries.normalizeText(field.getPreferredEnglishName());
+        String recommendedName = preferredName == null ? generateFallbackName(query) : preferredName;
+        String matchReason = "查询命中字段 `" + field.getName() + "` 的禁用翻译，不能直接采用该翻译；"
+                + (preferredName == null
+                ? "请人工确认标准字段或补充 preferredEnglishName。"
+                : "建议考虑 preferredEnglishName=`" + preferredName + "`。");
+        return new FieldSuggestion(
+                null,
+                0,
+                matchReason,
+                recommendedName,
+                false,
+                List.of(fieldEvidence(field, 1, matchReason)));
     }
 
     private SearchCriteria searchCriteria(FieldSearchReq req) {
@@ -572,6 +608,13 @@ public class FieldServiceImpl implements FieldService {
         }
         if (Boolean.TRUE.equals(field.getSensitive())) {
             reasons.add("敏感字段");
+        }
+        if (forbiddenTranslationMatches(field, criteria.queryCompact(), criteria.queryTokens())) {
+            reasons.add("命中禁用翻译：不得直接用该翻译作为字段名或可采纳标准");
+        }
+        String semanticCaution = semanticCautionReason(field);
+        if (semanticCaution != null) {
+            reasons.add(semanticCaution);
         }
         boolean contractContradiction = usageContractContradictsScenario(field, criteria.query());
         return new FieldSearchItem(
@@ -705,7 +748,121 @@ public class FieldServiceImpl implements FieldService {
         if (Boolean.TRUE.equals(field.getSensitive())) {
             actions.add("如用于导出或日志，先确认脱敏规则和访问边界。");
         }
+        actions.addAll(semanticNextActions(field));
         return List.copyOf(actions);
+    }
+
+    private boolean forbiddenTranslationMatches(Field field, String queryCompact, Set<String> queryTokens) {
+        if (queryCompact == null || queryCompact.isBlank()) {
+            return false;
+        }
+        for (String forbidden : stringListOrText(field.getForbiddenTranslationsJson())) {
+            if (scoreText("禁用翻译", forbidden, queryCompact, queryTokens, 1, 1, 1).score() > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String semanticCautionReason(Field field) {
+        List<String> cautions = new ArrayList<>();
+        if (FieldGroupingSummaries.normalizeText(field.getSemanticSummary()) != null) {
+            cautions.add("字段存在语义摘要");
+        }
+        if (field.getCodeSetId() != null) {
+            cautions.add("字段绑定枚举代码集");
+        }
+        if (hasSemanticRules(field)) {
+            cautions.add("字段存在语义规则");
+        }
+        if (hasMetricReferences(field)) {
+            cautions.add("字段参与指标口径");
+        }
+        if (cautions.isEmpty()) {
+            return null;
+        }
+        return String.join("、", cautions) + "，生成 SQL/DDL/mock 前建议打开字段知识卡确认边界";
+    }
+
+    private List<String> semanticNextActions(Field field) {
+        List<String> actions = new ArrayList<>();
+        if (FieldGroupingSummaries.normalizeText(field.getSemanticSummary()) != null || hasSemanticRules(field)) {
+            actions.add("打开 `/api/field-knowledge-cards/" + field.getId() + "?projectId=" + field.getProjectId() + "` 查看字段语义规则、source-of-truth 和单位/聚合边界。");
+        }
+        if (field.getCodeSetId() != null) {
+            actions.add("字段绑定 codeSetId=" + field.getCodeSetId() + "，生成枚举 literal 前查看枚举生命周期和替代值。");
+        }
+        List<MetricDefinitionResp> metrics = metricReferences(field);
+        if (!metrics.isEmpty()) {
+            String metricKeys = metrics.stream()
+                    .map(MetricDefinitionResp::metricKey)
+                    .filter(Objects::nonNull)
+                    .limit(3)
+                    .collect(java.util.stream.Collectors.joining(", "));
+            actions.add("字段参与指标口径" + (metricKeys.isBlank() ? "" : "（" + metricKeys + "）") + "，不能仅按字段名推断过滤、聚合或时间粒度。");
+        }
+        if (forbiddenTranslationsPresent(field)) {
+            actions.add("存在禁用翻译，AI 不得直接使用 forbiddenTranslations 作为字段名。");
+        }
+        return actions;
+    }
+
+    private boolean hasSemanticRules(Field field) {
+        try {
+            return !fieldSemanticRuleService.list(field.getProjectId(), field.getId(), null, null).isEmpty();
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean hasMetricReferences(Field field) {
+        return !metricReferences(field).isEmpty();
+    }
+
+    private List<MetricDefinitionResp> metricReferences(Field field) {
+        try {
+            return metricDefinitionService.list(field.getProjectId(), null, null, field.getId());
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private boolean forbiddenTranslationsPresent(Field field) {
+        return !stringListOrText(field.getForbiddenTranslationsJson()).isEmpty();
+    }
+
+    private List<String> stringListOrText(String jsonOrText) {
+        if (jsonOrText == null || jsonOrText.isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode parsed = objectMapper.readTree(jsonOrText);
+            if (parsed.isArray()) {
+                List<String> values = new ArrayList<>();
+                for (JsonNode item : parsed) {
+                    if (item.isTextual() && !item.asText().isBlank()) {
+                        values.add(SensitiveDataSanitizer.redactText(item.asText().trim()));
+                    }
+                }
+                return values.stream().distinct().toList();
+            }
+            if (parsed.isObject()) {
+                List<String> values = new ArrayList<>();
+                parsed.fields().forEachRemaining(entry -> {
+                    String value = entry.getValue().asText(null);
+                    if (value != null && !value.isBlank()) {
+                        values.add(entry.getKey() + "=" + SensitiveDataSanitizer.redactText(value.trim()));
+                    }
+                });
+                return values.stream().distinct().toList();
+            }
+        } catch (Exception ignored) {
+            // 兼容历史纯文本或逗号分隔值。
+        }
+        return splitCsv(jsonOrText).stream()
+                .map(SensitiveDataSanitizer::redactText)
+                .distinct()
+                .toList();
     }
 
     private List<String> searchHints(SearchCriteria criteria, int totalCandidates, int matchedCount, boolean truncated) {
@@ -797,6 +954,7 @@ public class FieldServiceImpl implements FieldService {
         field.setStatus(normalizeStatus(field.getStatus()));
         field.setReplacementReason(FieldGroupingSummaries.normalizeText(field.getReplacementReason()));
         applyFieldFormatDefaults(field);
+        applySemanticMetadataDefaults(field);
     }
 
     private void copyUsageContract(Field source, Field target) {
@@ -834,6 +992,83 @@ public class FieldServiceImpl implements FieldService {
         }
     }
 
+    private boolean hasSemanticMetadataInput(Field field) {
+        return field.getLocalizedNamesJson() != null
+                || field.getPreferredEnglishName() != null
+                || field.getForbiddenTranslationsJson() != null
+                || field.getTranslationAliasesJson() != null
+                || field.getTranslationConfidence() != null
+                || field.getTranslationNotes() != null
+                || field.getSemanticSummary() != null;
+    }
+
+    private void copySemanticMetadata(Field source, Field target) {
+        target.setLocalizedNamesJson(source.getLocalizedNamesJson());
+        target.setPreferredEnglishName(source.getPreferredEnglishName());
+        target.setForbiddenTranslationsJson(source.getForbiddenTranslationsJson());
+        target.setTranslationAliasesJson(source.getTranslationAliasesJson());
+        target.setTranslationConfidence(source.getTranslationConfidence());
+        target.setTranslationNotes(source.getTranslationNotes());
+        target.setSemanticSummary(source.getSemanticSummary());
+    }
+
+    private void applySemanticMetadataDefaults(Field field) {
+        field.setLocalizedNamesJson(normalizeJsonObjectOrArray(field.getLocalizedNamesJson(), "localizedNamesJson"));
+        field.setPreferredEnglishName(normalizeSemanticText(field.getPreferredEnglishName()));
+        field.setForbiddenTranslationsJson(normalizeExamplesJson(field.getForbiddenTranslationsJson(), "forbiddenTranslationsJson"));
+        field.setTranslationAliasesJson(normalizeExamplesJson(field.getTranslationAliasesJson(), "translationAliasesJson"));
+        field.setTranslationConfidence(normalizeTranslationConfidence(field.getTranslationConfidence()));
+        field.setTranslationNotes(normalizeSemanticText(field.getTranslationNotes()));
+        field.setSemanticSummary(normalizeSemanticText(field.getSemanticSummary()));
+    }
+
+    private String normalizeSemanticText(String value) {
+        String normalized = FieldGroupingSummaries.normalizeText(value);
+        if (normalized == null) {
+            return null;
+        }
+        if (SensitiveDataSanitizer.containsSensitiveText(normalized) || PRIVATE_KEY_PATTERN.matcher(normalized).find()) {
+            throw new BizException("字段语义或命名说明包含敏感连接或凭据信息，请改用脱敏说明");
+        }
+        return normalized;
+    }
+
+    private String normalizeTranslationConfidence(String value) {
+        String normalized = FieldGroupingSummaries.normalizeText(value);
+        if (normalized == null) {
+            return null;
+        }
+        if (SensitiveDataSanitizer.containsSensitiveText(normalized) || PRIVATE_KEY_PATTERN.matcher(normalized).find()) {
+            throw new BizException("translationConfidence 包含敏感连接或凭据信息，请改用脱敏说明");
+        }
+        String lowered = normalized.toLowerCase(Locale.ROOT);
+        if (!ALLOWED_TRANSLATION_CONFIDENCE.contains(lowered)) {
+            throw new BizException("无效translationConfidence，允许值: " + ALLOWED_TRANSLATION_CONFIDENCE);
+        }
+        return lowered;
+    }
+
+    private String normalizeJsonObjectOrArray(String value, String label) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String text = value.trim();
+        if (SensitiveDataSanitizer.containsSensitiveText(text) || PRIVATE_KEY_PATTERN.matcher(text).find()) {
+            throw new BizException(label + " 包含敏感连接或凭据信息，请改用脱敏说明");
+        }
+        try {
+            JsonNode root = objectMapper.readTree(text);
+            if (!root.isObject() && !root.isArray()) {
+                throw new BizException(label + " 必须是 JSON 对象或数组");
+            }
+            return objectMapper.writeValueAsString(root);
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(label + " 必须是 JSON 对象或数组: " + e.getMessage());
+        }
+    }
+
     private void copyFormatConstraints(Field source, Field target) {
         target.setFormatType(source.getFormatType());
         target.setFormatPattern(source.getFormatPattern());
@@ -863,6 +1098,9 @@ public class FieldServiceImpl implements FieldService {
             return null;
         }
         String text = value.trim();
+        if (SensitiveDataSanitizer.containsSensitiveText(text) || PRIVATE_KEY_PATTERN.matcher(text).find()) {
+            throw new BizException(label + " 包含敏感连接或凭据信息，请改用脱敏说明");
+        }
         try {
             JsonNode root = objectMapper.readTree(text);
             if (!root.isArray()) {
@@ -873,7 +1111,11 @@ public class FieldServiceImpl implements FieldService {
                 if (!item.isTextual()) {
                     throw new BizException(label + " 仅支持字符串示例");
                 }
-                examples.add(item.asText());
+                String example = item.asText();
+                if (SensitiveDataSanitizer.containsSensitiveText(example) || PRIVATE_KEY_PATTERN.matcher(example).find()) {
+                    throw new BizException(label + " 包含敏感连接或凭据信息，请改用脱敏说明");
+                }
+                examples.add(example);
             }
             return examples.isEmpty() ? null : objectMapper.writeValueAsString(examples);
         } catch (BizException e) {
@@ -1098,6 +1340,8 @@ public class FieldServiceImpl implements FieldService {
         applyFieldFormatDefaults(target);
         copyUsageContract(snapshot, target);
         applyUsageContractDefaults(target);
+        copySemanticMetadata(snapshot, target);
+        applySemanticMetadataDefaults(target);
     }
 
     private Long parseOptionalLong(Object value, String label) {
@@ -1183,6 +1427,17 @@ public class FieldServiceImpl implements FieldService {
         best = best.max(scoreText("分类", field.getCategory(), queryCompact, queryTokens, 55, 42, 18));
         best = best.max(scoreText("标签", field.getTags(), queryCompact, queryTokens, 50, 38, 16));
         best = best.max(scoreUsageContract(field, queryCompact));
+        best = best.max(scoreText("推荐英文名", field.getPreferredEnglishName(), queryCompact, queryTokens, 96, 82, 34));
+        best = best.max(scoreText("语义摘要", field.getSemanticSummary(), queryCompact, queryTokens, 58, 44, 18));
+        for (String localizedName : stringListOrText(field.getLocalizedNamesJson())) {
+            best = best.max(scoreText("本地化名称", localizedName, queryCompact, queryTokens, 92, 76, 30));
+        }
+        for (String alias : stringListOrText(field.getTranslationAliasesJson())) {
+            best = best.max(scoreText("翻译别名", alias, queryCompact, queryTokens, 94, 80, 32));
+        }
+        for (String forbidden : stringListOrText(field.getForbiddenTranslationsJson())) {
+            best = best.max(scoreText("禁用翻译", forbidden, queryCompact, queryTokens, 24, 18, 8));
+        }
         for (String alias : splitCsv(field.getAliases())) {
             best = best.max(scoreText("别名", alias, queryCompact, queryTokens, 98, 82, 32));
         }
@@ -1321,6 +1576,12 @@ public class FieldServiceImpl implements FieldService {
         values.add(field.getAggregationHints());
         values.add(field.getReplacementGuidance());
         values.add(field.getMisuseExamples());
+        values.add(field.getLocalizedNamesJson());
+        values.add(field.getPreferredEnglishName());
+        values.add(field.getForbiddenTranslationsJson());
+        values.add(field.getTranslationAliasesJson());
+        values.add(field.getTranslationNotes());
+        values.add(field.getSemanticSummary());
         values.addAll(splitCsv(field.getAliases()));
         return semanticGroupsForTexts(values);
     }

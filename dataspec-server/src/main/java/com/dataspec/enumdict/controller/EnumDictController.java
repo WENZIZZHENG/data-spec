@@ -4,12 +4,14 @@ import com.dataspec.common.result.R;
 import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.service.EnumDictService;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -90,6 +92,14 @@ public class EnumDictController {
         value.setValue(req.value());
         value.setLabel(req.label());
         value.setSortOrder(req.sortOrder() != null ? req.sortOrder() : 0);
+        value.setStatus(req.status());
+        value.setAliasesJson(req.aliasesJson());
+        value.setReplacementValue(req.replacementValue());
+        value.setValidFrom(req.validFrom());
+        value.setValidTo(req.validTo());
+        value.setSourceEvidence(req.sourceEvidence());
+        value.setMappingHints(req.mappingHints());
+        value.setAiUsageNotes(req.aiUsageNotes());
         return R.ok(enumDictService.createValue(value));
     }
 
@@ -101,6 +111,14 @@ public class EnumDictController {
         value.setValue(req.value());
         value.setLabel(req.label());
         value.setSortOrder(req.sortOrder());
+        value.setStatus(req.status());
+        value.setAliasesJson(req.aliasesJson());
+        value.setReplacementValue(req.replacementValue());
+        value.setValidFrom(req.validFrom());
+        value.setValidTo(req.validTo());
+        value.setSourceEvidence(req.sourceEvidence());
+        value.setMappingHints(req.mappingHints());
+        value.setAiUsageNotes(req.aiUsageNotes());
         return R.ok(enumDictService.updateValue(id, value));
     }
 
@@ -123,6 +141,22 @@ public class EnumDictController {
     public record EnumValueReq(
             @NotBlank(message = "枚举值不能为空") String value,
             @NotBlank(message = "显示标签不能为空") String label,
-            Integer sortOrder
+            Integer sortOrder,
+            @Schema(description = "枚举值生命周期状态：enabled、deprecated、disabled 或 draft。")
+            String status,
+            @Schema(description = "枚举值别名数组 JSON，用于 AI 识别历史值、展示值或外部系统映射。")
+            String aliasesJson,
+            @Schema(description = "废弃或停用枚举值的推荐替代值，仅作 guidance，不自动改写 SQL。")
+            String replacementValue,
+            @Schema(description = "枚举值有效期开始日期，可为空。")
+            LocalDate validFrom,
+            @Schema(description = "枚举值有效期结束日期，可为空。")
+            LocalDate validTo,
+            @Schema(description = "枚举值来源证据或维护说明；不得包含凭据或业务数据行。")
+            String sourceEvidence,
+            @Schema(description = "枚举值跨系统映射提示，如外部编码、展示名或兼容说明。")
+            String mappingHints,
+            @Schema(description = "枚举值 AI 使用说明；不得包含 token、密码、完整 JDBC URL、DSN 或业务数据行。")
+            String aiUsageNotes
     ) {}
 }

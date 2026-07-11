@@ -4,8 +4,8 @@
 
 本文件从根 TODO.md 机械迁移已完成的 P5/P6 待办详情，根待办只保留入口和当前候选池。每个条目保留原始状态、已完成能力、验证证据、产物、后续增强和边界；原条目未记录 commit 的地方不补猜。
 
-- 完成项数量：120
-- 当前未完成候选：68，详见 [P6 候选池](../todo-p6-candidates.md)
+- 完成项数量：125
+- 当前未完成候选：63，详见 [P6 候选池](../todo-p6-candidates.md)
 - P0-P4 已完成归档：[todo-completed-p0-p4.md](todo-completed-p0-p4.md)
 
 ## 历史追加记录（已降级为背景）
@@ -1031,6 +1031,12 @@
 - 已完成能力：表模板可携带 `primaryKey`、`uniqueKeys`、`indexes`、`foreignKeys`、`checkHints`、`auditPolicy`、`softDeletePolicy`、`dialectNotes` 和 `aiUsageNotes`；DDL preview 安全消费结构化约束，返回 `structureSummary`、skipped hints、policy notes 和 evidence；Schema Registry、CLI、MCP 和 AI contract 均登记新增只读契约。
 - 验证证据：见 `openspec/changes/add-business-object-table-standards/tasks.md` 的 `Verification Evidence`；最终以本轮 OpenSpec strict、后端目标测试、tools 测试、前端测试/build、secrets scan、独立评审和本地 commit 记录为准。
 - 后续增强：第一版不执行数据库迁移、不自动改写已有表、不允许 raw SQL 约束片段直接进入 DDL；完整方言差异、反向导入约束比对和迁移 recipe 可在后续主题中继续推进。
+
+### P6-77 / P6-107 / P6-161 / P6-175 / P6-184：字段语义、枚举、口径与命名知识卡
+- 状态：已完成第一版，随 OpenSpec change `add-field-semantics-knowledge-cards` 交付；change 按项目约定暂保留 active，不自动 archive。
+- 已完成能力：新增字段语义规则、枚举值 lifecycle、字段知识卡、指标口径映射和字段命名翻译辅助；后端提供维护/只读 API，前端字段库、枚举字典、DDL/指标维护和 AI Context 页面可维护或查看语义证据；AI Context 导出 `.dataspec/field-knowledge-cards.json`、`.dataspec/field-semantics.json` 和 `.dataspec/metrics.json`；Schema Registry、数据字典、字段搜索/推荐、CLI、MCP 和 contract fixture 已接入新增只读契约。
+- 验证证据：见 `openspec/changes/add-field-semantics-knowledge-cards/tasks.md` 的 `Verification Evidence`；最终以本轮 OpenSpec strict、后端目标测试、tools 测试、前端测试/build、OpenAPI drift、secrets scan、独立评审和本地 commit 记录为准。
+- 后续增强：第一版只沉淀 metadata guidance，不执行真实单位换算或指标计算，不连接业务库统计枚举分布，不自动改生产 SQL，不接入外部翻译、BI 或血缘平台；后续若需要更强枚举 literal lint、指标计算校验或语义检索，可按独立主题继续推进。
 
 ## 本轮候选覆盖归档（2026-07-09）
 

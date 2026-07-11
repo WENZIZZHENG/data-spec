@@ -100,7 +100,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/glossary/{id}": {
+    "/api/metric-definitions/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -116,7 +116,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/fields/{id}": {
+    "/api/glossary/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -132,7 +132,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enums/{id}": {
+    "/api/fields/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -143,6 +143,38 @@ export interface paths {
         put: operations["update_6"];
         post?: never;
         delete: operations["delete_7"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/field-semantics/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getById_7"];
+        put: operations["update_7"];
+        post?: never;
+        delete: operations["delete_8"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/enums/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getById_8"];
+        put: operations["update_8"];
+        post?: never;
+        delete: operations["delete_9"];
         options?: never;
         head?: never;
         patch?: never;
@@ -171,10 +203,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getById_7"];
-        put: operations["update_7"];
+        get: operations["getById_9"];
+        put: operations["update_9"];
         post?: never;
-        delete: operations["delete_8"];
+        delete: operations["delete_10"];
         options?: never;
         head?: never;
         patch?: never;
@@ -187,10 +219,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getById_8"];
-        put: operations["update_8"];
+        get: operations["getById_10"];
+        put: operations["update_10"];
         post?: never;
-        delete: operations["delete_9"];
+        delete: operations["delete_11"];
         options?: never;
         head?: never;
         patch?: never;
@@ -203,10 +235,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getById_9"];
-        put: operations["update_9"];
+        get: operations["getById_11"];
+        put: operations["update_11"];
         post?: never;
-        delete: operations["delete_10"];
+        delete: operations["delete_12"];
         options?: never;
         head?: never;
         patch?: never;
@@ -932,6 +964,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/metric-definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_5"];
+        put?: never;
+        post: operations["create_6"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lint": {
         parameters: {
             query?: never;
@@ -1021,7 +1069,7 @@ export interface paths {
         };
         get: operations["page_2"];
         put?: never;
-        post: operations["create_6"];
+        post: operations["create_7"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1037,7 +1085,7 @@ export interface paths {
         };
         get: operations["page_3"];
         put?: never;
-        post: operations["create_7"];
+        post: operations["create_8"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1140,6 +1188,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/field-semantics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_6"];
+        put?: never;
+        post: operations["create_9"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/evidence-packages": {
         parameters: {
             query?: never;
@@ -1179,9 +1243,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_5"];
+        get: operations["list_8"];
         put?: never;
-        post: operations["create_8"];
+        post: operations["create_10"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1211,9 +1275,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_6"];
+        get: operations["list_9"];
         put?: never;
-        post: operations["create_9"];
+        post: operations["create_11"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1227,9 +1291,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_7"];
+        get: operations["list_10"];
         put?: never;
-        post: operations["create_10"];
+        post: operations["create_12"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1323,9 +1387,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_8"];
+        get: operations["list_11"];
         put?: never;
-        post: operations["create_11"];
+        post: operations["create_13"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2180,6 +2244,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/field-knowledge-cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_7"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/field-knowledge-cards/{fieldId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dashboard/summary": {
         parameters: {
             query?: never;
@@ -2363,7 +2459,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_9"];
+        get: operations["list_12"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2459,7 +2555,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_10"];
+        get: operations["list_13"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2619,7 +2715,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_11"];
+        get: operations["list_14"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2959,6 +3055,68 @@ export interface components {
             data?: components["schemas"]["Project"];
             error?: components["schemas"]["ErrorDetail"];
         };
+        /** @description 指标口径保存请求。 */
+        MetricDefinitionReq: {
+            /**
+             * Format: int64
+             * @description 所属项目 ID，创建时必填；更新时若提供则必须与原记录一致。
+             */
+            projectId: number;
+            /** @description 项目内唯一指标键，建议使用 snake_case。 */
+            metricKey: string;
+            /** @description 指标展示名称。 */
+            displayName: string;
+            /** @description 指标业务定义文本。 */
+            definition: string;
+            /** @description 度量字段 ID 列表，字段必须属于同一项目。 */
+            measureFieldIds?: number[];
+            /** @description 维度字段 ID 列表，字段必须属于同一项目。 */
+            dimensionFieldIds?: number[];
+            /** @description 指标过滤口径说明，不自动改写 SQL。 */
+            filterRule?: string;
+            /** @description 指标聚合口径说明。 */
+            aggregationRule?: string;
+            /** @description 指标默认时间粒度。 */
+            timeGrain?: string;
+            /** @description 维护者说明或取舍记录；不得包含凭据或业务数据行。 */
+            ownerNotes?: string;
+            /** @description 示例 SQL，仅作说明和 AI guidance，不会被执行。 */
+            exampleSql?: string;
+            /** @description 证据引用列表。 */
+            evidenceRefs?: string[];
+            /** @description 指标口径状态，enabled 表示默认进入知识卡和 AI Context。 */
+            status?: string;
+        };
+        /** @description 指标口径响应。 */
+        MetricDefinitionResp: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            metricKey?: string;
+            displayName?: string;
+            definition?: string;
+            measureFieldIds?: number[];
+            dimensionFieldIds?: number[];
+            filterRule?: string;
+            aggregationRule?: string;
+            timeGrain?: string;
+            ownerNotes?: string;
+            exampleSql?: string;
+            evidenceRefs?: string[];
+            status?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        RMetricDefinitionResp: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["MetricDefinitionResp"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
         BusinessGlossaryReq: {
             /** Format: int64 */
             projectId: number;
@@ -3056,6 +3214,20 @@ export interface components {
             replacementGuidance?: string;
             /** @description 字段常见误用或反例说明，用于 AI 低置信提示；不得包含真实业务数据行或凭据。 */
             misuseExamples?: string;
+            /** @description 字段本地化名称 JSON，如中文名、英文名或业务别名；不得包含凭据或业务数据行。 */
+            localizedNamesJson?: string;
+            /** @description 推荐英文标准字段名或命名片段，用于 AI 命名建议和翻译辅助。 */
+            preferredEnglishName?: string;
+            /** @description 禁用翻译数组 JSON，AI 命中后需要提示不要直接采用。 */
+            forbiddenTranslationsJson?: string;
+            /** @description 翻译别名数组 JSON，用于搜索、推荐和 AI Context 命名匹配。 */
+            translationAliasesJson?: string;
+            /** @description 命名翻译置信度，如 high、medium、low，仅作为人工维护提示。 */
+            translationConfidence?: string;
+            /** @description 命名翻译说明、来源或边界；不得包含 token、JDBC URL、DSN、Authorization 或业务数据行。 */
+            translationNotes?: string;
+            /** @description 字段语义摘要，说明单位、口径、source of truth 或常见误用；只做 AI guidance，不执行真实计算。 */
+            semanticSummary?: string;
         };
         Field: {
             /** Format: int64 */
@@ -3110,6 +3282,20 @@ export interface components {
             replacementGuidance?: string;
             /** @description 字段常见误用或反例说明，用于 AI 低置信提示；不得包含真实业务数据行或凭据。 */
             misuseExamples?: string;
+            /** @description 字段本地化名称 JSON，如中文名、英文名或业务别名；不得包含凭据或业务数据行。 */
+            localizedNamesJson?: string;
+            /** @description 推荐英文标准字段名或命名片段，用于 AI 命名建议和翻译辅助。 */
+            preferredEnglishName?: string;
+            /** @description 禁用翻译数组 JSON，AI 命中后需要提示不要直接采用。 */
+            forbiddenTranslationsJson?: string;
+            /** @description 翻译别名数组 JSON，用于搜索、推荐和 AI Context 命名匹配。 */
+            translationAliasesJson?: string;
+            /** @description 命名翻译置信度，如 high、medium、low，仅作为人工维护提示。 */
+            translationConfidence?: string;
+            /** @description 命名翻译说明、来源或边界；不得包含 token、JDBC URL、DSN、Authorization 或业务数据行。 */
+            translationNotes?: string;
+            /** @description 字段语义摘要，说明单位、口径、source of truth 或常见误用；只做 AI guidance，不执行真实计算。 */
+            semanticSummary?: string;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -3121,6 +3307,73 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["Field"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 字段语义规则保存请求。 */
+        FieldSemanticRuleReq: {
+            /**
+             * Format: int64
+             * @description 所属项目 ID，创建时必填；更新时若提供则必须与原记录一致。
+             */
+            projectId: number;
+            /**
+             * Format: int64
+             * @description 目标标准字段 ID，必须属于同一项目。
+             */
+            fieldId: number;
+            /**
+             * Format: int64
+             * @description 可选源字段 ID，必须属于同一项目。
+             */
+            sourceFieldId?: number;
+            /** @description 语义规则类型，如 DERIVED_FROM、UNIT_CONVERSION、AGGREGATION、TIME_GRAIN、SOURCE_OF_TRUTH、NAMING。 */
+            ruleType: string;
+            /** @description 单位换算说明，只做 guidance，不执行真实数据计算。 */
+            unitConversion?: string;
+            /** @description 聚合口径说明，如 sum/count/distinct/ratio。 */
+            aggregationRule?: string;
+            /** @description 时间粒度说明，如 timestamp、date、day、month。 */
+            timeGranularity?: string;
+            /** @description source of truth 或首选字段说明。 */
+            sourceOfTruth?: string;
+            /** @description 推荐使用场景，不得包含真实业务数据行或凭据。 */
+            recommendedUse?: string;
+            /** @description 常见误用、反例或禁用场景，不得包含 raw secret 或业务数据行。 */
+            antiPatterns?: string;
+            /** @description 证据引用列表，可关联标准示例、决策记录或文档片段。 */
+            evidenceRefs?: string[];
+            /** @description 规则状态，enabled 表示默认进入知识卡和 AI Context。 */
+            status?: string;
+        };
+        /** @description 字段语义规则响应。 */
+        FieldSemanticRuleResp: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int64 */
+            fieldId?: number;
+            /** Format: int64 */
+            sourceFieldId?: number;
+            ruleType?: string;
+            unitConversion?: string;
+            aggregationRule?: string;
+            timeGranularity?: string;
+            sourceOfTruth?: string;
+            recommendedUse?: string;
+            antiPatterns?: string;
+            evidenceRefs?: string[];
+            status?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        RFieldSemanticRuleResp: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldSemanticRuleResp"];
             error?: components["schemas"]["ErrorDetail"];
         };
         EnumDictReq: {
@@ -3158,6 +3411,28 @@ export interface components {
             label: string;
             /** Format: int32 */
             sortOrder?: number;
+            /** @description 枚举值生命周期状态：enabled、deprecated、disabled 或 draft。 */
+            status?: string;
+            /** @description 枚举值别名数组 JSON，用于 AI 识别历史值、展示值或外部系统映射。 */
+            aliasesJson?: string;
+            /** @description 废弃或停用枚举值的推荐替代值，仅作 guidance，不自动改写 SQL。 */
+            replacementValue?: string;
+            /**
+             * Format: date
+             * @description 枚举值有效期开始日期，可为空。
+             */
+            validFrom?: string;
+            /**
+             * Format: date
+             * @description 枚举值有效期结束日期，可为空。
+             */
+            validTo?: string;
+            /** @description 枚举值来源证据或维护说明；不得包含凭据或业务数据行。 */
+            sourceEvidence?: string;
+            /** @description 枚举值跨系统映射提示，如外部编码、展示名或兼容说明。 */
+            mappingHints?: string;
+            /** @description 枚举值 AI 使用说明；不得包含 token、密码、完整 JDBC URL、DSN 或业务数据行。 */
+            aiUsageNotes?: string;
         };
         EnumValue: {
             /** Format: int64 */
@@ -3168,6 +3443,28 @@ export interface components {
             label?: string;
             /** Format: int32 */
             sortOrder?: number;
+            /** @description 枚举值生命周期状态：enabled、deprecated、disabled 或 draft。 */
+            status?: string;
+            /** @description 枚举值别名数组 JSON，用于 AI 识别历史值、展示值或外部系统映射。 */
+            aliasesJson?: string;
+            /** @description 废弃或停用枚举值的推荐替代值，仅作 guidance，不自动改写 SQL。 */
+            replacementValue?: string;
+            /**
+             * Format: date
+             * @description 枚举值有效期开始日期，可为空。
+             */
+            validFrom?: string;
+            /**
+             * Format: date
+             * @description 枚举值有效期结束日期，可为空。
+             */
+            validTo?: string;
+            /** @description 枚举值来源证据或维护说明；不得包含凭据或业务数据行。 */
+            sourceEvidence?: string;
+            /** @description 枚举值跨系统映射提示，如外部编码、展示名或兼容说明。 */
+            mappingHints?: string;
+            /** @description 枚举值 AI 使用说明；不得包含 token、密码、完整 JDBC URL、DSN 或业务数据行。 */
+            aiUsageNotes?: string;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -7165,9 +7462,9 @@ export interface components {
             /** Format: int32 */
             fieldCount?: number;
             /** Format: int32 */
-            enumCount?: number;
-            /** Format: int32 */
             templateCount?: number;
+            /** Format: int32 */
+            enumCount?: number;
         };
         StarterKitDomain: {
             code?: string;
@@ -7573,6 +7870,13 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["ProjectBackupPackage"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RListMetricDefinitionResp: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["MetricDefinitionResp"][];
             error?: components["schemas"]["ErrorDetail"];
         };
         RListMapStringString: {
@@ -8072,6 +8376,77 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["Field"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RListFieldSemanticRuleResp: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldSemanticRuleResp"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 字段知识卡中的枚举值生命周期提示。 */
+        EnumValueHint: {
+            value?: string;
+            label?: string;
+            status?: string;
+            aliases?: string[];
+            replacementValue?: string;
+            /** Format: date */
+            validFrom?: string;
+            /** Format: date */
+            validTo?: string;
+            mappingHints?: string;
+            aiUsageNotes?: string;
+        };
+        /** @description 字段知识卡列表响应。 */
+        FieldKnowledgeCardListResp: {
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int32 */
+            totalMatched?: number;
+            /** Format: int32 */
+            returnedCount?: number;
+            truncated?: boolean;
+            cards?: components["schemas"]["FieldKnowledgeCardResp"][];
+        };
+        /** @description AI 可读字段知识卡。 */
+        FieldKnowledgeCardResp: {
+            /** Format: int64 */
+            projectId?: number;
+            /** Format: int64 */
+            fieldId?: number;
+            stableRef?: string;
+            name?: string;
+            displayName?: string;
+            dataType?: string;
+            lifecycleStatus?: string;
+            aliases?: string[];
+            formatSummary?: string[];
+            usageContractSummary?: string[];
+            namingGuidance?: string[];
+            semanticRules?: components["schemas"]["FieldSemanticRuleResp"][];
+            enumHints?: components["schemas"]["EnumValueHint"][];
+            usageExamples?: string[];
+            metricReferences?: components["schemas"]["MetricDefinitionResp"][];
+            relatedFieldRefs?: string[];
+            riskNotes?: string[];
+            evidenceRefs?: string[];
+            /** Format: date-time */
+            lastVerifiedAt?: string;
+        };
+        RFieldKnowledgeCardListResp: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldKnowledgeCardListResp"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RFieldKnowledgeCardResp: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["FieldKnowledgeCardResp"];
             error?: components["schemas"]["ErrorDetail"];
         };
         RListEnumDict: {
@@ -9313,7 +9688,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RBusinessGlossary"];
+                    "*/*": components["schemas"]["RMetricDefinitionResp"];
                 };
             };
         };
@@ -9329,7 +9704,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BusinessGlossaryReq"];
+                "application/json": components["schemas"]["MetricDefinitionReq"];
             };
         };
         responses: {
@@ -9339,7 +9714,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RBusinessGlossary"];
+                    "*/*": components["schemas"]["RMetricDefinitionResp"];
                 };
             };
         };
@@ -9383,7 +9758,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RField"];
+                    "*/*": components["schemas"]["RBusinessGlossary"];
                 };
             };
         };
@@ -9399,7 +9774,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["FieldReq"];
+                "application/json": components["schemas"]["BusinessGlossaryReq"];
             };
         };
         responses: {
@@ -9409,7 +9784,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RField"];
+                    "*/*": components["schemas"]["RBusinessGlossary"];
                 };
             };
         };
@@ -9453,12 +9828,152 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["REnumDict"];
+                    "*/*": components["schemas"]["RField"];
                 };
             };
         };
     };
     update_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RField"];
+                };
+            };
+        };
+    };
+    delete_7: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    getById_7: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldSemanticRuleResp"];
+                };
+            };
+        };
+    };
+    update_7: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldSemanticRuleReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldSemanticRuleResp"];
+                };
+            };
+        };
+    };
+    delete_8: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    getById_8: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["REnumDict"];
+                };
+            };
+        };
+    };
+    update_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -9484,7 +9999,7 @@ export interface operations {
             };
         };
     };
-    delete_7: {
+    delete_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -9554,7 +10069,7 @@ export interface operations {
             };
         };
     };
-    getById_7: {
+    getById_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -9576,7 +10091,7 @@ export interface operations {
             };
         };
     };
-    update_7: {
+    update_9: {
         parameters: {
             query?: never;
             header?: never;
@@ -9602,7 +10117,7 @@ export interface operations {
             };
         };
     };
-    delete_8: {
+    delete_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -9624,7 +10139,7 @@ export interface operations {
             };
         };
     };
-    getById_8: {
+    getById_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -9646,7 +10161,7 @@ export interface operations {
             };
         };
     };
-    update_8: {
+    update_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -9672,7 +10187,7 @@ export interface operations {
             };
         };
     };
-    delete_9: {
+    delete_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -9694,7 +10209,7 @@ export interface operations {
             };
         };
     };
-    getById_9: {
+    getById_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -9716,7 +10231,7 @@ export interface operations {
             };
         };
     };
-    update_9: {
+    update_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -9742,7 +10257,7 @@ export interface operations {
             };
         };
     };
-    delete_10: {
+    delete_12: {
         parameters: {
             query?: never;
             header?: never;
@@ -11090,6 +11605,57 @@ export interface operations {
             };
         };
     };
+    list_5: {
+        parameters: {
+            query: {
+                projectId: number;
+                query?: string;
+                status?: string;
+                fieldId?: number;
+                metricKey?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListMetricDefinitionResp"];
+                };
+            };
+        };
+    };
+    create_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricDefinitionReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RMetricDefinitionResp"];
+                };
+            };
+        };
+    };
     lint: {
         parameters: {
             query?: never;
@@ -11251,7 +11817,7 @@ export interface operations {
             };
         };
     };
-    create_6: {
+    create_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -11299,7 +11865,7 @@ export interface operations {
             };
         };
     };
-    create_7: {
+    create_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -11467,6 +12033,56 @@ export interface operations {
             };
         };
     };
+    list_6: {
+        parameters: {
+            query: {
+                projectId: number;
+                fieldId?: number;
+                ruleType?: string;
+                query?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListFieldSemanticRuleResp"];
+                };
+            };
+        };
+    };
+    create_9: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldSemanticRuleReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldSemanticRuleResp"];
+                };
+            };
+        };
+    };
     generate: {
         parameters: {
             query?: never;
@@ -11515,7 +12131,7 @@ export interface operations {
             };
         };
     };
-    list_5: {
+    list_8: {
         parameters: {
             query: {
                 projectId: number;
@@ -11537,7 +12153,7 @@ export interface operations {
             };
         };
     };
-    create_8: {
+    create_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -11609,7 +12225,7 @@ export interface operations {
             };
         };
     };
-    list_6: {
+    list_9: {
         parameters: {
             query: {
                 projectId: number;
@@ -11631,7 +12247,7 @@ export interface operations {
             };
         };
     };
-    create_9: {
+    create_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -11655,7 +12271,7 @@ export interface operations {
             };
         };
     };
-    list_7: {
+    list_10: {
         parameters: {
             query: {
                 projectId: number;
@@ -11677,7 +12293,7 @@ export interface operations {
             };
         };
     };
-    create_10: {
+    create_12: {
         parameters: {
             query?: never;
             header?: never;
@@ -11821,7 +12437,7 @@ export interface operations {
             };
         };
     };
-    list_8: {
+    list_11: {
         parameters: {
             query: {
                 projectId: number;
@@ -11843,7 +12459,7 @@ export interface operations {
             };
         };
     };
-    create_11: {
+    create_13: {
         parameters: {
             query?: never;
             header?: never;
@@ -13090,6 +13706,56 @@ export interface operations {
             };
         };
     };
+    list_7: {
+        parameters: {
+            query: {
+                projectId: number;
+                query?: string;
+                status?: string;
+                fieldId?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldKnowledgeCardListResp"];
+                };
+            };
+        };
+    };
+    get: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path: {
+                fieldId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RFieldKnowledgeCardResp"];
+                };
+            };
+        };
+    };
     summary: {
         parameters: {
             query: {
@@ -13338,7 +14004,7 @@ export interface operations {
             };
         };
     };
-    list_9: {
+    list_12: {
         parameters: {
             query: {
                 projectId: number;
@@ -13480,7 +14146,7 @@ export interface operations {
             };
         };
     };
-    list_10: {
+    list_13: {
         parameters: {
             query: {
                 projectId: number;
@@ -13747,7 +14413,7 @@ export interface operations {
             };
         };
     };
-    list_11: {
+    list_14: {
         parameters: {
             query: {
                 projectId: number;

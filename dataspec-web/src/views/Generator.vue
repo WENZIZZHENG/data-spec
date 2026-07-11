@@ -110,6 +110,49 @@
         </el-table>
       </section>
 
+      <section class="metric-section">
+        <div class="section-header">
+          <div>
+            <h3>指标口径</h3>
+            <p class="page-subtitle">示例 SQL 仅作说明，不会执行</p>
+          </div>
+          <el-button type="primary" plain :disabled="!hasProject" @click="openMetricDialog()">
+            <el-icon><Plus /></el-icon>
+            新建指标
+          </el-button>
+        </div>
+        <el-table
+          v-loading="metricLoading"
+          :data="metricDefinitions"
+          stripe
+          class="metric-table"
+          empty-text="暂无指标口径"
+        >
+          <el-table-column label="metricKey / 名称" min-width="210">
+            <template #default="{ row }">
+              <div class="metric-key">{{ row.metricKey || '-' }}</div>
+              <div class="muted-text">{{ row.displayName || '-' }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="definition" label="业务定义" min-width="260" show-overflow-tooltip />
+          <el-table-column label="字段引用" min-width="240">
+            <template #default="{ row }">
+              <div>度量：{{ metricFieldLabels(row.measureFieldIds) }}</div>
+              <div class="muted-text">维度：{{ metricFieldLabels(row.dimensionFieldIds) }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="aggregationRule" label="聚合" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="timeGrain" label="时间粒度" width="120" show-overflow-tooltip />
+          <el-table-column prop="exampleSql" label="exampleSql" min-width="220" show-overflow-tooltip />
+          <el-table-column label="操作" width="150" fixed="right">
+            <template #default="{ row }">
+              <el-button text type="primary" @click="openMetricDialog(row)">编辑</el-button>
+              <el-button text type="danger" @click="handleDeleteMetric(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </section>
+
       <section class="dictionary-section">
         <div class="section-header">
           <h3>数据字典</h3>
@@ -270,14 +313,104 @@
         </el-table>
       </section>
     </template>
+
+    <el-dialog v-model="metricDialogVisible" :title="editingMetric ? '编辑指标口径' : '新建指标口径'" width="820px">
+      <el-form ref="metricFormRef" :model="metricForm" :rules="metricRules" label-width="104px">
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="metricKey" prop="metricKey">
+              <el-input v-model="metricForm.metricKey" placeholder="paid_order_amount" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="展示名称" prop="displayName">
+              <el-input v-model="metricForm.displayName" placeholder="已支付订单金额" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="指标定义" prop="definition">
+          <el-input v-model="metricForm.definition" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="度量字段">
+              <el-select v-model="metricForm.measureFieldIds" multiple filterable class="full-width">
+                <el-option
+                  v-for="field in standardFields"
+                  :key="field.id"
+                  :label="fieldOptionLabel(field)"
+                  :value="field.id"
+                  :disabled="!field.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="维度字段">
+              <el-select v-model="metricForm.dimensionFieldIds" multiple filterable class="full-width">
+                <el-option
+                  v-for="field in standardFields"
+                  :key="field.id"
+                  :label="fieldOptionLabel(field)"
+                  :value="field.id"
+                  :disabled="!field.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="聚合规则">
+              <el-input v-model="metricForm.aggregationRule" placeholder="sum(amount_cent) / 100" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="时间粒度">
+              <el-input v-model="metricForm.timeGrain" placeholder="day / month" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="状态">
+              <el-select v-model="metricForm.status" class="full-width">
+                <el-option label="启用" value="enabled" />
+                <el-option label="草稿" value="draft" />
+                <el-option label="停用" value="disabled" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="过滤规则">
+          <el-input v-model="metricForm.filterRule" type="textarea" :rows="2" />
+        </el-form-item>
+        <el-form-item label="exampleSql">
+          <el-input
+            v-model="metricForm.exampleSql"
+            type="textarea"
+            :rows="3"
+            placeholder="仅作口径说明，不会执行"
+          />
+        </el-form-item>
+        <el-form-item label="维护说明">
+          <el-input v-model="metricForm.ownerNotes" type="textarea" :rows="2" />
+        </el-form-item>
+        <el-form-item label="证据引用">
+          <el-input v-model="metricEvidenceRefsText" placeholder="每行或逗号分隔一个 evidence ref" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="metricDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="metricSubmitting" @click="handleSubmitMetric">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { CopyDocument, Download, Refresh, View } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { CopyDocument, Download, Plus, Refresh, View } from '@element-plus/icons-vue'
 import {
   downloadDataDictionaryErd,
   downloadDataDictionaryHtml,
@@ -286,6 +419,13 @@ import {
   previewDdl
 } from '@/api/generator'
 import { getBusinessObjectRelationSummary } from '@/api/businessObject'
+import { listFields } from '@/api/field'
+import {
+  createMetricDefinition,
+  deleteMetricDefinition,
+  listMetricDefinitions,
+  updateMetricDefinition
+} from '@/api/metricDefinition'
 import { listTemplateFields, listTemplates } from '@/api/template'
 import { useProjectStore } from '@/stores/project'
 import {
@@ -298,7 +438,10 @@ import type {
   BusinessObjectRelationEdge,
   BusinessObjectRelationSummary,
   DdlGenerateResult,
+  Field,
   LintIssue,
+  MetricDefinitionReq,
+  MetricDefinitionResp,
   Template,
   TemplateField
 } from '@/types'
@@ -307,18 +450,48 @@ const projectStore = useProjectStore()
 const route = useRoute()
 const templates = ref<Template[]>([])
 const templateFields = ref<TemplateField[]>([])
+const standardFields = ref<Field[]>([])
+const metricDefinitions = ref<MetricDefinitionResp[]>([])
 const relationSummary = ref<BusinessObjectRelationSummary | null>(null)
 const selectedTemplateId = ref<number | null>(null)
 const tableName = ref('')
 const result = ref<DdlGenerateResult | null>(null)
 const templateLoading = ref(false)
 const fieldLoading = ref(false)
+const metricLoading = ref(false)
+const metricSubmitting = ref(false)
 const generating = ref(false)
 const dictionaryHtml = ref('')
 const dictionaryErd = ref('')
+const metricDialogVisible = ref(false)
+const editingMetric = ref<MetricDefinitionResp | null>(null)
+const metricFormRef = ref<FormInstance>()
+const metricEvidenceRefsText = ref('')
 const activeDictionaryTab = ref<'html' | 'erd'>('html')
 const dictionaryLoading = ref<'html' | 'erd' | ''>('')
 const dictionaryDownloading = ref<'html' | 'erd' | ''>('')
+
+const metricForm = ref<MetricDefinitionReq>({
+  projectId: 0,
+  metricKey: '',
+  displayName: '',
+  definition: '',
+  measureFieldIds: [],
+  dimensionFieldIds: [],
+  filterRule: '',
+  aggregationRule: '',
+  timeGrain: '',
+  ownerNotes: '',
+  exampleSql: '',
+  evidenceRefs: [],
+  status: 'enabled'
+})
+
+const metricRules: FormRules<MetricDefinitionReq> = {
+  metricKey: [{ required: true, message: '请输入 metricKey', trigger: 'blur' }],
+  displayName: [{ required: true, message: '请输入展示名称', trigger: 'blur' }],
+  definition: [{ required: true, message: '请输入指标定义', trigger: 'blur' }]
+}
 
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
 const canGenerate = computed(() =>
@@ -376,6 +549,8 @@ watch(
   () => projectStore.currentProjectId,
   () => {
     void loadTemplates()
+    void loadMetricDefinitions()
+    void loadStandardFields()
   },
   { immediate: true }
 )
@@ -422,6 +597,29 @@ async function loadTemplates() {
   } finally {
     templateLoading.value = false
   }
+}
+
+async function loadMetricDefinitions() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    metricDefinitions.value = []
+    return
+  }
+  metricLoading.value = true
+  try {
+    metricDefinitions.value = await listMetricDefinitions({ projectId })
+  } finally {
+    metricLoading.value = false
+  }
+}
+
+async function loadStandardFields() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    standardFields.value = []
+    return
+  }
+  standardFields.value = await listFields(projectId)
 }
 
 async function loadRelationSummary() {
@@ -552,6 +750,95 @@ async function handleDownloadDictionaryErd() {
   }
 }
 
+function openMetricDialog(metric?: MetricDefinitionResp) {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    return
+  }
+  editingMetric.value = metric ?? null
+  metricForm.value = {
+    projectId,
+    metricKey: metric?.metricKey ?? '',
+    displayName: metric?.displayName ?? '',
+    definition: metric?.definition ?? '',
+    measureFieldIds: metric?.measureFieldIds ?? [],
+    dimensionFieldIds: metric?.dimensionFieldIds ?? [],
+    filterRule: metric?.filterRule ?? '',
+    aggregationRule: metric?.aggregationRule ?? '',
+    timeGrain: metric?.timeGrain ?? '',
+    ownerNotes: metric?.ownerNotes ?? '',
+    exampleSql: metric?.exampleSql ?? '',
+    evidenceRefs: metric?.evidenceRefs ?? [],
+    status: metric?.status ?? 'enabled'
+  }
+  metricEvidenceRefsText.value = (metric?.evidenceRefs ?? []).join('\n')
+  metricFormRef.value?.clearValidate()
+  metricDialogVisible.value = true
+}
+
+async function handleSubmitMetric() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    return
+  }
+  await metricFormRef.value?.validate()
+  metricSubmitting.value = true
+  try {
+    const payload: MetricDefinitionReq = {
+      ...metricForm.value,
+      projectId,
+      evidenceRefs: splitTextList(metricEvidenceRefsText.value)
+    }
+    if (editingMetric.value?.id) {
+      await updateMetricDefinition(editingMetric.value.id, payload)
+      ElMessage.success('指标口径已更新')
+    } else {
+      await createMetricDefinition(payload)
+      ElMessage.success('指标口径已创建')
+    }
+    metricDialogVisible.value = false
+    await loadMetricDefinitions()
+  } finally {
+    metricSubmitting.value = false
+  }
+}
+
+async function handleDeleteMetric(metric: MetricDefinitionResp) {
+  if (!metric.id) {
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`确定删除指标口径「${metric.metricKey ?? ''}」吗？`, '删除指标口径', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+  await deleteMetricDefinition(metric.id)
+  ElMessage.success('指标口径已删除')
+  await loadMetricDefinitions()
+}
+
+function metricFieldLabels(ids?: number[]) {
+  if (!ids?.length) {
+    return '-'
+  }
+  return ids.map((id) => standardFields.value.find((field) => field.id === id)?.name ?? `#${id}`).join(', ')
+}
+
+function fieldOptionLabel(field: Field) {
+  return `${field.name ?? '-'}${field.displayName ? `（${field.displayName}）` : ''}`
+}
+
+function splitTextList(value: string) {
+  return Array.from(new Set(value
+    .split(/[\n,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)))
+}
+
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -652,14 +939,21 @@ function applyTableNameFromQuery() {
 
 .field-table,
 .issue-table,
-.relation-table {
+.relation-table,
+.metric-table {
   width: 100%;
 }
 
 .dictionary-section,
 .relation-section,
+.metric-section,
 .result-section {
   margin-top: 20px;
+}
+
+.metric-section {
+  padding-top: 20px;
+  border-top: 1px solid #ebeef5;
 }
 
 .dictionary-section {
@@ -674,6 +968,17 @@ function applyTableNameFromQuery() {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.metric-key {
+  color: #303133;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.muted-text {
+  color: #909399;
+  font-size: 12px;
 }
 
 .lint-summary {

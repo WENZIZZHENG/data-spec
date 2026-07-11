@@ -96,6 +96,105 @@ test('keeps field usage contract editing and evidence display wired', () => {
   ], 'OpenAPI schema usage contract types')
 })
 
+test('keeps field semantics knowledge cards frontend wired', () => {
+  const schema = readSource('src/api/schema.ts')
+  const types = readSource('src/types/index.ts')
+  const fieldApi = readSource('src/api/fieldKnowledge.ts')
+  const semanticApi = readSource('src/api/fieldSemantic.ts')
+  const metricApi = readSource('src/api/metricDefinition.ts')
+  const enumApi = readSource('src/api/enumDict.ts')
+  const fieldView = readSource('src/views/FieldLibrary.vue')
+  const enumView = readSource('src/views/EnumDict.vue')
+  const generatorView = readSource('src/views/Generator.vue')
+  const aiExport = readSource('src/views/AiExport.vue')
+
+  assertContains(schema, [
+    '"/api/field-knowledge-cards"',
+    '"/api/field-semantics"',
+    '"/api/metric-definitions"',
+    'FieldKnowledgeCardResp',
+    'FieldSemanticRuleResp',
+    'MetricDefinitionResp',
+    'preferredEnglishName?: string',
+    'semanticSummary?: string',
+    'EnumValueHint'
+  ], 'field semantics OpenAPI schema')
+
+  assertContains(types, [
+    'export type FieldKnowledgeCardResp',
+    'export type FieldKnowledgeCardListResp',
+    'export type FieldSemanticRuleReq',
+    'export type FieldSemanticRuleResp',
+    'export type MetricDefinitionReq',
+    'export type MetricDefinitionResp',
+    'export type EnumValueReq',
+    'export type EnumValue'
+  ], 'field semantics generated types')
+
+  assertContains(fieldApi, [
+    'listFieldKnowledgeCards',
+    'getFieldKnowledgeCard',
+    'FieldKnowledgeCardListResp',
+    'FieldKnowledgeCardResp'
+  ], 'field knowledge API')
+
+  assertContains(semanticApi, [
+    'listFieldSemanticRules',
+    'createFieldSemanticRule',
+    'updateFieldSemanticRule',
+    'deleteFieldSemanticRule'
+  ], 'field semantic API')
+
+  assertContains(metricApi, [
+    'listMetricDefinitions',
+    'createMetricDefinition',
+    'updateMetricDefinition',
+    'deleteMetricDefinition'
+  ], 'metric definition API')
+
+  assertContains(enumApi, [
+    'listEnumDicts',
+    'listEnumValues',
+    'createEnumValue',
+    'updateEnumValue'
+  ], 'enum lifecycle API')
+
+  assertContains(fieldView, [
+    '命名翻译',
+    '推荐英文名',
+    '禁用翻译',
+    '语义摘要',
+    '知识卡',
+    'openKnowledgeCardDrawer',
+    'listFieldSemanticRules'
+  ], 'FieldLibrary field semantics')
+
+  assertContains(enumView, [
+    '枚举值生命周期',
+    '替代值',
+    '有效期',
+    'AI 使用说明',
+    'aliasesJson',
+    'replacementValue'
+  ], 'EnumDict lifecycle view')
+
+  assertContains(generatorView, [
+    '指标口径',
+    'metricKey',
+    'exampleSql',
+    '示例 SQL 仅作说明，不会执行',
+    'listMetricDefinitions'
+  ], 'Generator metric definitions')
+
+  assertContains(aiExport, [
+    'field-knowledge-cards.json',
+    'field-semantics.json',
+    'metrics.json',
+    '语义证据',
+    'metadata guidance'
+  ], 'AI Context semantic artifacts')
+})
+
 test('keeps stable reference and ai output post-check OpenAPI contracts generated', () => {
   const schema = readSource('src/api/schema.ts')
 

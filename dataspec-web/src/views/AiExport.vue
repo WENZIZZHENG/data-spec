@@ -79,6 +79,21 @@
         <code>{{ aiContextStandardQuerySummary }}</code>
       </div>
 
+      <div class="semantic-artifacts">
+        <span class="budget-section-label">语义证据</span>
+        <div class="semantic-artifact-list">
+          <el-tag
+            v-for="artifact in semanticArtifacts"
+            :key="artifact"
+            effect="plain"
+            type="info"
+          >
+            {{ artifact }}
+          </el-tag>
+        </div>
+        <span class="semantic-artifact-note">metadata guidance，不作为可执行 SQL 或真实计算结果。</span>
+      </div>
+
       <div class="budget-preview">
         <div class="budget-controls">
           <div class="budget-heading">
@@ -305,6 +320,12 @@ const scopeOptions: Array<{ label: string; value: AiContextScope }> = [
   { label: '业务对象', value: 'business-object' },
   { label: '表模板', value: 'table-template' },
   { label: '变更', value: 'changed' }
+]
+
+const semanticArtifacts = [
+  '.dataspec/field-knowledge-cards.json',
+  '.dataspec/field-semantics.json',
+  '.dataspec/metrics.json'
 ]
 
 const hasProject = computed(() => Boolean(projectStore.currentProjectId))
@@ -629,6 +650,29 @@ function isAiContextScope(scope?: AiContextRecommendedExportParams['scope']): sc
   background: #f9fafb;
 }
 
+.semantic-artifacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.semantic-artifact-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.semantic-artifact-note {
+  color: #6b7280;
+  font-size: 12px;
+}
+
 .post-check-guidance code,
 .standard-query-guidance code {
   min-width: 0;
@@ -810,6 +854,11 @@ function isAiContextScope(scope?: AiContextRecommendedExportParams['scope']): sc
   }
 
   .standard-query-guidance {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .semantic-artifacts {
     align-items: flex-start;
     flex-direction: column;
   }

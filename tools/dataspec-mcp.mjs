@@ -35,6 +35,22 @@ const TOOL_SAFETY = {
   get_session_state: READ_ONLY_TOOL_SAFETY,
   create_task_card: READ_ONLY_TOOL_SAFETY,
   render_task_card: READ_ONLY_TOOL_SAFETY,
+  get_field_knowledge_cards: {
+    ...READ_ONLY_TOOL_SAFETY,
+    sensitiveInputs: ['query'],
+    nextActions: ['字段知识卡是只读聚合视图；遇到 unit/source-of-truth/metric 风险时先读取详情再生成 SQL、DDL 或测试。']
+  },
+  get_field_semantics: {
+    ...READ_ONLY_TOOL_SAFETY,
+    sensitiveInputs: ['query'],
+    nextActions: ['字段语义规则只提供 guidance，不代表可执行计算或生产 SQL 修改。']
+  },
+  get_metric_definitions: {
+    ...READ_ONLY_TOOL_SAFETY,
+    sensitiveInputs: ['query'],
+    nextActions: ['指标 example SQL 仅作说明，不应直接执行。']
+  },
+  get_enum_lifecycle: READ_ONLY_TOOL_SAFETY,
   lint_sql: {
     readOnly: false,
     writesProject: true,
@@ -152,6 +168,9 @@ const RESOURCE_TEMPLATE_KEYS = [
   'capability-catalog',
   'schema-registry',
   'field-catalog',
+  'field-knowledge-cards',
+  'field-semantics',
+  'metric-definitions',
   'table-standards',
   'workflow-recipes',
   'ai-task-profiles',
@@ -222,6 +241,27 @@ const RESOURCE_DEFS = {
     description: '当前项目的标准字段目录，供 AI 生成或评审 SQL 时引用。',
     path: '/api/ai-context/field-catalog',
     mimeType: 'application/json'
+  },
+  'field-knowledge-cards': {
+    name: 'DataSpec Field Knowledge Cards',
+    description: '只读字段知识卡列表，聚合字段语义、枚举生命周期、命名翻译、使用示例和指标口径摘要。',
+    path: '/api/field-knowledge-cards',
+    mimeType: 'application/json',
+    jsonResource: true
+  },
+  'field-semantics': {
+    name: 'DataSpec Field Semantic Rules',
+    description: '只读字段语义规则，说明派生、单位换算、聚合、时间粒度和 source-of-truth guidance。',
+    path: '/api/field-semantics',
+    mimeType: 'application/json',
+    jsonResource: true
+  },
+  'metric-definitions': {
+    name: 'DataSpec Metric Definitions',
+    description: '只读指标口径映射，说明 metricKey、标准字段引用、过滤、聚合、时间粒度和 example SQL guidance。',
+    path: '/api/metric-definitions',
+    mimeType: 'application/json',
+    jsonResource: true
   },
   'table-standards': {
     name: 'DataSpec Table Standards',
@@ -910,7 +950,9 @@ async function readResource(params, context) {
                 ? JSON.stringify(structuredContent = await fetchTaskRunResource(context, projectId), null, 2)
                 : def.tableStandardsResource
                   ? JSON.stringify(structuredContent = await fetchTableStandardsResource(context, { projectId }), null, 2)
-                  : await fetchAiContextText(context, def.path, projectId)
+                  : def.jsonResource
+                    ? JSON.stringify(structuredContent = await fetchProjectJsonResource(context, def.path, { projectId }), null, 2)
+                    : await fetchAiContextText(context, def.path, projectId)
   const result = {
     contents: [
       {
@@ -1089,6 +1131,123 @@ function listTools() {
               description: '可选 AI task type，用于服务端默认裁剪范围。'
             }
           }
+        }
+      },
+      {
+        name: 'get_field_knowledge_cards',
+        description: '读取字段知识卡列表或单字段详情，聚合字段语义、枚举生命周期、命名翻译、使用示例和指标口径摘要。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            fieldId: {
+              type: 'integer',
+              description: '可选字段 ID。仅提供 fieldId 时默认读取详情；传 detail=false 时按列表过滤。'
+            },
+            detail: {
+              type: 'boolean',
+              description: '是否读取单字段详情；默认在仅提供 fieldId 时为 true。'
+            },
+            query: {
+              type: 'string',
+              description: '可选检索关键词。'
+            },
+            status: {
+              type: 'string',
+              description: '可选字段状态过滤。'
+            },
+            limit: {
+              type: 'integer',
+              description: '可选返回上限，默认 20。'
+            }
+          }
+        }
+      },
+      {
+        name: 'get_field_semantics',
+        description: '读取字段语义规则列表或单条详情，说明派生、单位换算、聚合、时间粒度和 source-of-truth guidance。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: {
+              type: 'integer',
+              description: '列表查询的项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            id: {
+              type: 'integer',
+              description: '可选语义规则 ID；提供时读取详情，不能同时传列表过滤。'
+            },
+            fieldId: {
+              type: 'integer',
+              description: '可选字段 ID 过滤。'
+            },
+            ruleType: {
+              type: 'string',
+              description: '可选语义规则类型过滤。'
+            },
+            query: {
+              type: 'string',
+              description: '可选检索关键词。'
+            },
+            limit: {
+              type: 'integer',
+              description: '可选返回上限，默认由服务端限制。'
+            }
+          }
+        }
+      },
+      {
+        name: 'get_metric_definitions',
+        description: '读取指标口径列表或单条详情，说明 metricKey、字段引用、过滤、聚合、时间粒度和 example SQL guidance。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: {
+              type: 'integer',
+              description: '列表查询的项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            id: {
+              type: 'integer',
+              description: '可选指标口径 ID；提供时读取详情，不能同时传列表过滤。'
+            },
+            query: {
+              type: 'string',
+              description: '可选检索关键词。'
+            },
+            status: {
+              type: 'string',
+              description: '可选状态过滤。'
+            },
+            fieldId: {
+              type: 'integer',
+              description: '可选标准字段 ID 过滤。'
+            },
+            metricKey: {
+              type: 'string',
+              description: '可选 metricKey 精确过滤。'
+            },
+            limit: {
+              type: 'integer',
+              description: '可选返回上限，默认由服务端限制。'
+            }
+          }
+        }
+      },
+      {
+        name: 'get_enum_lifecycle',
+        description: '读取枚举字典值及生命周期 metadata，包括 status、alias、replacement、有效期和 AI mapping hints。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            enumId: {
+              type: 'integer',
+              description: '枚举字典 ID。'
+            }
+          },
+          required: ['enumId']
         }
       },
       {
@@ -1427,6 +1586,18 @@ async function callTool(params, context) {
   if (name === 'get_field_catalog') {
     return await callGetFieldCatalog(args, context)
   }
+  if (name === 'get_field_knowledge_cards') {
+    return await callGetFieldKnowledgeCards(args, context)
+  }
+  if (name === 'get_field_semantics') {
+    return await callGetFieldSemantics(args, context)
+  }
+  if (name === 'get_metric_definitions') {
+    return await callGetMetricDefinitions(args, context)
+  }
+  if (name === 'get_enum_lifecycle') {
+    return await callGetEnumLifecycle(args, context)
+  }
   if (name === 'search_field_catalog') {
     return await callSearchFieldCatalog(args, context)
   }
@@ -1532,6 +1703,84 @@ async function callGetFieldCatalog(args, context) {
   const text = await fetchAiContextText(context, RESOURCE_DEFS['field-catalog'].path, projectId, scopedCatalogParams(args, context))
   const structured = parseJsonOrFallback(text)
   return toolJsonResult(structured)
+}
+
+async function callGetFieldKnowledgeCards(args, context) {
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  const fieldId = optionalPositiveInteger(args.fieldId, 'fieldId')
+  const hasListFilters = args.query !== undefined || args.status !== undefined || args.limit !== undefined
+  const detail = args.detail === true || (fieldId !== undefined && !hasListFilters && args.detail !== false)
+  if (detail && hasListFilters) {
+    throw new JsonRpcError(-32602, 'get_field_knowledge_cards 读取详情时不要同时传 query、status 或 limit；如需按 fieldId 过滤列表，请传 detail=false')
+  }
+  const result = detail
+    ? await fetchFieldKnowledgeCardResource(context, { projectId, fieldId })
+    : await fetchFieldKnowledgeCardsResource(context, {
+        projectId,
+        fieldId,
+        query: normalizeOptionalText(args.query),
+        status: normalizeOptionalText(args.status),
+        limit: args.limit === undefined || args.limit === null || args.limit === ''
+          ? 20
+          : optionalLimit(args.limit, 20)
+      })
+  return toolJsonResult(sanitizeSecretValue(result))
+}
+
+async function callGetFieldSemantics(args, context) {
+  const id = optionalPositiveInteger(args.id, 'id')
+  if (id !== undefined) {
+    assertNoDetailFilterMix('get_field_semantics', args, ['fieldId', 'ruleType', 'query', 'limit'])
+    return toolJsonResult(sanitizeSecretValue(await fetchFieldSemanticRuleResource(context, id)))
+  }
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  const result = await fetchFieldSemanticsResource(context, {
+    projectId,
+    fieldId: optionalPositiveInteger(args.fieldId, 'fieldId'),
+    ruleType: normalizeOptionalText(args.ruleType),
+    query: normalizeOptionalText(args.query),
+    limit: optionalLimit(args.limit, undefined)
+  })
+  return toolJsonResult(sanitizeSecretValue(result))
+}
+
+async function callGetMetricDefinitions(args, context) {
+  const id = optionalPositiveInteger(args.id, 'id')
+  if (id !== undefined) {
+    assertNoDetailFilterMix('get_metric_definitions', args, ['query', 'status', 'fieldId', 'metricKey', 'limit'])
+    return toolJsonResult(sanitizeSecretValue(await fetchMetricDefinitionResource(context, id)))
+  }
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  const result = await fetchMetricDefinitionsResource(context, {
+    projectId,
+    query: normalizeOptionalText(args.query),
+    status: normalizeOptionalText(args.status),
+    fieldId: optionalPositiveInteger(args.fieldId, 'fieldId'),
+    metricKey: normalizeOptionalText(args.metricKey),
+    limit: optionalLimit(args.limit, undefined)
+  })
+  return toolJsonResult(sanitizeSecretValue(result))
+}
+
+async function callGetEnumLifecycle(args, context) {
+  const enumId = parsePositiveInteger(args.enumId, 'enumId')
+  const response = await context.fetchFn(`${context.server}/api/enums/${encodeURIComponent(enumId)}/values`, {
+    headers: dataSpecHeaders(context.apiToken)
+  })
+  const result = await readDataSpecJson(response)
+  return toolJsonResult(sanitizeSecretValue({
+    kind: 'dataspec-enum-lifecycle',
+    schemaVersion: 1,
+    enumId,
+    values: Array.isArray(result) ? result : result?.values ?? result
+  }))
+}
+
+function assertNoDetailFilterMix(toolName, args, filterNames) {
+  const usedFilters = filterNames.filter((name) => args[name] !== undefined && args[name] !== null && args[name] !== '')
+  if (usedFilters.length > 0) {
+    throw new JsonRpcError(-32602, `${toolName} 使用 id 读取详情时不要同时传列表过滤: ${usedFilters.join(', ')}`)
+  }
 }
 
 async function callSearchFieldCatalog(args, context) {
@@ -1752,6 +2001,81 @@ async function fetchTableStandardsResource(context, { projectId, templateId, bus
   appendOptionalParam(params, 'templateId', templateId)
   appendOptionalParam(params, 'businessObject', businessObject)
   const response = await context.fetchFn(`${context.server}/api/table-standards?${params.toString()}`, {
+    headers: dataSpecHeaders(context.apiToken)
+  })
+  return await readDataSpecJson(response)
+}
+
+async function fetchProjectJsonResource(context, path, { projectId }) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  const response = await context.fetchFn(`${context.server}${path}?${params.toString()}`, {
+    headers: dataSpecHeaders(context.apiToken)
+  })
+  return await readDataSpecJson(response)
+}
+
+async function fetchFieldKnowledgeCardsResource(context, { projectId, fieldId, query, status, limit }) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'fieldId', fieldId)
+  appendOptionalParam(params, 'query', query)
+  appendOptionalParam(params, 'status', status)
+  appendOptionalParam(params, 'limit', limit)
+  const response = await context.fetchFn(`${context.server}/api/field-knowledge-cards?${params.toString()}`, {
+    headers: dataSpecHeaders(context.apiToken)
+  })
+  return await readDataSpecJson(response)
+}
+
+async function fetchFieldKnowledgeCardResource(context, { projectId, fieldId }) {
+  if (fieldId === undefined) {
+    throw new JsonRpcError(-32602, 'get_field_knowledge_cards 读取详情需要 fieldId')
+  }
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  const response = await context.fetchFn(`${context.server}/api/field-knowledge-cards/${encodeURIComponent(fieldId)}?${params.toString()}`, {
+    headers: dataSpecHeaders(context.apiToken)
+  })
+  return await readDataSpecJson(response)
+}
+
+async function fetchFieldSemanticsResource(context, { projectId, fieldId, ruleType, query, limit }) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'fieldId', fieldId)
+  appendOptionalParam(params, 'ruleType', ruleType)
+  appendOptionalParam(params, 'query', query)
+  appendOptionalParam(params, 'limit', limit)
+  const response = await context.fetchFn(`${context.server}/api/field-semantics?${params.toString()}`, {
+    headers: dataSpecHeaders(context.apiToken)
+  })
+  return await readDataSpecJson(response)
+}
+
+async function fetchFieldSemanticRuleResource(context, id) {
+  const response = await context.fetchFn(`${context.server}/api/field-semantics/${encodeURIComponent(id)}`, {
+    headers: dataSpecHeaders(context.apiToken)
+  })
+  return await readDataSpecJson(response)
+}
+
+async function fetchMetricDefinitionsResource(context, { projectId, query, status, fieldId, metricKey, limit }) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'query', query)
+  appendOptionalParam(params, 'status', status)
+  appendOptionalParam(params, 'fieldId', fieldId)
+  appendOptionalParam(params, 'metricKey', metricKey)
+  appendOptionalParam(params, 'limit', limit)
+  const response = await context.fetchFn(`${context.server}/api/metric-definitions?${params.toString()}`, {
+    headers: dataSpecHeaders(context.apiToken)
+  })
+  return await readDataSpecJson(response)
+}
+
+async function fetchMetricDefinitionResource(context, id) {
+  const response = await context.fetchFn(`${context.server}/api/metric-definitions/${encodeURIComponent(id)}`, {
     headers: dataSpecHeaders(context.apiToken)
   })
   return await readDataSpecJson(response)
@@ -2211,6 +2535,13 @@ function optionalLimit(value, fallback) {
     return fallback
   }
   return parsePositiveInteger(value, 'limit')
+}
+
+function optionalPositiveInteger(value, label) {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+  return parsePositiveInteger(value, label)
 }
 
 function stringArg(value, message) {

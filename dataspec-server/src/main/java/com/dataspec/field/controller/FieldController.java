@@ -170,6 +170,13 @@ public class FieldController {
         field.setAggregationHints(req.aggregationHints());
         field.setReplacementGuidance(req.replacementGuidance());
         field.setMisuseExamples(req.misuseExamples());
+        field.setLocalizedNamesJson(req.localizedNamesJson());
+        field.setPreferredEnglishName(req.preferredEnglishName());
+        field.setForbiddenTranslationsJson(req.forbiddenTranslationsJson());
+        field.setTranslationAliasesJson(req.translationAliasesJson());
+        field.setTranslationConfidence(req.translationConfidence());
+        field.setTranslationNotes(req.translationNotes());
+        field.setSemanticSummary(req.semanticSummary());
         return R.ok(fieldService.create(field));
     }
 
@@ -213,6 +220,13 @@ public class FieldController {
         field.setAggregationHints(req.aggregationHints());
         field.setReplacementGuidance(req.replacementGuidance());
         field.setMisuseExamples(req.misuseExamples());
+        field.setLocalizedNamesJson(req.localizedNamesJson());
+        field.setPreferredEnglishName(req.preferredEnglishName());
+        field.setForbiddenTranslationsJson(req.forbiddenTranslationsJson());
+        field.setTranslationAliasesJson(req.translationAliasesJson());
+        field.setTranslationConfidence(req.translationConfidence());
+        field.setTranslationNotes(req.translationNotes());
+        field.setSemanticSummary(req.semanticSummary());
         return R.ok(fieldService.update(id, field));
     }
 
@@ -267,6 +281,20 @@ public class FieldController {
             @Schema(description = "字段在特定场景下的替代字段或迁移指导，与生命周期替代说明互补。")
             String replacementGuidance,
             @Schema(description = "字段常见误用或反例说明，用于 AI 低置信提示；不得包含真实业务数据行或凭据。")
-            String misuseExamples
+            String misuseExamples,
+            @Schema(description = "字段本地化名称 JSON，如中文名、英文名或业务别名；不得包含凭据或业务数据行。")
+            String localizedNamesJson,
+            @Schema(description = "推荐英文标准字段名或命名片段，用于 AI 命名建议和翻译辅助。")
+            String preferredEnglishName,
+            @Schema(description = "禁用翻译数组 JSON，AI 命中后需要提示不要直接采用。")
+            String forbiddenTranslationsJson,
+            @Schema(description = "翻译别名数组 JSON，用于搜索、推荐和 AI Context 命名匹配。")
+            String translationAliasesJson,
+            @Schema(description = "命名翻译置信度，如 high、medium、low，仅作为人工维护提示。")
+            String translationConfidence,
+            @Schema(description = "命名翻译说明、来源或边界；不得包含 token、JDBC URL、DSN、Authorization 或业务数据行。")
+            String translationNotes,
+            @Schema(description = "字段语义摘要，说明单位、口径、source of truth 或常见误用；只做 AI guidance，不执行真实计算。")
+            String semanticSummary
     ) {}
 }

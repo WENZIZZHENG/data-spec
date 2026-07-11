@@ -27,11 +27,17 @@ class MarkdownGeneratorServiceTest {
         DomainService domainService = mock(DomainService.class);
         EnumDictService enumDictService = mock(EnumDictService.class);
         TemplateService templateService = mock(TemplateService.class);
+        com.dataspec.fieldsemantic.service.FieldSemanticRuleService fieldSemanticRuleService =
+                mock(com.dataspec.fieldsemantic.service.FieldSemanticRuleService.class);
+        com.dataspec.metric.service.MetricDefinitionService metricDefinitionService =
+                mock(com.dataspec.metric.service.MetricDefinitionService.class);
         MarkdownGeneratorService service = new MarkdownGeneratorService(
                 fieldService,
                 domainService,
                 enumDictService,
-                templateService);
+                templateService,
+                fieldSemanticRuleService,
+                metricDefinitionService);
 
         when(domainService.listByProject(1L)).thenReturn(List.of(domain(3L, "user", "用户域")));
         when(fieldService.listByProject(1L)).thenReturn(List.of(field()));
@@ -39,6 +45,8 @@ class MarkdownGeneratorServiceTest {
         when(enumDictService.listValues(6L)).thenReturn(List.of(enumValue()));
         when(templateService.listByProject(1L)).thenReturn(List.of(template(9L)));
         when(templateService.listFields(9L)).thenReturn(List.of(templateField()));
+        when(fieldSemanticRuleService.list(1L, null, null, null)).thenReturn(List.of());
+        when(metricDefinitionService.list(1L, null, null, null)).thenReturn(List.of());
 
         String markdown = service.generateDataDictionary(1L);
 

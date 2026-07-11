@@ -21,6 +21,9 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class FieldRepository {
 
+    private static final int DEFAULT_KNOWLEDGE_CARD_LIMIT = 20;
+    private static final int MAX_KNOWLEDGE_CARD_LIMIT = 100;
+
     private final FieldMapper fieldMapper;
 
     /** 根据 ID 查找字段 */
@@ -43,6 +46,77 @@ public class FieldRepository {
                 new LambdaQueryWrapper<Field>()
                         .eq(Field::getProjectId, projectId)
                         .orderByAsc(Field::getName));
+    }
+
+    /**
+     * 查询字段知识卡候选字段，并在持久化层下推 query、status 和 limit，避免 AI/前端列表入口先拉取项目全量字段。
+     */
+    public List<Field> findKnowledgeCardCandidates(Long projectId, String query, String status, int limit) {
+        return fieldMapper.selectList(
+                knowledgeCardCandidateWrapper(projectId, query, status)
+                        .orderByAsc(Field::getStatus)
+                        .orderByAsc(Field::getName)
+                        .last("LIMIT " + safeKnowledgeCardLimit(limit)));
+    }
+
+    /**
+     * 统计字段知识卡候选数量；只返回 count，不加载字段明细。
+     */
+    public long countKnowledgeCardCandidates(Long projectId, String query, String status) {
+        return fieldMapper.selectCount(knowledgeCardCandidateWrapper(projectId, query, status));
+    }
+
+    private LambdaQueryWrapper<Field> knowledgeCardCandidateWrapper(Long projectId, String query, String status) {
+        LambdaQueryWrapper<Field> wrapper = new LambdaQueryWrapper<Field>()
+                .eq(Field::getProjectId, projectId);
+        if (status != null && !status.isBlank()) {
+            wrapper.eq(Field::getStatus, status.trim());
+        }
+        if (query != null && !query.isBlank()) {
+            String like = query.trim();
+            wrapper.and(nested -> nested
+                    .like(Field::getName, like)
+                    .or()
+                    .like(Field::getDisplayName, like)
+                    .or()
+                    .like(Field::getComment, like)
+                    .or()
+                    .like(Field::getTags, like)
+                    .or()
+                    .like(Field::getAliases, like)
+                    .or()
+                    .like(Field::getCategory, like)
+                    .or()
+                    .like(Field::getPreferredEnglishName, like)
+                    .or()
+                    .like(Field::getLocalizedNamesJson, like)
+                    .or()
+                    .like(Field::getTranslationAliasesJson, like)
+                    .or()
+                    .like(Field::getForbiddenTranslationsJson, like)
+                    .or()
+                    .like(Field::getTranslationNotes, like)
+                    .or()
+                    .like(Field::getSemanticSummary, like)
+                    .or()
+                    .like(Field::getPreferredUseCases, like)
+                    .or()
+                    .like(Field::getAvoidWhen, like)
+                    .or()
+                    .like(Field::getAggregationHints, like)
+                    .or()
+                    .like(Field::getReplacementGuidance, like)
+                    .or()
+                    .like(Field::getMisuseExamples, like));
+        }
+        return wrapper;
+    }
+
+    private int safeKnowledgeCardLimit(int limit) {
+        if (limit <= 0) {
+            return DEFAULT_KNOWLEDGE_CARD_LIMIT;
+        }
+        return Math.min(limit, MAX_KNOWLEDGE_CARD_LIMIT);
     }
 
     /** 根据数据域查找字段 */

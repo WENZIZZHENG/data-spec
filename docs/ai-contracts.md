@@ -1,6 +1,6 @@
 # AI 输出契约
 
-本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、MCP agent guidance pack、CLI/MCP contract fixtures、AI Context、AI capability catalog、版本兼容握手、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、业务对象与表结构标准、标准字段合并和 DDL 预览的自动化使用场景。
+本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、MCP agent guidance pack、CLI/MCP contract fixtures、AI Context、AI capability catalog、版本兼容握手、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、字段语义知识卡、业务对象与表结构标准、标准字段合并和 DDL 预览的自动化使用场景。
 
 ## 兼容策略
 
@@ -42,7 +42,7 @@ Contract summary 稳定字段：
 - `compatibility`
 - `docsRef`
 
-Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`standard-field-merge`、`enum-dict`、`rule-config`、`template`、`business-object-standard`、`table-structure-standard`、`table-relation-hint`、`table-index-standard`、`table-foreign-key-standard`、`table-policy-standard`、`standard-snapshot`、`lint-result`、`ai-evidence-package`、`ai-context-manifest`、`ai-context-field-catalog`、`ai-context-table-standards` 和 `ai-task-profile`。
+Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`standard-field-merge`、`enum-dict`、`enum-value-lifecycle`、`field-semantic-rule`、`field-knowledge-card`、`metric-definition-mapping`、`rule-config`、`template`、`business-object-standard`、`table-structure-standard`、`table-relation-hint`、`table-index-standard`、`table-foreign-key-standard`、`table-policy-standard`、`standard-snapshot`、`lint-result`、`ai-evidence-package`、`ai-context-manifest`、`ai-context-field-catalog`、`ai-context-field-semantics`、`ai-context-field-knowledge-cards`、`ai-context-metrics`、`ai-context-table-standards` 和 `ai-task-profile`。
 
 `contract check` 的成功只说明 registry 结构对 AI 可用；它不会验证当前项目业务标准是否完整，也不会授权任何写入动作。
 
@@ -132,7 +132,7 @@ CLI `compat check` 兼容时退出码为 `0`，服务端报告 `compatibility.co
 
 ### field
 
-标准字段契约，覆盖字段库和 AI Context 中的字段基础元数据，例如 `name`、`dataType`、`nullable`、`comment`、`status`、`replacementFieldId`、`replacementReason`、`aliases[]` 和 `matchReasons[]`。`status` 稳定值至少包含 `draft`、`enabled`、`deprecated` 和 `disabled`。
+标准字段契约，覆盖字段库和 AI Context 中的字段基础元数据，例如 `name`、`dataType`、`nullable`、`comment`、`status`、`replacementFieldId`、`replacementReason`、`aliases[]`、命名翻译字段和 `matchReasons[]`。`status` 稳定值至少包含 `draft`、`enabled`、`deprecated` 和 `disabled`。命名翻译新增字段均为可选 metadata，包括 `localizedNames`、`preferredEnglishName`、`translationAliases`、`forbiddenTranslations`、`translationConfidence` 和 `translationNotes`；这些字段不得包含 token、password、Authorization、完整 JDBC URL、DSN 或业务数据行。
 
 ### standard-field-merge
 
@@ -145,6 +145,22 @@ CLI `compat check` 兼容时退出码为 `0`，服务端报告 `compatibility.co
 ### enum-dict
 
 枚举字典契约，覆盖代码集、枚举值、展示标签和排序信息。
+
+### enum-value-lifecycle
+
+枚举值生命周期契约，覆盖枚举值 `value`、`label`、`status`、`aliases[]`、`replacementValue`、`validFrom`、`validTo`、`sourceEvidence`、`mappingHints` 和 `aiUsageNotes`。`status` 稳定值包含 `enabled`、`deprecated`、`disabled` 和 `draft`。AI 应把 `deprecated`/`disabled` 视为需要确认或替代的提示，不得自动重写生产 SQL。
+
+### field-semantic-rule
+
+字段语义规则契约，覆盖 `projectId`、`fieldId`、可选 `sourceFieldId`、`ruleType`、`unitConversion`、`aggregationRule`、`timeGranularity`、`sourceOfTruth`、`recommendedUse`、`antiPatterns`、字段身份和稳定引用摘要。规则只表达 guidance，不执行真实数据计算；跨字段引用必须保持同项目。所有自由文本必须 secret-safe，不得保存连接凭据、Authorization header、token、完整 JDBC URL、DSN 或业务数据行。
+
+### field-knowledge-card
+
+字段知识卡契约，覆盖只读聚合视图：字段身份、`stableRef`、生命周期、格式约束、usage contract、语义规则、命名翻译、枚举 lifecycle、使用示例、相关字段、指标引用、风险提示、证据引用和 `lastVerifiedAt`。知识卡允许稀疏字段返回空数组或省略可选段落；列表接口必须 bounded，并通过 summary/truncation 表达截断。
+
+### metric-definition-mapping
+
+指标口径映射契约，覆盖 `metricKey`、`displayName`、`definition`、`measureFields[]`、`dimensionFields[]`、`filterRule`、`aggregationRule`、`timeGrain`、`ownerNotes`、`exampleSql`、`evidenceRefs[]` 和 `status`。`exampleSql` 只是说明性 metadata guidance，不连接业务数据库、不验证结果正确性、不代表可执行迁移或生产 SQL。
 
 ### rule-config
 
@@ -202,6 +218,18 @@ AI Context manifest 契约，覆盖离线包入口、标准版本、文件清单
 
 AI Context 字段目录契约，覆盖字段、枚举、上下文裁剪条件和标准版本。
 
+### ai-context-field-knowledge-cards
+
+AI Context 字段知识卡 artifact 契约，文件路径为 `.dataspec/field-knowledge-cards.json`。稳定字段包含 `kind`、`schemaVersion`、`projectId`、`contextScope`、`cards[]` 和 `summary`；`summary` 至少表达 `returnedCount`、`totalCount` 或等价计数以及 `truncated`。该 artifact 是只读语义证据，不包含业务数据行或可逆凭据。
+
+### ai-context-field-semantics
+
+AI Context 字段语义 artifact 契约，文件路径为 `.dataspec/field-semantics.json`。稳定字段包含字段命名翻译 guidance、semantic rules、source-of-truth、推荐/禁用使用场景和反例摘要。空项目可返回空数组或省略可选段落，但文件结构必须保持可解析。
+
+### ai-context-metrics
+
+AI Context 指标口径 artifact 契约，文件路径为 `.dataspec/metrics.json`。稳定字段包含 `metricKey`、定义、字段引用、过滤、聚合、时间粒度、示例 SQL 摘要、证据引用和 `summary`；所有 SQL 字段都仅作说明性 guidance，AI 不得把它当成已经验证或应直接执行的查询。
+
 ### ai-context-table-standards
 
 AI Context 表结构标准契约，覆盖 `.dataspec/table-standards.json` 中的业务对象、模板结构标准、关系 edge、上下文裁剪摘要和统计信息。该文件是离线只读上下文，不代表已经在业务数据库应用约束。
@@ -235,6 +263,9 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - `.dataspec/capabilities.json`: AI Capability Catalog，稳定字段遵循上方 Capability Catalog 契约。
 - `.dataspec/field-catalog.json`: `projectId`、`standard.specVersion`、`standard.specHash`、`contextScope`、`fields[]`、`enums[]`。
 - `.dataspec/table-standards.json`: `kind`、`schemaVersion`、`projectId`、`contextScope`、`businessObjects[]`、`templates[]`、`relations[]`、`summary`。
+- `.dataspec/field-knowledge-cards.json`: `kind`、`schemaVersion`、`projectId`、`contextScope`、`cards[]`、`summary`。
+- `.dataspec/field-semantics.json`: `kind`、`schemaVersion`、`projectId`、`contextScope`、`semanticRules[]`、`namingGuidance[]`、`summary`。
+- `.dataspec/metrics.json`: `kind`、`schemaVersion`、`projectId`、`contextScope`、`metrics[]`、`summary`。
 - `fields[]`: `name`、`dataType`、`nullable`、`sensitive`、`status`、`replacementFieldId`、`replacementReason`、`comment`、`displayName`、`category`、`tags`、`codeSetId`、`example`、`aliases[]`、`matchReasons[]`。
 - `table-standards.businessObjects[]`: `id`、`projectId`、`objectKey`、`entityName`、`tablePattern`、`templateId`、`requiredFieldNames[]`、`optionalFieldNames[]`、`relations[]`、`foreignKeyHints[]`、`auditFields[]`、`antiPatterns[]`、`aiUsageNotes`、`contextExport`。
 - `table-standards.templates[]`: `id`、`name`、`businessObjectId`、`structure`，其中 `structure` 遵循 `table-structure-standard` 契约。
@@ -243,6 +274,8 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - `.dataspec/workflows.md`: `create-table`、`review-pr-sql`、`reverse-import-standards`、`export-min-context`、`standard-evidence-review`、`standard-maintenance` 六个 recipe id。
 
 `scope=business-object|table-template` 时，`.dataspec/table-standards.json` 可按 `query/status/limit` 裁剪业务对象、表模板和关系 edge；裁剪必须保留空数组和 `summary`，让旧客户端即使忽略表结构标准也能继续消费字段目录。
+
+语义 artifact 与字段目录一样遵循 additive-friendly 兼容策略：新增可选字段兼容；删除或重命名 `kind/schemaVersion/projectId/contextScope/summary/cards[]/semanticRules[]/metrics[]` 等稳定路径必须同步 OpenSpec、Schema Registry、CLI/MCP fixture 和测试。
 
 ## SQL Lint
 
@@ -311,7 +344,7 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - `FieldSearchSummary`: `totalCandidates`、`matchedCount`、`returnedCount`、`truncated`、`appliedFilters`、`hints[]`。
 - `FieldSearchItem`: `field`、`score`、`matchReasons[]`、`recommendedUse`、`nextActions[]`、`evidence[]`。
 
-字段检索是只读能力。AI 可依赖 `matchReasons[]` 和 `evidence[]` 判断命中来源，依赖 `recommendedUse` 和 `nextActions[]` 决定收窄检索、采用标准字段或进入候选补全流程。默认检索只返回 `enabled` 字段；显式传入非 enabled `status` 时，返回项必须说明状态、替代字段或替代原因。不得把 `score` 当作跨版本绝对分值，只能用于同一次结果内排序参考。Explain Trace 不包含业务数据行、token、password 或完整 JDBC URL。
+字段检索是只读能力。AI 可依赖 `matchReasons[]` 和 `evidence[]` 判断命中来源，依赖 `recommendedUse`、语义摘要和 `nextActions[]` 决定收窄检索、采用标准字段或进入候选补全流程。默认检索只返回 `enabled` 字段；显式传入非 enabled `status` 时，返回项必须说明状态、替代字段或替代原因。命中禁用翻译、source-of-truth、单位换算、枚举 lifecycle 或指标边界时，结果可增加 warning/next action，但不得把 forbidden translation 作为安全推荐。不得把 `score` 当作跨版本绝对分值，只能用于同一次结果内排序参考。Explain Trace 不包含业务数据行、token、password 或完整 JDBC URL。
 
 ## 标准字段合并
 
@@ -388,6 +421,7 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - CLI `doctor --format json` 包含 `compatibility` check，稳定 details 包括 `localCliVersion`、`serverVersion`、`apiSchemaHash`、`minCliVersion`、`status`、`compatible` 和 `nextActions[]`。
 - CLI `workflow list/show` 输出 `kind`、`schemaVersion`、`recipes[]`、`recipe`；recipe 保留 `id`、`title`、`goal`、`requiredInputs`、`prechecks`、`steps`、`expectedArtifacts`、`failureHandling`、`nextActions`。
 - CLI `table-standards list/show` 输出 `.dataspec/table-standards.json` 兼容 shape 或指定业务对象/模板详情；命令只读调用后端，不写 DataSpec 标准、不连接业务库、不执行 DDL。
+- CLI `field-knowledge list/show`、`field-semantics list/show` 和 `metric-definitions list/show` 只读调用后端字段语义知识接口，输出知识卡、语义规则和指标口径 metadata guidance；这些命令不写 DataSpec 标准、不连接业务库、不执行 SQL 或真实计算。
 - CLI `generate-ddl --format json` 保留后端 `structureSummary`，不得把表级策略说明降级成不可解析文本。
 - CLI `evidence export` 输出 `AiEvidencePackage` JSON 或 zip；失败时返回参数错误退出码并输出脱敏错误。
 - MCP resources/tools 返回 `structuredContent` 和 `content[].text`；`content[].text` 应保持可解析 JSON 或明确文本 fallback。
@@ -396,8 +430,10 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - MCP `version-compatibility` resource 输出版本兼容握手，并返回 `structuredContent` 和可解析 JSON text。
 - MCP `schema-registry` resource 输出 Schema Registry catalog。
 - MCP `table-standards` resource 输出 `.dataspec/table-standards.json` 兼容 shape，并返回 `structuredContent` 和可解析 JSON text。
+- MCP `field-knowledge-cards`、`field-semantics` 和 `metric-definitions` resources 输出字段语义知识只读结构，并返回 `structuredContent` 和可解析 JSON text。
 - MCP `workflow-recipes` resource 输出 `kind`、`schemaVersion`、`projectId`、`recipes[]`。
 - MCP `get_table_standards` tool 输出表结构标准兼容 shape，可按项目、业务对象或模板过滤；该工具只读，不执行数据库迁移或写入业务仓库。
+- MCP `get_field_knowledge_cards`、`get_field_semantics` 和 `get_metric_definitions` tools 只读返回字段知识卡、语义规则和指标口径，支持项目、fieldId、query/status/ruleType 等安全过滤；详情读取和列表过滤冲突时应在本地拒绝，避免 AI 误以为 detail 已按 query 裁剪。
 - MCP `generate_table_ddl` tool 返回后端 DDL preview 结构，并保留 `structureSummary`。
 - MCP `search_fields` tool 返回字段检索稳定字段，`content[].text` 保持可解析 JSON。
 - MCP `export_evidence_package` tool 返回 `AiEvidencePackage`，并保持后端脱敏结果。

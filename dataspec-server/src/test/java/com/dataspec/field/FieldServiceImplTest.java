@@ -21,6 +21,8 @@ import com.dataspec.field.model.FieldSearchResult;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.impl.FieldServiceImpl;
+import com.dataspec.fieldsemantic.service.FieldSemanticRuleService;
+import com.dataspec.metric.service.MetricDefinitionService;
 import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.security.context.DataSpecSecurityContext;
 import com.dataspec.security.model.ApiTokenPrincipal;
@@ -313,6 +315,125 @@ class FieldServiceImplTest {
         assertEquals("sum(amount_cent) / 100", updated.getAggregationHints());
         assertEquals("展示层改用 amount_yuan", updated.getReplacementGuidance());
         assertEquals("把 amount_cent 当元展示", updated.getMisuseExamples());
+        verify(repository).update(updated);
+    }
+
+    @Test
+    void create_normalizesSemanticTranslationMetadata() throws Exception {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.existsByNameInProject("amount_cent", 1L)).thenReturn(false);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        Field field = new Field();
+        field.setProjectId(1L);
+        field.setName("amount_cent");
+        field.setDataType("bigint");
+        field.setLocalizedNamesJson(" { \"zh\": \"订单金额\", \"en\": \"amount\" } ");
+        field.setPreferredEnglishName(" amount_cent ");
+        field.setForbiddenTranslationsJson("[\"amount\"]");
+        field.setTranslationAliasesJson("[\"paid amount\", \"支付金额\"]");
+        field.setTranslationConfidence(" HIGH ");
+        field.setTranslationNotes(" 统一翻译为 amount_cent，避免 amount_yuan 混用 ");
+        field.setSemanticSummary(" 金额以分存储，展示前需要换算 ");
+
+        Field created = service.create(field);
+
+        JsonNode localizedNames = objectMapper.readTree(created.getLocalizedNamesJson());
+        assertEquals("订单金额", localizedNames.path("zh").asText());
+        assertEquals("amount_cent", created.getPreferredEnglishName());
+        assertEquals("amount", objectMapper.readTree(created.getForbiddenTranslationsJson()).get(0).asText());
+        assertEquals("paid amount", objectMapper.readTree(created.getTranslationAliasesJson()).get(0).asText());
+        assertEquals("high", created.getTranslationConfidence());
+        assertEquals("统一翻译为 amount_cent，避免 amount_yuan 混用", created.getTranslationNotes());
+        assertEquals("金额以分存储，展示前需要换算", created.getSemanticSummary());
+        verify(repository).insert(created);
+    }
+
+    @Test
+    void create_rejectsSensitiveSemanticTranslationJsonWithoutEchoingSecret() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.existsByNameInProject("amount_cent", 1L)).thenReturn(false);
+        when(repository.existsByNameInProject("payment_status", 1L)).thenReturn(false);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        Field forbidden = new Field();
+        forbidden.setProjectId(1L);
+        forbidden.setName("amount_cent");
+        forbidden.setDataType("bigint");
+        forbidden.setForbiddenTranslationsJson("[\"jdbc:postgresql://localhost/app?password=raw-secret\"]");
+
+        BizException forbiddenEx = assertThrows(BizException.class, () -> service.create(forbidden));
+
+        assertTrue(forbiddenEx.getMessage().contains("forbiddenTranslationsJson"));
+        assertFalse(forbiddenEx.getMessage().contains("raw-secret"));
+        assertFalse(forbiddenEx.getMessage().contains("jdbc:postgresql://localhost/app"));
+
+        Field aliases = new Field();
+        aliases.setProjectId(1L);
+        aliases.setName("payment_status");
+        aliases.setDataType("varchar(20)");
+        aliases.setTranslationAliasesJson("[\"Authorization: Bearer raw.jwt\"]");
+
+        BizException aliasEx = assertThrows(BizException.class, () -> service.create(aliases));
+
+        assertTrue(aliasEx.getMessage().contains("translationAliasesJson"));
+        assertFalse(aliasEx.getMessage().contains("raw.jwt"));
+        verify(repository, never()).insert(any());
+    }
+
+    @Test
+    void create_rejectsSensitiveTranslationConfidenceWithoutEchoingSecret() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.existsByNameInProject("amount_cent", 1L)).thenReturn(false);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        Field field = new Field();
+        field.setProjectId(1L);
+        field.setName("amount_cent");
+        field.setDataType("bigint");
+        field.setTranslationConfidence("token=raw-confidence-secret");
+
+        BizException ex = assertThrows(BizException.class, () -> service.create(field));
+
+        assertTrue(ex.getMessage().contains("translationConfidence 包含敏感连接或凭据信息"));
+        assertFalse(ex.getMessage().contains("raw-confidence-secret"));
+        verify(repository, never()).insert(any());
+    }
+
+    @Test
+    void update_preservesSemanticMetadataWhenOrdinaryUpdateOmitsAdditiveFields() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field existing = new Field();
+        existing.setId(9L);
+        existing.setProjectId(1L);
+        existing.setName("amount_cent");
+        existing.setDataType("bigint");
+        existing.setLocalizedNamesJson("{\"zh\":\"订单金额\"}");
+        existing.setPreferredEnglishName("amount_cent");
+        existing.setForbiddenTranslationsJson("[\"amount\"]");
+        existing.setTranslationAliasesJson("[\"paid amount\"]");
+        existing.setTranslationConfidence("high");
+        existing.setTranslationNotes("保留命名取舍");
+        existing.setSemanticSummary("金额以分存储");
+        when(repository.findById(9L)).thenReturn(Optional.of(existing));
+        when(repository.existsByNameInProjectExcludeId("amount_cent", 1L, 9L)).thenReturn(false);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        Field incoming = new Field();
+        incoming.setName("amount_cent");
+        incoming.setDataType("bigint");
+        incoming.setNullable(false);
+        incoming.setComment("订单金额字段");
+
+        Field updated = service.update(9L, incoming);
+
+        assertEquals("{\"zh\":\"订单金额\"}", updated.getLocalizedNamesJson());
+        assertEquals("amount_cent", updated.getPreferredEnglishName());
+        assertEquals("[\"amount\"]", updated.getForbiddenTranslationsJson());
+        assertEquals("[\"paid amount\"]", updated.getTranslationAliasesJson());
+        assertEquals("high", updated.getTranslationConfidence());
+        assertEquals("保留命名取舍", updated.getTranslationNotes());
+        assertEquals("金额以分存储", updated.getSemanticSummary());
         verify(repository).update(updated);
     }
 
@@ -1352,6 +1473,19 @@ class FieldServiceImplTest {
     private FieldServiceImpl service(FieldRepository repository, FieldSourceRepository sourceRepository,
                                      StandardChangeLogService changeLogService,
                                      BusinessGlossaryService glossaryService) {
-        return new FieldServiceImpl(repository, sourceRepository, changeLogService, objectMapper, glossaryService);
+        FieldSemanticRuleService semanticRuleService = mock(FieldSemanticRuleService.class);
+        MetricDefinitionService metricDefinitionService = mock(MetricDefinitionService.class);
+        when(semanticRuleService.list(anyLong(), nullable(Long.class), nullable(String.class), nullable(String.class)))
+                .thenReturn(List.of());
+        when(metricDefinitionService.list(anyLong(), nullable(String.class), nullable(String.class), nullable(Long.class)))
+                .thenReturn(List.of());
+        return new FieldServiceImpl(
+                repository,
+                sourceRepository,
+                changeLogService,
+                objectMapper,
+                glossaryService,
+                semanticRuleService,
+                metricDefinitionService);
     }
 }

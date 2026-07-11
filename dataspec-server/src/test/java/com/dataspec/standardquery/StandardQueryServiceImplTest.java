@@ -249,12 +249,30 @@ class StandardQueryServiceImplTest {
     }
 
     private StandardQueryService service(FieldRepository repository) {
+        com.dataspec.fieldsemantic.service.FieldSemanticRuleService semanticRuleService =
+                mock(com.dataspec.fieldsemantic.service.FieldSemanticRuleService.class);
+        when(semanticRuleService.list(
+                anyLong(),
+                org.mockito.ArgumentMatchers.nullable(Long.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class)))
+                .thenReturn(List.of());
+        com.dataspec.metric.service.MetricDefinitionService metricDefinitionService =
+                mock(com.dataspec.metric.service.MetricDefinitionService.class);
+        when(metricDefinitionService.list(
+                anyLong(),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(Long.class)))
+                .thenReturn(List.of());
         FieldService fieldService = new FieldServiceImpl(
                 repository,
                 mock(FieldSourceRepository.class),
                 mock(com.dataspec.changelog.service.StandardChangeLogService.class),
                 new ObjectMapper(),
-                mock(com.dataspec.businessglossary.service.BusinessGlossaryService.class));
+                mock(com.dataspec.businessglossary.service.BusinessGlossaryService.class),
+                semanticRuleService,
+                metricDefinitionService);
         return new StandardQueryServiceImpl(fieldService);
     }
 

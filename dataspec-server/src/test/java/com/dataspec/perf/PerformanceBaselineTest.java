@@ -123,12 +123,30 @@ class PerformanceBaselineTest {
         BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
         when(repository.findAllByProjectId(PROJECT_ID)).thenReturn(fields);
         when(glossaryService.match(PROJECT_ID, "用户手机号")).thenReturn(List.of());
+        com.dataspec.fieldsemantic.service.FieldSemanticRuleService semanticRuleService =
+                mock(com.dataspec.fieldsemantic.service.FieldSemanticRuleService.class);
+        when(semanticRuleService.list(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.nullable(Long.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class)))
+                .thenReturn(List.of());
+        com.dataspec.metric.service.MetricDefinitionService metricDefinitionService =
+                mock(com.dataspec.metric.service.MetricDefinitionService.class);
+        when(metricDefinitionService.list(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(Long.class)))
+                .thenReturn(List.of());
         return new FieldServiceImpl(
                 repository,
                 mock(FieldSourceRepository.class),
                 mock(StandardChangeLogService.class),
                 new ObjectMapper(),
-                glossaryService);
+                glossaryService,
+                semanticRuleService,
+                metricDefinitionService);
     }
 
     private AiContextExportService aiContextExportService(FieldService fieldService) {
@@ -157,6 +175,47 @@ class PerformanceBaselineTest {
                 org.mockito.ArgumentMatchers.anyList(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyInt())).thenReturn(List.of());
+        com.dataspec.fieldknowledge.service.FieldKnowledgeCardService fieldKnowledgeCardService =
+                mock(com.dataspec.fieldknowledge.service.FieldKnowledgeCardService.class);
+        when(fieldKnowledgeCardService.get(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong()))
+                .thenAnswer(invocation -> new com.dataspec.fieldknowledge.model.FieldKnowledgeCardResp(
+                        invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        "field:" + invocation.getArgument(0) + ":" + invocation.getArgument(1),
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        null));
+        com.dataspec.fieldsemantic.service.FieldSemanticRuleService fieldSemanticRuleService =
+                mock(com.dataspec.fieldsemantic.service.FieldSemanticRuleService.class);
+        when(fieldSemanticRuleService.list(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.nullable(Long.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class)))
+                .thenReturn(List.of());
+        com.dataspec.metric.service.MetricDefinitionService metricDefinitionService =
+                mock(com.dataspec.metric.service.MetricDefinitionService.class);
+        when(metricDefinitionService.list(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(Long.class)))
+                .thenReturn(List.of());
 
         SqlLintService sqlLintService = new SqlLintService(
                 new SqlParserService(),
@@ -189,7 +248,10 @@ class PerformanceBaselineTest {
                 usageExampleService,
                 mock(StandardReusePackService.class),
                 new StandardQueryServiceImpl(fieldService),
-                null
+                null,
+                fieldKnowledgeCardService,
+                fieldSemanticRuleService,
+                metricDefinitionService
         );
     }
 

@@ -102,7 +102,9 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                 List.of("stableRef", "canonicalRef", "aliasHistory[]", "replacementRef",
                         "name", "dataType", "nullable", "comment", "displayName", "category", "tags",
                         "codeSetId", "sensitive", "status", "replacementFieldId", "replacementReason",
-                        "example", "aliases[]", "matchReasons[]"),
+                        "example", "aliases[]", "matchReasons[]",
+                        "semanticMetadata.preferredEnglishName", "semanticMetadata.translationAliases[]",
+                        "semanticMetadata.forbiddenTranslations[]", "semanticMetadata.semanticSummary"),
                 List.of(),
                 objectSchema("DataSpec Field", List.of("name", "dataType"), orderedMap(
                         "stableRef", describedStringProp("项目内稳定字段引用，格式为 field:<projectId>:<fieldId>。"),
@@ -127,7 +129,16 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                         "replacementReason", stringProp(),
                         "example", stringProp(),
                         "aliases", arrayOf(stringProp()),
-                        "matchReasons", arrayOf(stringProp())
+                        "matchReasons", arrayOf(stringProp()),
+                        "semanticMetadata", objectSchema("Field Semantic Metadata", List.of(), orderedMap(
+                                "localizedNames", describedStringProp("本地化名称 JSON 摘要；secret-safe，不得包含凭据或业务数据行。"),
+                                "preferredEnglishName", describedStringProp("推荐英文标准字段名或命名片段。"),
+                                "forbiddenTranslations", arrayOf(describedStringProp("禁用翻译；AI 命中后不得直接采用。")),
+                                "translationAliases", arrayOf(describedStringProp("翻译别名，用于搜索、推荐和 AI Context。")),
+                                "translationConfidence", describedStringProp("命名翻译置信度，如 high、medium、low。"),
+                                "translationNotes", describedStringProp("命名翻译说明；secret-safe。"),
+                                "semanticSummary", describedStringProp("字段单位、口径、source-of-truth 或常见误用摘要；只作 guidance。")
+                        ))
                 )),
                 List.of(orderedMap(
                         "name", "mobile_no",
@@ -197,7 +208,9 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                 "enum-dict",
                 "枚举字典",
                 "项目枚举字典及其枚举值结构。",
-                List.of("stableRef", "canonicalRef", "code", "name", "valueType", "values[].value", "values[].label", "values[].sortOrder"),
+                List.of("stableRef", "canonicalRef", "code", "name", "valueType", "values[].value", "values[].label", "values[].sortOrder",
+                        "values[].status", "values[].aliases[]", "values[].replacementValue", "values[].validFrom", "values[].validTo",
+                        "values[].mappingHints", "values[].aiUsageNotes"),
                 List.of(),
                 objectSchema("DataSpec Enum Dict", List.of("code", "name", "values"), orderedMap(
                         "stableRef", describedStringProp("项目内稳定枚举代码集引用，格式为 enum:<projectId>:<codeSetId>。"),
@@ -208,7 +221,15 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                         "values", arrayOf(objectSchema("Enum Value", List.of("value", "label"), orderedMap(
                                 "value", stringProp(),
                                 "label", stringProp(),
-                                "sortOrder", integerProp()
+                                "sortOrder", integerProp(),
+                                "status", describedEnumProp("枚举值生命周期状态。", "draft", "enabled", "deprecated", "disabled"),
+                                "aliases", arrayOf(describedStringProp("枚举值别名；用于外部系统映射和 AI 识别历史值。")),
+                                "replacementValue", describedStringProp("废弃或停用枚举值的替代值；只作 guidance。"),
+                                "validFrom", describedStringProp("有效期开始日期，YYYY-MM-DD。"),
+                                "validTo", describedStringProp("有效期结束日期，YYYY-MM-DD。"),
+                                "sourceEvidence", describedStringProp("来源证据或维护说明；secret-safe。"),
+                                "mappingHints", describedStringProp("跨系统映射提示；secret-safe。"),
+                                "aiUsageNotes", describedStringProp("AI 使用说明；secret-safe。")
                         )))
                 )),
                 List.of(orderedMap(
@@ -463,6 +484,181 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                         "usageExamples", List.of(orderedMap("scope", "FIELD", "exampleType", "GOOD")),
                         "usageExampleSummary", orderedMap("totalExamples", 1)
                 ))
+        ));
+        add(map, contract(
+                "field-semantic-rule",
+                "字段语义规则",
+                "字段派生、单位换算、聚合口径、时间粒度、source-of-truth 和反例 guidance；project-scoped 且 secret-safe。",
+                List.of("id", "projectId", "fieldId", "sourceFieldId", "ruleType", "unitConversion",
+                        "aggregationRule", "timeGranularity", "sourceOfTruth", "recommendedUse",
+                        "antiPatterns", "evidenceRefs[]", "status"),
+                List.of(),
+                objectSchema("DataSpec Field Semantic Rule", List.of("projectId", "fieldId", "ruleType"), orderedMap(
+                        "id", describedIntegerProp("语义规则 ID。"),
+                        "projectId", describedIntegerProp("所属项目 ID；所有字段引用必须同项目。"),
+                        "fieldId", describedIntegerProp("目标标准字段 ID。"),
+                        "sourceFieldId", describedIntegerProp("可选源字段 ID；必须和目标字段同项目。"),
+                        "ruleType", describedEnumProp("语义规则类型。", "DERIVED_FROM", "UNIT_CONVERSION", "AGGREGATION", "TIME_GRAIN", "SOURCE_OF_TRUTH", "NAMING"),
+                        "unitConversion", describedStringProp("单位换算说明；guidance only，secret-safe。"),
+                        "aggregationRule", describedStringProp("聚合口径说明；guidance only，secret-safe。"),
+                        "timeGranularity", describedStringProp("时间粒度说明；guidance only，secret-safe。"),
+                        "sourceOfTruth", describedStringProp("source of truth 或首选字段说明；secret-safe。"),
+                        "recommendedUse", describedStringProp("推荐使用场景；secret-safe。"),
+                        "antiPatterns", describedStringProp("反例或误用说明；secret-safe。"),
+                        "evidenceRefs", arrayOf(describedStringProp("只读证据引用；不得包含 token、JDBC URL、DSN 或业务数据行。")),
+                        "status", describedEnumProp("规则状态。", "draft", "enabled", "disabled")
+                )),
+                List.of(orderedMap(
+                        "projectId", 1,
+                        "fieldId", 100,
+                        "sourceFieldId", 90,
+                        "ruleType", "UNIT_CONVERSION",
+                        "unitConversion", "源字段为分，目标展示为元；生成 SQL 前需确认换算方向。",
+                        "status", "enabled"
+                ))
+        ));
+        add(map, contract(
+                "field-knowledge-card",
+                "字段知识卡",
+                "AI 可读字段知识卡，只读聚合字段元数据、格式、usage contract、语义规则、枚举生命周期、使用示例和指标引用。",
+                List.of("projectId", "fieldId", "stableRef", "name", "dataType", "lifecycleStatus",
+                        "formatSummary[]", "usageContractSummary[]", "namingGuidance[]", "semanticRules[]",
+                        "enumHints[]", "usageExamples[]", "metricReferences[]", "riskNotes[]", "evidenceRefs[]"),
+                List.of(),
+                objectSchema("DataSpec Field Knowledge Card", List.of("projectId", "fieldId", "stableRef", "name"), orderedMap(
+                        "projectId", describedIntegerProp("所属项目 ID。"),
+                        "fieldId", describedIntegerProp("字段 ID。"),
+                        "stableRef", describedStringProp("稳定字段引用，格式为 field:<projectId>:<fieldId>。"),
+                        "name", describedStringProp("标准字段名。"),
+                        "displayName", describedStringProp("字段展示名称；secret-safe。"),
+                        "dataType", describedStringProp("数据类型。"),
+                        "lifecycleStatus", describedStringProp("字段生命周期状态。"),
+                        "aliases", arrayOf(describedStringProp("字段别名。")),
+                        "formatSummary", arrayOf(describedStringProp("格式和值形态摘要；bounded、secret-safe。")),
+                        "usageContractSummary", arrayOf(describedStringProp("使用边界摘要；bounded、secret-safe。")),
+                        "namingGuidance", arrayOf(describedStringProp("命名翻译 guidance；bounded、secret-safe。")),
+                        "semanticRules", arrayOf(objectProp()),
+                        "enumHints", arrayOf(objectProp()),
+                        "usageExamples", arrayOf(describedStringProp("字段使用正反例摘要；bounded、secret-safe。")),
+                        "metricReferences", arrayOf(objectProp()),
+                        "relatedFieldRefs", arrayOf(describedStringProp("相关字段 stableRef。")),
+                        "riskNotes", arrayOf(describedStringProp("风险、边界或人工确认提示。")),
+                        "evidenceRefs", arrayOf(describedStringProp("只读证据引用。")),
+                        "lastVerifiedAt", describedStringProp("聚合来源最近更新时间。")
+                )),
+                List.of(orderedMap(
+                        "projectId", 1,
+                        "fieldId", 100,
+                        "stableRef", "field:1:100",
+                        "name", "order_amount",
+                        "dataType", "bigint",
+                        "formatSummary", List.of("单位: cent"),
+                        "riskNotes", List.of("指标口径有独立聚合规则，不能仅按字段名推断。")
+                ))
+        ));
+        add(map, contract(
+                "enum-value-lifecycle",
+                "枚举值生命周期",
+                "枚举值状态、别名、替代值、有效期、来源证据和 AI 映射提示。",
+                List.of("value", "label", "status", "aliases[]", "replacementValue", "validFrom", "validTo", "mappingHints", "aiUsageNotes"),
+                List.of(),
+                objectSchema("DataSpec Enum Value Lifecycle", List.of("value", "label"), orderedMap(
+                        "value", describedStringProp("枚举值。"),
+                        "label", describedStringProp("显示标签。"),
+                        "status", describedEnumProp("生命周期状态。", "draft", "enabled", "deprecated", "disabled"),
+                        "aliases", arrayOf(describedStringProp("别名或历史值。")),
+                        "replacementValue", describedStringProp("替代值；只作 guidance。"),
+                        "validFrom", describedStringProp("有效期开始日期。"),
+                        "validTo", describedStringProp("有效期结束日期。"),
+                        "sourceEvidence", describedStringProp("来源证据；secret-safe。"),
+                        "mappingHints", describedStringProp("映射提示；secret-safe。"),
+                        "aiUsageNotes", describedStringProp("AI 使用说明；secret-safe。")
+                )),
+                List.of(orderedMap("value", "PAID", "label", "已支付", "status", "enabled", "aliases", List.of("paid")))
+        ));
+        add(map, contract(
+                "metric-definition-mapping",
+                "指标口径映射",
+                "轻量指标口径定义与标准字段映射；example SQL 仅作说明，不执行。",
+                List.of("id", "projectId", "metricKey", "displayName", "definition",
+                        "measureFieldIds[]", "dimensionFieldIds[]", "filterRule", "aggregationRule",
+                        "timeGrain", "ownerNotes", "exampleSql", "evidenceRefs[]", "status"),
+                List.of(),
+                objectSchema("DataSpec Metric Definition Mapping", List.of("projectId", "metricKey"), orderedMap(
+                        "id", describedIntegerProp("指标口径 ID。"),
+                        "projectId", describedIntegerProp("所属项目 ID。"),
+                        "metricKey", describedStringProp("项目内唯一指标键，snake_case。"),
+                        "displayName", describedStringProp("指标展示名；secret-safe。"),
+                        "definition", describedStringProp("指标业务定义；secret-safe。"),
+                        "measureFieldIds", arrayOf(describedIntegerProp("度量字段 ID；必须同项目。")),
+                        "dimensionFieldIds", arrayOf(describedIntegerProp("维度字段 ID；必须同项目。")),
+                        "filterRule", describedStringProp("过滤口径；guidance only。"),
+                        "aggregationRule", describedStringProp("聚合口径；guidance only。"),
+                        "timeGrain", describedStringProp("时间粒度；guidance only。"),
+                        "ownerNotes", describedStringProp("维护者说明；secret-safe。"),
+                        "exampleSql", describedStringProp("示例 SQL，仅作说明，不执行，secret-safe。"),
+                        "evidenceRefs", arrayOf(describedStringProp("只读证据引用。")),
+                        "status", describedEnumProp("口径状态。", "draft", "enabled", "deprecated", "disabled")
+                )),
+                List.of(orderedMap(
+                        "projectId", 1,
+                        "metricKey", "paid_order_amount",
+                        "definition", "已支付订单金额，单位分。",
+                        "measureFieldIds", List.of(100),
+                        "aggregationRule", "sum(order_amount)",
+                        "status", "enabled"
+                ))
+        ));
+        add(map, contract(
+                "ai-context-field-knowledge-cards",
+                "AI Context Field Knowledge Cards Artifact",
+                ".dataspec/field-knowledge-cards.json 契约。",
+                List.of("kind", "schemaVersion", "projectId", "contextScope", "cards[]", "summary.totalMatched", "summary.truncated"),
+                List.of(),
+                objectSchema("DataSpec AI Context Field Knowledge Cards", List.of("kind", "schemaVersion", "projectId", "cards"), orderedMap(
+                        "kind", describedStringProp("固定为 dataspec-field-knowledge-cards。"),
+                        "schemaVersion", describedIntegerProp("AI Context schema version。"),
+                        "projectId", describedIntegerProp("项目 ID。"),
+                        "contextScope", objectProp(),
+                        "cards", arrayOf(objectProp()),
+                        "summary", objectProp()
+                )),
+                List.of(orderedMap("kind", "dataspec-field-knowledge-cards", "schemaVersion", 1, "projectId", 1, "cards", List.of()))
+        ));
+        add(map, contract(
+                "ai-context-field-semantics",
+                "AI Context Field Semantics Artifact",
+                ".dataspec/field-semantics.json 契约。",
+                List.of("kind", "schemaVersion", "projectId", "semanticRules[]", "namingGuidance[]", "summary.truncated"),
+                List.of(),
+                objectSchema("DataSpec AI Context Field Semantics", List.of("kind", "schemaVersion", "projectId"), orderedMap(
+                        "kind", describedStringProp("固定为 dataspec-field-semantics。"),
+                        "schemaVersion", describedIntegerProp("AI Context schema version。"),
+                        "projectId", describedIntegerProp("项目 ID。"),
+                        "contextScope", objectProp(),
+                        "semanticRules", arrayOf(objectProp()),
+                        "namingGuidance", arrayOf(objectProp()),
+                        "summary", objectProp()
+                )),
+                List.of(orderedMap("kind", "dataspec-field-semantics", "schemaVersion", 1, "projectId", 1, "semanticRules", List.of()))
+        ));
+        add(map, contract(
+                "ai-context-metric-definitions",
+                "AI Context Metric Definitions Artifact",
+                ".dataspec/metrics.json 契约。",
+                List.of("kind", "schemaVersion", "projectId", "guidanceOnly", "executionPolicy", "metrics[]", "summary.truncated"),
+                List.of(),
+                objectSchema("DataSpec AI Context Metric Definitions", List.of("kind", "schemaVersion", "projectId", "metrics"), orderedMap(
+                        "kind", describedStringProp("固定为 dataspec-metric-definitions。"),
+                        "schemaVersion", describedIntegerProp("AI Context schema version。"),
+                        "projectId", describedIntegerProp("项目 ID。"),
+                        "guidanceOnly", describedBooleanProp("始终为 true；指标口径不执行 SQL。"),
+                        "executionPolicy", describedStringProp("exampleSql 仅作说明的策略文本。"),
+                        "contextScope", objectProp(),
+                        "metrics", arrayOf(objectProp()),
+                        "summary", objectProp()
+                )),
+                List.of(orderedMap("kind", "dataspec-metric-definitions", "schemaVersion", 1, "projectId", 1, "guidanceOnly", true, "metrics", List.of()))
         ));
         add(map, contract(
                 "ai-task-profile",

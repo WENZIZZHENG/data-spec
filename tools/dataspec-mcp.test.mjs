@@ -46,6 +46,9 @@ test('resources list and read use configured project', async () => {
     'dataspec://project/7/session-bootstrap',
     'dataspec://project/7/session-state',
     'dataspec://project/7/field-catalog',
+    'dataspec://project/7/field-knowledge-cards',
+    'dataspec://project/7/field-semantics',
+    'dataspec://project/7/metric-definitions',
     'dataspec://project/7/table-standards',
     'dataspec://project/7/database-rules',
     'dataspec://project/7/rules-yaml',
@@ -1490,6 +1493,138 @@ test('get_table_standards tool rejects conflicting filters locally', async () =>
   assert.equal(response.error.code, -32602)
   assert.match(response.error.message, /templateId 与 businessObject/)
   assert.equal(calls.length, 0)
+})
+
+test('semantic knowledge resources are listed and read as structured json', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    calls.push(url)
+    return jsonResponse({
+      code: 200,
+      data: {
+        kind: 'dataspec-field-knowledge-card-list',
+        cards: [{ fieldId: 100, fieldName: 'amount_cent' }],
+        summary: { returnedCount: 1, truncated: false }
+      }
+    })
+  })
+
+  const templates = await handler({ jsonrpc: '2.0', id: 113, method: 'resources/templates/list' })
+  assert.ok(templates.result.resourceTemplates.some((template) =>
+    template.uriTemplate === 'dataspec://project/{projectId}/field-knowledge-cards'))
+  assert.ok(templates.result.resourceTemplates.some((template) =>
+    template.uriTemplate === 'dataspec://project/{projectId}/field-semantics'))
+  assert.ok(templates.result.resourceTemplates.some((template) =>
+    template.uriTemplate === 'dataspec://project/{projectId}/metric-definitions'))
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 114,
+    method: 'resources/read',
+    params: { uri: 'dataspec://project/7/field-knowledge-cards' }
+  })
+
+  assert.equal(calls[0], 'http://dataspec.local/api/field-knowledge-cards?projectId=7')
+  assert.equal(read.result.contents[0].mimeType, 'application/json')
+  assert.equal(read.result.structuredContent.cards[0].fieldName, 'amount_cent')
+  assert.equal(JSON.parse(read.result.contents[0].text).summary.returnedCount, 1)
+})
+
+test('semantic knowledge MCP tools call readonly APIs and redact outputs', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    calls.push(url)
+    if (url.includes('/api/field-knowledge-cards/100?')) {
+      return jsonResponse({ code: 200, data: { fieldId: 100, riskNotes: ['token=raw-secret'] } })
+    }
+    if (url.includes('/api/field-semantics?')) {
+      return jsonResponse({ code: 200, data: [{ id: 33, ruleType: 'UNIT_CONVERSION' }] })
+    }
+    if (url.includes('/api/metric-definitions?')) {
+      return jsonResponse({ code: 200, data: [{ id: 44, metricKey: 'gmv' }] })
+    }
+    if (url.includes('/api/metric-definitions/44')) {
+      return jsonResponse({ code: 200, data: { id: 44, metricKey: 'gmv', exampleSql: 'select dsn=postgres://user:secret@host/db' } })
+    }
+    if (url.includes('/api/enums/9/values')) {
+      return jsonResponse({ code: 200, data: [{ value: 'OLD', status: 'deprecated', replacementValue: 'NEW' }] })
+    }
+    throw new Error(`unexpected url: ${url}`)
+  })
+
+  const tools = await handler({ jsonrpc: '2.0', id: 115, method: 'tools/list' })
+  for (const name of ['get_field_knowledge_cards', 'get_field_semantics', 'get_metric_definitions', 'get_enum_lifecycle']) {
+    const descriptor = tools.result.tools.find((tool) => tool.name === name)
+    assert.ok(descriptor, `missing ${name}`)
+    assert.equal(descriptor.safety.readOnly, true)
+    assert.equal(descriptor.safety.writesProject, false)
+  }
+
+  const card = await handler({
+    jsonrpc: '2.0',
+    id: 116,
+    method: 'tools/call',
+    params: { name: 'get_field_knowledge_cards', arguments: { projectId: 8, fieldId: 100 } }
+  })
+  const semantics = await handler({
+    jsonrpc: '2.0',
+    id: 117,
+    method: 'tools/call',
+    params: { name: 'get_field_semantics', arguments: { projectId: 8, fieldId: 100, ruleType: 'UNIT_CONVERSION', limit: 5 } }
+  })
+  const metricList = await handler({
+    jsonrpc: '2.0',
+    id: 122,
+    method: 'tools/call',
+    params: { name: 'get_metric_definitions', arguments: { projectId: 8, fieldId: 100, metricKey: 'gmv', limit: 5 } }
+  })
+  const metric = await handler({
+    jsonrpc: '2.0',
+    id: 118,
+    method: 'tools/call',
+    params: { name: 'get_metric_definitions', arguments: { id: 44 } }
+  })
+  const enumLifecycle = await handler({
+    jsonrpc: '2.0',
+    id: 119,
+    method: 'tools/call',
+    params: { name: 'get_enum_lifecycle', arguments: { enumId: 9 } }
+  })
+
+  assert.equal(calls[0], 'http://dataspec.local/api/field-knowledge-cards/100?projectId=8')
+  assert.equal(calls[1], 'http://dataspec.local/api/field-semantics?projectId=8&fieldId=100&ruleType=UNIT_CONVERSION&limit=5')
+  assert.equal(calls[2], 'http://dataspec.local/api/metric-definitions?projectId=8&fieldId=100&metricKey=gmv&limit=5')
+  assert.equal(calls[3], 'http://dataspec.local/api/metric-definitions/44')
+  assert.equal(calls[4], 'http://dataspec.local/api/enums/9/values')
+  assert.equal(card.result.structuredContent.fieldId, 100)
+  assert.equal(semantics.result.structuredContent[0].ruleType, 'UNIT_CONVERSION')
+  assert.equal(metricList.result.structuredContent[0].metricKey, 'gmv')
+  assert.equal(metric.result.structuredContent.metricKey, 'gmv')
+  assert.equal(enumLifecycle.result.structuredContent.values[0].replacementValue, 'NEW')
+  assert.doesNotMatch(card.result.content[0].text, /raw-secret/)
+  assert.doesNotMatch(metric.result.content[0].text, /secret@host/)
+})
+
+test('semantic knowledge MCP detail tools reject mixed filters locally', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
+
+  const semantics = await handler({
+    jsonrpc: '2.0',
+    id: 120,
+    method: 'tools/call',
+    params: { name: 'get_field_semantics', arguments: { id: 33, query: '金额' } }
+  })
+  const metrics = await handler({
+    jsonrpc: '2.0',
+    id: 121,
+    method: 'tools/call',
+    params: { name: 'get_metric_definitions', arguments: { id: 44, status: 'enabled' } }
+  })
+
+  assert.equal(semantics.error.code, -32602)
+  assert.match(semantics.error.message, /不要同时传列表过滤/)
+  assert.equal(metrics.error.code, -32602)
+  assert.match(metrics.error.message, /不要同时传列表过滤/)
 })
 
 test('export_evidence_package tool returns structured package without adding secrets', async () => {

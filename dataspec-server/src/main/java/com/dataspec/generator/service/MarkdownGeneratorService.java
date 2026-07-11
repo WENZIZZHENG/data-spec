@@ -2,9 +2,14 @@ package com.dataspec.generator.service;
 
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.fieldsemantic.model.FieldSemanticRuleResp;
+import com.dataspec.fieldsemantic.service.FieldSemanticRuleService;
 import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.service.EnumDictService;
+import com.dataspec.metric.model.MetricDefinitionResp;
+import com.dataspec.metric.service.MetricDefinitionService;
+import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.domain.entity.Domain;
 import com.dataspec.domain.service.DomainService;
 import com.dataspec.template.entity.Template;
@@ -28,6 +33,8 @@ public class MarkdownGeneratorService {
     private final DomainService domainService;
     private final EnumDictService enumDictService;
     private final TemplateService templateService;
+    private final FieldSemanticRuleService fieldSemanticRuleService;
+    private final MetricDefinitionService metricDefinitionService;
 
     /**
      * 生成项目级 Markdown 数据字典
@@ -59,10 +66,10 @@ public class MarkdownGeneratorService {
         // 标准字段
         if (!fields.isEmpty()) {
             md.append("## 标准字段库\n\n");
-            md.append("| 字段名 | 显示名 | 数据域 | 数据类型 | 可空 | 默认值 | 敏感 | 状态 | 别名 | 分类 | 代码集 | 示例 | 注释 |\n");
-            md.append("|--------|--------|--------|----------|------|--------|------|------|------|------|--------|------|------|\n");
+            md.append("| 字段名 | 显示名 | 数据域 | 数据类型 | 可空 | 默认值 | 敏感 | 状态 | 别名 | 分类 | 代码集 | 语义摘要 | 命名翻译 | 使用边界 | 示例 | 注释 |\n");
+            md.append("|--------|--------|--------|----------|------|--------|------|------|------|------|--------|----------|----------|----------|------|------|\n");
             for (Field f : fields) {
-                md.append(String.format("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+                md.append(String.format("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
                         cell(f.getName()),
                         cell(f.getDisplayName()),
                         cell(domainLabel(f.getDomainId(), domainsById)),
@@ -74,10 +81,14 @@ public class MarkdownGeneratorService {
                         cell(f.getAliases()),
                         cell(f.getCategory()),
                         f.getCodeSetId() != null ? f.getCodeSetId().toString() : "-",
+                        cell(f.getSemanticSummary()),
+                        cell(namingSummary(f)),
+                        cell(usageBoundarySummary(f)),
                         cell(f.getExampleValue()),
                         cell(f.getComment())));
             }
             md.append("\n");
+            appendFieldSemanticRules(md, projectId);
         }
 
         // 枚举字典
@@ -92,16 +103,26 @@ public class MarkdownGeneratorService {
 
                 List<EnumValue> values = enumDictService.listValues(e.getId());
                 if (!values.isEmpty()) {
-                    md.append("| 值 | 标签 | 排序 |\n");
-                    md.append("|----|------|------|\n");
+                    md.append("| 值 | 标签 | 状态 | 别名 | 替代值 | 有效期 | 映射提示 | AI 使用说明 | 排序 |\n");
+                    md.append("|----|------|------|------|--------|--------|----------|------------|------|\n");
                     for (EnumValue v : values) {
-                        md.append(String.format("| %s | %s | %d |\n",
-                                cell(v.getValue()), cell(v.getLabel()), v.getSortOrder()));
+                        md.append(String.format("| %s | %s | %s | %s | %s | %s | %s | %s | %d |\n",
+                                cell(v.getValue()),
+                                cell(v.getLabel()),
+                                cell(v.getStatus()),
+                                cell(v.getAliasesJson()),
+                                cell(v.getReplacementValue()),
+                                cell(validWindow(v)),
+                                cell(v.getMappingHints()),
+                                cell(v.getAiUsageNotes()),
+                                v.getSortOrder()));
                     }
                     md.append("\n");
                 }
             }
         }
+
+        appendMetricDefinitions(md, projectId);
 
         // 表模板
         if (!templates.isEmpty()) {
@@ -174,6 +195,105 @@ public class MarkdownGeneratorService {
         return text(domain.getName()) + "(" + text(domain.getCode()) + ")";
     }
 
+    private void appendFieldSemanticRules(StringBuilder md, Long projectId) {
+        List<FieldSemanticRuleResp> rules = fieldSemanticRuleService.list(projectId, null, null, null);
+        if (rules.isEmpty()) {
+            return;
+        }
+        md.append("### 字段语义规则\n\n");
+        md.append("| 字段ID | 源字段ID | 类型 | 单位换算 | 聚合口径 | 时间粒度 | Source of Truth | 推荐使用 | 反例 |\n");
+        md.append("|--------|----------|------|----------|----------|----------|-----------------|----------|------|\n");
+        for (FieldSemanticRuleResp rule : rules) {
+            md.append(String.format("| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+                    idText(rule.fieldId()),
+                    idText(rule.sourceFieldId()),
+                    cell(rule.ruleType()),
+                    cell(rule.unitConversion()),
+                    cell(rule.aggregationRule()),
+                    cell(rule.timeGranularity()),
+                    cell(rule.sourceOfTruth()),
+                    cell(rule.recommendedUse()),
+                    cell(rule.antiPatterns())));
+        }
+        md.append("\n");
+    }
+
+    private void appendMetricDefinitions(StringBuilder md, Long projectId) {
+        List<MetricDefinitionResp> metrics = metricDefinitionService.list(projectId, null, null, null);
+        if (metrics.isEmpty()) {
+            return;
+        }
+        md.append("## 指标口径\n\n");
+        md.append("> example SQL 仅作说明和 AI guidance，不会被 DataSpec 执行，也不代表结果正确。\n\n");
+        md.append("| 指标键 | 名称 | 定义 | 度量字段 | 维度字段 | 过滤口径 | 聚合口径 | 时间粒度 | 示例 SQL | 状态 |\n");
+        md.append("|--------|------|------|----------|----------|----------|----------|----------|----------|------|\n");
+        for (MetricDefinitionResp metric : metrics) {
+            md.append(String.format("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+                    cell(metric.metricKey()),
+                    cell(metric.displayName()),
+                    cell(metric.definition()),
+                    cell(idList(metric.measureFieldIds())),
+                    cell(idList(metric.dimensionFieldIds())),
+                    cell(metric.filterRule()),
+                    cell(metric.aggregationRule()),
+                    cell(metric.timeGrain()),
+                    cell(metric.exampleSql()),
+                    cell(metric.status())));
+        }
+        md.append("\n");
+    }
+
+    private String namingSummary(Field field) {
+        List<String> parts = new java.util.ArrayList<>();
+        if (field.getPreferredEnglishName() != null && !field.getPreferredEnglishName().isBlank()) {
+            parts.add("preferred=" + field.getPreferredEnglishName());
+        }
+        if (field.getTranslationAliasesJson() != null && !field.getTranslationAliasesJson().isBlank()) {
+            parts.add("aliases=" + field.getTranslationAliasesJson());
+        }
+        if (field.getForbiddenTranslationsJson() != null && !field.getForbiddenTranslationsJson().isBlank()) {
+            parts.add("forbidden=" + field.getForbiddenTranslationsJson());
+        }
+        if (field.getTranslationConfidence() != null && !field.getTranslationConfidence().isBlank()) {
+            parts.add("confidence=" + field.getTranslationConfidence());
+        }
+        return parts.isEmpty() ? "-" : String.join("；", parts);
+    }
+
+    private String usageBoundarySummary(Field field) {
+        List<String> parts = new java.util.ArrayList<>();
+        addPart(parts, "推荐", field.getPreferredUseCases());
+        addPart(parts, "禁用", field.getAvoidWhen());
+        addPart(parts, "聚合", field.getAggregationHints());
+        addPart(parts, "误用", field.getMisuseExamples());
+        return parts.isEmpty() ? "-" : String.join("；", parts);
+    }
+
+    private void addPart(List<String> parts, String label, String value) {
+        if (value != null && !value.isBlank()) {
+            parts.add(label + "=" + value);
+        }
+    }
+
+    private String validWindow(EnumValue value) {
+        if (value.getValidFrom() == null && value.getValidTo() == null) {
+            return "-";
+        }
+        String from = value.getValidFrom() == null ? "-" : value.getValidFrom().toString();
+        String to = value.getValidTo() == null ? "-" : value.getValidTo().toString();
+        return from + " ~ " + to;
+    }
+
+    private String idText(Long id) {
+        return id == null ? "-" : id.toString();
+    }
+
+    private String idList(List<Long> ids) {
+        return ids == null || ids.isEmpty()
+                ? "-"
+                : ids.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+    }
+
     private String cell(String value) {
         return text(value)
                 .replace("\\", "\\\\")
@@ -183,7 +303,7 @@ public class MarkdownGeneratorService {
     }
 
     private String text(String value) {
-        return value == null || value.isBlank() ? "-" : value;
+        return value == null || value.isBlank() ? "-" : SensitiveDataSanitizer.redactText(value);
     }
 
     private String boolText(Boolean value) {

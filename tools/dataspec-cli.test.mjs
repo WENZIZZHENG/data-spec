@@ -4863,6 +4863,174 @@ test('table-standards show rejects conflicting filters and redacts backend diagn
   assert.doesNotMatch(backendIo.stderr, /plain-secret|raw-secret|db\.internal/)
 })
 
+test('field-knowledge list and show call readonly endpoints and redact output', async () => {
+  const calls = []
+  const fetchFn = async (url, options = {}) => {
+    calls.push({ url, options })
+    if (url.includes('/api/field-knowledge-cards/100?')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            fieldId: 100,
+            fieldName: 'amount_cent',
+            riskNotes: ['不要粘贴 Authorization: Bearer raw-secret']
+          }
+        })
+      }
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          kind: 'dataspec-field-knowledge-card-list',
+          cards: [{ fieldId: 100, fieldName: 'amount_cent' }],
+          summary: { returnedCount: 1, truncated: false }
+        }
+      })
+    }
+  }
+
+  const listIo = createIo()
+  const listCode = await runCli([
+    'field-knowledge',
+    'list',
+    '--project',
+    '7',
+    '--query',
+    '订单金额',
+    '--status',
+    'enabled',
+    '--field-id',
+    '100',
+    '--limit',
+    '5',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local',
+    '--dataspec-token',
+    'ds_cli_token'
+  ], listIo, fetchFn)
+
+  const showIo = createIo()
+  const showCode = await runCli([
+    'field-knowledge',
+    'show',
+    '--project',
+    '7',
+    '100',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], showIo, fetchFn)
+
+  assert.equal(listCode, 0)
+  assert.equal(showCode, 0)
+  assert.equal(calls[0].url, 'http://dataspec.local/api/field-knowledge-cards?projectId=7&query=%E8%AE%A2%E5%8D%95%E9%87%91%E9%A2%9D&status=enabled&fieldId=100&limit=5')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_cli_token')
+  assert.equal(calls[1].url, 'http://dataspec.local/api/field-knowledge-cards/100?projectId=7')
+  assert.equal(JSON.parse(listIo.stdout).cards[0].fieldName, 'amount_cent')
+  assert.doesNotMatch(showIo.stdout, /raw-secret/)
+})
+
+test('field-semantics and metric-definitions expose readonly list and show commands', async () => {
+  const calls = []
+  const fetchFn = async (url) => {
+    calls.push(url)
+    if (url.endsWith('/api/field-semantics/33')) {
+      return jsonCliResponse({ id: 33, ruleType: 'UNIT_CONVERSION', sourceOfTruth: 'field rule' })
+    }
+    if (url.endsWith('/api/metric-definitions/44')) {
+      return jsonCliResponse({ id: 44, metricKey: 'gmv', exampleSql: "select 'jdbc:postgresql://db/app' as dsn" })
+    }
+    if (url.includes('/api/field-semantics?')) {
+      return jsonCliResponse([{ id: 33, ruleType: 'UNIT_CONVERSION' }])
+    }
+    return jsonCliResponse([{ id: 44, metricKey: 'gmv' }])
+  }
+
+  const semanticListIo = createIo()
+  const semanticListCode = await runCli([
+    'field-semantics',
+    'list',
+    '--project',
+    '7',
+    '--field-id',
+    '100',
+    '--rule-type',
+    'UNIT_CONVERSION',
+    '--query',
+    '金额',
+    '--limit',
+    '5',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], semanticListIo, fetchFn)
+
+  const semanticShowIo = createIo()
+  const semanticShowCode = await runCli([
+    'field-semantics',
+    'show',
+    '33',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], semanticShowIo, fetchFn)
+
+  const metricListIo = createIo()
+  const metricListCode = await runCli([
+    'metric-definitions',
+    'list',
+    '--project',
+    '7',
+    '--status',
+    'enabled',
+    '--field-id',
+    '100',
+    '--metric-key',
+    'gmv',
+    '--limit',
+    '5',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], metricListIo, fetchFn)
+
+  const metricShowIo = createIo()
+  const metricShowCode = await runCli([
+    'metric-definitions',
+    'show',
+    '44',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], metricShowIo, fetchFn)
+
+  assert.equal(semanticListCode, 0)
+  assert.equal(semanticShowCode, 0)
+  assert.equal(metricListCode, 0)
+  assert.equal(metricShowCode, 0)
+  assert.equal(calls[0], 'http://dataspec.local/api/field-semantics?projectId=7&fieldId=100&ruleType=UNIT_CONVERSION&query=%E9%87%91%E9%A2%9D&limit=5')
+  assert.equal(calls[1], 'http://dataspec.local/api/field-semantics/33')
+  assert.equal(calls[2], 'http://dataspec.local/api/metric-definitions?projectId=7&status=enabled&fieldId=100&metricKey=gmv&limit=5')
+  assert.equal(calls[3], 'http://dataspec.local/api/metric-definitions/44')
+  assert.equal(JSON.parse(semanticListIo.stdout)[0].ruleType, 'UNIT_CONVERSION')
+  assert.equal(JSON.parse(semanticShowIo.stdout).id, 33)
+  assert.equal(JSON.parse(metricListIo.stdout)[0].metricKey, 'gmv')
+  assert.doesNotMatch(metricShowIo.stdout, /jdbc:postgresql:\/\/db\/app/)
+})
+
 test('synthetic-examples generate calls synthetic examples api and prints json', async () => {
   const calls = []
   const fetchFn = async (url) => {
@@ -7337,6 +7505,14 @@ function createIo(stdin = '', cwd = process.cwd()) {
     async readStdin() {
       return this.stdin
     }
+  }
+}
+
+function jsonCliResponse(data) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ code: 200, data })
   }
 }
 

@@ -248,6 +248,89 @@ test('bundled fixtures include table standards CLI and MCP readonly contracts', 
   assert.ok(prompt.dataspecGuidance.stopConditions.some((item) => /structure standards/.test(item)))
 })
 
+test('bundled fixtures include semantic knowledge and metric readonly contracts', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const requiredCliIds = [
+    'field-knowledge-list',
+    'field-knowledge-show',
+    'field-semantics-list',
+    'field-semantics-show',
+    'metric-definitions-list',
+    'metric-definitions-show'
+  ]
+  const requiredTools = [
+    'get_field_knowledge_cards',
+    'get_field_semantics',
+    'get_metric_definitions',
+    'get_enum_lifecycle'
+  ]
+  const requiredResources = [
+    'dataspec://project/<projectId>/field-knowledge-cards',
+    'dataspec://project/<projectId>/field-semantics',
+    'dataspec://project/<projectId>/metric-definitions'
+  ]
+  const requiredTemplates = [
+    'dataspec://project/{projectId}/field-knowledge-cards',
+    'dataspec://project/{projectId}/field-semantics',
+    'dataspec://project/{projectId}/metric-definitions'
+  ]
+
+  for (const id of requiredCliIds) {
+    const command = fixture.cliCommands.find((item) => item.id === id)
+    assert.ok(command, `missing CLI fixture ${id}`)
+    assert.equal(command.safety.readOnly, true)
+    assert.equal(command.safety.writesProject, false)
+    assert.equal(command.safety.requiresIdempotencyKey, false)
+    assert.ok(command.outputShape.length > 0)
+    assert.ok(command.recommendedNextActions.length > 0)
+  }
+
+  const fieldKnowledge = fixture.cliCommands.find((item) => item.id === 'field-knowledge-list')
+  assert.ok(fieldKnowledge.outputShape.includes('cards[]'))
+  assert.ok(fieldKnowledge.outputShape.includes('summary.truncated'))
+  assert.ok(fieldKnowledge.safety.sensitiveInputs.includes('query'))
+
+  const metricDetail = fixture.cliCommands.find((item) => item.id === 'metric-definitions-show')
+  assert.ok(metricDetail.outputShape.includes('exampleSql'))
+  assert.ok(metricDetail.recommendedNextActions.some((item) => /execute|执行|example SQL/i.test(item)))
+
+  for (const name of requiredTools) {
+    const tool = fixture.mcpTools.find((item) => item.name === name)
+    assert.ok(tool, `missing MCP tool fixture ${name}`)
+    assert.equal(tool.safety.readOnly, true)
+    assert.equal(tool.safety.writesProject, false)
+    assert.ok(tool.outputShape.includes('structuredContent'))
+    assert.ok(tool.recommendedNextActions.length > 0)
+  }
+
+  const semanticTool = fixture.mcpTools.find((item) => item.name === 'get_field_semantics')
+  assert.ok(semanticTool.inputProperties.includes('ruleType'))
+  assert.ok(semanticTool.inputProperties.includes('limit'))
+  assert.ok(semanticTool.safety.sensitiveInputs.includes('query'))
+
+  const metricTool = fixture.mcpTools.find((item) => item.name === 'get_metric_definitions')
+  assert.ok(metricTool.inputProperties.includes('metricKey'))
+  assert.ok(metricTool.inputProperties.includes('limit'))
+
+  const enumTool = fixture.mcpTools.find((item) => item.name === 'get_enum_lifecycle')
+  assert.deepEqual(enumTool.requiredInputs, ['enumId'])
+  assert.ok(enumTool.outputShape.includes('structuredContent.values[]'))
+
+  for (const uri of requiredResources) {
+    const resource = fixture.mcpResources.find((item) => item.uri === uri)
+    assert.ok(resource, `missing MCP resource fixture ${uri}`)
+    assert.equal(resource.safety.readOnly, true)
+    assert.equal(resource.safety.writesProject, false)
+    assert.equal(resource.mimeType, 'application/json')
+  }
+
+  for (const uriTemplate of requiredTemplates) {
+    const template = fixture.mcpResourceTemplates.find((item) => item.uriTemplate === uriTemplate)
+    assert.ok(template, `missing MCP resource template fixture ${uriTemplate}`)
+    assert.equal(template.mimeType, 'application/json')
+  }
+})
+
 test('bundled fixtures include synthetic examples readonly contract', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'synthetic-examples-generate')

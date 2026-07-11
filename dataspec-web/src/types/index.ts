@@ -9,6 +9,16 @@ export type DemoProjectResult = Schemas['DemoProjectResult']
 export type Field = Schemas['Field']
 export type FieldReq = Schemas['FieldReq']
 export type FieldSuggestion = Schemas['FieldSuggestion']
+export type FieldKnowledgeCardListResp = Schemas['FieldKnowledgeCardListResp']
+export type FieldKnowledgeCardResp = Schemas['FieldKnowledgeCardResp']
+export type FieldSemanticRuleReq = Schemas['FieldSemanticRuleReq']
+export type FieldSemanticRuleResp = Schemas['FieldSemanticRuleResp']
+export type MetricDefinitionReq = Schemas['MetricDefinitionReq']
+export type MetricDefinitionResp = Schemas['MetricDefinitionResp']
+export type EnumDict = Schemas['EnumDict']
+export type EnumDictReq = Schemas['EnumDictReq']
+export type EnumValue = Schemas['EnumValue']
+export type EnumValueReq = Schemas['EnumValueReq']
 
 /** Standard Query DSL v1 支持的查询目标；当前前端只暴露 FIELD 只读查询。 */
 export type StandardQueryTarget = 'FIELD'

@@ -153,6 +153,41 @@ public class Field {
     @TableField(value = "misuse_examples", updateStrategy = FieldStrategy.ALWAYS)
     private String misuseExamples;
 
+    /** 本地化名称 JSON，如中文名、英文名或业务别名；不得包含凭据或业务数据行 */
+    @Schema(description = "字段本地化名称 JSON，如中文名、英文名或业务别名；不得包含凭据或业务数据行。")
+    @TableField(value = "localized_names_json", updateStrategy = FieldStrategy.ALWAYS)
+    private String localizedNamesJson;
+
+    /** 推荐英文标准字段名或命名片段，用于 AI 命名建议和翻译辅助 */
+    @Schema(description = "推荐英文标准字段名或命名片段，用于 AI 命名建议和翻译辅助。")
+    @TableField(value = "preferred_english_name", updateStrategy = FieldStrategy.ALWAYS)
+    private String preferredEnglishName;
+
+    /** 禁用翻译数组 JSON，AI 命中后需要提示不要直接采用 */
+    @Schema(description = "禁用翻译数组 JSON，AI 命中后需要提示不要直接采用。")
+    @TableField(value = "forbidden_translations_json", updateStrategy = FieldStrategy.ALWAYS)
+    private String forbiddenTranslationsJson;
+
+    /** 翻译别名数组 JSON，用于搜索、推荐和 AI Context 命名匹配 */
+    @Schema(description = "翻译别名数组 JSON，用于搜索、推荐和 AI Context 命名匹配。")
+    @TableField(value = "translation_aliases_json", updateStrategy = FieldStrategy.ALWAYS)
+    private String translationAliasesJson;
+
+    /** 命名翻译置信度，如 high、medium、low，仅作为人工维护提示 */
+    @Schema(description = "命名翻译置信度，如 high、medium、low，仅作为人工维护提示。")
+    @TableField(value = "translation_confidence", updateStrategy = FieldStrategy.ALWAYS)
+    private String translationConfidence;
+
+    /** 命名翻译说明、来源或边界；不得包含 token、JDBC URL、DSN、Authorization 或业务数据行 */
+    @Schema(description = "命名翻译说明、来源或边界；不得包含 token、JDBC URL、DSN、Authorization 或业务数据行。")
+    @TableField(value = "translation_notes", updateStrategy = FieldStrategy.ALWAYS)
+    private String translationNotes;
+
+    /** 字段语义摘要，说明单位、口径、source of truth 或常见误用；只做 AI guidance */
+    @Schema(description = "字段语义摘要，说明单位、口径、source of truth 或常见误用；只做 AI guidance，不执行真实计算。")
+    @TableField(value = "semantic_summary", updateStrategy = FieldStrategy.ALWAYS)
+    private String semanticSummary;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

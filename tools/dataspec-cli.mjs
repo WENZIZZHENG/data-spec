@@ -183,6 +183,15 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'table-standards' || command === 'tablestandards') {
       return await runTableStandards(rest, io, fetchFn)
     }
+    if (command === 'field-knowledge' || command === 'fieldknowledge') {
+      return await runFieldKnowledge(rest, io, fetchFn)
+    }
+    if (command === 'field-semantics' || command === 'fieldsemantics') {
+      return await runFieldSemantics(rest, io, fetchFn)
+    }
+    if (command === 'metric-definitions' || command === 'metricdefinitions') {
+      return await runMetricDefinitions(rest, io, fetchFn)
+    }
     if (command === 'synthetic-examples' || command === 'synthetic-example') {
       return await runSyntheticExamples(rest, io, fetchFn)
     }
@@ -2201,6 +2210,277 @@ async function fetchTableStandards({ server, apiToken, fetchFn, projectId, templ
   appendOptionalParam(params, 'templateId', templateId)
   appendOptionalParam(params, 'businessObject', businessObject)
   const response = await fetchFn(`${server}/api/table-standards?${params.toString()}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  const payload = await readJsonResponse(response)
+  return unwrapResponse(payload)
+}
+
+async function runFieldKnowledge(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand === 'list' || !subcommand || subcommand.startsWith('--')) {
+    const { positional, options } = parseArgs(subcommand === 'list' ? rest : args, [
+      'project',
+      'query',
+      'status',
+      'field-id',
+      'fieldId',
+      'limit',
+      'format',
+      'server',
+      'dataspec-token'
+    ])
+    if (positional.length > 0) {
+      throw new Error(`field-knowledge list 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    assertJsonFormat(options.format, 'field-knowledge list')
+    const projectId = parseProjectId(options.project ?? config.projectId)
+    const fieldId = optionalPositiveInteger(options.fieldId ?? options['field-id'], 'field id')
+    const result = await fetchFieldKnowledgeCards({
+      server: normalizeServer(options.server ?? config.server),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      projectId,
+      query: options.query,
+      status: options.status,
+      fieldId,
+      limit: parseLimit(options.limit, 20)
+    })
+    io.writeOut(`${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`)
+    return 0
+  }
+
+  if (subcommand === 'show') {
+    const { positional, options } = parseArgs(rest, [
+      'project',
+      'field-id',
+      'fieldId',
+      'format',
+      'server',
+      'dataspec-token'
+    ])
+    if (positional.length > 1) {
+      throw new Error(`field-knowledge show 只接受一个 fieldId，收到: ${positional.slice(1).join(', ')}`)
+    }
+    if (positional[0] && (options.fieldId !== undefined || options['field-id'] !== undefined)) {
+      throw new Error('field-knowledge show 的 fieldId 请使用位置参数或 --field-id 之一，不要同时传入')
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    assertJsonFormat(options.format, 'field-knowledge show')
+    const projectId = parseProjectId(options.project ?? config.projectId)
+    const fieldId = parsePositiveInteger(positional[0] ?? options.fieldId ?? options['field-id'], 'field id')
+    const result = await fetchFieldKnowledgeCard({
+      server: normalizeServer(options.server ?? config.server),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      projectId,
+      fieldId
+    })
+    io.writeOut(`${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`)
+    return 0
+  }
+
+  throw new Error(`未知 field-knowledge 子命令: ${subcommand}。支持: list, show`)
+}
+
+async function runFieldSemantics(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand === 'list' || !subcommand || subcommand.startsWith('--')) {
+    const { positional, options } = parseArgs(subcommand === 'list' ? rest : args, [
+      'project',
+      'field-id',
+      'fieldId',
+      'rule-type',
+      'ruleType',
+      'query',
+      'limit',
+      'format',
+      'server',
+      'dataspec-token'
+    ])
+    if (positional.length > 0) {
+      throw new Error(`field-semantics list 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    assertJsonFormat(options.format, 'field-semantics list')
+    const projectId = parseProjectId(options.project ?? config.projectId)
+    const result = await fetchFieldSemanticRules({
+      server: normalizeServer(options.server ?? config.server),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      projectId,
+      fieldId: optionalPositiveInteger(options.fieldId ?? options['field-id'], 'field id'),
+      ruleType: options.ruleType ?? options['rule-type'],
+      query: options.query,
+      limit: options.limit === undefined ? undefined : parseLimit(options.limit, 20)
+    })
+    io.writeOut(`${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`)
+    return 0
+  }
+
+  if (subcommand === 'show') {
+    const { positional, options } = parseArgs(rest, ['format', 'server', 'dataspec-token'])
+    const id = positional[0]
+    if (!id) {
+      throw new Error('field-semantics show 需要提供 rule id')
+    }
+    if (positional.length > 1) {
+      throw new Error(`field-semantics show 只接受一个 rule id，收到: ${positional.slice(1).join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    assertJsonFormat(options.format, 'field-semantics show')
+    const result = await fetchFieldSemanticRule({
+      server: normalizeServer(options.server ?? config.server),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      id: parsePositiveInteger(id, 'rule id')
+    })
+    io.writeOut(`${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`)
+    return 0
+  }
+
+  throw new Error(`未知 field-semantics 子命令: ${subcommand}。支持: list, show`)
+}
+
+async function runMetricDefinitions(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand === 'list' || !subcommand || subcommand.startsWith('--')) {
+    const { positional, options } = parseArgs(subcommand === 'list' ? rest : args, [
+      'project',
+      'query',
+      'status',
+      'field-id',
+      'fieldId',
+      'metric-key',
+      'metricKey',
+      'limit',
+      'format',
+      'server',
+      'dataspec-token'
+    ])
+    if (positional.length > 0) {
+      throw new Error(`metric-definitions list 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    assertJsonFormat(options.format, 'metric-definitions list')
+    const projectId = parseProjectId(options.project ?? config.projectId)
+    const result = await fetchMetricDefinitions({
+      server: normalizeServer(options.server ?? config.server),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      projectId,
+      query: options.query,
+      status: options.status,
+      fieldId: optionalPositiveInteger(options.fieldId ?? options['field-id'], 'field id'),
+      metricKey: options.metricKey ?? options['metric-key'],
+      limit: options.limit === undefined ? undefined : parseLimit(options.limit, 20)
+    })
+    io.writeOut(`${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`)
+    return 0
+  }
+
+  if (subcommand === 'show') {
+    const { positional, options } = parseArgs(rest, ['format', 'server', 'dataspec-token'])
+    const id = positional[0]
+    if (!id) {
+      throw new Error('metric-definitions show 需要提供 metric definition id')
+    }
+    if (positional.length > 1) {
+      throw new Error(`metric-definitions show 只接受一个 metric definition id，收到: ${positional.slice(1).join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    assertJsonFormat(options.format, 'metric-definitions show')
+    const result = await fetchMetricDefinition({
+      server: normalizeServer(options.server ?? config.server),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      id: parsePositiveInteger(id, 'metric definition id')
+    })
+    io.writeOut(`${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`)
+    return 0
+  }
+
+  throw new Error(`未知 metric-definitions 子命令: ${subcommand}。支持: list, show`)
+}
+
+function assertJsonFormat(format, commandLabel) {
+  const resolved = format ?? 'json'
+  if (resolved !== 'json') {
+    throw new Error(`${commandLabel} 当前仅支持 --format json`)
+  }
+}
+
+function optionalPositiveInteger(value, label) {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+  return parsePositiveInteger(value, label)
+}
+
+async function fetchFieldKnowledgeCards({ server, apiToken, fetchFn, projectId, query, status, fieldId, limit }) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'query', query)
+  appendOptionalParam(params, 'status', status)
+  appendOptionalParam(params, 'fieldId', fieldId)
+  appendOptionalParam(params, 'limit', limit)
+  const response = await fetchFn(`${server}/api/field-knowledge-cards?${params.toString()}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  const payload = await readJsonResponse(response)
+  return unwrapResponse(payload)
+}
+
+async function fetchFieldKnowledgeCard({ server, apiToken, fetchFn, projectId, fieldId }) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  const response = await fetchFn(`${server}/api/field-knowledge-cards/${encodeURIComponent(fieldId)}?${params.toString()}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  const payload = await readJsonResponse(response)
+  return unwrapResponse(payload)
+}
+
+async function fetchFieldSemanticRules({ server, apiToken, fetchFn, projectId, fieldId, ruleType, query, limit }) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'fieldId', fieldId)
+  appendOptionalParam(params, 'ruleType', ruleType)
+  appendOptionalParam(params, 'query', query)
+  appendOptionalParam(params, 'limit', limit)
+  const response = await fetchFn(`${server}/api/field-semantics?${params.toString()}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  const payload = await readJsonResponse(response)
+  return unwrapResponse(payload)
+}
+
+async function fetchFieldSemanticRule({ server, apiToken, fetchFn, id }) {
+  const response = await fetchFn(`${server}/api/field-semantics/${encodeURIComponent(id)}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  const payload = await readJsonResponse(response)
+  return unwrapResponse(payload)
+}
+
+async function fetchMetricDefinitions({ server, apiToken, fetchFn, projectId, query, status, fieldId, metricKey, limit }) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'query', query)
+  appendOptionalParam(params, 'status', status)
+  appendOptionalParam(params, 'fieldId', fieldId)
+  appendOptionalParam(params, 'metricKey', metricKey)
+  appendOptionalParam(params, 'limit', limit)
+  const response = await fetchFn(`${server}/api/metric-definitions?${params.toString()}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  const payload = await readJsonResponse(response)
+  return unwrapResponse(payload)
+}
+
+async function fetchMetricDefinition({ server, apiToken, fetchFn, id }) {
+  const response = await fetchFn(`${server}/api/metric-definitions/${encodeURIComponent(id)}`, {
     headers: dataSpecHeaders(apiToken)
   })
   const payload = await readJsonResponse(response)
@@ -6759,6 +7039,12 @@ Usage:
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs table-standards list --project <id> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs table-standards show --project <id> (--template <id>|--business-object <key>) --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs field-knowledge list --project <id> [--query <text>] [--status <status>] [--field-id <id>] [--limit <n>] --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs field-knowledge show --project <id> <fieldId> --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs field-semantics list --project <id> [--field-id <id>] [--rule-type <type>] [--query <text>] [--limit <n>] --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs field-semantics show <id> --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs metric-definitions list --project <id> [--query <text>] [--status <status>] [--field-id <id>] [--metric-key <key>] [--limit <n>] --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs metric-definitions show <id> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs synthetic-examples generate [--project <id>] --scenario <user|order|payment|audit> [--max-cases <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract-import preview [--project <id>] --source-kind <openapi|json-schema|protobuf> --input <path> [--max-candidates <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs schema-plan [--project <id>] --database-type <postgresql|mysql> --host <host> [--port <n>] --database <name> [--schema <schema>] --username <user> [--password-env <env>|--password <value>] --table <name> [--table <name> ...] --format json [--server <url>] [--dataspec-token <token>]
@@ -6808,6 +7094,7 @@ Options:
   ref resolve 只读解析字段、枚举、规则或快照引用，返回 stableRef/canonicalRef、生命周期状态和替代引用建议
   ai-output check 只读校验 AI 产物中的标准引用；PASS 返回 0，WARN/FAIL 返回 1，参数、配置或 API 错误返回 2
   table-standards 只读读取业务对象、模板结构标准、关系摘要、安全 metadata 和 nextActions；show 需在 --template 与 --business-object 间二选一
+  field-knowledge、field-semantics 和 metric-definitions 只读读取字段知识卡、字段语义规则和指标口径；输出会再次脱敏，不执行计算、不写项目状态
   synthetic-examples generate 只读生成合成标准样例包，可作为 fixture、Prompt 评测或人工审核草案；不会写入项目标准或调用外部 LLM
   contract-import preview 只读读取本地 OpenAPI/JSON Schema/Protobuf 契约并生成候选预览；不会自动写入标准字段或候选 Inbox
   schema-plan 只生成数据库 schema change plan 预览，不执行迁移；推荐使用 --password-env 读取数据库密码
