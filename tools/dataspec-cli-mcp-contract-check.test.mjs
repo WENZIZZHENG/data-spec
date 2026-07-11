@@ -396,6 +396,31 @@ test('fixture checker reports missing MCP tool and safety metadata drift', async
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'MCP_TOOL_SAFETY_MISMATCH'))
 })
 
+test('fixture checker reports Standard Query DSL contract drift', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'search-fields')
+  const tool = fixture.mcpTools.find((item) => item.name === 'search_fields')
+
+  command.standardQueryDsl.supportedFilters = command.standardQueryDsl.supportedFilters
+    .filter((field) => field !== 'updatedSince')
+  command.safety.sensitiveInputs = command.safety.sensitiveInputs
+    .filter((input) => input !== 'dsl')
+  tool.inputProperties = tool.inputProperties
+    .filter((input) => input !== 'standardQuery')
+  tool.outputShape = tool.outputShape
+    .filter((shape) => shape !== 'structuredContent.ignoredFilters[]')
+  tool.safety.sensitiveInputs = tool.safety.sensitiveInputs
+    .filter((input) => input !== 'standardQuery')
+
+  const result = await validateContractFixtures({ fixture })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'STANDARD_QUERY_DSL_FILTERS_MISMATCH'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'STANDARD_QUERY_DSL_SENSITIVE_INPUT_MISSING'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'STANDARD_QUERY_DSL_INPUT_MISSING'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'STANDARD_QUERY_DSL_OUTPUT_SHAPE_MISSING'))
+})
+
 test('fixture checker reports MCP resource and prompt descriptor drift', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   fixture.mcpResources = fixture.mcpResources.map((resource) => resource.uri === 'dataspec://version-compatibility'

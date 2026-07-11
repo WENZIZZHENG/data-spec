@@ -20,7 +20,9 @@ import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.service.EnumDictService;
 import com.dataspec.field.entity.Field;
+import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.field.service.impl.FieldServiceImpl;
 import com.dataspec.fieldconflict.service.impl.FieldConflictServiceImpl;
 import com.dataspec.lint.engine.FixedSqlGenerator;
 import com.dataspec.lint.engine.SqlLintService;
@@ -29,6 +31,7 @@ import com.dataspec.lint.rules.TableNameSnakeCaseRule;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.prompt.service.PromptTemplateEvaluationService;
 import com.dataspec.prompt.service.PromptTemplateRegistry;
+import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.rulebaseline.model.RuleBaselineInfo;
@@ -43,6 +46,10 @@ import com.dataspec.standardreuse.model.StandardReusePackApplicationInfo;
 import com.dataspec.standardreuse.model.StandardReusePackAssetCounts;
 import com.dataspec.standardreuse.model.StandardReusePackDriftCounts;
 import com.dataspec.standardreuse.service.StandardReusePackService;
+import com.dataspec.standardquery.model.StandardQueryFilter;
+import com.dataspec.standardquery.model.StandardQueryRequest;
+import com.dataspec.standardquery.service.StandardQueryService;
+import com.dataspec.standardquery.service.impl.StandardQueryServiceImpl;
 import com.dataspec.standardusageexample.entity.StandardUsageExample;
 import com.dataspec.standardusageexample.model.StandardUsageExampleSaveReq;
 import com.dataspec.standardusageexample.service.StandardUsageExampleService;
@@ -428,6 +435,73 @@ class AiContextExportServiceTest {
         var usage = new ObjectMapper().readTree(entries.get(".dataspec/usage-examples.json"));
         assertEquals("field", usage.path("contextScope").path("scope").asText());
         assertEquals("手机号", usage.path("contextScope").path("query").asText());
+    }
+
+    @Test
+    void generateAiContextPackage_standardQueryScopeFiltersCatalogAndManifest() throws Exception {
+        Field mobile = sampleField("mobile_no", "手机号", "contact", "pii", "phone");
+        mobile.setId(10L);
+        mobile.setSensitive(true);
+        Field amount = sampleField("amount_cent", "订单金额", "money", "finance", "amount");
+        amount.setId(20L);
+        amount.setSensitive(false);
+        amount.setUpdatedAt(LocalDateTime.parse("2026-07-01T10:00:00"));
+        AiContextExportService service = createService(List.of(mobile, amount));
+
+        StandardQueryRequest standardQuery = new StandardQueryRequest(
+                PROJECT_ID,
+                "FIELD",
+                "订单金额",
+                List.of(
+                        new StandardQueryFilter("category", "eq", "money"),
+                        new StandardQueryFilter("sourceBatchId", "eq", 9L),
+                        new StandardQueryFilter("stableRef", "eq", "field:1:20"),
+                        new StandardQueryFilter("updatedSince", "gte", "2026-06-01T00:00:00"),
+                        new StandardQueryFilter("sensitive", "eq", false),
+                        new StandardQueryFilter("owner", "eq", "token=raw-scope-token")),
+                null,
+                10,
+                true,
+                false);
+        Map<String, String> entries = unzipTextEntries(service.generateAiContextPackage(
+                PROJECT_ID,
+                new AiContextScopeOptions("field", null, null, null, null, null, true, standardQuery)));
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode catalog = mapper.readTree(entries.get(".dataspec/field-catalog.json"));
+        assertEquals(1, catalog.path("fields").size());
+        assertEquals("amount_cent", catalog.path("fields").get(0).path("name").asText());
+        assertEquals("订单金额", catalog.path("contextScope").path("querySummary").path("text").asText());
+        assertEquals("money", catalog.path("contextScope").path("appliedFilters").get(0).path("redactedValue").asText());
+        assertEquals("token=[REDACTED]", catalog.path("contextScope").path("ignoredFilters").get(0).path("redactedValue").asText());
+        assertFalse(entries.get(".dataspec/field-catalog.json").contains("raw-scope-token"));
+
+        JsonNode manifest = mapper.readTree(entries.get(".dataspec/manifest.json"));
+        assertEquals("standard-query-dsl", manifest.path("contextScope").path("source").asText());
+        assertEquals(1, manifest.path("contextScope").path("returnedFieldCount").asInt());
+        assertFalse(entries.get(".dataspec/manifest.json").contains("raw-scope-token"));
+    }
+
+    @Test
+    void generateAiContextPackage_standardQueryStrictUnsupportedFilterFails() {
+        AiContextExportService service = createService(List.of(sampleField("mobile_no", "手机号", "contact", "pii", "phone")));
+        StandardQueryRequest standardQuery = new StandardQueryRequest(
+                PROJECT_ID,
+                "FIELD",
+                "手机号",
+                List.of(new StandardQueryFilter("owner", "eq", "platform-team")),
+                null,
+                10,
+                true,
+                true);
+
+        var ex = assertThrows(com.dataspec.standardquery.exception.StandardQueryValidationException.class,
+                () -> service.generateAiContextPackage(
+                        PROJECT_ID,
+                        new AiContextScopeOptions("field", null, null, null, null, null, true, standardQuery)));
+
+        assertEquals("STANDARD_QUERY_DSL_INVALID", ex.getValidationError().code());
+        assertTrue(ex.getValidationError().supportedFields().contains("stableRef"));
     }
 
     @Test
@@ -1405,6 +1479,7 @@ class AiContextExportServiceTest {
         RuleConfigService ruleConfigService = mock(RuleConfigService.class);
         RuleBaselineService ruleBaselineService = mock(RuleBaselineService.class);
         FieldService fieldService = mock(FieldService.class);
+        FieldSourceRepository fieldSourceRepository = fieldSourceRepository();
         EnumDictService enumDictService = mock(EnumDictService.class);
         SqlCheckRecordService sqlCheckRecordService = mock(SqlCheckRecordService.class);
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -1456,8 +1531,27 @@ class AiContextExportServiceTest {
                 glossaryService,
                 new FieldConflictServiceImpl(fieldService),
                 usageExampleService,
-                standardReusePackService
+                standardReusePackService,
+                standardQueryService(fields, fieldSourceRepository)
         );
+    }
+
+    private StandardQueryService standardQueryService(List<Field> fields, FieldSourceRepository fieldSourceRepository) {
+        FieldRepository fieldRepository = mock(FieldRepository.class);
+        when(fieldRepository.findAllByProjectId(PROJECT_ID)).thenReturn(fields);
+        FieldService searchFieldService = new FieldServiceImpl(
+                fieldRepository,
+                fieldSourceRepository,
+                mock(com.dataspec.changelog.service.StandardChangeLogService.class),
+                new ObjectMapper(),
+                mock(com.dataspec.businessglossary.service.BusinessGlossaryService.class));
+        return new StandardQueryServiceImpl(searchFieldService);
+    }
+
+    private FieldSourceRepository fieldSourceRepository() {
+        FieldSourceRepository repository = mock(FieldSourceRepository.class);
+        when(repository.findFieldIdsByProjectAndBatch(PROJECT_ID, 9L)).thenReturn(List.of(20L));
+        return repository;
     }
 
     private StandardSnapshotInfo snapshotInfo(String version, String hash) {

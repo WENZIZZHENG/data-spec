@@ -1208,6 +1208,131 @@ test('search_fields tool calls backend field search api', async () => {
   assert.equal(JSON.parse(response.result.content[0].text).summary.matchedCount, 1)
 })
 
+test('search_fields descriptor exposes standardQuery schema and safety metadata', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' })
+
+  const tools = await handler({
+    jsonrpc: '2.0',
+    id: 1401,
+    method: 'tools/list',
+    params: {}
+  })
+
+  const descriptor = tools.result.tools.find((tool) => tool.name === 'search_fields')
+  assert.ok(descriptor.inputSchema.properties.standardQuery)
+  assert.equal(descriptor.safety.readOnly, true)
+  assert.equal(descriptor.safety.writesProject, false)
+  assert.ok(descriptor.safety.sensitiveInputs.includes('query'))
+  assert.ok(descriptor.safety.sensitiveInputs.includes('standardQuery'))
+  assert.ok(descriptor.safety.sensitiveInputs.includes('filters'))
+})
+
+test('search_fields posts standardQuery DSL and returns secret-safe JSON content', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url, options = {}) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: {
+        projectId: 8,
+        normalizedQuery: { target: 'FIELD', text: '订单金额', limit: 5 },
+        querySummary: {
+          target: 'FIELD',
+          text: 'token=raw-secret-123',
+          resultCount: 1,
+          returnedCount: 1,
+          truncated: false,
+          nextQueryHints: []
+        },
+        appliedFilters: [{ field: 'category', op: 'eq', redactedValue: 'money' }],
+        ignoredFilters: [{ field: 'owner', op: 'eq', redactedValue: 'Authorization: Bearer raw.jwt' }],
+        resultCount: 1,
+        returnedCount: 1,
+        truncated: false,
+        nextQueryHints: [],
+        fields: [{ field: { name: 'amount_cent' }, score: 99 }]
+      }
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 1402,
+    method: 'tools/call',
+    params: {
+      name: 'search_fields',
+      arguments: {
+        projectId: 8,
+        standardQuery: {
+          target: 'FIELD',
+          text: '订单金额',
+          filters: [{ field: 'category', op: 'eq', value: 'money' }],
+          limit: 5
+        }
+      }
+    }
+  })
+
+  const body = JSON.parse(calls[0].options.body)
+  assert.equal(new URL(calls[0].url).pathname, '/api/standard-query/search')
+  assert.equal(calls[0].options.method, 'POST')
+  assert.equal(body.projectId, 8)
+  assert.equal(body.target, 'FIELD')
+  assert.equal(response.result.structuredContent.fields[0].field.name, 'amount_cent')
+  assert.doesNotMatch(response.result.content[0].text, /raw-secret-123|raw\.jwt/)
+  assert.match(response.result.content[0].text, /\[REDACTED\]/)
+})
+
+test('search_fields preserves Standard Query DSL validation diagnostic', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({
+      code: 400,
+      message: 'Standard Query limit 必须在 1 到 50 之间',
+      data: {
+        code: 'STANDARD_QUERY_DSL_INVALID',
+        message: 'Standard Query limit 必须在 1 到 50 之间',
+        supportedFields: ['category', 'stableRef'],
+        supportedOperators: ['eq'],
+        bounds: 'limit=1..50'
+      },
+      error: {
+        code: 'STANDARD_QUERY_DSL_INVALID',
+        category: 'VALIDATION',
+        retryable: true,
+        suggestedAction: '检查 Standard Query target/filter/op/value/limit。',
+        docsRef: 'openspec/changes/add-standard-query-dsl/specs/standard-query-dsl/spec.md',
+        capabilityId: 'standard-query-dsl',
+        safety: { bounds: 'limit=1..50' },
+        nextActions: ['将 limit 调整到 bounds 允许范围内。']
+      }
+    })
+  }))
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 1403,
+    method: 'tools/call',
+    params: {
+      name: 'search_fields',
+      arguments: {
+        projectId: 7,
+        standardQuery: {
+          target: 'FIELD',
+          limit: 51
+        }
+      }
+    }
+  })
+
+  assert.equal(response.error.code, -32000)
+  assert.equal(response.error.data.dataspecError.code, 'STANDARD_QUERY_DSL_INVALID')
+  assert.equal(response.error.data.dataspecError.category, 'VALIDATION')
+  assert.equal(response.error.data.dataspecError.capabilityId, 'standard-query-dsl')
+  assert.equal(response.error.data.dataspecError.safety.bounds, 'limit=1..50')
+})
+
 test('suggest_fields tool returns structured suggestions', async () => {
   const calls = []
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {

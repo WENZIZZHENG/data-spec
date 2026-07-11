@@ -1,5 +1,7 @@
 package com.dataspec.field.model;
 
+import java.util.Map;
+
 /**
  * 字段标准检索请求。
  *
@@ -13,6 +15,19 @@ public record FieldSearchReq(
         String status,
         Boolean sensitive,
         Long sourceBatchId,
-        Integer limit
+        Integer limit,
+        Map<String, Object> extraFilters
 ) {
+    public FieldSearchReq(
+            Long projectId,
+            String query,
+            String category,
+            String tag,
+            String status,
+            Boolean sensitive,
+            Long sourceBatchId,
+            Integer limit
+    ) {
+        this(projectId, query, category, tag, status, sensitive, sourceBatchId, limit, Map.of());
+    }
 }

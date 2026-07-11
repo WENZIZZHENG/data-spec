@@ -47,7 +47,7 @@
           v-model="scopeForm.limit"
           class="scope-limit"
           :min="1"
-          :max="500"
+          :max="50"
           :step="10"
           controls-position="right"
           placeholder="上限"
@@ -72,6 +72,11 @@
       <div class="post-check-guidance">
         <span class="budget-section-label">Post-check</span>
         <code>{{ postCheckCommand }}</code>
+      </div>
+
+      <div v-if="aiContextStandardQuerySummary" class="standard-query-guidance">
+        <span class="budget-section-label">Standard Query</span>
+        <code>{{ aiContextStandardQuerySummary }}</code>
       </div>
 
       <div class="budget-preview">
@@ -255,6 +260,9 @@ import {
   buildAiOutputPostCheckCommand,
   buildSnapshotRef
 } from '@/utils/aiOutputPostCheckDisplay'
+import {
+  buildFieldStandardQueryFromAiContextScope
+} from '@/utils/standardQuerySummary'
 import { stableTestIds } from '@/utils/stableTestIds'
 
 const projectStore = useProjectStore()
@@ -331,6 +339,27 @@ const postCheckCommand = computed(() =>
     )
   })
 )
+const currentStandardQuery = computed(() => {
+  const projectId = projectStore.currentProjectId
+  return projectId ? buildFieldStandardQueryFromAiContextScope(projectId, currentScopeParams.value) : null
+})
+const aiContextStandardQuerySummary = computed(() => {
+  const query = currentStandardQuery.value
+  if (!query) {
+    return ''
+  }
+  const parts = [`target: ${query.target ?? 'FIELD'}`]
+  if (query.text) {
+    parts.push('text: 已设置')
+  }
+  if (query.filters?.length) {
+    parts.push(`filters: ${query.filters.length}`)
+  }
+  if (query.limit) {
+    parts.push(`limit: ${query.limit}`)
+  }
+  return parts.join('；')
+})
 
 onMounted(async () => {
   if (!projectStore.currentProjectId && projectStore.projects.length === 0) {
@@ -585,7 +614,19 @@ function isAiContextScope(scope?: AiContextRecommendedExportParams['scope']): sc
   background: #f8fafc;
 }
 
-.post-check-guidance code {
+.standard-query-guidance {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #f9fafb;
+}
+
+.post-check-guidance code,
+.standard-query-guidance code {
   min-width: 0;
   overflow-wrap: anywhere;
   color: #1f2937;
@@ -760,6 +801,11 @@ function isAiContextScope(scope?: AiContextRecommendedExportParams['scope']): sc
   }
 
   .post-check-guidance {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .standard-query-guidance {
     align-items: flex-start;
     flex-direction: column;
   }

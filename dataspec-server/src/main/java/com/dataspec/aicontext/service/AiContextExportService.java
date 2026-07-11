@@ -37,6 +37,12 @@ import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.standardref.service.StandardReferenceFormatter;
 import com.dataspec.standardreuse.model.StandardReusePackApplicationInfo;
 import com.dataspec.standardreuse.service.StandardReusePackService;
+import com.dataspec.standardquery.model.StandardQueryAppliedFilter;
+import com.dataspec.standardquery.model.StandardQueryIgnoredFilter;
+import com.dataspec.standardquery.model.StandardQueryRequest;
+import com.dataspec.standardquery.model.StandardQueryResult;
+import com.dataspec.standardquery.model.StandardQuerySummary;
+import com.dataspec.standardquery.service.StandardQueryService;
 import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.service.EnumDictService;
@@ -152,6 +158,7 @@ public class AiContextExportService {
     private final FieldConflictService fieldConflictService;
     private final StandardUsageExampleService standardUsageExampleService;
     private final StandardReusePackService standardReusePackService;
+    private final StandardQueryService standardQueryService;
 
     /**
      * 生成 DATABASE_RULES.md —— 给 AI 工具使用的数据库规范文档
@@ -1761,6 +1768,9 @@ public class AiContextExportService {
         List<String> warnings = new ArrayList<>();
         AiContextScopeOptions options = resolveProfileScopeOptions(rawOptions, warnings);
         List<Field> allFields = fieldService.listByProject(projectId);
+        if (options.standardQuery() != null) {
+            return buildStandardQueryScopedFields(projectId, options, allFields, warnings);
+        }
         String effectiveScope = options.scopeSupported() ? options.scope() : "all";
         if (!options.scopeSupported()) {
             warnings.add("未知 scope=" + options.scope() + "，已按完整字段文本匹配处理。");
@@ -1816,9 +1826,76 @@ public class AiContextExportService {
                 matchedCount,
                 returnedFields.size(),
                 List.copyOf(warnings),
-                groupSummary
+                groupSummary,
+                null,
+                List.of(),
+                List.of(),
+                "legacy-scope"
         );
         return new ScopedFields(List.copyOf(returnedFields), summary);
+    }
+
+    private ScopedFields buildStandardQueryScopedFields(
+            Long projectId,
+            AiContextScopeOptions options,
+            List<Field> allFields,
+            List<String> warnings) {
+        StandardQueryRequest query = options.standardQuery();
+        StandardQueryResult result = standardQueryService.search(new StandardQueryRequest(
+                projectId,
+                query.target(),
+                query.text(),
+                query.filters(),
+                query.sort(),
+                query.limit(),
+                query.explain(),
+                query.strict()));
+        Map<Long, List<String>> reasonsByFieldId = new LinkedHashMap<>();
+        for (var item : result.fields()) {
+            if (item.field() != null && item.field().getId() != null) {
+                reasonsByFieldId.put(item.field().getId(), sanitizeReasons(item.matchReasons()));
+            }
+        }
+        Set<Long> matchedFieldIds = reasonsByFieldId.keySet();
+        List<FieldMatch> matchedFields = new ArrayList<>();
+        for (Field field : allFields) {
+            if (field.getId() != null && matchedFieldIds.contains(field.getId())) {
+                matchedFields.add(new FieldMatch(field, reasonsByFieldId.getOrDefault(field.getId(), List.of())));
+            }
+        }
+        FieldGroupSummary groupSummary = FieldGroupingSummaries.fromFields(
+                projectId,
+                matchedFields.stream().map(FieldMatch::field).toList());
+        List<String> nextQueryHints = new ArrayList<>(warnings);
+        if (!result.ignoredFilters().isEmpty()) {
+            nextQueryHints.add("部分 Standard Query scope 过滤条件未应用；请改用 supportedFields 中列出的 allowlist 字段。");
+        }
+        StandardQuerySummary querySummary = new StandardQuerySummary(
+                result.querySummary().target(),
+                result.querySummary().text(),
+                result.querySummary().resultCount(),
+                result.querySummary().returnedCount(),
+                result.querySummary().truncated(),
+                List.copyOf(nextQueryHints));
+        ScopeSummary summary = new ScopeSummary(
+                true,
+                "field",
+                result.querySummary().text(),
+                options.status(),
+                result.normalizedQuery().limit(),
+                options.profileId(),
+                options.taskType(),
+                allFields.size(),
+                result.resultCount(),
+                result.returnedCount(),
+                List.copyOf(warnings),
+                groupSummary,
+                querySummary,
+                result.appliedFilters(),
+                result.ignoredFilters(),
+                "standard-query-dsl"
+        );
+        return new ScopedFields(List.copyOf(matchedFields), summary);
     }
 
     private AiContextScopeOptions resolveProfileScopeOptions(AiContextScopeOptions rawOptions, List<String> warnings) {
@@ -1931,6 +2008,16 @@ public class AiContextExportService {
         return status == null || fieldStatusForExport(field.getStatus()).equalsIgnoreCase(status);
     }
 
+    private List<String> sanitizeReasons(List<String> reasons) {
+        return reasons == null ? List.of() : reasons.stream()
+                .map(this::sanitizeAiContextText)
+                .toList();
+    }
+
+    private String normalizeAiContextText(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
     private Set<Long> codeSetIds(List<FieldMatch> fields) {
         Set<Long> ids = new LinkedHashSet<>();
         for (FieldMatch match : fields) {
@@ -1990,6 +2077,18 @@ public class AiContextExportService {
         if (summary.taskType() != null) {
             node.put("taskType", sanitizeAiContextText(summary.taskType()));
         }
+        if (summary.source() != null) {
+            node.put("source", sanitizeAiContextText(summary.source()));
+        }
+        if (summary.querySummary() != null) {
+            node.set("querySummary", mapper.valueToTree(summary.querySummary()));
+        }
+        if (summary.appliedFilters() != null && !summary.appliedFilters().isEmpty()) {
+            node.set("appliedFilters", mapper.valueToTree(summary.appliedFilters()));
+        }
+        if (summary.ignoredFilters() != null && !summary.ignoredFilters().isEmpty()) {
+            node.set("ignoredFilters", mapper.valueToTree(summary.ignoredFilters()));
+        }
         node.put("totalFieldCount", summary.totalFieldCount());
         node.put("matchedFieldCount", summary.matchedFieldCount());
         node.put("returnedFieldCount", summary.returnedFieldCount());
@@ -2020,7 +2119,11 @@ public class AiContextExportService {
                 summary.matchedFieldCount(),
                 summary.returnedFieldCount(),
                 List.copyOf(warnings),
-                summary.groupSummary());
+                summary.groupSummary(),
+                summary.querySummary(),
+                summary.appliedFilters(),
+                summary.ignoredFilters(),
+                summary.source());
     }
 
     private ArrayNode glossaryNode(ObjectMapper mapper, BusinessGlossaryContextExport glossaryExport) {
@@ -3299,10 +3402,14 @@ public class AiContextExportService {
             int matchedFieldCount,
             int returnedFieldCount,
             List<String> warnings,
-            FieldGroupSummary groupSummary
+            FieldGroupSummary groupSummary,
+            StandardQuerySummary querySummary,
+            List<StandardQueryAppliedFilter> appliedFilters,
+            List<StandardQueryIgnoredFilter> ignoredFilters,
+            String source
     ) {
         static ScopeSummary full() {
-            return new ScopeSummary(false, "all", null, null, null, null, null, 0, 0, 0, List.of(), null);
+            return new ScopeSummary(false, "all", null, null, null, null, null, 0, 0, 0, List.of(), null, null, List.of(), List.of(), "legacy-scope");
         }
     }
 

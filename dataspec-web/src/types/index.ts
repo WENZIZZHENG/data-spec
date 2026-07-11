@@ -9,6 +9,137 @@ export type DemoProjectResult = Schemas['DemoProjectResult']
 export type Field = Schemas['Field']
 export type FieldReq = Schemas['FieldReq']
 export type FieldSuggestion = Schemas['FieldSuggestion']
+
+/** Standard Query DSL v1 支持的查询目标；当前前端只暴露 FIELD 只读查询。 */
+export type StandardQueryTarget = 'FIELD'
+
+/** Standard Query DSL v1 支持的字段过滤名，均为服务端 allowlist 字段。 */
+export type StandardQueryFilterField =
+  | 'category'
+  | 'tag'
+  | 'status'
+  | 'sensitive'
+  | 'sourceBatchId'
+  | 'stableRef'
+  | 'canonicalRef'
+  | 'hasExample'
+  | 'updatedSince'
+
+/** Standard Query DSL v1 支持的过滤操作符；未传时服务端按字段默认语义处理。 */
+export type StandardQueryFilterOp = 'eq' | 'contains' | 'gte'
+
+/** Standard Query DSL 的单个过滤条件；value 会被服务端视为敏感输入并只输出脱敏摘要。 */
+export interface StandardQueryFilter {
+  /** allowlist 字段名；前端 v1 只生成 FIELD 目标支持的字段。 */
+  field?: StandardQueryFilterField | string
+  /** allowlist 操作符；为空时由服务端按字段默认语义解析。 */
+  op?: StandardQueryFilterOp | string
+  /** 过滤值；不得在前端日志或 UI 中原样作为 secret 展示。 */
+  value?: string | number | boolean | string[] | number[] | boolean[] | null
+}
+
+/** Standard Query DSL 只读请求；v1 target 固定为 FIELD，不触发标准、业务文件或数据库写入。 */
+export interface StandardQueryRequest {
+  /** 当前 DataSpec 项目 ID；服务端会按项目隔离查询。 */
+  projectId?: number
+  /** 标准对象目标；第一版仅支持 FIELD。 */
+  target?: StandardQueryTarget
+  /** 自然语言或字段名检索文本；服务端返回摘要时会脱敏。 */
+  text?: string
+  /** allowlist 过滤条件；不支持项在非 strict 模式会进入 ignoredFilters。 */
+  filters?: StandardQueryFilter[]
+  /** 预留排序字段；v1 服务端保持字段搜索既有排序。 */
+  sort?: string[]
+  /** 返回上限；v1 允许 1 到 50，和字段搜索实际执行上限一致。 */
+  limit?: number
+  /** 是否请求解释信息；v1 服务端始终返回可解释摘要。 */
+  explain?: boolean
+  /** 严格模式；true 时不支持的 target/filter/op/value 会在执行前失败。 */
+  strict?: boolean
+}
+
+/** Standard Query DSL 已应用过滤摘要；所有值已由服务端脱敏，可用于页面 summary。 */
+export interface StandardQueryAppliedFilter {
+  /** 生效的 allowlist 字段名。 */
+  field?: string
+  /** 生效操作符。 */
+  op?: string
+  /** 脱敏后的过滤值。 */
+  redactedValue?: string
+  /** 面向用户和 AI 的过滤语义说明。 */
+  description?: string
+}
+
+/** Standard Query DSL 被忽略过滤摘要；用于解释非 strict 模式的降级。 */
+export interface StandardQueryIgnoredFilter {
+  /** 原始过滤字段名。 */
+  field?: string
+  /** 原始操作符。 */
+  op?: string
+  /** 脱敏后的原始值。 */
+  redactedValue?: string
+  /** 脱敏后的忽略原因。 */
+  reason?: string
+}
+
+/** Standard Query DSL 归一化结果；不包含 raw secret，可作为只读查询摘要复用。 */
+export interface StandardQueryNormalized {
+  /** 归一化目标类型；v1 为 FIELD。 */
+  target?: StandardQueryTarget | string
+  /** 归一化并脱敏后的检索文本。 */
+  text?: string
+  /** 已应用的过滤条件摘要。 */
+  filters?: StandardQueryAppliedFilter[]
+  /** 已接受的排序字段；v1 通常为空。 */
+  sort?: string[]
+  /** 生效返回上限。 */
+  limit?: number
+  /** 是否返回解释信息。 */
+  explain?: boolean
+  /** 是否严格校验。 */
+  strict?: boolean
+}
+
+/** Standard Query DSL 执行摘要；服务端保证文本、建议和过滤值为 secret-safe summary。 */
+export interface StandardQuerySummary {
+  /** 查询目标类型。 */
+  target?: StandardQueryTarget | string
+  /** 脱敏后的检索文本。 */
+  text?: string
+  /** 过滤和检索后命中的总数。 */
+  resultCount?: number
+  /** 本次返回条数。 */
+  returnedCount?: number
+  /** 是否因 limit 截断。 */
+  truncated?: boolean
+  /** 下一步收窄、修正或改写查询的建议；不得包含 raw secret。 */
+  nextQueryHints?: string[]
+}
+
+/** Standard Query DSL 只读查询结果；target=FIELD 时 fields 返回字段标准命中项。 */
+export interface StandardQueryResult {
+  /** 当前项目 ID。 */
+  projectId?: number
+  /** 已归一化且脱敏的查询表达。 */
+  normalizedQuery?: StandardQueryNormalized
+  /** 查询执行摘要。 */
+  querySummary?: StandardQuerySummary
+  /** 已应用过滤条件。 */
+  appliedFilters?: StandardQueryAppliedFilter[]
+  /** 被忽略过滤条件。 */
+  ignoredFilters?: StandardQueryIgnoredFilter[]
+  /** 命中总数。 */
+  resultCount?: number
+  /** 返回条数。 */
+  returnedCount?: number
+  /** 是否截断。 */
+  truncated?: boolean
+  /** 下一步查询建议。 */
+  nextQueryHints?: string[]
+  /** 字段标准命中项；v1 target=FIELD 时返回。 */
+  fields?: FieldSearchItem[]
+}
+
 export interface FieldSearchReq {
   projectId?: number
   query?: string
@@ -20,7 +151,16 @@ export interface FieldSearchReq {
   limit?: number
 }
 export type FieldSearchItem = Schemas['FieldSearchItem']
-export type FieldSearchSummary = Schemas['FieldSearchSummary']
+export type FieldSearchSummary = Schemas['FieldSearchSummary'] & {
+  /** 字段搜索映射到 Standard Query DSL 后的脱敏查询摘要；additive 字段，不改变旧字段语义。 */
+  querySummary?: StandardQuerySummary
+  /** 字段搜索对应的 DSL 已应用过滤条件；值已脱敏。 */
+  dslAppliedFilters?: StandardQueryAppliedFilter[]
+  /** 字段搜索对应的 DSL 忽略过滤条件；legacy 搜索通常为空。 */
+  dslIgnoredFilters?: StandardQueryIgnoredFilter[]
+  /** 字段搜索对应的 DSL 下一步查询建议；等价于 querySummary.nextQueryHints。 */
+  nextQueryHints?: string[]
+}
 export type FieldSearchResult = Schemas['FieldSearchResult']
 export type Domain = Schemas['Domain']
 export type FieldGroupItem = Schemas['FieldGroupItem']

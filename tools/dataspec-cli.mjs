@@ -1873,11 +1873,13 @@ async function runSearchFields(args, io, fetchFn) {
     'sensitive',
     'source-batch',
     'sourceBatchId',
+    'dsl',
+    'dsl-file',
     'format',
     'server',
     'limit',
     'dataspec-token'
-  ])
+  ], ['stdin'])
   const config = loadDataSpecConfig(cliCwd(io))
   if (positional.length > 1) {
     throw new Error(`search-fields 最多接受一个 query 参数，收到: ${positional.slice(1).join(', ')}`)
@@ -1889,6 +1891,34 @@ async function runSearchFields(args, io, fetchFn) {
   const format = options.format ?? 'json'
   if (format !== 'json') {
     throw new Error('当前仅支持 --format json')
+  }
+  const hasDslInput = options.dsl !== undefined || options['dsl-file'] !== undefined || options.stdin === true
+  if (hasDslInput) {
+    const legacyOptions = [
+      positional[0],
+      options.query,
+      options.category,
+      options.tag,
+      options.status,
+      options.sensitive,
+      options.sourceBatchId,
+      options['source-batch']
+    ].filter((value) => value !== undefined)
+    if (legacyOptions.length > 0) {
+      throw new Error('search-fields 使用 DSL 输入时不要同时传 legacy query/category/tag/status/sensitive/sourceBatchId 参数')
+    }
+    const server = normalizeServer(options.server ?? config.server)
+    const apiToken = resolveDataSpecToken(options, config)
+    const standardQuery = await readStandardQueryDsl(options, io)
+    const response = await fetchFn(`${server}/api/standard-query/search`, {
+      method: 'POST',
+      headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ projectId, ...standardQuery })
+    })
+    const payload = await readJsonResponse(response)
+    const result = unwrapResponse(payload)
+    io.writeOut(`${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`)
+    return 0
   }
   const params = new URLSearchParams()
   params.set('projectId', String(projectId))
@@ -1908,8 +1938,37 @@ async function runSearchFields(args, io, fetchFn) {
   })
   const payload = await readJsonResponse(response)
   const result = unwrapResponse(payload)
-  io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+  io.writeOut(`${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`)
   return 0
+}
+
+async function readStandardQueryDsl(options, io) {
+  const sources = [options.dsl !== undefined, options['dsl-file'] !== undefined, options.stdin === true]
+    .filter(Boolean)
+    .length
+  if (sources !== 1) {
+    throw new Error('search-fields DSL 输入需要且只能选择 --dsl、--dsl-file 或 --stdin')
+  }
+  let content
+  if (options.dsl !== undefined) {
+    content = options.dsl
+  } else if (options['dsl-file'] !== undefined) {
+    content = await readFile(path.resolve(cliCwd(io), options['dsl-file']), 'utf8')
+  } else {
+    content = await io.readStdin()
+  }
+  try {
+    const parsed = JSON.parse(content)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('DSL JSON 必须是对象')
+    }
+    if (parsed.projectId !== undefined) {
+      throw new Error('DSL JSON 不要包含 projectId，请使用 --project 指定')
+    }
+    return parsed
+  } catch (error) {
+    throw new Error(`search-fields DSL JSON 无效: ${sanitizeSecretText(error.message)}`)
+  }
 }
 
 async function runRef(args, io, fetchFn) {
@@ -6612,6 +6671,7 @@ Usage:
   node tools/dataspec-cli.mjs context-quality check [--context-dir <dir>|--context-zip <zip>|--budget-plan <json>] [--format text|json]
   node tools/dataspec-cli.mjs suggest-field <query> [--project <id>] --format json [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs search-fields [--project <id>] --format json (--dsl <json>|--dsl-file <path>|--stdin) [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs ref resolve --project <id> --type <FIELD|ENUM|RULE|SNAPSHOT> --ref <value> [--ref <value> ...] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs ai-output check --project <id> --type <SQL|DDL|MARKDOWN|JSON|TEXT> (--file <path>|--stdin) [--snapshot-ref <ref>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
@@ -6660,7 +6720,7 @@ Options:
   export-context 默认导出完整包；传 --profile 或配置 aiProfile 时可让服务端 profile 提供上下文默认值；传 --scope/--query/--status/--limit 时显式裁剪优先；传 --snapshot-id/--snapshot-version 可按历史标准快照导出
   context-budget plan 是导出前只读预算预检；只调用后端 planner，不下载、不缓存、不写入 AI Context 文件
   context-quality check 是本地只读质量检查；读取已导出的目录、zip 或预算 plan JSON，不调用后端、不写缓存、不修改项目状态
-  search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段
+  search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段；传 --dsl/--dsl-file/--stdin 时使用只读 Standard Query DSL 且不与 legacy 筛选参数混用
   ref resolve 只读解析字段、枚举、规则或快照引用，返回 stableRef/canonicalRef、生命周期状态和替代引用建议
   ai-output check 只读校验 AI 产物中的标准引用；PASS 返回 0，WARN/FAIL 返回 1，参数、配置或 API 错误返回 2
   synthetic-examples generate 只读生成合成标准样例包，可作为 fixture、Prompt 评测或人工审核草案；不会写入项目标准或调用外部 LLM

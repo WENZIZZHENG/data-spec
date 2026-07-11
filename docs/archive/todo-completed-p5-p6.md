@@ -4,8 +4,8 @@
 
 本文件从根 TODO.md 机械迁移已完成的 P5/P6 待办详情，根待办只保留入口和当前候选池。每个条目保留原始状态、已完成能力、验证证据、产物、后续增强和边界；原条目未记录 commit 的地方不补猜。
 
-- 完成项数量：117
-- 当前未完成候选：71，详见 [P6 候选池](../todo-p6-candidates.md)
+- 完成项数量：118
+- 当前未完成候选：70，详见 [P6 候选池](../todo-p6-candidates.md)
 - P0-P4 已完成归档：[todo-completed-p0-p4.md](todo-completed-p0-p4.md)
 
 ## 历史追加记录（已降级为背景）
@@ -1012,6 +1012,13 @@
 - 验证证据：`AiOutputPostCheckServiceImplTest`、`AiOutputPostCheckControllerTest`、`dataspec-cli.test.mjs`、`dataspec-mcp.test.mjs`、`dataspec-cli-mcp-contract-check.test.mjs` 和 `dataspec-web/tests/aiOutputPostCheckDisplay.test.ts` 均已接入统一验证；完整命令结果同 P6-165 验证证据。`node tools/dataspec-status-check.mjs --format json` 仅 `OPENSPEC_ACTIVE_CHANGE_PRESENT` warning，符合两个 active change 暂保留约定。
 - 评审证据：同 P6-165；独立复评已确认 SQL 隐式 alias、JSON enum 字段顺序、MCP sensitive input、OpenAPI schema 和前端 replacementRef 展示均已关闭回归风险。
 - 后续增强：第一版只做 DataSpec 可确定的引用校验，不判断自然语言全部事实，不自动调用外部 LLM 改写；后续可在查询 DSL、测试数据包和消费端兼容套件中扩展覆盖。
+
+### P6-167：标准查询 DSL 与可组合筛选协议
+- 状态：已完成第一版，OpenSpec change `add-standard-query-dsl` 当前按项目约定保留为 active change，不自动 archive。
+- 已完成能力：新增项目内只读 Standard Query DSL v1，支持 `FIELD` target、text、category/tag/status/sensitive/sourceBatchId/stableRef/canonicalRef/hasExample/updatedSince、limit、strict 和 explain；新增 `POST /api/standard-query/search`、字段搜索 legacy 参数到 DSL 的确定性映射、AI Context field catalog/package DSL scope、Schema Registry DSL request/result/filter/summary/error schema、CLI `search-fields --dsl/--dsl-file/--stdin`、MCP `search_fields.standardQuery`、前端 API wrapper/类型/摘要展示和 CLI/MCP fixture drift 检查。
+- 验证证据：`mvn -Dtest=StandardQueryServiceImplTest,StandardQueryControllerTest,AiContextExportServiceTest,FieldServiceImplTest,SchemaRegistryServiceImplTest,PerformanceBaselineTest test` 107 pass；`mvn test` 607 pass；`pnpm test` 180 pass；`pnpm build` 通过，保留既有 Rolldown pure annotation、chunk size 和 plugin timing warning；`node --test tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs` 217 total，215 pass / 2 skipped；`node --test tools/*.test.mjs` 397 total，395 pass / 2 skipped；`openspec validate add-standard-query-dsl --strict` valid；`openspec validate --all` 127 passed；`node tools/dataspec-status-check.mjs --format json` 仅 3 个 `OPENSPEC_ACTIVE_CHANGE_PRESENT` warning，符合 active change 暂保留约定；`git diff --check` 通过，仅 LF/CRLF warning；diff secrets scan 命中均为脱敏说明、测试假值、字段名或 token 变量名，未见真实凭据。
+- 评审证据：独立评审 agent `019f4ec7-88fc-7232-b365-90c9a03adf3c`（Helmholtz）完成只读评审；初评指出 AI Context 未复用 DSL、stableRef/canonicalRef 未校验 projectId、validation error schema 未接入三项 P2，均已修复；复评指出 `R.error` 未携带 `STANDARD_QUERY_DSL_INVALID` 的 P2，已补后端 handler 和 CLI/MCP 回归测试。最终复评 agent `019f4f0a-6f20-7433-917e-a1d7eada074e`（Curie）指出 `canonicalRef` 过滤未按 replacement canonical 语义执行、DSL limit 契约与字段搜索实际上限不一致；已补失败测试并修复为 canonicalRef 匹配字段实际 canonical 引用、DSL limit 统一为 1..50。Curie 复评结论 Approved，无阻塞 findings，agent 已关闭。
+- 后续增强：第一版不做任意 SQL 查询、全文搜索平台或跨项目查询；非 FIELD target 仍通过 ignoredFilters/strict validation 提示后续扩展；可在 `P6-176` 消费端兼容套件中进一步固化多消费端 golden payload。
 
 ## 本轮候选覆盖归档（2026-07-09）
 

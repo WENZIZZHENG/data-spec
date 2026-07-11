@@ -71,6 +71,12 @@
         <div v-if="fieldSearchHints.length" class="search-insight-line">
           {{ fieldSearchHints.join('；') }}
         </div>
+        <div v-if="fieldSearchDslSummary" class="search-insight-line">
+          DSL 摘要：{{ fieldSearchDslSummary }}
+        </div>
+        <div v-if="fieldSearchDslFilterDescriptions.length" class="search-insight-line">
+          DSL 过滤：{{ fieldSearchDslFilterDescriptions.join('；') }}
+        </div>
         <div v-if="fieldSearchNextActions.length" class="search-insight-line">
           下一步建议：{{ fieldSearchNextActions.join('；') }}
         </div>
@@ -812,6 +818,7 @@ import {
   readPositiveIntQuery,
   replaceRouteQuery
 } from '@/utils/urlState'
+import { standardQuerySummaryText } from '@/utils/standardQuerySummary'
 import type {
   Domain,
   Field,
@@ -1024,6 +1031,23 @@ const hasFieldSearchConditions = computed(() =>
     || Boolean(sourceBatchIdFilter.value)
 )
 const fieldSearchHints = computed(() => fieldSearchSummary.value?.hints?.filter(Boolean) ?? [])
+const fieldSearchDslAppliedFilters = computed(() => fieldSearchSummary.value?.dslAppliedFilters ?? [])
+const fieldSearchDslIgnoredFilters = computed(() => fieldSearchSummary.value?.dslIgnoredFilters ?? [])
+const fieldSearchDslSummary = computed(() =>
+  standardQuerySummaryText(
+    fieldSearchSummary.value?.querySummary,
+    fieldSearchDslAppliedFilters.value,
+    fieldSearchDslIgnoredFilters.value
+  )
+)
+const fieldSearchDslFilterDescriptions = computed(() => [
+  ...fieldSearchDslAppliedFilters.value
+    .map((filter) => filter.description || filter.redactedValue || filter.field)
+    .filter(Boolean),
+  ...fieldSearchDslIgnoredFilters.value
+    .map((filter) => filter.reason || filter.field)
+    .filter(Boolean)
+] as string[])
 const fieldSearchItemByFieldId = computed(() => {
   const items = new Map<number, FieldSearchItem>()
   for (const item of fieldSearchItems.value) {

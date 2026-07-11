@@ -1,10 +1,10 @@
 # DataSpec P6 候选池
 
-更新时间：2026-07-10
+更新时间：2026-07-11
 
 本文件承接根 TODO.md 中尚未完成的 P6 候选详情。后续开发先读根 TODO.md、候选评审和时间评估，再按任务范围读取本文件对应条目；不要默认线性顺扫全部候选。
 
-- 未完成候选数量：71
+- 未完成候选数量：70
 - 本轮已归档为现有能力覆盖：6 项，详见 [archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
 - 本轮已删除独立候选：9 项，详见 [archive/todo-removed-p6-candidates.md](archive/todo-removed-p6-candidates.md)
 - 已完成 P5/P6 详情：[archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
@@ -83,7 +83,6 @@
 - P6-161：AI 可读字段知识卡片
 - P6-162：规则/标准 A/B 评测与回归数据集
 - P6-163：连接器能力探测与方言 Profile
-- P6-167：标准查询 DSL 与可组合筛选协议
 - P6-168：MCP Resource 游标分页与大字段库分片导出
 - P6-171：标准规则向数据质量测试导出
 - P6-173：编辑器提示与 Code Action 轻量包
@@ -707,16 +706,6 @@
 - 落地产物：连接数据库后生成能力探测报告；AI Context、反向导入 plan 和 SQL 校验结果携带方言 profile；前端连接诊断页展示不支持项和替代建议。
 - 验收标准：同一个任务在 MySQL/PostgreSQL 等连接下能获得不同方言提示；不支持的能力会提前警告；探测过程只读且不保存密码。
 - 边界：不承诺覆盖所有数据库第一版，不自动安装驱动；优先 PostgreSQL/MySQL 和当前已支持路径。
-
-### P6-167：标准查询 DSL 与可组合筛选协议
-- 状态：待办。
-- 为什么做：AI 经常需要按“订单域 + 金额字段 + 可用于建表 + 非敏感 + 最近验证”这类组合条件取标准；如果每次只能拼多个松散参数，Context 裁剪、字段检索、问答和 CLI 查询都会越来越难稳定复用。
-- 已有基础：已有字段检索、字段分组、AI Context 按需裁剪、字段质量评分、字段可见性、业务术语表、本地语义检索和前端类型化 API Client 待办。
-- 缺口：缺少统一 query expression，无法稳定表达 domain/tag/status/visibility/quality/source/updatedSince/hasExample/relatedTo 等条件，也缺少 explainable query plan 说明哪些条件命中或被降级。
-- 参考项目：`sourcegraph/sourcegraph` 的搜索语法、`TanStack/table` 的筛选状态模型和 MCP resource 参数化协议；只借鉴查询表达与可解释筛选，不引入复杂全文搜索平台。
-- 落地产物：定义轻量 StandardQuery DSL 与 JSON Schema；字段检索、AI Context、CLI/MCP 和前端筛选逐步接入；输出 querySummary、appliedFilters、ignoredFilters、resultCount 和 nextQueryHints。
-- 验收标准：AI 可用同一条查询在 API、CLI 和 MCP 中获取一致字段集合；无效条件会给出结构化错误；查询语义有 fixture 防漂移。
-- 边界：不做任意 SQL 查询，不允许 DSL 绕过项目边界或安全红线；第一版只覆盖标准对象元数据筛选。
 
 ### P6-168：MCP Resource 游标分页与大字段库分片导出
 - 状态：待办。

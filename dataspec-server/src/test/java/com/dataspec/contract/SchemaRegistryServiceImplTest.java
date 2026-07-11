@@ -47,7 +47,9 @@ class SchemaRegistryServiceImplTest {
                 "ai-context-field-catalog",
                 "ai-task-profile",
                 "standard-reference-resolution",
-                "ai-output-post-check-result"
+                "ai-output-post-check-result",
+                "standard-query-dsl-request",
+                "standard-query-dsl-result"
         )));
         assertTrue(catalog.getContracts().stream().allMatch(item -> item.getJsonSchemaRef().startsWith("dataspec://contracts/")));
         assertTrue(catalog.getContracts().stream().allMatch(item -> item.getStableFields() != null && !item.getStableFields().isEmpty()));
@@ -160,6 +162,37 @@ class SchemaRegistryServiceImplTest {
         assertFalse(postCheckSchema.contains("totalRefs"));
         assertFalse(postCheckSchema.contains("blockingIssueCount"));
         assertFalse(postCheckSchema.contains("INFO"));
+    }
+
+    @Test
+    void detailDescribesStandardQueryDslContracts() {
+        SchemaContract request = service.getContract("standard-query-dsl-request");
+        assertEquals("standard-query-dsl-request", request.getContractId());
+        assertTrue(request.getStableFields().contains("target"));
+        assertTrue(request.getStableFields().contains("filters[].field"));
+        assertTrue(request.getStableFields().contains("filters[].op"));
+        assertTrue(request.getStableFields().contains("limit"));
+        String requestSchema = request.getJsonSchema().get("properties").toString();
+        assertTrue(requestSchema.contains("FIELD"));
+        assertTrue(requestSchema.contains("category"));
+        assertTrue(requestSchema.contains("updatedSince"));
+        assertTrue(requestSchema.contains("secret-safe"));
+        assertTrue(requestSchema.contains("description"));
+
+        SchemaContract result = service.getContract("standard-query-dsl-result");
+        assertEquals("standard-query-dsl-result", result.getContractId());
+        assertTrue(result.getStableFields().contains("normalizedQuery"));
+        assertTrue(result.getStableFields().contains("querySummary"));
+        assertTrue(result.getStableFields().contains("appliedFilters[]"));
+        assertTrue(result.getStableFields().contains("ignoredFilters[]"));
+        assertTrue(result.getStableFields().contains("nextQueryHints[]"));
+        String resultSchema = result.getJsonSchema().get("properties").toString();
+        assertTrue(resultSchema.contains("resultCount"));
+        assertTrue(resultSchema.contains("returnedCount"));
+        assertTrue(resultSchema.contains("truncated"));
+        assertTrue(resultSchema.contains("supportedFields"));
+        assertTrue(resultSchema.contains("bounds"));
+        assertTrue(resultSchema.contains("secret-safety"));
     }
 
     @Test

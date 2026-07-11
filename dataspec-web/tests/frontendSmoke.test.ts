@@ -1315,6 +1315,15 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
     "request.post<unknown, StandardFieldMergeResult>('/fields/merge/apply'"
   ], 'field api')
 
+  assertContains(view, [
+    'DSL 摘要',
+    'DSL 过滤',
+    'fieldSearchDslSummary',
+    'fieldSearchDslAppliedFilters',
+    'fieldSearchDslIgnoredFilters',
+    'standardQuerySummaryText'
+  ], 'FieldLibrary Standard Query summary')
+
   assertContains(standardChangeApi, [
     "request.post<unknown, StandardChangePreview>(`/standard-changes/preview/fields/${id}`",
     "request.post<unknown, StandardChangePreview>(`/standard-changes/preview/rules/${id}`",
@@ -1353,6 +1362,9 @@ test('keeps DDL generation and AI Context export flows project-scoped', () => {
   assertContains(aiExport, [
     'projectStore.currentProjectId',
     'normalizeAiContextScopeParams(scopeForm)',
+    'buildFieldStandardQueryFromAiContextScope(projectId, currentScopeParams.value)',
+    'aiContextStandardQuerySummary',
+    'Standard Query',
     'planAiContextBudget(projectId, budgetRequest)',
     'budgetPlan',
     'recommendedExportParams',
@@ -1372,6 +1384,23 @@ test('keeps DDL generation and AI Context export flows project-scoped', () => {
     "request.get<unknown, Blob>('/ai-context/package/download'",
     "request.post<unknown, AiContextBudgetPlan>('/ai-context/budget/plan'"
   ], 'AI Context api')
+
+  const standardQueryApi = readSource('src/api/standardQuery.ts')
+  const standardQueryUtils = readSource('src/utils/standardQuerySummary.ts')
+  const types = readSource('src/types/index.ts')
+
+  assertContains(standardQueryApi, [
+    "request.post<unknown, StandardQueryResult>('/standard-query/search', data)"
+  ], 'standard query api')
+  assertContains(standardQueryUtils, [
+    'export function buildFieldStandardQueryFromAiContextScope',
+    'export function standardQuerySummaryText'
+  ], 'standard query summary utils')
+  assertContains(types, [
+    'export interface StandardQueryRequest',
+    'export interface StandardQueryResult',
+    'export interface StandardQuerySummary'
+  ], 'standard query public types')
 })
 
 test('keeps rule baseline suite workflow wired on rule config page', () => {

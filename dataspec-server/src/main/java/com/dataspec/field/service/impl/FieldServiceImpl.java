@@ -30,12 +30,16 @@ import com.dataspec.field.service.FieldService;
 import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.security.context.ProjectAccessGuard;
 import com.dataspec.standardref.service.StandardReferenceFormatter;
+import com.dataspec.standardquery.model.StandardQueryAppliedFilter;
+import com.dataspec.standardquery.model.StandardQueryIgnoredFilter;
+import com.dataspec.standardquery.model.StandardQuerySummary;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -144,13 +148,26 @@ public class FieldServiceImpl implements FieldService {
 
         boolean truncated = matched.size() > criteria.limit();
         List<FieldSearchItem> returned = matched.stream().limit(criteria.limit()).toList();
+        List<String> hints = searchHints(criteria, candidates.size(), matched.size(), truncated);
+        List<StandardQueryAppliedFilter> dslAppliedFilters = dslAppliedFilters(criteria);
+        StandardQuerySummary querySummary = new StandardQuerySummary(
+                "FIELD",
+                SensitiveDataSanitizer.redactText(criteria.query()),
+                matched.size(),
+                returned.size(),
+                truncated,
+                hints);
         FieldSearchSummary summary = new FieldSearchSummary(
                 candidates.size(),
                 matched.size(),
                 returned.size(),
                 truncated,
                 criteria.appliedFilters(),
-                searchHints(criteria, candidates.size(), matched.size(), truncated));
+                hints,
+                querySummary,
+                dslAppliedFilters,
+                List.of(),
+                hints);
 
         return new FieldSearchResult(
                 req.projectId(),
@@ -465,7 +482,8 @@ public class FieldServiceImpl implements FieldService {
                 status,
                 req.sensitive(),
                 req.sourceBatchId(),
-                normalizeSearchLimit(req.limit()));
+                normalizeSearchLimit(req.limit()),
+                req.extraFilters() == null ? Map.of() : req.extraFilters());
     }
 
     private Set<Long> loadSourceFieldIds(Long projectId, Long sourceBatchId) {
@@ -479,7 +497,7 @@ public class FieldServiceImpl implements FieldService {
     }
 
     private boolean matchesSearchFilters(Field field, SearchCriteria criteria, Set<Long> sourceFieldIds) {
-        if (criteria.status() == null && !isEnabledStatus(field.getStatus())) {
+        if (criteria.status() == null && !criteria.hasReferenceFilter() && !isEnabledStatus(field.getStatus())) {
             return false;
         }
         if (criteria.category() != null && !criteria.category().equals(FieldGroupingSummaries.normalizeText(field.getCategory()))) {
@@ -494,7 +512,40 @@ public class FieldServiceImpl implements FieldService {
         if (criteria.sensitive() != null && !criteria.sensitive().equals(Boolean.TRUE.equals(field.getSensitive()))) {
             return false;
         }
-        return criteria.sourceBatchId() == null || sourceFieldIds.contains(field.getId());
+        if (criteria.sourceBatchId() != null && !sourceFieldIds.contains(field.getId())) {
+            return false;
+        }
+        return matchesDslExtraFilters(field, criteria.extraFilters());
+    }
+
+    private boolean matchesDslExtraFilters(Field field, Map<String, Object> extraFilters) {
+        if (extraFilters == null || extraFilters.isEmpty()) {
+            return true;
+        }
+        Object stableRef = extraFilters.get("stableRef");
+        if (stableRef instanceof String expectedRef && !Objects.equals(fieldStableRef(field), expectedRef)) {
+            return false;
+        }
+        Object canonicalRef = extraFilters.get("canonicalRef");
+        if (canonicalRef instanceof String expectedRef && !Objects.equals(fieldCanonicalRef(field), expectedRef)) {
+            return false;
+        }
+        Object hasExample = extraFilters.get("hasExample");
+        if (hasExample instanceof Boolean expected && expected != hasAnyExample(field)) {
+            return false;
+        }
+        Object updatedSince = extraFilters.get("updatedSince");
+        if (updatedSince instanceof LocalDateTime threshold) {
+            LocalDateTime updatedAt = field.getUpdatedAt();
+            return updatedAt != null && !updatedAt.isBefore(threshold);
+        }
+        return true;
+    }
+
+    private boolean hasAnyExample(Field field) {
+        return FieldGroupingSummaries.normalizeText(field.getExampleValue()) != null
+                || FieldGroupingSummaries.normalizeText(field.getValidExamplesJson()) != null
+                || FieldGroupingSummaries.normalizeText(field.getInvalidExamplesJson()) != null;
     }
 
     private FieldSearchItem searchItemFor(Field field, SearchCriteria criteria, List<GlossaryMatch> glossaryMatches) {
@@ -669,6 +720,52 @@ public class FieldServiceImpl implements FieldService {
             hints.add("结果已截断；可增加更具体 query/category/tag/status 过滤。");
         }
         return List.copyOf(hints);
+    }
+
+    private List<StandardQueryAppliedFilter> dslAppliedFilters(SearchCriteria criteria) {
+        List<StandardQueryAppliedFilter> filters = new ArrayList<>();
+        addDslFilter(filters, "category", criteria.category(), "字段分类");
+        addDslFilter(filters, "tag", criteria.tag(), "字段标签");
+        addDslFilter(filters, "status", criteria.status(), "字段状态");
+        if (criteria.sensitive() != null) {
+            filters.add(new StandardQueryAppliedFilter(
+                    "sensitive",
+                    "eq",
+                    String.valueOf(criteria.sensitive()),
+                    "敏感标记 = " + criteria.sensitive()));
+        }
+        if (criteria.sourceBatchId() != null) {
+            filters.add(new StandardQueryAppliedFilter(
+                    "sourceBatchId",
+                    "eq",
+                    String.valueOf(criteria.sourceBatchId()),
+                    "来源批次 = " + criteria.sourceBatchId()));
+        }
+        addExtraDslFilters(filters, criteria.extraFilters());
+        return List.copyOf(filters);
+    }
+
+    private void addDslFilter(List<StandardQueryAppliedFilter> filters, String field, String value, String label) {
+        if (value != null) {
+            filters.add(new StandardQueryAppliedFilter(
+                    field,
+                    "tag".equals(field) ? "contains" : "eq",
+                    SensitiveDataSanitizer.redactText(value),
+                    label + " = " + SensitiveDataSanitizer.redactText(value)));
+        }
+    }
+
+    private void addExtraDslFilters(List<StandardQueryAppliedFilter> filters, Map<String, Object> extraFilters) {
+        if (extraFilters == null || extraFilters.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, Object> entry : extraFilters.entrySet()) {
+            filters.add(new StandardQueryAppliedFilter(
+                    entry.getKey(),
+                    "updatedSince".equals(entry.getKey()) ? "gte" : "eq",
+                    SensitiveDataSanitizer.redactText(String.valueOf(entry.getValue())),
+                    "DSL 过滤 = " + entry.getKey()));
+        }
     }
 
     private List<String> resultNextActions(List<FieldSearchItem> items, boolean truncated) {
@@ -1472,7 +1569,8 @@ public class FieldServiceImpl implements FieldService {
             String status,
             Boolean sensitive,
             Long sourceBatchId,
-            int limit
+            int limit,
+            Map<String, Object> extraFilters
     ) {
         boolean hasQuery() {
             return !queryCompact.isBlank() || !queryTokens.isEmpty();
@@ -1483,7 +1581,13 @@ public class FieldServiceImpl implements FieldService {
                     || tag != null
                     || status != null
                     || sensitive != null
-                    || sourceBatchId != null;
+                    || sourceBatchId != null
+                    || (extraFilters != null && !extraFilters.isEmpty());
+        }
+
+        boolean hasReferenceFilter() {
+            return extraFilters != null
+                    && (extraFilters.containsKey("stableRef") || extraFilters.containsKey("canonicalRef"));
         }
 
         Map<String, Object> appliedFilters() {
@@ -1502,6 +1606,9 @@ public class FieldServiceImpl implements FieldService {
             }
             if (sourceBatchId != null) {
                 filters.put("sourceBatchId", sourceBatchId);
+            }
+            if (extraFilters != null && !extraFilters.isEmpty()) {
+                filters.putAll(extraFilters);
             }
             filters.put("limit", limit);
             return filters;

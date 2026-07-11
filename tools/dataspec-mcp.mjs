@@ -46,7 +46,11 @@ const TOOL_SAFETY = {
   },
   get_field_catalog: READ_ONLY_TOOL_SAFETY,
   search_field_catalog: READ_ONLY_TOOL_SAFETY,
-  search_fields: READ_ONLY_TOOL_SAFETY,
+  search_fields: {
+    ...READ_ONLY_TOOL_SAFETY,
+    sensitiveInputs: ['query', 'standardQuery', 'filters'],
+    nextActions: ['Standard Query DSL 只读且 project-scoped；如 ignoredFilters 非空，先收窄或改写查询。']
+  },
   resolve_standard_refs: {
     ...READ_ONLY_TOOL_SAFETY,
     sensitiveInputs: ['refs'],
@@ -1146,6 +1150,45 @@ function listTools() {
               type: 'integer',
               description: '可选反向导入批次 ID 过滤。'
             },
+            standardQuery: {
+              type: 'object',
+              description: '可选 Standard Query DSL JSON AST；v1 target=FIELD，query/filter 值均视为敏感输入并要求服务端脱敏摘要。',
+              properties: {
+                target: {
+                  type: 'string',
+                  enum: ['FIELD'],
+                  description: '查询目标；v1 仅支持 FIELD。'
+                },
+                text: {
+                  type: 'string',
+                  description: '自然语言或字段名检索文本；视为敏感输入。'
+                },
+                filters: {
+                  type: 'array',
+                  description: 'allowlist 过滤条件；支持 category/tag/status/sensitive/sourceBatchId/stableRef/canonicalRef/hasExample/updatedSince。',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      field: { type: 'string', description: '过滤字段名。' },
+                      op: { type: 'string', description: '操作符，如 eq、contains、gte。' },
+                      value: { description: '过滤值；视为敏感输入。' }
+                    }
+                  }
+                },
+                limit: {
+                  type: 'integer',
+                  description: '返回上限。'
+                },
+                explain: {
+                  type: 'boolean',
+                  description: '是否请求解释摘要。'
+                },
+                strict: {
+                  type: 'boolean',
+                  description: 'true 时不支持过滤条件会失败；false 时进入 ignoredFilters。'
+                }
+              }
+            },
             limit: {
               type: 'integer',
               description: '可选返回数量，默认 20。'
@@ -1471,6 +1514,15 @@ async function callSearchFieldCatalog(args, context) {
 
 async function callSearchFields(args, context) {
   const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  if (args.standardQuery !== undefined && args.standardQuery !== null) {
+    const response = await context.fetchFn(`${context.server}/api/standard-query/search`, {
+      method: 'POST',
+      headers: dataSpecHeaders(context.apiToken, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ projectId, ...args.standardQuery })
+    })
+    const result = await readDataSpecJson(response)
+    return toolJsonResult(sanitizeSecretValue(result))
+  }
   const params = new URLSearchParams()
   params.set('projectId', String(projectId))
   appendOptionalParam(params, 'query', args.query)
@@ -1486,7 +1538,7 @@ async function callSearchFields(args, context) {
     headers: dataSpecHeaders(context.apiToken)
   })
   const result = await readDataSpecJson(response)
-  return toolJsonResult(result)
+  return toolJsonResult(sanitizeSecretValue(result))
 }
 
 async function callResolveStandardRefs(args, context) {

@@ -34,6 +34,7 @@ import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.dataspec.standard.service.StandardSnapshotService;
 import com.dataspec.standardreuse.service.StandardReusePackService;
+import com.dataspec.standardquery.service.impl.StandardQueryServiceImpl;
 import com.dataspec.standardusageexample.service.StandardUsageExampleService;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -186,7 +187,8 @@ class PerformanceBaselineTest {
                 glossaryService,
                 new FieldConflictServiceImpl(fieldService),
                 usageExampleService,
-                mock(StandardReusePackService.class)
+                mock(StandardReusePackService.class),
+                new StandardQueryServiceImpl(fieldService)
         );
     }
 

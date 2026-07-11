@@ -608,6 +608,106 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                         "nextActions", List.of("先替换为 canonicalRef 后再复制或执行。")
                 ))
         ));
+        add(map, contract(
+                "standard-query-dsl-request",
+                "Standard Query DSL 请求",
+                "项目内只读 Standard Query DSL 请求结构；v1 仅执行 FIELD，并要求所有 query/filter 输入 secret-safe。",
+                List.of("projectId", "target", "text", "filters[]", "filters[].field", "filters[].op", "filters[].value",
+                        "sort[]", "limit", "strict", "explain"),
+                List.of(),
+                objectSchema("DataSpec Standard Query DSL Request", List.of("projectId"), orderedMap(
+                        "projectId", describedIntegerProp("当前 DataSpec 项目 ID；查询必须 project-scoped。"),
+                        "target", describedEnumProp("标准对象类型；v1 仅支持 FIELD，缺省按 FIELD 处理。", "FIELD"),
+                        "text", describedStringProp("自然语言或字段名检索文本；视为敏感输入，输出摘要和错误必须脱敏，secret-safe。"),
+                        "filters", arrayOf(objectSchema("Standard Query Filter", List.of("field"), orderedMap(
+                                "field", describedEnumProp("allowlist 过滤字段。", "category", "tag", "status", "sensitive", "sourceBatchId", "stableRef", "canonicalRef", "hasExample", "updatedSince"),
+                                "op", describedEnumProp("allowlist 操作符；字段默认操作符可省略。", "eq", "contains", "gte"),
+                                "value", describedValueProp("过滤值；按敏感输入处理，错误和摘要只能输出脱敏值。")
+                        ))),
+                        "sort", arrayOf(describedStringProp("预留排序字段；v1 保持字段搜索既有排序。")),
+                        "limit", describedIntegerProp("返回上限；v1 允许 1 到 50。bounds: min=1, max=50。"),
+                        "strict", describedBooleanProp("严格模式；true 时不支持 target/filter/op/value 会在执行前失败。"),
+                        "explain", describedBooleanProp("是否请求解释；v1 始终返回 querySummary、appliedFilters、ignoredFilters、nextQueryHints。"),
+                        "supportedFields", arrayOf(describedStringProp("支持字段说明；用于 AI 发现可用筛选。")),
+                        "bounds", describedStringProp("输入边界摘要，包括最大文本长度、最大过滤数量、最大 limit 和 secret-safety 约束。")
+                )),
+                List.of(orderedMap(
+                        "projectId", 1,
+                        "target", "FIELD",
+                        "text", "订单金额",
+                        "filters", List.of(
+                                orderedMap("field", "category", "op", "eq", "value", "money"),
+                                orderedMap("field", "sensitive", "op", "eq", "value", false)
+                        ),
+                        "limit", 20,
+                        "strict", false,
+                        "explain", true
+                ))
+        ));
+        add(map, contract(
+                "standard-query-dsl-result",
+                "Standard Query DSL 结果",
+                "项目内只读 Standard Query DSL 查询结果；包含归一化查询、可解释摘要、应用/忽略过滤和字段命中。",
+                List.of("projectId", "normalizedQuery", "querySummary", "appliedFilters[]", "ignoredFilters[]",
+                        "resultCount", "returnedCount", "truncated", "nextQueryHints[]", "fields[]",
+                        "validationError.supportedFields", "validationError.bounds"),
+                List.of(),
+                objectSchema("DataSpec Standard Query DSL Result", List.of("projectId", "normalizedQuery", "querySummary"), orderedMap(
+                        "projectId", describedIntegerProp("当前 DataSpec 项目 ID。"),
+                        "normalizedQuery", objectSchema("Normalized Standard Query", List.of("target", "limit"), orderedMap(
+                                "target", describedEnumProp("归一化标准对象类型；v1 为 FIELD。", "FIELD"),
+                                "text", describedStringProp("归一化并脱敏后的检索文本。"),
+                                "filters", arrayOf(objectProp()),
+                                "sort", arrayOf(describedStringProp("已接受的排序字段；v1 为空列表。")),
+                                "limit", describedIntegerProp("生效返回上限。"),
+                                "strict", describedBooleanProp("是否严格校验。"),
+                                "explain", describedBooleanProp("是否返回解释信息。")
+                        )),
+                        "querySummary", objectSchema("Standard Query Summary", List.of("target", "resultCount", "returnedCount", "truncated"), orderedMap(
+                                "target", describedEnumProp("查询目标。", "FIELD"),
+                                "text", describedStringProp("脱敏后的检索文本。"),
+                                "resultCount", describedIntegerProp("命中总数。"),
+                                "returnedCount", describedIntegerProp("返回条数。"),
+                                "truncated", describedBooleanProp("是否因 limit 截断。"),
+                                "nextQueryHints", arrayOf(describedStringProp("下一步查询建议；secret-safety: 不得包含 raw secret。"))
+                        )),
+                        "appliedFilters", arrayOf(objectSchema("Applied Filter", List.of("field", "op", "redactedValue"), orderedMap(
+                                "field", describedStringProp("生效 allowlist 字段名。"),
+                                "op", describedStringProp("生效操作符。"),
+                                "redactedValue", describedStringProp("脱敏后的过滤值。"),
+                                "description", describedStringProp("过滤语义说明。")
+                        ))),
+                        "ignoredFilters", arrayOf(objectSchema("Ignored Filter", List.of("field", "reason"), orderedMap(
+                                "field", describedStringProp("原始过滤字段名。"),
+                                "op", describedStringProp("原始操作符。"),
+                                "redactedValue", describedStringProp("脱敏后的过滤值。"),
+                                "reason", describedStringProp("脱敏后的忽略原因。")
+                        ))),
+                        "resultCount", describedIntegerProp("命中总数。"),
+                        "returnedCount", describedIntegerProp("返回条数。"),
+                        "truncated", describedBooleanProp("是否因 limit 截断。"),
+                        "nextQueryHints", arrayOf(describedStringProp("下一步查询建议。")),
+                        "fields", arrayOf(objectProp()),
+                        "validationError", objectSchema("Standard Query Validation Error", List.of("code", "message"), orderedMap(
+                                "code", describedStringProp("稳定错误码。"),
+                                "message", describedStringProp("脱敏后的错误信息。"),
+                                "supportedFields", arrayOf(describedStringProp("当前支持字段。")),
+                                "supportedOperators", arrayOf(describedStringProp("当前支持操作符。")),
+                                "bounds", describedStringProp("bounds 和 secret-safety 约束摘要。")
+                        ))
+                )),
+                List.of(orderedMap(
+                        "projectId", 1,
+                        "normalizedQuery", orderedMap("target", "FIELD", "text", "订单金额", "limit", 20),
+                        "querySummary", orderedMap("target", "FIELD", "resultCount", 1, "returnedCount", 1, "truncated", false),
+                        "appliedFilters", List.of(orderedMap("field", "category", "op", "eq", "redactedValue", "money")),
+                        "ignoredFilters", List.of(),
+                        "resultCount", 1,
+                        "returnedCount", 1,
+                        "truncated", false,
+                        "nextQueryHints", List.of()
+                ))
+        ));
         return map;
     }
 
@@ -676,6 +776,15 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
 
     private static Map<String, Object> objectProp() {
         return orderedMap("type", "object", "additionalProperties", true);
+    }
+
+    private static Map<String, Object> describedValueProp(String description) {
+        return orderedMap("description", description, "oneOf", List.of(
+                orderedMap("type", "string"),
+                orderedMap("type", "number"),
+                orderedMap("type", "integer"),
+                orderedMap("type", "boolean")
+        ));
     }
 
     private static Map<String, Object> enumProp(String... values) {

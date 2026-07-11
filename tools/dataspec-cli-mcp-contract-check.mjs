@@ -101,6 +101,18 @@ const REQUIRED_SAFETY_FIELDS = [
   'nextActions'
 ]
 
+const STANDARD_QUERY_DSL_FILTERS = [
+  'category',
+  'tag',
+  'status',
+  'sensitive',
+  'sourceBatchId',
+  'stableRef',
+  'canonicalRef',
+  'hasExample',
+  'updatedSince'
+]
+
 /**
  * Load the CLI/MCP contract fixture JSON from disk.
  *
@@ -227,6 +239,13 @@ function validateCliCommands(commands, diagnostics) {
     validateSafety(command.safety, `${basePath}.safety`, diagnostics)
     requireObject(command.successExample, `${basePath}.successExample`, diagnostics)
     requireObject(command.failureExample, `${basePath}.failureExample`, diagnostics)
+    if (command.id === 'search-fields') {
+      validateStandardQueryDslFixture(command, basePath, diagnostics, {
+        requiredInputs: ['query', 'dsl', 'dsl-file', 'stdin'],
+        requiredOutputShape: ['normalizedQuery', 'querySummary', 'appliedFilters[]', 'ignoredFilters[]', 'nextQueryHints[]'],
+        requiredSensitiveInputs: ['query', 'dsl', 'dsl-file', 'stdin']
+      })
+    }
   })
 }
 
@@ -278,6 +297,13 @@ function validateMcpTools(fixtures, liveTools, diagnostics) {
     requireObject(tool.failureExample, `${basePath}.failureExample`, diagnostics)
     validateSafety(tool.safety, `${basePath}.safety`, diagnostics)
     requireNonEmptyArray(tool.recommendedNextActions, `${basePath}.recommendedNextActions`, diagnostics)
+    if (tool.name === 'search_fields') {
+      validateStandardQueryDslFixture(tool, basePath, diagnostics, {
+        requiredInputs: ['standardQuery'],
+        requiredOutputShape: ['structuredContent.normalizedQuery', 'structuredContent.querySummary', 'structuredContent.appliedFilters[]', 'structuredContent.ignoredFilters[]', 'structuredContent.nextQueryHints[]'],
+        requiredSensitiveInputs: ['query', 'standardQuery', 'filters']
+      })
+    }
 
     const liveTool = liveByName.get(tool.name)
     if (!liveTool) {
@@ -498,6 +524,53 @@ function validateSafety(safety, pathName, diagnostics) {
   }
   if ('nextActions' in safety) {
     requireArray(safety.nextActions, `${pathName}.nextActions`, diagnostics)
+  }
+}
+
+function validateStandardQueryDslFixture(entry, basePath, diagnostics, options) {
+  const dsl = entry.standardQueryDsl
+  if (!dsl || typeof dsl !== 'object' || Array.isArray(dsl)) {
+    diagnostics.push(diagnosticOf('STANDARD_QUERY_DSL_FIXTURE_MISSING', `${basePath}.standardQueryDsl`, 'Standard Query DSL fixture 必须声明 standardQueryDsl 元数据。'))
+    return
+  }
+  if (dsl.version !== 1) {
+    diagnostics.push(diagnosticOf('STANDARD_QUERY_DSL_VERSION_MISMATCH', `${basePath}.standardQueryDsl.version`, 'Standard Query DSL fixture version 必须是 1。'))
+  }
+  if (dsl.target !== 'FIELD') {
+    diagnostics.push(diagnosticOf('STANDARD_QUERY_DSL_TARGET_MISMATCH', `${basePath}.standardQueryDsl.target`, 'Standard Query DSL v1 target 必须是 FIELD。'))
+  }
+  if (dsl.readOnly !== true || dsl.secretSafeDiagnostics !== true) {
+    diagnostics.push(diagnosticOf('STANDARD_QUERY_DSL_SAFETY_MISMATCH', `${basePath}.standardQueryDsl`, 'Standard Query DSL fixture 必须声明 readOnly 和 secretSafeDiagnostics。'))
+  }
+  compareStringSets(
+    STANDARD_QUERY_DSL_FILTERS,
+    dsl.supportedFilters ?? [],
+    `${basePath}.standardQueryDsl.supportedFilters`,
+    'STANDARD_QUERY_DSL_FILTERS_MISMATCH',
+    diagnostics
+  )
+  for (const input of options.requiredInputs) {
+    const inputCollections = [
+      entry.inputProperties ?? [],
+      entry.optionalOptions ?? [],
+      entry.oneOfRequiredOptions ?? []
+    ].flat().map(String)
+    if (!inputCollections.includes(input)) {
+      diagnostics.push(diagnosticOf('STANDARD_QUERY_DSL_INPUT_MISSING', `${basePath}.standardQueryDsl`, `缺少 DSL 输入声明: ${input}`))
+    }
+  }
+  for (const shape of options.requiredOutputShape) {
+    if (!(entry.outputShape ?? []).includes(shape)) {
+      diagnostics.push(diagnosticOf('STANDARD_QUERY_DSL_OUTPUT_SHAPE_MISSING', `${basePath}.outputShape`, `缺少 DSL 输出字段: ${shape}`))
+    }
+  }
+  for (const input of options.requiredSensitiveInputs) {
+    if (!(entry.safety?.sensitiveInputs ?? []).includes(input)) {
+      diagnostics.push(diagnosticOf('STANDARD_QUERY_DSL_SENSITIVE_INPUT_MISSING', `${basePath}.safety.sensitiveInputs`, `缺少 DSL 敏感输入声明: ${input}`))
+    }
+  }
+  if (entry.safety?.readOnly !== true || entry.safety?.writesProject !== false) {
+    diagnostics.push(diagnosticOf('STANDARD_QUERY_DSL_SAFETY_MISMATCH', `${basePath}.safety`, 'Standard Query DSL 必须保持只读且不写项目。'))
   }
 }
 

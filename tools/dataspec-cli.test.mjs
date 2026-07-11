@@ -1082,6 +1082,194 @@ test('search-fields passes filters and prints stable json', async () => {
   assert.equal(io.stderr, '')
 })
 
+test('search-fields accepts inline DSL JSON and posts secret-safe stable json', async () => {
+  const calls = []
+  const fetchFn = async (url, options = {}) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          projectId: 7,
+          normalizedQuery: { target: 'FIELD', text: '订单金额', limit: 5 },
+          querySummary: {
+            target: 'FIELD',
+            text: 'token=raw-secret-123',
+            resultCount: 1,
+            returnedCount: 1,
+            truncated: false,
+            nextQueryHints: []
+          },
+          appliedFilters: [{ field: 'category', op: 'eq', redactedValue: 'money' }],
+          ignoredFilters: [{ field: 'owner', op: 'eq', redactedValue: 'Authorization: Bearer raw.jwt' }],
+          resultCount: 1,
+          returnedCount: 1,
+          truncated: false,
+          nextQueryHints: [],
+          fields: [{ field: { name: 'amount_cent' }, score: 99 }]
+        }
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'search-fields',
+    '--project',
+    '7',
+    '--dsl',
+    '{"target":"FIELD","text":"订单金额","filters":[{"field":"category","op":"eq","value":"money"}],"limit":5}',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+
+  const body = JSON.parse(calls[0].options.body)
+  assert.equal(code, 0)
+  assert.equal(new URL(calls[0].url).pathname, '/api/standard-query/search')
+  assert.equal(calls[0].options.method, 'POST')
+  assert.equal(body.projectId, 7)
+  assert.equal(body.target, 'FIELD')
+  assert.equal(body.filters[0].field, 'category')
+  assert.equal(JSON.parse(io.stdout).fields[0].field.name, 'amount_cent')
+  assert.doesNotMatch(io.stdout, /raw-secret-123|raw\.jwt/)
+  assert.match(io.stdout, /\*\*\*|\[REDACTED\]/)
+})
+
+test('search-fields accepts DSL JSON from file and stdin', async () => {
+  const calls = []
+  const fetchFn = async (url, options = {}) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          projectId: 7,
+          normalizedQuery: { target: 'FIELD', limit: 3 },
+          querySummary: { target: 'FIELD', resultCount: 0, returnedCount: 0, truncated: false, nextQueryHints: [] },
+          fields: []
+        }
+      })
+    }
+  }
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-dsl-'))
+  try {
+    await writeFile(path.join(dir, 'field-query.json'), JSON.stringify({
+      target: 'FIELD',
+      filters: [{ field: 'hasExample', op: 'eq', value: true }],
+      limit: 3
+    }), 'utf8')
+
+    const fileIo = createIo('', dir)
+    const fileCode = await runCli([
+      'search-fields',
+      '--project',
+      '7',
+      '--dsl-file',
+      'field-query.json',
+      '--server',
+      'http://dataspec.local'
+    ], fileIo, fetchFn)
+
+    const stdinIo = createIo(JSON.stringify({
+      target: 'FIELD',
+      filters: [{ field: 'updatedSince', op: 'gte', value: '2026-01-01T00:00:00Z' }],
+      limit: 2
+    }), dir)
+    const stdinCode = await runCli([
+      'search-fields',
+      '--project',
+      '7',
+      '--stdin',
+      '--server',
+      'http://dataspec.local'
+    ], stdinIo, fetchFn)
+
+    const fileBody = JSON.parse(calls[0].options.body)
+    const stdinBody = JSON.parse(calls[1].options.body)
+    assert.equal(fileCode, 0)
+    assert.equal(stdinCode, 0)
+    assert.equal(fileBody.filters[0].field, 'hasExample')
+    assert.equal(stdinBody.filters[0].field, 'updatedSince')
+    assert.equal(fileBody.projectId, 7)
+    assert.equal(stdinBody.projectId, 7)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('search-fields rejects mixed DSL and legacy filters before backend call', async () => {
+  const io = createIo()
+  const fetchFn = async () => {
+    throw new Error('fetch should not be called')
+  }
+
+  const code = await runCli([
+    'search-fields',
+    '--project',
+    '7',
+    '--dsl',
+    '{"target":"FIELD"}',
+    '--category',
+    'money'
+  ], io, fetchFn)
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /DSL.*legacy|legacy.*DSL/)
+  assert.equal(io.stdout, '')
+})
+
+test('search-fields preserves Standard Query DSL validation diagnostic', async () => {
+  const io = createIo()
+  const fetchFn = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({
+      code: 400,
+      message: 'Standard Query limit 必须在 1 到 50 之间',
+      data: {
+        code: 'STANDARD_QUERY_DSL_INVALID',
+        message: 'Standard Query limit 必须在 1 到 50 之间',
+        supportedFields: ['category', 'stableRef'],
+        supportedOperators: ['eq'],
+        bounds: 'limit=1..50'
+      },
+      error: {
+        code: 'STANDARD_QUERY_DSL_INVALID',
+        category: 'VALIDATION',
+        retryable: true,
+        suggestedAction: '检查 Standard Query target/filter/op/value/limit。',
+        docsRef: 'openspec/changes/add-standard-query-dsl/specs/standard-query-dsl/spec.md',
+        capabilityId: 'standard-query-dsl',
+        safety: { bounds: 'limit=1..50' },
+        nextActions: ['将 limit 调整到 bounds 允许范围内。']
+      }
+    })
+  })
+
+  const code = await runCli([
+    'search-fields',
+    '--project',
+    '7',
+    '--dsl',
+    '{"target":"FIELD","limit":51}',
+    '--server',
+    'http://dataspec.local'
+  ], io, fetchFn)
+  const diagnosticLine = io.stderr.split(/\r?\n/).find((line) => line.startsWith('DataSpecError: '))
+  const diagnostic = JSON.parse(diagnosticLine.replace('DataSpecError: ', ''))
+
+  assert.equal(code, 2)
+  assert.equal(diagnostic.code, 'STANDARD_QUERY_DSL_INVALID')
+  assert.equal(diagnostic.category, 'VALIDATION')
+  assert.equal(diagnostic.capabilityId, 'standard-query-dsl')
+  assert.equal(diagnostic.safety.bounds, 'limit=1..50')
+  assert.equal(io.stdout, '')
+})
+
 test('search-fields prints DataSpecError when api returns diagnostic', async () => {
   const io = createIo()
   const fetchFn = async () => ({

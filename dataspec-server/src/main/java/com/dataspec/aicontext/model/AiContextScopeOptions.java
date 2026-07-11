@@ -1,5 +1,8 @@
 package com.dataspec.aicontext.model;
 
+import com.dataspec.standardquery.model.StandardQueryRequest;
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.Locale;
 import java.util.Set;
 
@@ -15,7 +18,9 @@ public record AiContextScopeOptions(
         Integer limit,
         String profileId,
         String taskType,
-        boolean scopeExplicit
+        boolean scopeExplicit,
+        @Schema(description = "可选 Standard Query DSL scope；用于 field catalog/package 裁剪字段标准，query/filter 值按敏感输入处理。")
+        StandardQueryRequest standardQuery
 ) {
     private static final String DEFAULT_SCOPE = "all";
     private static final Set<String> SUPPORTED_SCOPES = Set.of("all", "field", "domain", "tag", "table", "changed");
@@ -34,20 +39,32 @@ public record AiContextScopeOptions(
         taskType = normalizeText(taskType);
     }
 
+    public AiContextScopeOptions(
+            String scope,
+            String query,
+            String status,
+            Integer limit,
+            String profileId,
+            String taskType,
+            boolean scopeExplicit
+    ) {
+        this(scope, query, status, limit, profileId, taskType, scopeExplicit, null);
+    }
+
     public AiContextScopeOptions(String scope, String query, String status, Integer limit) {
-        this(scope, query, status, limit, null, null, scope != null && !scope.isBlank());
+        this(scope, query, status, limit, null, null, scope != null && !scope.isBlank(), null);
     }
 
     public AiContextScopeOptions(String scope, String query, String status, Integer limit, String profileId, String taskType) {
-        this(scope, query, status, limit, profileId, taskType, scope != null && !scope.isBlank());
+        this(scope, query, status, limit, profileId, taskType, scope != null && !scope.isBlank(), null);
     }
 
     public static AiContextScopeOptions full() {
-        return new AiContextScopeOptions(null, null, null, null, null, null, false);
+        return new AiContextScopeOptions(null, null, null, null, null, null, false, null);
     }
 
     public boolean scoped() {
-        return !DEFAULT_SCOPE.equals(scope) || query != null || status != null || limit != null;
+        return standardQuery != null || !DEFAULT_SCOPE.equals(scope) || query != null || status != null || limit != null;
     }
 
     public boolean scopeSupported() {

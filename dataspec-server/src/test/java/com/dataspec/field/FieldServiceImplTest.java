@@ -979,6 +979,32 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void search_legacyParametersExposeDslExplanationWithoutChangingResults() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field amount = field("amount_cent", "金额（分）", "bigint", "支付金额", "amount", "enabled");
+        amount.setId(3L);
+        amount.setCategory("money");
+        amount.setTags("finance");
+        amount.setSensitive(false);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(amount));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "金额", "money", "finance", "enabled", false, null, 10));
+
+        assertEquals("amount_cent", result.items().getFirst().field().getName());
+        assertEquals("FIELD", result.summary().querySummary().target());
+        assertEquals("金额", result.summary().querySummary().text());
+        assertEquals(1, result.summary().querySummary().resultCount());
+        assertEquals(1, result.summary().querySummary().returnedCount());
+        assertFalse(result.summary().querySummary().truncated());
+        assertTrue(result.summary().dslAppliedFilters().stream().anyMatch(filter ->
+                "category".equals(filter.field()) && "money".equals(filter.redactedValue())));
+        assertTrue(result.summary().dslIgnoredFilters().isEmpty());
+        assertTrue(result.summary().nextQueryHints().isEmpty());
+    }
+
+    @Test
     void search_requiresQueryOrFilter() {
         FieldRepository repository = mock(FieldRepository.class);
         FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
