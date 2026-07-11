@@ -53,6 +53,7 @@ import com.dataspec.standardquery.service.impl.StandardQueryServiceImpl;
 import com.dataspec.standardusageexample.entity.StandardUsageExample;
 import com.dataspec.standardusageexample.model.StandardUsageExampleSaveReq;
 import com.dataspec.standardusageexample.service.StandardUsageExampleService;
+import com.dataspec.tablemodel.service.TableStandardsContextProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -92,6 +93,7 @@ class AiContextExportServiceTest {
         assertTrue(entries.containsKey(".dataspec/schema-registry.json"));
         assertTrue(entries.containsKey(".dataspec/capabilities.json"));
         assertTrue(entries.containsKey(".dataspec/usage-examples.json"));
+        assertTrue(entries.containsKey(".dataspec/table-standards.json"));
         assertTrue(entries.containsKey(".dataspec/manifest.json"));
         assertTrue(entries.containsKey(".dataspec/README.md"));
         assertTrue(entries.containsKey(".dataspec/rules.yaml"));
@@ -125,12 +127,14 @@ class AiContextExportServiceTest {
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/schema-registry.json"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/capabilities.json"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/usage-examples.json"));
+        assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/table-standards.json"));
         assertTrue(entries.get(".dataspec/README.md").contains(".dataspec/workflows.md"));
         assertTrue(entries.get(".dataspec/README.md").contains("dataspec lint"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/field-catalog.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/schema-registry.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/capabilities.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/usage-examples.json"));
+        assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/table-standards.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains(".dataspec/manifest.json"));
         assertTrue(entries.get("AGENTS.md.fragment").contains("dataspec lint <path|-> --project 1 --format json"));
         assertTrue(entries.get(".dataspec/examples/good.sql").contains("CREATE TABLE users"));
@@ -146,6 +150,7 @@ class AiContextExportServiceTest {
         assertTrue(manifest.path("files").toString().contains(".dataspec/schema-registry.json"));
         assertTrue(manifest.path("files").toString().contains(".dataspec/capabilities.json"));
         assertTrue(manifest.path("files").toString().contains(".dataspec/usage-examples.json"));
+        assertTrue(manifest.path("files").toString().contains(".dataspec/table-standards.json"));
         assertTrue(manifest.path("files").toString().contains(".dataspec/workflows.md"));
         assertEquals(1, manifest.path("contracts").path("schemaVersion").asInt());
         assertEquals(SchemaRegistryServiceImpl.REGISTRY_VERSION, manifest.path("contracts").path("registryVersion").asText());
@@ -210,6 +215,13 @@ class AiContextExportServiceTest {
         assertTrue(usageExamples.path("examples").isArray());
         assertEquals(0, usageExamples.path("summary").path("totalExamples").asInt());
         assertFalse(usageExamples.path("snapshotBound").asBoolean());
+        var tableStandards = new ObjectMapper().readTree(entries.get(".dataspec/table-standards.json"));
+        assertEquals("dataspec-table-standards", tableStandards.path("kind").asText());
+        assertEquals(PROJECT_ID.longValue(), tableStandards.path("projectId").asLong());
+        assertEquals("all", tableStandards.path("contextScope").path("scope").asText());
+        assertTrue(tableStandards.path("businessObjects").isArray());
+        assertTrue(tableStandards.path("templates").isArray());
+        assertTrue(tableStandards.path("relations").isArray());
 
         var schema = new ObjectMapper().readTree(entries.get(".dataspec/field-catalog.schema.json"));
         assertTrue(schema.path("properties").has("projectId"));
@@ -1532,19 +1544,57 @@ class AiContextExportServiceTest {
                 new FieldConflictServiceImpl(fieldService),
                 usageExampleService,
                 standardReusePackService,
-                standardQueryService(fields, fieldSourceRepository)
+                standardQueryService(fields, fieldSourceRepository),
+                emptyTableStandardsContextProvider()
         );
+    }
+
+    private TableStandardsContextProvider emptyTableStandardsContextProvider() {
+        TableStandardsContextProvider provider = mock(TableStandardsContextProvider.class);
+        String empty = """
+                {
+                  "kind": "dataspec-table-standards",
+                  "schemaVersion": 1,
+                  "projectId": 1,
+                  "contextScope": {
+                    "scope": "all",
+                    "matchedObjectCount": 0,
+                    "returnedObjectCount": 0,
+                    "matchedTemplateCount": 0,
+                    "returnedTemplateCount": 0,
+                    "truncated": false,
+                    "warnings": []
+                  },
+                  "businessObjects": [],
+                  "templates": [],
+                  "relations": [],
+                  "summary": {
+                    "businessObjectCount": 0,
+                    "exportedBusinessObjectCount": 0,
+                    "templateCount": 0,
+                    "relationEdgeCount": 0
+                  }
+                }
+                """;
+        when(provider.generateTableStandardsJson(org.mockito.ArgumentMatchers.eq(PROJECT_ID), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(empty);
+        when(provider.generateTableStandardsJson(PROJECT_ID)).thenReturn(empty);
+        when(provider.generateTableStandardsMarkdown(PROJECT_ID)).thenReturn("");
+        return provider;
     }
 
     private StandardQueryService standardQueryService(List<Field> fields, FieldSourceRepository fieldSourceRepository) {
         FieldRepository fieldRepository = mock(FieldRepository.class);
         when(fieldRepository.findAllByProjectId(PROJECT_ID)).thenReturn(fields);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(glossaryService.match(org.mockito.ArgumentMatchers.eq(PROJECT_ID), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(List.of());
         FieldService searchFieldService = new FieldServiceImpl(
                 fieldRepository,
                 fieldSourceRepository,
                 mock(com.dataspec.changelog.service.StandardChangeLogService.class),
                 new ObjectMapper(),
-                mock(com.dataspec.businessglossary.service.BusinessGlossaryService.class));
+                glossaryService);
         return new StandardQueryServiceImpl(searchFieldService);
     }
 
@@ -1582,6 +1632,7 @@ class AiContextExportServiceTest {
     private Field sampleField(String name, String displayName, String category, String tags, String aliases) {
         Field field = new Field();
         field.setId(100L);
+        field.setProjectId(PROJECT_ID);
         field.setName(name);
         field.setDisplayName(displayName);
         field.setDataType("varchar(20)");

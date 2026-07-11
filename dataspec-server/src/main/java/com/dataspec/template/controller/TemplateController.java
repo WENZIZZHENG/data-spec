@@ -1,9 +1,19 @@
 package com.dataspec.template.controller;
 
 import com.dataspec.common.result.R;
+import com.dataspec.tablemodel.model.TableAuditPolicy;
+import com.dataspec.tablemodel.model.TableForeignKeyStandard;
+import com.dataspec.tablemodel.model.TableIndexStandard;
+import com.dataspec.tablemodel.model.TablePrimaryKeyStandard;
+import com.dataspec.tablemodel.model.TableSoftDeletePolicy;
+import com.dataspec.tablemodel.model.TableStructureStandard;
+import com.dataspec.tablemodel.model.TableUniqueKeyStandard;
+import com.dataspec.tablemodel.service.TableStructureJsonCodec;
 import com.dataspec.template.entity.Template;
 import com.dataspec.template.entity.TemplateField;
+import com.dataspec.template.model.TemplateResp;
 import com.dataspec.template.service.TemplateService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -22,44 +32,49 @@ import java.util.List;
 public class TemplateController {
 
     private final TemplateService templateService;
+    private final ObjectMapper objectMapper;
 
     // ---- 模板 ----
 
     /** 查询模板列表 */
 
     @GetMapping
-    public R<List<Template>> list(@RequestParam Long projectId) {
-        return R.ok(templateService.listByProject(projectId));
+    public R<List<TemplateResp>> list(@RequestParam Long projectId) {
+        return R.ok(templateService.listByProject(projectId).stream()
+                .map(this::toResp)
+                .toList());
     }
 
     /** 获取模板详情 */
 
     @GetMapping("/{id}")
-    public R<Template> getById(@PathVariable Long id) {
-        return R.ok(templateService.getById(id));
+    public R<TemplateResp> getById(@PathVariable Long id) {
+        return R.ok(toResp(templateService.getById(id)));
     }
 
     /** 创建模板 */
 
     @PostMapping
-    public R<Template> create(@Valid @RequestBody TemplateReq req) {
+    public R<TemplateResp> create(@Valid @RequestBody TemplateReq req) {
         Template t = new Template();
         t.setProjectId(req.projectId());
         t.setName(req.name());
         t.setDescription(req.description());
         t.setTablePrefix(req.tablePrefix());
-        return R.ok(templateService.create(t));
+        applyStructure(req.structure(), t);
+        return R.ok(toResp(templateService.create(t)));
     }
 
     /** 更新模板 */
 
     @PutMapping("/{id}")
-    public R<Template> update(@PathVariable Long id, @Valid @RequestBody TemplateReq req) {
+    public R<TemplateResp> update(@PathVariable Long id, @Valid @RequestBody TemplateReq req) {
         Template t = new Template();
         t.setName(req.name());
         t.setDescription(req.description());
         t.setTablePrefix(req.tablePrefix());
-        return R.ok(templateService.update(id, t));
+        applyStructure(req.structure(), t);
+        return R.ok(toResp(templateService.update(id, t)));
     }
 
     /** 删除模板 */
@@ -126,7 +141,8 @@ public class TemplateController {
             @NotNull(message = "项目ID不能为空") Long projectId,
             @NotBlank(message = "模板名称不能为空") String name,
             String description,
-            String tablePrefix
+            String tablePrefix,
+            TableStructureStandard structure
     ) {}
 
     public record TemplateFieldReq(
@@ -139,4 +155,54 @@ public class TemplateController {
             Integer sortOrder,
             Boolean isRequired
     ) {}
+
+    private TemplateResp toResp(Template template) {
+        return new TemplateResp(
+                template.getId(),
+                template.getProjectId(),
+                template.getName(),
+                template.getDescription(),
+                template.getTablePrefix(),
+                toStructure(template),
+                template.getCreatedAt(),
+                template.getUpdatedAt()
+        );
+    }
+
+    private TableStructureStandard toStructure(Template template) {
+        TableStructureJsonCodec codec = codec();
+        return new TableStructureStandard(
+                template.getBusinessObjectId(),
+                codec.read(template.getPrimaryKeyJson(), TablePrimaryKeyStandard.class, null, "主键标准"),
+                codec.readList(template.getUniqueKeysJson(), TableUniqueKeyStandard.class, "唯一键标准"),
+                codec.readList(template.getIndexesJson(), TableIndexStandard.class, "索引标准"),
+                codec.readList(template.getForeignKeysJson(), TableForeignKeyStandard.class, "外键标准"),
+                codec.readList(template.getCheckHintsJson(), String.class, "CHECK 提示"),
+                codec.read(template.getAuditPolicyJson(), TableAuditPolicy.class, null, "审计策略"),
+                codec.read(template.getSoftDeletePolicyJson(), TableSoftDeletePolicy.class, null, "软删除策略"),
+                codec.readList(template.getDialectNotesJson(), String.class, "方言说明"),
+                template.getAiUsageNotes()
+        );
+    }
+
+    private void applyStructure(TableStructureStandard structure, Template template) {
+        if (structure == null) {
+            return;
+        }
+        TableStructureJsonCodec codec = codec();
+        template.setBusinessObjectId(structure.businessObjectId());
+        template.setPrimaryKeyJson(codec.write(structure.primaryKey(), "主键标准"));
+        template.setUniqueKeysJson(codec.write(structure.uniqueKeys(), "唯一键标准"));
+        template.setIndexesJson(codec.write(structure.indexes(), "索引标准"));
+        template.setForeignKeysJson(codec.write(structure.foreignKeys(), "外键标准"));
+        template.setCheckHintsJson(codec.write(structure.checkHints(), "CHECK 提示"));
+        template.setAuditPolicyJson(codec.write(structure.auditPolicy(), "审计策略"));
+        template.setSoftDeletePolicyJson(codec.write(structure.softDeletePolicy(), "软删除策略"));
+        template.setDialectNotesJson(codec.write(structure.dialectNotes(), "方言说明"));
+        template.setAiUsageNotes(structure.aiUsageNotes());
+    }
+
+    private TableStructureJsonCodec codec() {
+        return new TableStructureJsonCodec(objectMapper);
+    }
 }

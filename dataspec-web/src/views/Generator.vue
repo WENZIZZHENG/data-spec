@@ -81,6 +81,35 @@
 
       <el-empty v-if="templates.length === 0 && !templateLoading" description="当前项目暂无表模板" />
 
+      <section class="relation-section">
+        <div class="section-header">
+          <h3>关系摘要</h3>
+          <el-tag size="small" type="info">
+            边 {{ relationEdges.length }}
+          </el-tag>
+        </div>
+        <el-table
+          :data="relationEdges"
+          stripe
+          class="relation-table"
+          empty-text="暂无关系 edge"
+        >
+          <el-table-column label="来源" min-width="150">
+            <template #default="{ row }">
+              {{ relationNodeLabel(row.source) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="kind" label="关系" width="140" show-overflow-tooltip />
+          <el-table-column label="目标" min-width="150">
+            <template #default="{ row }">
+              {{ relationNodeLabel(row.target) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="confidence" label="置信度" width="100" />
+          <el-table-column prop="evidence" label="证据" min-width="220" show-overflow-tooltip />
+        </el-table>
+      </section>
+
       <section class="dictionary-section">
         <div class="section-header">
           <h3>数据字典</h3>
@@ -161,6 +190,14 @@
           </div>
         </div>
 
+        <el-alert
+          class="preview-safety"
+          title="只读 preview，未应用到数据库，执行前需人工确认"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
+
         <div v-if="ddlDialectDiagnostics.length" class="dialect-panel">
           <div class="dialect-header">
             <span>方言诊断</span>
@@ -181,6 +218,31 @@
                 <span>{{ diagnostic.message }}</span>
                 <small v-if="diagnostic.nextAction">{{ diagnostic.nextAction }}</small>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="hasStructureSummary" class="structure-panel">
+          <div class="dialect-header">
+            <span>结构标准摘要</span>
+            <el-tag size="small" type="success">
+              {{ structureSummaryItemCount }} 项
+            </el-tag>
+          </div>
+          <div class="structure-grid">
+            <div
+              v-for="section in structureSections"
+              :key="section.key"
+              class="structure-section"
+            >
+              <div class="structure-title">
+                <span>{{ section.label }}</span>
+                <code>{{ section.key }}</code>
+              </div>
+              <ul v-if="section.items.length" class="structure-list">
+                <li v-for="item in section.items" :key="item">{{ item }}</li>
+              </ul>
+              <span v-else class="empty-inline">暂无</span>
             </div>
           </div>
         </div>
@@ -223,6 +285,7 @@ import {
   previewDataDictionaryHtml,
   previewDdl
 } from '@/api/generator'
+import { getBusinessObjectRelationSummary } from '@/api/businessObject'
 import { listTemplateFields, listTemplates } from '@/api/template'
 import { useProjectStore } from '@/stores/project'
 import {
@@ -231,12 +294,20 @@ import {
   diagnosticTagType,
   dialectSummary
 } from '@/utils/dialectDiagnostics'
-import type { DdlGenerateResult, LintIssue, Template, TemplateField } from '@/types'
+import type {
+  BusinessObjectRelationEdge,
+  BusinessObjectRelationSummary,
+  DdlGenerateResult,
+  LintIssue,
+  Template,
+  TemplateField
+} from '@/types'
 
 const projectStore = useProjectStore()
 const route = useRoute()
 const templates = ref<Template[]>([])
 const templateFields = ref<TemplateField[]>([])
+const relationSummary = ref<BusinessObjectRelationSummary | null>(null)
 const selectedTemplateId = ref<number | null>(null)
 const tableName = ref('')
 const result = ref<DdlGenerateResult | null>(null)
@@ -261,6 +332,39 @@ const ddlDialectDiagnostics = computed(() => [
 const hasDictionaryPreview = computed(() => Boolean(dictionaryHtml.value || dictionaryErd.value))
 const dictionaryBusy = computed(() => Boolean(dictionaryLoading.value))
 const dictionaryDownloadBusy = computed(() => Boolean(dictionaryDownloading.value))
+const relationEdges = computed<BusinessObjectRelationEdge[]>(() => relationSummary.value?.edges ?? [])
+const structureSummary = computed(() => result.value?.structureSummary ?? null)
+const structureSections = computed(() => [
+  {
+    key: 'appliedConstraints',
+    label: '已应用约束',
+    items: structureSummary.value?.appliedConstraints ?? []
+  },
+  {
+    key: 'generatedIndexes',
+    label: '生成索引',
+    items: structureSummary.value?.generatedIndexes ?? []
+  },
+  {
+    key: 'skippedHints',
+    label: '跳过提示',
+    items: structureSummary.value?.skippedHints ?? []
+  },
+  {
+    key: 'policyNotes',
+    label: '策略说明',
+    items: structureSummary.value?.policyNotes ?? []
+  },
+  {
+    key: 'evidence',
+    label: '证据',
+    items: structureSummary.value?.evidence ?? []
+  }
+])
+const structureSummaryItemCount = computed(() =>
+  structureSections.value.reduce((total, section) => total + section.items.length, 0)
+)
+const hasStructureSummary = computed(() => structureSummaryItemCount.value > 0)
 
 onMounted(() => {
   if (projectStore.projects.length === 0) {
@@ -279,6 +383,7 @@ watch(
 watch(selectedTemplateId, () => {
   result.value = null
   void loadTemplateFields()
+  void loadRelationSummary()
 })
 
 watch(
@@ -297,11 +402,13 @@ async function loadTemplates() {
   result.value = null
   templateFields.value = []
   selectedTemplateId.value = null
+  relationSummary.value = null
   dictionaryHtml.value = ''
   dictionaryErd.value = ''
   activeDictionaryTab.value = 'html'
   if (!projectId) {
     templates.value = []
+    relationSummary.value = null
     return
   }
   templateLoading.value = true
@@ -311,8 +418,22 @@ async function loadTemplates() {
       ?? templates.value.find((template) => template.id)?.id
       ?? null
     applyTableNameFromQuery()
+    await loadRelationSummary()
   } finally {
     templateLoading.value = false
+  }
+}
+
+async function loadRelationSummary() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId) {
+    relationSummary.value = null
+    return
+  }
+  try {
+    relationSummary.value = await getBusinessObjectRelationSummary(projectId)
+  } catch {
+    relationSummary.value = null
   }
 }
 
@@ -452,6 +573,17 @@ function severityTagType(severity?: string) {
   return 'info'
 }
 
+function relationNodeLabel(nodeId?: string) {
+  if (!nodeId) {
+    return '未知节点'
+  }
+  const node = relationSummary.value?.nodes?.find((item) => item.id === nodeId)
+  if (!node) {
+    return nodeId
+  }
+  return node.label ? `${node.label}（${node.type || node.id}）` : node.id
+}
+
 function templateIdFromQuery() {
   const rawTemplateId = route.query.templateId
   const value = Array.isArray(rawTemplateId) ? rawTemplateId[0] : rawTemplateId
@@ -519,11 +651,13 @@ function applyTableNameFromQuery() {
 }
 
 .field-table,
-.issue-table {
+.issue-table,
+.relation-table {
   width: 100%;
 }
 
 .dictionary-section,
+.relation-section,
 .result-section {
   margin-top: 20px;
 }
@@ -544,6 +678,10 @@ function applyTableNameFromQuery() {
 
 .lint-summary {
   margin-top: 10px;
+}
+
+.preview-safety {
+  margin-bottom: 12px;
 }
 
 .dialect-panel {
@@ -589,6 +727,59 @@ function applyTableNameFromQuery() {
 
 .diagnostic-copy small {
   color: #909399;
+}
+
+.structure-panel {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid #d9ecff;
+  border-radius: 4px;
+  background: #f5faff;
+}
+
+.structure-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.structure-section {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.structure-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #303133;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.structure-title code {
+  color: #606266;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.structure-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.empty-inline {
+  color: #909399;
+  font-size: 13px;
 }
 
 .ddl-code {
@@ -644,6 +835,10 @@ function applyTableNameFromQuery() {
   .section-header,
   .result-header {
     flex-direction: column;
+  }
+
+  .structure-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

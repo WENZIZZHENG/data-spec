@@ -1,4 +1,12 @@
-export type AiContextScope = 'all' | 'field' | 'domain' | 'tag' | 'table' | 'changed'
+export type AiContextScope =
+  | 'all'
+  | 'field'
+  | 'domain'
+  | 'tag'
+  | 'table'
+  | 'business-object'
+  | 'table-template'
+  | 'changed'
 
 export interface AiContextScopeForm {
   scope: AiContextScope

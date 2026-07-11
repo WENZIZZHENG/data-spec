@@ -1,6 +1,6 @@
 # AI 输出契约
 
-本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、MCP agent guidance pack、CLI/MCP contract fixtures、AI Context、AI capability catalog、版本兼容握手、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、标准字段合并和 DDL 预览的自动化使用场景。
+本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、MCP agent guidance pack、CLI/MCP contract fixtures、AI Context、AI capability catalog、版本兼容握手、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、业务对象与表结构标准、标准字段合并和 DDL 预览的自动化使用场景。
 
 ## 兼容策略
 
@@ -42,7 +42,7 @@ Contract summary 稳定字段：
 - `compatibility`
 - `docsRef`
 
-Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`standard-field-merge`、`enum-dict`、`rule-config`、`template`、`standard-snapshot`、`lint-result`、`ai-evidence-package`、`ai-context-manifest`、`ai-context-field-catalog` 和 `ai-task-profile`。
+Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`standard-field-merge`、`enum-dict`、`rule-config`、`template`、`business-object-standard`、`table-structure-standard`、`table-relation-hint`、`table-index-standard`、`table-foreign-key-standard`、`table-policy-standard`、`standard-snapshot`、`lint-result`、`ai-evidence-package`、`ai-context-manifest`、`ai-context-field-catalog`、`ai-context-table-standards` 和 `ai-task-profile`。
 
 `contract check` 的成功只说明 registry 结构对 AI 可用；它不会验证当前项目业务标准是否完整，也不会授权任何写入动作。
 
@@ -154,6 +154,30 @@ CLI `compat check` 兼容时退出码为 `0`，服务端报告 `compatibility.co
 
 表模板契约，覆盖 DDL 生成所需的模板元数据和模板字段。
 
+### business-object-standard
+
+业务对象标准契约，覆盖项目内对象 key、实体名、目标表模式、关联模板、必选/可选字段、关系提示、外键提示、审计字段、反模式、AI 使用说明和是否导出到 AI Context。该契约只描述 DataSpec 标准元数据，不包含业务数据库行值、数据库连接凭据或可执行迁移。
+
+### table-structure-standard
+
+表结构标准契约，覆盖模板级 `primaryKey`、`uniqueKeys[]`、`indexes[]`、`foreignKeys[]`、`checkHints[]`、`auditPolicy`、`softDeletePolicy`、`dialectNotes[]` 和 `aiUsageNotes`。字段名、约束名和索引名必须是结构化 identifier；`checkHints`、审计/软删除策略和方言说明默认作为 guidance，不得被客户端当作 raw SQL 执行。
+
+### table-relation-hint
+
+业务对象或模板之间的只读关系提示契约，稳定字段包含关系来源、目标、关系类型、引用字段、目标字段、可选性、基数和说明。它用于 AI 建表前理解对象关系，不是实际数据库约束已存在的证明。
+
+### table-index-standard
+
+表索引标准契约，稳定字段包含索引名、字段列表、唯一性、索引类型和说明。第一版 DDL preview 仅支持 `btree` 或空索引方法，其他方法应作为诊断返回；AI 可把它用于 DDL preview 或人工审阅建议，但不得跳过 lint、方言诊断和人工确认。
+
+### table-foreign-key-standard
+
+外键标准契约，稳定字段包含约束名、来源字段、目标表、目标字段、更新/删除动作、`advisoryOnly` 和说明。`advisoryOnly=true` 表示只读建议，不应生成强约束 SQL；`onDelete`/`onUpdate` 使用 `NO ACTION`、`RESTRICT`、`CASCADE`、`SET NULL` 这些可直接进入受控 DDL 片段的值。
+
+### table-policy-standard
+
+表级策略契约，覆盖审计字段、软删除策略、检查提示、方言说明和 AI 使用说明。策略文本必须按敏感信息规则脱敏，且默认不作为可执行 SQL。
+
 ### standard-snapshot
 
 标准快照契约，覆盖 `specVersion`、`specHash`、来源和是否已版本化。
@@ -177,6 +201,10 @@ AI Context manifest 契约，覆盖离线包入口、标准版本、文件清单
 ### ai-context-field-catalog
 
 AI Context 字段目录契约，覆盖字段、枚举、上下文裁剪条件和标准版本。
+
+### ai-context-table-standards
+
+AI Context 表结构标准契约，覆盖 `.dataspec/table-standards.json` 中的业务对象、模板结构标准、关系 edge、上下文裁剪摘要和统计信息。该文件是离线只读上下文，不代表已经在业务数据库应用约束。
 
 ### ai-task-profile
 
@@ -206,9 +234,15 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - `.dataspec/schema-registry.json`: Schema Registry catalog，稳定字段遵循上方 Schema Registry 契约。
 - `.dataspec/capabilities.json`: AI Capability Catalog，稳定字段遵循上方 Capability Catalog 契约。
 - `.dataspec/field-catalog.json`: `projectId`、`standard.specVersion`、`standard.specHash`、`contextScope`、`fields[]`、`enums[]`。
+- `.dataspec/table-standards.json`: `kind`、`schemaVersion`、`projectId`、`contextScope`、`businessObjects[]`、`templates[]`、`relations[]`、`summary`。
 - `fields[]`: `name`、`dataType`、`nullable`、`sensitive`、`status`、`replacementFieldId`、`replacementReason`、`comment`、`displayName`、`category`、`tags`、`codeSetId`、`example`、`aliases[]`、`matchReasons[]`。
+- `table-standards.businessObjects[]`: `id`、`projectId`、`objectKey`、`entityName`、`tablePattern`、`templateId`、`requiredFieldNames[]`、`optionalFieldNames[]`、`relations[]`、`foreignKeyHints[]`、`auditFields[]`、`antiPatterns[]`、`aiUsageNotes`、`contextExport`。
+- `table-standards.templates[]`: `id`、`name`、`businessObjectId`、`structure`，其中 `structure` 遵循 `table-structure-standard` 契约。
+- `table-standards.relations[]`: 只读对象/模板关系 edge，用于建表前理解依赖；不证明业务库已存在外键。
 - `.dataspec/rules.yaml`: `standard`、`naming`、`rules`、`rule_exemptions`。
 - `.dataspec/workflows.md`: `create-table`、`review-pr-sql`、`reverse-import-standards`、`export-min-context`、`standard-evidence-review`、`standard-maintenance` 六个 recipe id。
+
+`scope=business-object|table-template` 时，`.dataspec/table-standards.json` 可按 `query/status/limit` 裁剪业务对象、表模板和关系 edge；裁剪必须保留空数组和 `summary`，让旧客户端即使忽略表结构标准也能继续消费字段目录。
 
 ## SQL Lint
 
@@ -329,8 +363,10 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - `ddl`
 - `lintResult`
 - `standardSnapshot`
+- `dialectDiagnostics`
+- `structureSummary`
 
-`lintResult` 遵循 SQL Lint 契约，`standardSnapshot` 至少保留 `specVersion` 与 `specHash`，用于 AI 交付说明和回放。
+`lintResult` 遵循 SQL Lint 契约，`standardSnapshot` 至少保留 `specVersion` 与 `specHash`，用于 AI 交付说明和回放。`structureSummary` 稳定包含 `appliedConstraints[]`、`generatedIndexes[]`、`skippedHints[]`、`policyNotes[]` 和 `evidence[]`；关系提示通过业务对象 relation summary 或 `.dataspec/table-standards.json` 读取。其中 skipped/policy/evidence 文本必须脱敏，且只说明 preview 结果，不表示 SQL 已执行。
 
 ## CLI 与 MCP
 
@@ -351,13 +387,18 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - CLI `compat check` 输出版本兼容握手稳定字段，并额外包含 `localCliVersion` 和 `server`。
 - CLI `doctor --format json` 包含 `compatibility` check，稳定 details 包括 `localCliVersion`、`serverVersion`、`apiSchemaHash`、`minCliVersion`、`status`、`compatible` 和 `nextActions[]`。
 - CLI `workflow list/show` 输出 `kind`、`schemaVersion`、`recipes[]`、`recipe`；recipe 保留 `id`、`title`、`goal`、`requiredInputs`、`prechecks`、`steps`、`expectedArtifacts`、`failureHandling`、`nextActions`。
+- CLI `table-standards list/show` 输出 `.dataspec/table-standards.json` 兼容 shape 或指定业务对象/模板详情；命令只读调用后端，不写 DataSpec 标准、不连接业务库、不执行 DDL。
+- CLI `generate-ddl --format json` 保留后端 `structureSummary`，不得把表级策略说明降级成不可解析文本。
 - CLI `evidence export` 输出 `AiEvidencePackage` JSON 或 zip；失败时返回参数错误退出码并输出脱敏错误。
 - MCP resources/tools 返回 `structuredContent` 和 `content[].text`；`content[].text` 应保持可解析 JSON 或明确文本 fallback。
 - MCP `ai-task-profiles` resource 输出 `AiTaskProfileCatalog` 兼容结构。
 - MCP `capability-catalog` resource 输出 AI Capability Catalog，并为该 resource 返回 `structuredContent` 和可解析 JSON text；MCP `tools/list` 的本地工具描述同步包含 `safety` metadata 或等价安全引用。
 - MCP `version-compatibility` resource 输出版本兼容握手，并返回 `structuredContent` 和可解析 JSON text。
 - MCP `schema-registry` resource 输出 Schema Registry catalog。
+- MCP `table-standards` resource 输出 `.dataspec/table-standards.json` 兼容 shape，并返回 `structuredContent` 和可解析 JSON text。
 - MCP `workflow-recipes` resource 输出 `kind`、`schemaVersion`、`projectId`、`recipes[]`。
+- MCP `get_table_standards` tool 输出表结构标准兼容 shape，可按项目、业务对象或模板过滤；该工具只读，不执行数据库迁移或写入业务仓库。
+- MCP `generate_table_ddl` tool 返回后端 DDL preview 结构，并保留 `structureSummary`。
 - MCP `search_fields` tool 返回字段检索稳定字段，`content[].text` 保持可解析 JSON。
 - MCP `export_evidence_package` tool 返回 `AiEvidencePackage`，并保持后端脱敏结果。
 - 安全诊断在 API `error`、CLI `DataSpecError` 和 MCP `error.data.dataspecError` 中保留 `code`、`category`、`missing`、`operation`、`safety` 和 `nextActions`；`IDEMPOTENCY_KEY_REQUIRED` 表示高风险写入缺少必需的 `Idempotency-Key`，`DRY_RUN_REQUIRED` 表示确认写入缺少预览返回的 `dryRunToken`。CLI/MCP 透传这些诊断时会递归脱敏 token、password、Authorization、JDBC URL、DSN 和 connection string。

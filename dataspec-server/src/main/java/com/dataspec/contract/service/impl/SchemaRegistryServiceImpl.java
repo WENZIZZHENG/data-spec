@@ -25,7 +25,7 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
 
     public static final String REGISTRY_KIND = "dataspec-schema-registry";
     public static final int REGISTRY_SCHEMA_VERSION = 1;
-    public static final String REGISTRY_VERSION = "2026.07.10";
+    public static final String REGISTRY_VERSION = "2026.07.11";
     public static final String CONTRACT_SCHEMA_VERSION = "1.0";
 
     private final SchemaCompatibilityPolicy compatibilityPolicy = SchemaCompatibilityPolicy.builder()
@@ -706,6 +706,209 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                         "returnedCount", 1,
                         "truncated", false,
                         "nextQueryHints", List.of()
+                ))
+        ));
+        add(map, contract(
+                "business-object-standard",
+                "业务对象标准",
+                "项目级业务对象与表模板依赖标准；所有文本字段必须 secret-safe，不保存业务数据行或连接凭据。",
+                List.of("id", "projectId", "objectKey", "entityName", "tablePattern", "templateId",
+                        "requiredFields[]", "optionalFields[]", "relations[]", "foreignKeyHints[]",
+                        "auditFields", "commonPitfalls[]", "aiUsageNotes", "contextExport", "status"),
+                List.of(),
+                objectSchema("DataSpec Business Object Standard", List.of("projectId", "objectKey", "entityName"), orderedMap(
+                        "id", describedIntegerProp("业务对象标准 ID。nullable: false on persisted response。"),
+                        "projectId", describedIntegerProp("所属项目 ID；必须按项目授权边界读写。"),
+                        "objectKey", describedStringProp("项目内唯一业务对象键；safe identifier，不含 secret 或业务数据行。"),
+                        "entityName", describedStringProp("人可读业务实体名称；项目内唯一，输出前按敏感文本规则脱敏。"),
+                        "tablePattern", describedStringProp("推荐表名模式或前缀；nullable，只作为 DDL preview/AI guidance。"),
+                        "templateId", describedIntegerProp("可选关联表模板 ID；nullable，必须属于同一项目。"),
+                        "requiredFields", arrayOf(describedStringProp("必选字段名或 stableRef；secret-safe。")),
+                        "optionalFields", arrayOf(describedStringProp("可选字段名或 stableRef；secret-safe。")),
+                        "relations", arrayOf(objectProp()),
+                        "foreignKeyHints", arrayOf(objectProp()),
+                        "auditFields", objectProp(),
+                        "commonPitfalls", arrayOf(describedStringProp("常见反模式说明；不得包含 raw SQL secret、token、JDBC URL 或 DSN。")),
+                        "aiUsageNotes", describedStringProp("AI 使用说明；按不可信业务内容处理并脱敏。"),
+                        "contextExport", describedBooleanProp("是否默认导出到 AI Context table-standards.json。"),
+                        "status", describedEnumProp("对象状态。", "ENABLED", "DISABLED")
+                )),
+                List.of(orderedMap(
+                        "id", 10,
+                        "projectId", 1,
+                        "objectKey", "order",
+                        "entityName", "订单",
+                        "tablePattern", "biz_order",
+                        "templateId", 20,
+                        "requiredFields", List.of("id", "order_no", "created_at"),
+                        "contextExport", true,
+                        "status", "ENABLED"
+                ))
+        ));
+        add(map, contract(
+                "table-structure-standard",
+                "表结构标准",
+                "表模板上的主键、唯一键、索引、外键、check guidance、审计和软删除策略结构。",
+                List.of("primaryKey", "uniqueKeys[]", "indexes[]", "foreignKeys[]", "checkHints[]",
+                        "auditPolicy", "softDeletePolicy", "dialectNotes[]", "aiUsageNotes"),
+                List.of(),
+                objectSchema("DataSpec Table Structure Standard", List.of(), orderedMap(
+                        "primaryKey", objectSchema("Table Primary Key", List.of("columns"), orderedMap(
+                                "name", describedStringProp("约束名；safe identifier，nullable。"),
+                                "columns", arrayOf(describedStringProp("模板字段名；必须存在于同一模板。"))
+                        )),
+                        "uniqueKeys", arrayOf(objectSchema("Table Unique Key", List.of("columns"), orderedMap(
+                                "name", describedStringProp("唯一键名；safe identifier，nullable。"),
+                                "columns", arrayOf(describedStringProp("参与唯一键的模板字段名。"))
+                        ))),
+                        "indexes", arrayOf(objectProp()),
+                        "foreignKeys", arrayOf(objectProp()),
+                        "checkHints", arrayOf(describedStringProp("CHECK 或校验提示；默认只读 guidance，不拼 raw SQL。")),
+                        "auditPolicy", objectProp(),
+                        "softDeletePolicy", objectProp(),
+                        "dialectNotes", arrayOf(describedStringProp("方言差异说明；只作为 guidance。")),
+                        "aiUsageNotes", describedStringProp("AI 使用说明；不得包含 token、password、Authorization、JDBC URL 或 DSN。")
+                )),
+                List.of(orderedMap(
+                        "primaryKey", orderedMap("name", "pk_order", "columns", List.of("id")),
+                        "uniqueKeys", List.of(orderedMap("name", "uk_order_no", "columns", List.of("order_no"))),
+                        "indexes", List.of(orderedMap("name", "idx_order_user", "columns", List.of("user_id")))
+                ))
+        ));
+        add(map, contract(
+                "table-relation-hint",
+                "表关系提示",
+                "业务对象之间或表之间的轻量关系边；不保存 raw SQL、凭据或业务数据样本。",
+                List.of("sourceObjectKey", "targetObjectKey", "relationType", "sourceColumns[]",
+                        "targetColumns[]", "optional", "confidence", "notes"),
+                List.of(),
+                objectSchema("DataSpec Table Relation Hint", List.of("targetObjectKey"), orderedMap(
+                        "sourceObjectKey", describedStringProp("来源业务对象 key；nullable 时默认当前对象。"),
+                        "targetObjectKey", describedStringProp("目标业务对象 key；secret-safe。"),
+                        "relationType", describedEnumProp("关系类型。", "ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_ONE", "MANY_TO_MANY", "RELATES_TO"),
+                        "sourceColumns", arrayOf(describedStringProp("来源列名；safe identifier。")),
+                        "targetColumns", arrayOf(describedStringProp("目标列名；safe identifier。")),
+                        "optional", describedBooleanProp("关系是否可选。"),
+                        "confidence", describedEnumProp("关系置信度。", "HIGH", "MEDIUM", "LOW"),
+                        "notes", describedStringProp("脱敏证据或说明；不得包含 raw secret。")
+                )),
+                List.of(orderedMap(
+                        "sourceObjectKey", "order",
+                        "targetObjectKey", "customer",
+                        "relationType", "MANY_TO_ONE",
+                        "sourceColumns", List.of("customer_id"),
+                        "targetColumns", List.of("id"),
+                        "confidence", "HIGH"
+                ))
+        ));
+        add(map, contract(
+                "table-index-standard",
+                "表索引标准",
+                "表模板索引标准；DDL preview 只接受 safe identifier 与结构化枚举选项。",
+                List.of("name", "columns[]", "unique", "method", "whereHint", "notes"),
+                List.of(),
+                objectSchema("DataSpec Table Index Standard", List.of("columns"), orderedMap(
+                        "name", describedStringProp("索引名；safe identifier，nullable。"),
+                        "columns", arrayOf(describedStringProp("索引字段名；必须存在于模板字段。")),
+                        "unique", describedBooleanProp("是否唯一索引。"),
+                        "method", describedEnumProp("索引方法；v1 PostgreSQL preview 仅支持 btree 或为空，其他方法作为诊断返回。", "btree"),
+                        "whereHint", describedStringProp("部分索引提示；v1 默认只作为 guidance，不拼 raw SQL。"),
+                        "notes", describedStringProp("脱敏说明。")
+                )),
+                List.of(orderedMap("name", "idx_order_customer", "columns", List.of("customer_id"), "method", "btree"))
+        ));
+        add(map, contract(
+                "table-foreign-key-standard",
+                "表外键标准",
+                "表模板外键标准；advisoryOnly 或非法引用只能作为诊断返回，不进入 raw SQL。",
+                List.of("name", "columns[]", "targetTable", "targetColumns[]", "onDelete", "onUpdate",
+                        "advisoryOnly", "confidence", "notes"),
+                List.of(),
+                objectSchema("DataSpec Table Foreign Key Standard", List.of("columns", "targetTable", "targetColumns"), orderedMap(
+                        "name", describedStringProp("外键名；safe identifier，nullable。"),
+                        "columns", arrayOf(describedStringProp("当前模板列名。")),
+                        "targetTable", describedStringProp("目标表名；safe identifier。"),
+                        "targetColumns", arrayOf(describedStringProp("目标列名；safe identifier。")),
+                        "onDelete", describedEnumProp("删除动作；值直接进入受控 DDL 片段。", "NO ACTION", "RESTRICT", "CASCADE", "SET NULL"),
+                        "onUpdate", describedEnumProp("更新动作；值直接进入受控 DDL 片段。", "NO ACTION", "RESTRICT", "CASCADE", "SET NULL"),
+                        "advisoryOnly", describedBooleanProp("true 时只作为 relation guidance，不生成外键约束。"),
+                        "confidence", describedEnumProp("外键建议置信度。", "HIGH", "MEDIUM", "LOW"),
+                        "notes", describedStringProp("脱敏说明。")
+                )),
+                List.of(orderedMap(
+                        "name", "fk_order_customer",
+                        "columns", List.of("customer_id"),
+                        "targetTable", "customer",
+                        "targetColumns", List.of("id"),
+                        "onDelete", "NO ACTION",
+                        "onUpdate", "NO ACTION",
+                        "advisoryOnly", false
+                ))
+        ));
+        add(map, contract(
+                "table-policy-standard",
+                "表策略标准",
+                "审计、软删除、checkHints 和方言说明的只读 AI/lint guidance 契约。",
+                List.of("auditPolicy", "softDeletePolicy", "checkHints[]", "dialectNotes[]",
+                        "policyNotes[]", "redactionBoundary"),
+                List.of(),
+                objectSchema("DataSpec Table Policy Standard", List.of(), orderedMap(
+                        "auditPolicy", objectProp(),
+                        "softDeletePolicy", objectProp(),
+                        "checkHints", arrayOf(describedStringProp("只读校验提示；不得拼接为 raw SQL。")),
+                        "dialectNotes", arrayOf(describedStringProp("方言差异说明。")),
+                        "policyNotes", arrayOf(describedStringProp("DDL preview 返回的脱敏策略说明。")),
+                        "redactionBoundary", describedStringProp("token/password/Authorization/JDBC URL/DSN/业务数据行必须脱敏或拒绝。")
+                )),
+                List.of(orderedMap(
+                        "auditPolicy", orderedMap("createdAtColumn", "created_at", "updatedAtColumn", "updated_at"),
+                        "softDeletePolicy", orderedMap("column", "is_deleted", "activeValue", false),
+                        "redactionBoundary", "secret-safe"
+                ))
+        ));
+        add(map, contract(
+                "ai-context-table-standards",
+                "AI Context 表结构标准",
+                "AI Context 包中的 .dataspec/table-standards.json 结构。支持 business-object/table-template scope 裁剪。",
+                List.of("kind", "schemaVersion", "projectId", "contextScope", "contextScope.scope",
+                        "contextScope.matchedObjectCount", "contextScope.returnedObjectCount",
+                        "contextScope.matchedTemplateCount", "contextScope.returnedTemplateCount",
+                        "businessObjects[]", "templates[]", "templates[].structure", "relations[]", "summary"),
+                List.of(),
+                objectSchema("DataSpec AI Context Table Standards", List.of("kind", "schemaVersion", "projectId"), orderedMap(
+                        "kind", describedStringProp("固定为 dataspec-table-standards。"),
+                        "schemaVersion", describedIntegerProp("table standards context schema 版本。"),
+                        "projectId", describedIntegerProp("项目 ID。"),
+                        "contextScope", objectSchema("Table Standards Context Scope", List.of("scope"), orderedMap(
+                                "scope", describedEnumProp("表结构标准裁剪范围。", "all", "business-object", "table-template"),
+                                "query", describedStringProp("脱敏后的查询文本；nullable。"),
+                                "matchedObjectCount", describedIntegerProp("匹配业务对象数。"),
+                                "returnedObjectCount", describedIntegerProp("返回业务对象数。"),
+                                "matchedTemplateCount", describedIntegerProp("匹配模板数。"),
+                                "returnedTemplateCount", describedIntegerProp("返回模板数。"),
+                                "truncated", describedBooleanProp("是否因 limit 截断。"),
+                                "warnings", arrayOf(describedStringProp("脱敏警告。"))
+                        )),
+                        "businessObjects", arrayOf(objectProp()),
+                        "templates", arrayOf(objectSchema("Table Standards Template", List.of("id", "name"), orderedMap(
+                                "id", describedIntegerProp("模板 ID。"),
+                                "projectId", describedIntegerProp("项目 ID。"),
+                                "name", describedStringProp("模板名称。"),
+                                "businessObjectId", describedIntegerProp("关联业务对象 ID；nullable。"),
+                                "structure", objectProp()
+                        ))),
+                        "relations", arrayOf(objectProp()),
+                        "summary", objectProp()
+                )),
+                List.of(orderedMap(
+                        "kind", "dataspec-table-standards",
+                        "schemaVersion", 1,
+                        "projectId", 1,
+                        "contextScope", orderedMap("scope", "business-object", "returnedObjectCount", 1, "returnedTemplateCount", 1),
+                        "businessObjects", List.of(orderedMap("objectKey", "order", "entityName", "订单")),
+                        "templates", List.of(orderedMap("id", 20, "name", "订单表模板", "structure", orderedMap("primaryKey", orderedMap("columns", List.of("id"))))),
+                        "relations", List.of(),
+                        "summary", orderedMap("businessObjectCount", 1, "templateCount", 1)
                 ))
         ));
         return map;

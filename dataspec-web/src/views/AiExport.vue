@@ -302,6 +302,8 @@ const scopeOptions: Array<{ label: string; value: AiContextScope }> = [
   { label: '数据域', value: 'domain' },
   { label: '标签', value: 'tag' },
   { label: '表', value: 'table' },
+  { label: '业务对象', value: 'business-object' },
+  { label: '表模板', value: 'table-template' },
   { label: '变更', value: 'changed' }
 ]
 
@@ -535,6 +537,8 @@ function isAiContextScope(scope?: AiContextRecommendedExportParams['scope']): sc
     scope === 'domain' ||
     scope === 'tag' ||
     scope === 'table' ||
+    scope === 'business-object' ||
+    scope === 'table-template' ||
     scope === 'changed'
 }
 </script>

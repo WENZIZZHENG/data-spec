@@ -4727,6 +4727,142 @@ test('generate-ddl calls ddl preview api and prints json', async () => {
   assert.equal(io.stderr, '')
 })
 
+test('table-standards list calls readonly endpoint and prints stable json', async () => {
+  const calls = []
+  const fetchFn = async (url, options = {}) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: tableStandardsFixture()
+      })
+    }
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'table-standards',
+    'list',
+    '--project',
+    '7',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local',
+    '--dataspec-token',
+    'ds_cli_token'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.equal(calls[0].url, 'http://dataspec.local/api/table-standards?projectId=7')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_cli_token')
+  const output = JSON.parse(io.stdout)
+  assert.equal(output.kind, 'dataspec-table-standards')
+  assert.equal(output.businessObjects[0].objectKey, 'order')
+  assert.equal(output.summary.relationCount, 1)
+  assert.equal(output.safety.readOnly, true)
+  assert.deepEqual(output.nextActions, ['Inspect structure standards before generating DDL.'])
+  assert.equal(io.stderr, '')
+})
+
+test('table-standards show supports template and business object filters', async () => {
+  const calls = []
+  const fetchFn = async (url) => {
+    calls.push(url)
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: tableStandardsFixture({ detail: true })
+      })
+    }
+  }
+
+  const templateIo = createIo()
+  const templateCode = await runCli([
+    'table-standards',
+    'show',
+    '--project',
+    '7',
+    '--template',
+    '10',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], templateIo, fetchFn)
+
+  const objectIo = createIo()
+  const objectCode = await runCli([
+    'table-standards',
+    'show',
+    '--project',
+    '7',
+    '--business-object',
+    'order',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local'
+  ], objectIo, fetchFn)
+
+  assert.equal(templateCode, 0)
+  assert.equal(objectCode, 0)
+  assert.equal(calls[0], 'http://dataspec.local/api/table-standards?projectId=7&templateId=10')
+  assert.equal(calls[1], 'http://dataspec.local/api/table-standards?projectId=7&businessObject=order')
+  assert.equal(JSON.parse(templateIo.stdout).templates[0].templateId, 10)
+  assert.equal(JSON.parse(objectIo.stdout).businessObjects[0].objectKey, 'order')
+})
+
+test('table-standards show rejects conflicting filters and redacts backend diagnostics', async () => {
+  const conflictIo = createIo()
+  const conflictCode = await runCli([
+    'table-standards',
+    'show',
+    '--project',
+    '7',
+    '--template',
+    '10',
+    '--business-object',
+    'order',
+    '--format',
+    'json'
+  ], conflictIo, async () => {
+    throw new Error('fetch should not be called')
+  })
+
+  const backendIo = createIo()
+  const backendCode = await runCli([
+    'table-standards',
+    'list',
+    '--project',
+    '7',
+    '--format',
+    'json'
+  ], backendIo, async () => ({
+    ok: false,
+    status: 500,
+    json: async () => ({
+      message: 'table standards failed token=plain-secret jdbc:postgresql://db.internal/app',
+      error: {
+        code: 'TABLE_STANDARDS_UNAVAILABLE',
+        category: 'SERVER',
+        retryable: true,
+        suggestedAction: 'retry without Authorization: Bearer raw-secret'
+      }
+    })
+  }))
+
+  assert.equal(conflictCode, 2)
+  assert.match(conflictIo.stderr, /只能二选一/)
+  assert.equal(backendCode, 2)
+  assert.match(backendIo.stderr, /TABLE_STANDARDS_UNAVAILABLE/)
+  assert.doesNotMatch(backendIo.stderr, /plain-secret|raw-secret|db\.internal/)
+})
+
 test('synthetic-examples generate calls synthetic examples api and prints json', async () => {
   const calls = []
   const fetchFn = async (url) => {
@@ -6902,6 +7038,55 @@ function contractCandidatePreviewFixture(sourceKind = 'openapi') {
       sensitiveInputs: []
     },
     nextActions: ['人工复核后再提交 inboxPayload']
+  }
+}
+
+function tableStandardsFixture(overrides = {}) {
+  return {
+    kind: 'dataspec-table-standards',
+    schemaVersion: 1,
+    projectId: 7,
+    businessObjects: [
+      {
+        objectKey: 'order',
+        entityName: '订单',
+        tablePattern: 'order_*',
+        templateId: 10
+      }
+    ],
+    templates: [
+      {
+        templateId: 10,
+        templateCode: 'order_table',
+        tableNamePattern: 'order_*',
+        structureStandard: {
+          primaryKey: ['id'],
+          uniqueKeys: [{ name: 'uk_order_no', columns: ['order_no'] }],
+          indexes: [{ name: 'idx_order_user', columns: ['user_id'] }]
+        }
+      }
+    ],
+    relations: [
+      {
+        sourceObjectKey: 'order',
+        targetObjectKey: 'user',
+        relationType: 'many-to-one'
+      }
+    ],
+    summary: {
+      businessObjectCount: 1,
+      templateCount: 1,
+      relationCount: 1
+    },
+    safety: {
+      readOnly: true,
+      writesProject: false,
+      generatesDdl: false,
+      connectsDatabase: false,
+      sensitiveInputs: []
+    },
+    nextActions: ['Inspect structure standards before generating DDL.'],
+    ...overrides
   }
 }
 

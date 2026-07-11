@@ -180,6 +180,9 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     if (command === 'generate-ddl') {
       return await runGenerateDdl(rest, io, fetchFn)
     }
+    if (command === 'table-standards' || command === 'tablestandards') {
+      return await runTableStandards(rest, io, fetchFn)
+    }
     if (command === 'synthetic-examples' || command === 'synthetic-example') {
       return await runSyntheticExamples(rest, io, fetchFn)
     }
@@ -2082,6 +2085,73 @@ async function runGenerateDdl(args, io, fetchFn) {
   return 0
 }
 
+async function runTableStandards(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand === 'list' || !subcommand || subcommand.startsWith('--')) {
+    const { positional, options } = parseArgs(subcommand === 'list' ? rest : args, [
+      'project',
+      'format',
+      'server',
+      'dataspec-token'
+    ])
+    if (positional.length > 0) {
+      throw new Error(`table-standards list 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (format !== 'json') {
+      throw new Error('table-standards list 当前仅支持 --format json')
+    }
+    const projectId = parseProjectId(options.project ?? config.projectId)
+    const result = await fetchTableStandards({
+      server: normalizeServer(options.server ?? config.server),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      projectId
+    })
+    io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+    return 0
+  }
+
+  if (subcommand === 'show') {
+    const { positional, options } = parseArgs(rest, [
+      'project',
+      'template',
+      'business-object',
+      'businessObject',
+      'format',
+      'server',
+      'dataspec-token'
+    ])
+    if (positional.length > 0) {
+      throw new Error(`table-standards show 不接受位置参数: ${positional.join(', ')}`)
+    }
+    const templateId = options.template === undefined ? undefined : parsePositiveInteger(options.template, 'template id')
+    const businessObject = options.businessObject ?? options['business-object']
+    if ((templateId === undefined && !businessObject) || (templateId !== undefined && businessObject)) {
+      throw new Error('table-standards show 需要且只能二选一提供 --template <id> 或 --business-object <key>')
+    }
+    const config = loadDataSpecConfig(cliCwd(io))
+    const format = options.format ?? 'json'
+    if (format !== 'json') {
+      throw new Error('table-standards show 当前仅支持 --format json')
+    }
+    const projectId = parseProjectId(options.project ?? config.projectId)
+    const result = await fetchTableStandards({
+      server: normalizeServer(options.server ?? config.server),
+      apiToken: resolveDataSpecToken(options, config),
+      fetchFn,
+      projectId,
+      templateId,
+      businessObject
+    })
+    io.writeOut(`${JSON.stringify(result, null, 2)}\n`)
+    return 0
+  }
+
+  throw new Error(`未知 table-standards 子命令: ${subcommand}。支持: list, show`)
+}
+
 async function runSyntheticExamples(args, io, fetchFn) {
   const [subcommand, ...rest] = args
   if (subcommand !== 'generate') {
@@ -2123,6 +2193,18 @@ async function runSyntheticExamples(args, io, fetchFn) {
     ? `${JSON.stringify(result, null, 2)}\n`
     : formatSyntheticExamplesText(result))
   return 0
+}
+
+async function fetchTableStandards({ server, apiToken, fetchFn, projectId, templateId, businessObject }) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'templateId', templateId)
+  appendOptionalParam(params, 'businessObject', businessObject)
+  const response = await fetchFn(`${server}/api/table-standards?${params.toString()}`, {
+    headers: dataSpecHeaders(apiToken)
+  })
+  const payload = await readJsonResponse(response)
+  return unwrapResponse(payload)
 }
 
 async function runContractImport(args, io, fetchFn) {
@@ -6675,6 +6757,8 @@ Usage:
   node tools/dataspec-cli.mjs ref resolve --project <id> --type <FIELD|ENUM|RULE|SNAPSHOT> --ref <value> [--ref <value> ...] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs ai-output check --project <id> --type <SQL|DDL|MARKDOWN|JSON|TEXT> (--file <path>|--stdin) [--snapshot-ref <ref>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs table-standards list --project <id> --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs table-standards show --project <id> (--template <id>|--business-object <key>) --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs synthetic-examples generate [--project <id>] --scenario <user|order|payment|audit> [--max-cases <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs contract-import preview [--project <id>] --source-kind <openapi|json-schema|protobuf> --input <path> [--max-candidates <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs schema-plan [--project <id>] --database-type <postgresql|mysql> --host <host> [--port <n>] --database <name> [--schema <schema>] --username <user> [--password-env <env>|--password <value>] --table <name> [--table <name> ...] --format json [--server <url>] [--dataspec-token <token>]
@@ -6723,6 +6807,7 @@ Options:
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段；传 --dsl/--dsl-file/--stdin 时使用只读 Standard Query DSL 且不与 legacy 筛选参数混用
   ref resolve 只读解析字段、枚举、规则或快照引用，返回 stableRef/canonicalRef、生命周期状态和替代引用建议
   ai-output check 只读校验 AI 产物中的标准引用；PASS 返回 0，WARN/FAIL 返回 1，参数、配置或 API 错误返回 2
+  table-standards 只读读取业务对象、模板结构标准、关系摘要、安全 metadata 和 nextActions；show 需在 --template 与 --business-object 间二选一
   synthetic-examples generate 只读生成合成标准样例包，可作为 fixture、Prompt 评测或人工审核草案；不会写入项目标准或调用外部 LLM
   contract-import preview 只读读取本地 OpenAPI/JSON Schema/Protobuf 契约并生成候选预览；不会自动写入标准字段或候选 Inbox
   schema-plan 只生成数据库 schema change plan 预览，不执行迁移；推荐使用 --password-env 读取数据库密码

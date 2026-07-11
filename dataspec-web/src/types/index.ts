@@ -1076,9 +1076,57 @@ export type AiEvidencePackageReq = Omit<Schemas['AiEvidencePackageReq'], 'payloa
   postCheckSummary?: Record<string, unknown>
 }
 export type AuthMe = Schemas['AuthMe']
-export type DdlGenerateResult = Schemas['DdlGenerateResult']
 export type DialectDiagnostic = Schemas['DialectDiagnostic']
-export type Template = Schemas['Template']
+export type TablePrimaryKeyStandard = Schemas['TablePrimaryKeyStandard']
+export type TableUniqueKeyStandard = Schemas['TableUniqueKeyStandard']
+export type TableIndexStandard = Schemas['TableIndexStandard']
+export type TableForeignKeyStandard = Schemas['TableForeignKeyStandard']
+
+/** CHECK 或校验提示的前端归一化展示类型；后端第一版保存为字符串数组。 */
+export interface TableCheckHintStandard {
+  /** 提示名称或短标题。 */
+  name?: string | null
+  /** 涉及的列名数组。 */
+  columns?: string[]
+  /** 非 raw SQL 的校验说明。 */
+  hint?: string | null
+  /** true 表示仅作为 guidance，不生成 CHECK 约束。 */
+  advisoryOnly?: boolean | null
+}
+
+export type TableAuditPolicy = Schemas['TableAuditPolicy']
+export type TableSoftDeletePolicy = Schemas['TableSoftDeletePolicy']
+
+/** 通用表级策略说明；用于 Schema Registry/AI Context 描述审计、软删除等策略边界。 */
+export interface TablePolicyStandard {
+  /** 策略类型，如 AUDIT、SOFT_DELETE、CHECK_HINT。 */
+  policyType?: string | null
+  /** 策略适用字段名数组。 */
+  fields?: string[]
+  /** 策略是否只作为 guidance，不自动生成或应用数据库变更。 */
+  advisoryOnly?: boolean | null
+  /** 非敏感说明。 */
+  notes?: string | null
+}
+
+export type TableRelationHint = Schemas['TableRelationHint']
+export type TableStructureStandard = Schemas['TableStructureStandard']
+export type BusinessObjectStandard = Schemas['BusinessObjectStandardResp']
+export type BusinessObjectStandardReq = Schemas['BusinessObjectStandardReq']
+export type BusinessObjectRelationNode = Schemas['TableRelationSummaryNode']
+export type BusinessObjectRelationEdge = Schemas['TableRelationSummaryEdge']
+export type BusinessObjectRelationStats = Schemas['TableRelationSummaryStats']
+export type BusinessObjectRelationSummary = Schemas['TableRelationSummary']
+export type DdlStructureSummary = Schemas['DdlStructureSummary']
+export type DdlGenerateResult = Schemas['DdlGenerateResult']
+export type TemplateResp = Schemas['TemplateResp']
+export type TemplateSaveReq = Schemas['TemplateReq']
+
+/** 兼容旧引用的模板类型；新增代码可优先使用 TemplateResp 表达详情。 */
+export type Template = TemplateResp
+
+/** 兼容表模板保存请求的旧命名。 */
+export type TemplateReq = TemplateSaveReq
 export type TemplateField = Schemas['TemplateField']
 export type TableDef = Schemas['TableDef']
 export type ColumnDef = Schemas['ColumnDef']

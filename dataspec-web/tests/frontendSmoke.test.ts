@@ -1403,6 +1403,98 @@ test('keeps DDL generation and AI Context export flows project-scoped', () => {
   ], 'standard query public types')
 })
 
+test('keeps business object table standard frontend loop wired', () => {
+  const templateManage = readSource('src/views/TemplateManage.vue')
+  const generator = readSource('src/views/Generator.vue')
+  const templateApi = readSource('src/api/template.ts')
+  const businessObjectApi = readSource('src/api/businessObject.ts')
+  const types = readSource('src/types/index.ts')
+  const aiExport = readSource('src/views/AiExport.vue')
+  const aiContextScope = readSource('src/utils/aiContextScope.ts')
+
+  assertContains(templateManage, [
+    "import { listBusinessObjects, createBusinessObject, updateBusinessObject } from '@/api/businessObject'",
+    "import { createTemplate, getTemplate, listTemplateFields, listTemplates, updateTemplate } from '@/api/template'",
+    '业务对象标准',
+    '表结构标准',
+    '模板基础信息',
+    '关联业务对象',
+    '主键字段',
+    '唯一键 JSON',
+    '索引 JSON',
+    '外键 JSON',
+    'Check 提示 JSON',
+    '审计策略 JSON',
+    '软删除策略 JSON',
+    '方言说明',
+    'AI 使用说明',
+    '保存模板标准',
+    '新建业务对象',
+    '保存业务对象',
+    '字段列表',
+    '请先创建并选择项目',
+    'JSON.parse(text)'
+  ], 'TemplateManage table standard loop')
+
+  assertContains(generator, [
+    "import { getBusinessObjectRelationSummary } from '@/api/businessObject'",
+    'loadRelationSummary',
+    'structureSummary',
+    'appliedConstraints',
+    'generatedIndexes',
+    'skippedHints',
+    'policyNotes',
+    'evidence',
+    '关系摘要',
+    '结构标准摘要',
+    '只读 preview，未应用到数据库，执行前需人工确认'
+  ], 'Generator structure summary')
+
+  assertContains(templateApi, [
+    'TemplateResp',
+    'TemplateSaveReq',
+    'getTemplate',
+    'createTemplate',
+    'updateTemplate'
+  ], 'template API table standard wrappers')
+
+  assertContains(businessObjectApi, [
+    '/business-objects',
+    'relation-summary',
+    'BusinessObjectRelationSummary'
+  ], 'business object API wrapper')
+
+  assertContains(types, [
+    "export type BusinessObjectStandard = Schemas['BusinessObjectStandardResp']",
+    "export type BusinessObjectStandardReq = Schemas['BusinessObjectStandardReq']",
+    "export type TableStructureStandard = Schemas['TableStructureStandard']",
+    "export type TablePrimaryKeyStandard = Schemas['TablePrimaryKeyStandard']",
+    "export type TableUniqueKeyStandard = Schemas['TableUniqueKeyStandard']",
+    "export type TableIndexStandard = Schemas['TableIndexStandard']",
+    "export type TableForeignKeyStandard = Schemas['TableForeignKeyStandard']",
+    'export interface TableCheckHintStandard',
+    'export interface TablePolicyStandard',
+    "export type DdlStructureSummary = Schemas['DdlStructureSummary']",
+    "export type BusinessObjectRelationSummary = Schemas['TableRelationSummary']",
+    "export type DdlGenerateResult = Schemas['DdlGenerateResult']",
+    "export type TemplateResp = Schemas['TemplateResp']",
+    "export type TemplateSaveReq = Schemas['TemplateReq']"
+  ], 'business object table standard public types')
+
+  assertContains(aiExport, [
+    "label: '业务对象'",
+    "value: 'business-object'",
+    "label: '表模板'",
+    "value: 'table-template'",
+    "scope === 'business-object'",
+    "scope === 'table-template'"
+  ], 'AI Context table standard scoped options')
+  assertContains(aiContextScope, [
+    "'business-object'",
+    "'table-template'"
+  ], 'AI Context table standard scope type')
+})
+
 test('keeps rule baseline suite workflow wired on rule config page', () => {
   const ruleConfig = readSource('src/views/RuleConfig.vue')
   const ruleBaselineApi = readSource('src/api/ruleBaseline.ts')

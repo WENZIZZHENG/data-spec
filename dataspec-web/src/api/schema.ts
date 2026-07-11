@@ -196,6 +196,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/business-objects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getById_9"];
+        put: operations["update_9"];
+        post?: never;
+        delete: operations["delete_10"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/usage-examples": {
         parameters: {
             query?: never;
@@ -334,6 +350,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-query/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["search"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1284,6 +1316,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/business-objects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_8"];
+        put?: never;
+        post: operations["create_11"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-output/check": {
         parameters: {
             query?: never;
@@ -1410,6 +1458,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["disable"];
+        trace?: never;
+    };
+    "/api/table-standards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTableStandards"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/synthetic-examples/generate": {
@@ -2027,7 +2091,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["search"];
+        get: operations["search_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2228,6 +2292,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/business-objects/relation-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["relationSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/business-objects/by-key/{objectKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getByObjectKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/bootstrap/session": {
         parameters: {
             query?: never;
@@ -2267,7 +2363,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_8"];
+        get: operations["list_9"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2363,7 +2459,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_9"];
+        get: operations["list_10"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2523,7 +2619,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_10"];
+        get: operations["list_11"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2644,21 +2740,78 @@ export interface components {
             updatedAt?: string;
             isDeleted?: boolean;
         };
+        TableAuditPolicy: {
+            requiredFields?: string[];
+            createdAtField?: string;
+            updatedAtField?: string;
+            createdByField?: string;
+            updatedByField?: string;
+            notes?: string;
+        };
+        TableForeignKeyStandard: {
+            name?: string;
+            columns?: string[];
+            targetTable?: string;
+            targetColumns?: string[];
+            relationName?: string;
+            onDelete?: string;
+            onUpdate?: string;
+            advisoryOnly?: boolean;
+            notes?: string;
+        };
+        TableIndexStandard: {
+            name?: string;
+            columns?: string[];
+            unique?: boolean;
+            method?: string;
+            notes?: string;
+        };
+        TablePrimaryKeyStandard: {
+            name?: string;
+            columns?: string[];
+            notes?: string;
+        };
+        TableSoftDeletePolicy: {
+            fieldName?: string;
+            activeValue?: string;
+            deletedValue?: string;
+            defaultFilter?: string;
+            notes?: string;
+        };
+        TableStructureStandard: {
+            /** Format: int64 */
+            businessObjectId?: number;
+            primaryKey?: components["schemas"]["TablePrimaryKeyStandard"];
+            uniqueKeys?: components["schemas"]["TableUniqueKeyStandard"][];
+            indexes?: components["schemas"]["TableIndexStandard"][];
+            foreignKeys?: components["schemas"]["TableForeignKeyStandard"][];
+            checkHints?: string[];
+            auditPolicy?: components["schemas"]["TableAuditPolicy"];
+            softDeletePolicy?: components["schemas"]["TableSoftDeletePolicy"];
+            dialectNotes?: string[];
+            aiUsageNotes?: string;
+        };
+        TableUniqueKeyStandard: {
+            name?: string;
+            columns?: string[];
+            notes?: string;
+        };
         TemplateReq: {
             /** Format: int64 */
             projectId: number;
             name: string;
             description?: string;
             tablePrefix?: string;
+            structure?: components["schemas"]["TableStructureStandard"];
         };
-        RTemplate: {
+        RTemplateResp: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            data?: components["schemas"]["Template"];
+            data?: components["schemas"]["TemplateResp"];
             error?: components["schemas"]["ErrorDetail"];
         };
-        Template: {
+        TemplateResp: {
             /** Format: int64 */
             id?: number;
             /** Format: int64 */
@@ -2666,11 +2819,11 @@ export interface components {
             name?: string;
             description?: string;
             tablePrefix?: string;
+            structure?: components["schemas"]["TableStructureStandard"];
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
-            isDeleted?: boolean;
         };
         TemplateFieldReq: {
             /** Format: int64 */
@@ -3092,6 +3245,65 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["DatabaseConnectionPreset"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        BusinessObjectStandardReq: {
+            /** Format: int64 */
+            projectId: number;
+            objectKey: string;
+            entityName: string;
+            tablePattern?: string;
+            /** Format: int64 */
+            templateId?: number;
+            requiredFields?: string[];
+            optionalFields?: string[];
+            relations?: components["schemas"]["TableRelationHint"][];
+            foreignKeyHints?: components["schemas"]["TableForeignKeyStandard"][];
+            auditFields?: components["schemas"]["TableAuditPolicy"];
+            commonPitfalls?: string[];
+            aiUsageNotes?: string;
+            contextExport?: boolean;
+            status?: string;
+        };
+        TableRelationHint: {
+            sourceObjectKey?: string;
+            targetObjectKey?: string;
+            relationType?: string;
+            sourceColumns?: string[];
+            targetColumns?: string[];
+            optional?: boolean;
+            confidence?: string;
+            notes?: string;
+        };
+        BusinessObjectStandardResp: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            objectKey?: string;
+            entityName?: string;
+            tablePattern?: string;
+            /** Format: int64 */
+            templateId?: number;
+            requiredFields?: string[];
+            optionalFields?: string[];
+            relations?: components["schemas"]["TableRelationHint"][];
+            foreignKeyHints?: components["schemas"]["TableForeignKeyStandard"][];
+            auditFields?: components["schemas"]["TableAuditPolicy"];
+            commonPitfalls?: string[];
+            aiUsageNotes?: string;
+            contextExport?: boolean;
+            status?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        RBusinessObjectStandardResp: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["BusinessObjectStandardResp"];
             error?: components["schemas"]["ErrorDetail"];
         };
         ApiTokenCreateReq: {
@@ -3552,6 +3764,167 @@ export interface components {
             projectId?: number;
             results?: components["schemas"]["StandardReferenceResolutionResult"][];
             warnings?: string[];
+        };
+        /** @description Standard Query DSL 单个过滤条件；仅支持 allowlist 字段和操作符，不执行任意表达式。 */
+        StandardQueryFilter: {
+            /** @description 过滤字段名；v1 支持 category、tag、status、sensitive、sourceBatchId、stableRef、canonicalRef、hasExample、updatedSince。 */
+            field?: string;
+            /** @description 过滤操作符；支持 eq、contains、gte，未传时由字段默认语义决定。 */
+            op?: string;
+            /** @description 过滤值；视为敏感输入，错误和摘要只输出脱敏值。 */
+            value?: Record<string, never>;
+        };
+        /** @description Standard Query DSL 只读查询请求；用于 API/CLI/MCP/AI Context 复用同一字段标准筛选语义。 */
+        StandardQueryRequest: {
+            /**
+             * Format: int64
+             * @description 当前 DataSpec 项目 ID；查询严格限制在该项目内。
+             * @example 1
+             */
+            projectId?: number;
+            /**
+             * @description 标准对象类型；v1 仅执行 FIELD，缺省时按 FIELD 处理。
+             * @example FIELD
+             */
+            target?: string;
+            /** @description 自然语言或字段名检索文本；视为敏感输入，输出摘要和错误会脱敏。 */
+            text?: string;
+            filters?: components["schemas"]["StandardQueryFilter"][];
+            sort?: string[];
+            /**
+             * Format: int32
+             * @description 返回条数上限；v1 允许 1 到 50。
+             * @example 20
+             */
+            limit?: number;
+            /** @description 是否请求解释信息；v1 始终返回可解释摘要。 */
+            explain?: boolean;
+            /** @description 严格模式；true 时不支持的 target/filter/op/value 会在执行前失败。 */
+            strict?: boolean;
+        };
+        ExplainTrace: {
+            sourceType?: string;
+            /** Format: int64 */
+            sourceId?: number;
+            snapshotVersion?: string;
+            matchReason?: string;
+            /** Format: int32 */
+            confidence?: number;
+            ruleCode?: string;
+            docsRef?: string;
+        };
+        /** @description 字段标准命中项；v1 target=FIELD 时返回。 */
+        FieldSearchItem: {
+            field?: components["schemas"]["Field"];
+            /** Format: int32 */
+            score?: number;
+            matchReasons?: string[];
+            recommendedUse?: string;
+            /** @description 字段使用契约摘要，包含推荐使用、禁用场景、Join、默认过滤、聚合、替代指导和误用样例。 */
+            usageContractSummary?: string[];
+            nextActions?: string[];
+            evidence?: components["schemas"]["ExplainTrace"][];
+            /** @description 项目内稳定字段引用，格式为 field:<projectId>:<fieldId>；供 AI/CLI/MCP 在字段改名后继续定位同一标准字段。 */
+            stableRef?: string;
+            /** @description 当前推荐 canonical 字段引用；废弃或停用字段存在有效 replacementFieldId 时指向替代字段 stableRef。 */
+            canonicalRef?: string;
+            /** @description 字段生命周期状态，如 enabled、draft、deprecated 或 disabled。 */
+            lifecycleStatus?: string;
+            /** @description 本次搜索命中的别名或历史名；非别名命中时为空。 */
+            matchedAlias?: string;
+        };
+        RStandardQueryResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardQueryResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 已应用的 Standard Query 过滤条件摘要；值已脱敏，可安全出现在 API/CLI/MCP 输出。 */
+        StandardQueryAppliedFilter: {
+            /** @description 生效的 allowlist 字段名。 */
+            field?: string;
+            /** @description 生效操作符。 */
+            op?: string;
+            /** @description 脱敏后的过滤值。 */
+            redactedValue?: string;
+            /** @description 过滤语义说明。 */
+            description?: string;
+        };
+        /** @description 被忽略的 Standard Query 过滤条件摘要；用于非 strict 模式解释降级原因。 */
+        StandardQueryIgnoredFilter: {
+            /** @description 原始过滤字段名。 */
+            field?: string;
+            /** @description 原始过滤操作符。 */
+            op?: string;
+            /** @description 脱敏后的过滤值。 */
+            redactedValue?: string;
+            /** @description 脱敏后的忽略原因。 */
+            reason?: string;
+        };
+        /** @description 归一化后的 Standard Query DSL；不包含 raw secret，可作为执行摘要和复用输入。 */
+        StandardQueryNormalized: {
+            /** @description 归一化标准对象类型；v1 为 FIELD。 */
+            target?: string;
+            /** @description 归一化并脱敏后的检索文本。 */
+            text?: string;
+            filters?: components["schemas"]["StandardQueryAppliedFilter"][];
+            sort?: string[];
+            /**
+             * Format: int32
+             * @description 生效返回上限。
+             */
+            limit?: number;
+            /** @description 是否返回解释信息。 */
+            explain?: boolean;
+            /** @description 是否严格校验。 */
+            strict?: boolean;
+        };
+        /** @description Standard Query DSL 只读查询结果；v1 目标为 FIELD 时返回字段标准命中项。 */
+        StandardQueryResult: {
+            /**
+             * Format: int64
+             * @description 当前项目 ID。
+             */
+            projectId?: number;
+            normalizedQuery?: components["schemas"]["StandardQueryNormalized"];
+            querySummary?: components["schemas"]["StandardQuerySummary"];
+            appliedFilters?: components["schemas"]["StandardQueryAppliedFilter"][];
+            ignoredFilters?: components["schemas"]["StandardQueryIgnoredFilter"][];
+            /**
+             * Format: int32
+             * @description 命中总数。
+             */
+            resultCount?: number;
+            /**
+             * Format: int32
+             * @description 返回条数。
+             */
+            returnedCount?: number;
+            /** @description 是否截断。 */
+            truncated?: boolean;
+            nextQueryHints?: string[];
+            fields?: components["schemas"]["FieldSearchItem"][];
+        };
+        /** @description Standard Query 执行摘要；用于 AI/CLI/MCP 判断查询是否完整或需要改写。 */
+        StandardQuerySummary: {
+            /** @description 查询目标类型。 */
+            target?: string;
+            /** @description 脱敏后的检索文本。 */
+            text?: string;
+            /**
+             * Format: int32
+             * @description 过滤和检索后命中的总数。
+             */
+            resultCount?: number;
+            /**
+             * Format: int32
+             * @description 本次返回条数。
+             */
+            returnedCount?: number;
+            /** @description 是否因 limit 截断。 */
+            truncated?: boolean;
+            nextQueryHints?: string[];
         };
         /** @description 标准维护 workflow dry-run 计划请求；只携带来源筛选和页面上下文，不触发写入。 */
         StandardMaintenanceWorkflowPlanReq: {
@@ -5120,17 +5493,6 @@ export interface components {
             /** Format: int32 */
             limit?: number;
         };
-        ExplainTrace: {
-            sourceType?: string;
-            /** Format: int64 */
-            sourceId?: number;
-            snapshotVersion?: string;
-            matchReason?: string;
-            /** Format: int32 */
-            confidence?: number;
-            ruleCode?: string;
-            docsRef?: string;
-        };
         RRequirementDraftResult: {
             /** Format: int32 */
             code?: number;
@@ -5451,6 +5813,31 @@ export interface components {
             description?: string;
             snapshotHash?: string;
             payloadJson?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            isDeleted?: boolean;
+        };
+        Template: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            projectId?: number;
+            name?: string;
+            description?: string;
+            tablePrefix?: string;
+            /** Format: int64 */
+            businessObjectId?: number;
+            primaryKeyJson?: string;
+            uniqueKeysJson?: string;
+            indexesJson?: string;
+            foreignKeysJson?: string;
+            checkHintsJson?: string;
+            auditPolicyJson?: string;
+            softDeletePolicyJson?: string;
+            dialectNotesJson?: string;
+            aiUsageNotes?: string;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -6649,11 +7036,11 @@ export interface components {
             data?: components["schemas"]["ApiTokenInfo"][];
             error?: components["schemas"]["ErrorDetail"];
         };
-        RListTemplate: {
+        RListTemplateResp: {
             /** Format: int32 */
             code?: number;
             message?: string;
-            data?: components["schemas"]["Template"][];
+            data?: components["schemas"]["TemplateResp"][];
             error?: components["schemas"]["ErrorDetail"];
         };
         RListTemplateField: {
@@ -6661,6 +7048,14 @@ export interface components {
             code?: number;
             message?: string;
             data?: components["schemas"]["TemplateField"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        JsonNode: Record<string, never>;
+        RJsonNode: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["JsonNode"];
             error?: components["schemas"]["ErrorDetail"];
         };
         RSyntheticStandardExamplePackage: {
@@ -7327,6 +7722,14 @@ export interface components {
             lintResult?: components["schemas"]["LintResult"];
             standardSnapshot?: components["schemas"]["StandardSnapshotInfo"];
             dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
+            structureSummary?: components["schemas"]["DdlStructureSummary"];
+        };
+        DdlStructureSummary: {
+            appliedConstraints?: string[];
+            generatedIndexes?: string[];
+            skippedHints?: string[];
+            policyNotes?: string[];
+            evidence?: string[];
         };
         RDdlGenerateResult: {
             /** Format: int32 */
@@ -7438,25 +7841,6 @@ export interface components {
             data?: components["schemas"]["FieldSuggestion"][];
             error?: components["schemas"]["ErrorDetail"];
         };
-        FieldSearchItem: {
-            field?: components["schemas"]["Field"];
-            /** Format: int32 */
-            score?: number;
-            matchReasons?: string[];
-            recommendedUse?: string;
-            /** @description 字段使用契约摘要，包含推荐使用、禁用场景、Join、默认过滤、聚合、替代指导和误用样例。 */
-            usageContractSummary?: string[];
-            nextActions?: string[];
-            evidence?: components["schemas"]["ExplainTrace"][];
-            /** @description 项目内稳定字段引用，格式为 field:<projectId>:<fieldId>；供 AI/CLI/MCP 在字段改名后继续定位同一标准字段。 */
-            stableRef?: string;
-            /** @description 当前推荐 canonical 字段引用；废弃或停用字段存在有效 replacementFieldId 时指向替代字段 stableRef。 */
-            canonicalRef?: string;
-            /** @description 字段生命周期状态，如 enabled、draft、deprecated 或 disabled。 */
-            lifecycleStatus?: string;
-            /** @description 本次搜索命中的别名或历史名；非别名命中时为空。 */
-            matchedAlias?: string;
-        };
         FieldSearchResult: {
             /** Format: int64 */
             projectId?: number;
@@ -7477,6 +7861,10 @@ export interface components {
                 [key: string]: Record<string, never>;
             };
             hints?: string[];
+            querySummary?: components["schemas"]["StandardQuerySummary"];
+            dslAppliedFilters?: components["schemas"]["StandardQueryAppliedFilter"][];
+            dslIgnoredFilters?: components["schemas"]["StandardQueryIgnoredFilter"][];
+            nextQueryHints?: string[];
         };
         RFieldSearchResult: {
             /** Format: int32 */
@@ -8005,6 +8393,49 @@ export interface components {
             status?: string;
             /** @description 推荐的最小客户端版本；为空表示该能力不需要额外的客户端版本约束。 */
             minClientVersion?: string;
+        };
+        RListBusinessObjectStandardResp: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["BusinessObjectStandardResp"][];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        RTableRelationSummary: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["TableRelationSummary"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        TableRelationSummary: {
+            /** Format: int64 */
+            projectId?: number;
+            nodes?: components["schemas"]["TableRelationSummaryNode"][];
+            edges?: components["schemas"]["TableRelationSummaryEdge"][];
+            summary?: components["schemas"]["TableRelationSummaryStats"];
+        };
+        TableRelationSummaryEdge: {
+            source?: string;
+            target?: string;
+            kind?: string;
+            confidence?: string;
+            evidence?: string;
+        };
+        TableRelationSummaryNode: {
+            id?: string;
+            type?: string;
+            label?: string;
+            /** Format: int64 */
+            refId?: number;
+        };
+        TableRelationSummaryStats: {
+            /** Format: int32 */
+            objectCount?: number;
+            /** Format: int32 */
+            templateCount?: number;
+            /** Format: int32 */
+            edgeCount?: number;
         };
         AiSessionBootstrap: {
             kind?: string;
@@ -8578,7 +9009,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RTemplate"];
+                    "*/*": components["schemas"]["RTemplateResp"];
                 };
             };
         };
@@ -8604,7 +9035,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RTemplate"];
+                    "*/*": components["schemas"]["RTemplateResp"];
                 };
             };
         };
@@ -9263,6 +9694,76 @@ export interface operations {
             };
         };
     };
+    getById_9: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RBusinessObjectStandardResp"];
+                };
+            };
+        };
+    };
+    update_9: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessObjectStandardReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RBusinessObjectStandardResp"];
+                };
+            };
+        };
+    };
+    delete_10: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
     page: {
         parameters: {
             query: {
@@ -9376,7 +9877,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RListTemplate"];
+                    "*/*": components["schemas"]["RListTemplateResp"];
                 };
             };
         };
@@ -9400,7 +9901,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RTemplate"];
+                    "*/*": components["schemas"]["RTemplateResp"];
                 };
             };
         };
@@ -9591,6 +10092,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RStandardReferenceResolveResponse"];
+                };
+            };
+        };
+    };
+    search: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardQueryResult"];
                 };
             };
         };
@@ -11296,6 +11821,52 @@ export interface operations {
             };
         };
     };
+    list_8: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RListBusinessObjectStandardResp"];
+                };
+            };
+        };
+    };
+    create_11: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessObjectStandardReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RBusinessObjectStandardResp"];
+                };
+            };
+        };
+    };
     check: {
         parameters: {
             query?: never;
@@ -11482,6 +12053,31 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RVoid"];
+                };
+            };
+        };
+    };
+    getTableStandards: {
+        parameters: {
+            query: {
+                projectId: number;
+                templateId?: number;
+                businessObject?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RJsonNode"];
                 };
             };
         };
@@ -12355,7 +12951,7 @@ export interface operations {
             };
         };
     };
-    search: {
+    search_1: {
         parameters: {
             query: {
                 projectId: number;
@@ -12653,6 +13249,52 @@ export interface operations {
             };
         };
     };
+    relationSummary: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RTableRelationSummary"];
+                };
+            };
+        };
+    };
+    getByObjectKey: {
+        parameters: {
+            query: {
+                projectId: number;
+            };
+            header?: never;
+            path: {
+                objectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RBusinessObjectStandardResp"];
+                };
+            };
+        };
+    };
     session: {
         parameters: {
             query?: {
@@ -12696,7 +13338,7 @@ export interface operations {
             };
         };
     };
-    list_8: {
+    list_9: {
         parameters: {
             query: {
                 projectId: number;
@@ -12838,7 +13480,7 @@ export interface operations {
             };
         };
     };
-    list_9: {
+    list_10: {
         parameters: {
             query: {
                 projectId: number;
@@ -13105,7 +13747,7 @@ export interface operations {
             };
         };
     };
-    list_10: {
+    list_11: {
         parameters: {
             query: {
                 projectId: number;

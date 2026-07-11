@@ -16,6 +16,17 @@ test('normalizes scoped AI context params', () => {
   )
 })
 
+test('normalizes table-standard scoped AI context params', () => {
+  assert.deepEqual(
+    normalizeAiContextScopeParams({ scope: 'business-object', query: ' 订单 ', status: '', limit: null }),
+    { scope: 'business-object', query: '订单' }
+  )
+  assert.deepEqual(
+    normalizeAiContextScopeParams({ scope: 'table-template', query: ' order_table ', status: '', limit: 5 }),
+    { scope: 'table-template', query: 'order_table', limit: 5 }
+  )
+})
+
 test('normalizes snapshot AI context params', () => {
   assert.deepEqual(
     normalizeAiContextScopeParams({
@@ -33,6 +44,8 @@ test('normalizes snapshot AI context params', () => {
 test('builds scoped context filename', () => {
   assert.equal(aiContextScopeFilename({}), 'dataspec-ai-context.zip')
   assert.equal(aiContextScopeFilename({ scope: 'domain' }), 'dataspec-ai-context-domain.zip')
+  assert.equal(aiContextScopeFilename({ scope: 'business-object' }), 'dataspec-ai-context-business-object.zip')
+  assert.equal(aiContextScopeFilename({ scope: 'table-template' }), 'dataspec-ai-context-table-template.zip')
   assert.equal(aiContextScopeFilename({ snapshotId: 42 }), 'dataspec-ai-context-snapshot-42.zip')
   assert.equal(
     aiContextScopeFilename({ snapshotVersion: '2026/06 快照' }),

@@ -53,6 +53,7 @@ class DdlGeneratorServiceTest {
         assertSame(lintResult, result.lintResult());
         assertEquals("v2026.06.24", result.standardSnapshot().specVersion());
         assertEquals("hash123", result.standardSnapshot().specHash());
+        assertNotNull(result.structureSummary());
         String ddl = result.ddl();
         assertTrue(ddl.contains("CREATE TABLE user_order ("));
         assertTrue(ddl.contains("    order_no varchar(32) NOT NULL DEFAULT 'PENDING',"));
@@ -98,6 +99,104 @@ class DdlGeneratorServiceTest {
         assertEquals("v2026.06.24", root.path("standardSnapshot").path("specVersion").asText());
         assertEquals("hash123", root.path("standardSnapshot").path("specHash").asText());
         assertEquals("POSTGRESQL_DDL_TARGET", root.path("dialectDiagnostics").get(0).path("code").asText());
+        assertTrue(root.path("structureSummary").path("appliedConstraints").isArray());
+    }
+
+    @Test
+    void generateFromTemplate_consumesStructuredTableStandards() {
+        TemplateService templateService = mock(TemplateService.class);
+        SqlLintService sqlLintService = mock(SqlLintService.class);
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        RecordingAiJobRecordService aiJobRecordService = new RecordingAiJobRecordService();
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, standardSnapshotService,
+                aiJobRecordService, new PromptTemplateRegistry());
+        when(standardSnapshotService.getCurrentSnapshot(1L)).thenReturn(snapshotInfo());
+        Template template = template(10L, 1L, "订单模板", "用户订单表");
+        template.setBusinessObjectId(99L);
+        template.setPrimaryKeyJson("{\"name\":\"user_order_pk\",\"columns\":[\"id\"]}");
+        template.setUniqueKeysJson("[{\"name\":\"user_order_order_no_uk\",\"columns\":[\"order_no\"]}]");
+        template.setIndexesJson("[{\"name\":\"idx_user_order_user_id\",\"columns\":[\"user_id\"]}]");
+        template.setForeignKeysJson("[{\"name\":\"user_order_user_fk\",\"columns\":[\"user_id\"],\"targetTable\":\"user_account\",\"targetColumns\":[\"id\"],\"onDelete\":\"RESTRICT\"}]");
+        template.setCheckHintsJson("[\"amount_cent >= 0\"]");
+        template.setAiUsageNotes("订单表必须保留审计字段");
+        when(templateService.getById(10L)).thenReturn(template);
+        when(templateService.listFields(10L)).thenReturn(List.of(
+                field(1L, "id", "bigserial", false, null, "主键", 1),
+                field(2L, "order_no", "varchar(32)", false, null, "订单编号", 2),
+                field(3L, "user_id", "bigint", false, null, "用户ID", 3)
+        ));
+        when(sqlLintService.lint(anyString(), eq(1L))).thenReturn(LintResult.of(List.of(), List.of()));
+
+        DdlGenerateResult result = service.generateFromTemplate(1L, 10L, "user_order");
+
+        assertTrue(result.ddl().contains("CONSTRAINT user_order_pk PRIMARY KEY (id)"));
+        assertTrue(result.ddl().contains("CONSTRAINT user_order_order_no_uk UNIQUE (order_no)"));
+        assertTrue(result.ddl().contains("CONSTRAINT user_order_user_fk FOREIGN KEY (user_id) REFERENCES user_account (id) ON DELETE RESTRICT"));
+        assertTrue(result.ddl().contains("CREATE INDEX idx_user_order_user_id ON user_order (user_id);"));
+        assertTrue(result.structureSummary().appliedConstraints().contains("primaryKey:user_order_pk(id)"));
+        assertTrue(result.structureSummary().generatedIndexes().contains("index:idx_user_order_user_id(user_id)"));
+        assertTrue(result.structureSummary().policyNotes().contains("checkHint:amount_cent >= 0"));
+        assertTrue(result.structureSummary().policyNotes().contains("aiUsageNotes:订单表必须保留审计字段"));
+        assertTrue(result.structureSummary().evidence().contains("businessObjectId:99"));
+        assertTrue(aiJobRecordService.created.get(0).outputPayload().toString().contains("structureSummary"));
+    }
+
+    @Test
+    void generateFromTemplate_skipsUnsafeStructureHints() {
+        TemplateService templateService = mock(TemplateService.class);
+        SqlLintService sqlLintService = mock(SqlLintService.class);
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, standardSnapshotService,
+                new NoopAiJobRecordService(), new PromptTemplateRegistry());
+        when(standardSnapshotService.getCurrentSnapshot(1L)).thenReturn(snapshotInfo());
+        Template template = template(10L, 1L, "订单模板", "用户订单表");
+        template.setIndexesJson("[{\"name\":\"idx_bad\",\"columns\":[\"missing_column\"]},{\"name\":\"idx_hack;drop\",\"columns\":[\"id\"]}]");
+        template.setForeignKeysJson("[{\"columns\":[\"id\"],\"targetTable\":\"UserTable\",\"targetColumns\":[\"id\"],\"onDelete\":\"DROP\"}]");
+        when(templateService.getById(10L)).thenReturn(template);
+        when(templateService.listFields(10L)).thenReturn(List.of(
+                field(1L, "id", "bigint", false, null, "主键", 1)
+        ));
+        when(sqlLintService.lint(anyString(), eq(1L))).thenReturn(LintResult.of(List.of(), List.of()));
+
+        DdlGenerateResult result = service.generateFromTemplate(1L, 10L, "user_order");
+
+        assertFalse(result.ddl().contains("missing_column"));
+        assertFalse(result.ddl().contains("idx_hack;drop"));
+        assertFalse(result.ddl().contains("UserTable"));
+        assertTrue(result.structureSummary().skippedHints().stream()
+                .anyMatch(item -> item.contains("模板中不存在的字段")));
+        assertTrue(result.structureSummary().skippedHints().stream()
+                .anyMatch(item -> item.contains("外键目标表名")));
+    }
+
+    @Test
+    void generateFromTemplate_redactsSensitiveStructureSummaryInReplay() {
+        TemplateService templateService = mock(TemplateService.class);
+        SqlLintService sqlLintService = mock(SqlLintService.class);
+        StandardSnapshotService standardSnapshotService = mock(StandardSnapshotService.class);
+        RecordingAiJobRecordService aiJobRecordService = new RecordingAiJobRecordService();
+        DdlGeneratorService service = new DdlGeneratorService(templateService, sqlLintService, standardSnapshotService,
+                aiJobRecordService, new PromptTemplateRegistry());
+        when(standardSnapshotService.getCurrentSnapshot(1L)).thenReturn(snapshotInfo());
+        Template template = template(10L, 1L, "订单模板", "用户订单表");
+        template.setCheckHintsJson("[\"token=raw-structure-token\"]");
+        template.setAiUsageNotes("password=raw-structure-password");
+        when(templateService.getById(10L)).thenReturn(template);
+        when(templateService.listFields(10L)).thenReturn(List.of(
+                field(1L, "id", "bigint", false, null, "主键", 1)
+        ));
+        when(sqlLintService.lint(anyString(), eq(1L))).thenReturn(LintResult.of(List.of(), List.of()));
+
+        DdlGenerateResult result = service.generateFromTemplate(1L, 10L, "user_order");
+
+        String summaryText = result.structureSummary().toString();
+        String replayText = aiJobRecordService.created.get(0).outputPayload().toString();
+        assertFalse(summaryText.contains("raw-structure-token"));
+        assertFalse(summaryText.contains("raw-structure-password"));
+        assertFalse(replayText.contains("raw-structure-token"));
+        assertFalse(replayText.contains("raw-structure-password"));
+        assertTrue(summaryText.contains("[REDACTED]"));
+        assertTrue(replayText.contains("[REDACTED]"));
     }
 
     @Test

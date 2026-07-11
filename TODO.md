@@ -5,11 +5,11 @@
 ## 当前状态
 
 - 近期优先行动项已清空；后续开发由用户从评审后的候选池或新需求中选择，不再从 P6-71 到 P6-188 全量顺扫。
-- OpenSpec 当前 active changes：`add-ai-context-safety-controls`、`add-stable-standard-refs-and-ai-output-checks` 与 `add-standard-query-dsl` 均已完成实现、验证和独立评审，按项目约定暂保留 open，不自动 archive。
+- OpenSpec 当前 active changes：`add-ai-context-safety-controls`、`add-stable-standard-refs-and-ai-output-checks` 与 `add-standard-query-dsl` 均已完成实现、验证和独立评审，`add-business-object-table-standards` 正在本轮收口；按项目约定暂保留 open，不自动 archive。
 - 已完成 P0-P4 详情见 [docs/archive/todo-completed-p0-p4.md](docs/archive/todo-completed-p0-p4.md)。
-- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 118 项。
+- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 120 项。
 - 已删除 / 不做独立候选 9 项，详见 [docs/archive/todo-removed-p6-candidates.md](docs/archive/todo-removed-p6-candidates.md)。
-- 未完成 P6 候选共 70 项，详情见 [docs/todo-p6-candidates.md](docs/todo-p6-candidates.md)。
+- 未完成 P6 候选共 68 项，详情见 [docs/todo-p6-candidates.md](docs/todo-p6-candidates.md)。
 - 候选池价值评审见 [docs/todo-p6-candidate-review.md](docs/todo-p6-candidate-review.md)。
 - 剩余待办时间评估见 [docs/todo-p6-remaining-estimates.md](docs/todo-p6-remaining-estimates.md)。
 - 任务卡可从 create-table/review-pr-sql/reverse-import-standards/export-min-context/standard-evidence-review/standard-maintenance workflow recipe 生成；该短摘要用于本地状态检查，详细能力见完成归档。
@@ -26,7 +26,7 @@
 
 - [P6 候选池](docs/todo-p6-candidates.md)：保留所有未完成候选的完整背景、缺口、产物、验收标准和边界。
 - [P6 候选价值评审](docs/todo-p6-candidate-review.md)：记录哪些值得做、哪些应合并、哪些已删除或暂缓。
-- [P6 剩余待办时间评估](docs/todo-p6-remaining-estimates.md)：列出剩余 70 项候选和粗略开发时间。
+- [P6 剩余待办时间评估](docs/todo-p6-remaining-estimates.md)：列出剩余 68 项候选和粗略开发时间。
 - [P5/P6 完成归档](docs/archive/todo-completed-p5-p6.md)：保留已完成条目的验证证据、产物和后续增强。
 - [P6 删除候选归档](docs/archive/todo-removed-p6-candidates.md)：记录删除独立候选的原因和恢复触发条件。
 - [P0-P4 完成归档](docs/archive/todo-completed-p0-p4.md)：保留早期已完成能力的详细背景。
@@ -35,11 +35,11 @@
 
 ### 早期遗留候选
 
-7 项：P6-74、P6-76、P6-77、P6-80、P6-84、P6-85、P6-86
+6 项：P6-74、P6-77、P6-80、P6-84、P6-85、P6-86
 
 ### 扩展候选池 P6-94 到 P6-128
 
-26 项：P6-95、P6-96、P6-98、P6-101、P6-102、P6-103、P6-104、P6-106、P6-107、P6-108、P6-109、P6-110、P6-111、P6-112、P6-113、P6-116、P6-117、P6-118、P6-119、P6-120、P6-121、P6-122、P6-123、P6-124、P6-126、P6-127
+25 项：P6-95、P6-96、P6-98、P6-101、P6-102、P6-103、P6-104、P6-107、P6-108、P6-109、P6-110、P6-111、P6-112、P6-113、P6-116、P6-117、P6-118、P6-119、P6-120、P6-121、P6-122、P6-123、P6-124、P6-126、P6-127
 
 ### 扩展候选池 P6-129 到 P6-176
 

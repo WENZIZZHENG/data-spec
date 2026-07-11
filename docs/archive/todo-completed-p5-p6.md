@@ -4,8 +4,8 @@
 
 本文件从根 TODO.md 机械迁移已完成的 P5/P6 待办详情，根待办只保留入口和当前候选池。每个条目保留原始状态、已完成能力、验证证据、产物、后续增强和边界；原条目未记录 commit 的地方不补猜。
 
-- 完成项数量：118
-- 当前未完成候选：70，详见 [P6 候选池](../todo-p6-candidates.md)
+- 完成项数量：120
+- 当前未完成候选：68，详见 [P6 候选池](../todo-p6-candidates.md)
 - P0-P4 已完成归档：[todo-completed-p0-p4.md](todo-completed-p0-p4.md)
 
 ## 历史追加记录（已降级为背景）
@@ -1019,6 +1019,18 @@
 - 验证证据：`mvn -Dtest=StandardQueryServiceImplTest,StandardQueryControllerTest,AiContextExportServiceTest,FieldServiceImplTest,SchemaRegistryServiceImplTest,PerformanceBaselineTest test` 107 pass；`mvn test` 607 pass；`pnpm test` 180 pass；`pnpm build` 通过，保留既有 Rolldown pure annotation、chunk size 和 plugin timing warning；`node --test tools/dataspec-cli.test.mjs tools/dataspec-mcp.test.mjs` 217 total，215 pass / 2 skipped；`node --test tools/*.test.mjs` 397 total，395 pass / 2 skipped；`openspec validate add-standard-query-dsl --strict` valid；`openspec validate --all` 127 passed；`node tools/dataspec-status-check.mjs --format json` 仅 3 个 `OPENSPEC_ACTIVE_CHANGE_PRESENT` warning，符合 active change 暂保留约定；`git diff --check` 通过，仅 LF/CRLF warning；diff secrets scan 命中均为脱敏说明、测试假值、字段名或 token 变量名，未见真实凭据。
 - 评审证据：独立评审 agent `019f4ec7-88fc-7232-b365-90c9a03adf3c`（Helmholtz）完成只读评审；初评指出 AI Context 未复用 DSL、stableRef/canonicalRef 未校验 projectId、validation error schema 未接入三项 P2，均已修复；复评指出 `R.error` 未携带 `STANDARD_QUERY_DSL_INVALID` 的 P2，已补后端 handler 和 CLI/MCP 回归测试。最终复评 agent `019f4f0a-6f20-7433-917e-a1d7eada074e`（Curie）指出 `canonicalRef` 过滤未按 replacement canonical 语义执行、DSL limit 契约与字段搜索实际上限不一致；已补失败测试并修复为 canonicalRef 匹配字段实际 canonical 引用、DSL limit 统一为 1..50。Curie 复评结论 Approved，无阻塞 findings，agent 已关闭。
 - 后续增强：第一版不做任意 SQL 查询、全文搜索平台或跨项目查询；非 FIELD target 仍通过 ignoredFilters/strict validation 提示后续扩展；可在 `P6-176` 消费端兼容套件中进一步固化多消费端 golden payload。
+
+### P6-76：业务对象关系图与表模板依赖
+- 状态：已完成第一版，随 OpenSpec change `add-business-object-table-standards` 交付；change 按项目约定暂保留 active，不自动 archive。
+- 已完成能力：新增业务对象与表结构标准闭环，支持项目级业务对象、表模板关联、必选/可选字段、关系、外键提示、审计字段、常见反模式和 AI 使用说明；新增只读 table standards API，AI Context 导出 `.dataspec/table-standards.json`，前端模板管理和 DDL 生成页可维护/查看结构标准与关系摘要。
+- 验证证据：见 `openspec/changes/add-business-object-table-standards/tasks.md` 的 `Verification Evidence`；最终以本轮 OpenSpec strict、后端目标测试、tools 测试、前端测试/build、secrets scan、独立评审和本地 commit 记录为准。
+- 后续增强：第一版不做完整 ER 建模器、不做拖拽图编辑、不连接业务库应用关系、不读取业务数据行；更复杂的数据域/对象图、迁移交付和变更预演可由后续主题承接。
+
+### P6-106：表级约束、索引与主外键标准
+- 状态：已完成第一版，随 OpenSpec change `add-business-object-table-standards` 交付；change 按项目约定暂保留 active，不自动 archive。
+- 已完成能力：表模板可携带 `primaryKey`、`uniqueKeys`、`indexes`、`foreignKeys`、`checkHints`、`auditPolicy`、`softDeletePolicy`、`dialectNotes` 和 `aiUsageNotes`；DDL preview 安全消费结构化约束，返回 `structureSummary`、skipped hints、policy notes 和 evidence；Schema Registry、CLI、MCP 和 AI contract 均登记新增只读契约。
+- 验证证据：见 `openspec/changes/add-business-object-table-standards/tasks.md` 的 `Verification Evidence`；最终以本轮 OpenSpec strict、后端目标测试、tools 测试、前端测试/build、secrets scan、独立评审和本地 commit 记录为准。
+- 后续增强：第一版不执行数据库迁移、不自动改写已有表、不允许 raw SQL 约束片段直接进入 DDL；完整方言差异、反向导入约束比对和迁移 recipe 可在后续主题中继续推进。
 
 ## 本轮候选覆盖归档（2026-07-09）
 

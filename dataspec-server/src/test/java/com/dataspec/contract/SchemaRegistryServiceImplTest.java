@@ -25,7 +25,7 @@ class SchemaRegistryServiceImplTest {
 
         assertEquals("dataspec-schema-registry", catalog.getKind());
         assertEquals(1, catalog.getSchemaVersion());
-        assertEquals("2026.07.10", catalog.getRegistryVersion());
+        assertEquals("2026.07.11", catalog.getRegistryVersion());
         assertNotNull(catalog.getCompatibilityPolicy());
         assertTrue(catalog.getCompatibilityPolicy().getBreakingChangePolicy().contains("schemaVersion"));
 
@@ -49,7 +49,14 @@ class SchemaRegistryServiceImplTest {
                 "standard-reference-resolution",
                 "ai-output-post-check-result",
                 "standard-query-dsl-request",
-                "standard-query-dsl-result"
+                "standard-query-dsl-result",
+                "business-object-standard",
+                "table-structure-standard",
+                "table-relation-hint",
+                "table-index-standard",
+                "table-foreign-key-standard",
+                "table-policy-standard",
+                "ai-context-table-standards"
         )));
         assertTrue(catalog.getContracts().stream().allMatch(item -> item.getJsonSchemaRef().startsWith("dataspec://contracts/")));
         assertTrue(catalog.getContracts().stream().allMatch(item -> item.getStableFields() != null && !item.getStableFields().isEmpty()));
@@ -196,6 +203,43 @@ class SchemaRegistryServiceImplTest {
     }
 
     @Test
+    void detailDescribesBusinessObjectTableStandardContracts() {
+        SchemaContract businessObject = service.getContract("business-object-standard");
+        assertTrue(businessObject.getStableFields().contains("objectKey"));
+        assertTrue(businessObject.getStableFields().contains("foreignKeyHints[]"));
+        assertTrue(businessObject.getJsonSchema().get("properties").toString().contains("secret"));
+
+        SchemaContract structure = service.getContract("table-structure-standard");
+        assertTrue(structure.getStableFields().contains("primaryKey"));
+        assertTrue(structure.getStableFields().contains("foreignKeys[]"));
+        assertTrue(structure.getJsonSchema().get("properties").toString().contains("checkHints"));
+        assertTrue(structure.getJsonSchema().get("properties").toString().contains("不拼 raw SQL"));
+
+        SchemaContract tableStandards = service.getContract("ai-context-table-standards");
+        assertTrue(tableStandards.getStableFields().contains("contextScope.scope"));
+        assertTrue(tableStandards.getStableFields().contains("templates[].structure"));
+        String schema = tableStandards.getJsonSchema().get("properties").toString();
+        assertTrue(schema.contains("business-object"));
+        assertTrue(schema.contains("table-template"));
+        assertTrue(schema.contains("truncated"));
+
+        SchemaContract index = service.getContract("table-index-standard");
+        String indexSchema = index.getJsonSchema().get("properties").toString();
+        assertTrue(indexSchema.contains("btree"));
+        assertFalse(indexSchema.contains("gin"));
+
+        SchemaContract foreignKey = service.getContract("table-foreign-key-standard");
+        assertTrue(foreignKey.getStableFields().contains("advisoryOnly"));
+        assertFalse(foreignKey.getStableFields().contains("advisory"));
+        String foreignKeySchema = foreignKey.getJsonSchema().get("properties").toString();
+        assertTrue(foreignKeySchema.contains("NO ACTION"));
+        assertTrue(foreignKeySchema.contains("SET NULL"));
+        assertTrue(foreignKeySchema.contains("advisoryOnly"));
+        assertFalse(foreignKeySchema.contains("NO_ACTION"));
+        assertFalse(foreignKeySchema.contains("SET_NULL"));
+    }
+
+    @Test
     void evidenceContractIncludesAiTaskRunSourceTypeAndPostCheckSummary() {
         SchemaContract evidence = service.getContract("ai-evidence-package");
         String schema = evidence.getJsonSchema().get("properties").toString();
@@ -220,7 +264,7 @@ class SchemaRegistryServiceImplTest {
         var summary = service.manifestSummary();
 
         assertEquals(1, summary.get("schemaVersion"));
-        assertEquals("2026.07.10", summary.get("registryVersion"));
+        assertEquals("2026.07.11", summary.get("registryVersion"));
         assertEquals(".dataspec/schema-registry.json", summary.get("file"));
         assertEquals(service.requiredContractIds(), summary.get("contractIds"));
     }

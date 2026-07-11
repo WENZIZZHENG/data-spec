@@ -46,6 +46,7 @@ test('resources list and read use configured project', async () => {
     'dataspec://project/7/session-bootstrap',
     'dataspec://project/7/session-state',
     'dataspec://project/7/field-catalog',
+    'dataspec://project/7/table-standards',
     'dataspec://project/7/database-rules',
     'dataspec://project/7/rules-yaml',
     'dataspec://project/7/workflow-recipes',
@@ -66,6 +67,34 @@ test('resources list and read use configured project', async () => {
   assert.equal(read.result.contents[0].uri, 'dataspec://project/7/field-catalog')
   assert.equal(read.result.contents[0].mimeType, 'application/json')
   assert.equal(read.result.contents[0].text, '{"fields":[]}')
+})
+
+test('table standards resource reads json text and structured content', async () => {
+  const calls = []
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local/',
+    apiToken: 'ds_mcp_token'
+  }, async (url, options = {}) => {
+    calls.push({ url, options })
+    return jsonResponse({ code: 200, data: tableStandardsFixture() })
+  })
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 33,
+    method: 'resources/read',
+    params: { uri: 'dataspec://project/7/table-standards' }
+  })
+
+  const payload = JSON.parse(read.result.contents[0].text)
+  assert.equal(calls[0].url, 'http://dataspec.local/api/table-standards?projectId=7')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_mcp_token')
+  assert.equal(read.result.contents[0].mimeType, 'application/json')
+  assert.equal(payload.kind, 'dataspec-table-standards')
+  assert.equal(read.result.structuredContent.businessObjects[0].objectKey, 'order')
+  assert.equal(read.result.structuredContent.safety.readOnly, true)
+  assert.deepEqual(read.result.structuredContent.nextActions, ['Inspect structure standards before generating DDL.'])
 })
 
 test('agent guidance pack resource and templates are served locally', async () => {
@@ -681,6 +710,11 @@ test('prompts list and get return DataSpec workflow guidance', async () => {
   assert.match(reversePrompt.result.messages[0].content.text, /stopConditions/)
   assert.match(reversePrompt.result.messages[0].content.text, /evidenceRequirements/)
   assert.match(reversePrompt.result.messages[0].content.text, /从订单库反向导入字段/)
+
+  const createTablePrompt = listed.result.prompts.find((prompt) => prompt.name === 'create_table_with_dataspec')
+  assert.ok(createTablePrompt.dataspecGuidance.resourceSequence.includes('table-standards'))
+  assert.ok(createTablePrompt.dataspecGuidance.toolSequence.includes('generate_table_ddl'))
+  assert.ok(createTablePrompt.dataspecGuidance.stopConditions.some((item) => /structure standards/.test(item)))
 })
 
 test('lint_sql tool returns structured lint result and json text content', async () => {
@@ -1399,6 +1433,65 @@ test('generate_table_ddl tool returns structured ddl result', async () => {
   assert.equal(JSON.parse(response.result.content[0].text).lintResult.errorCount, 0)
 })
 
+test('get_table_standards tool returns readonly filtered table standards', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    calls.push(url)
+    return jsonResponse({
+      code: 200,
+      data: tableStandardsFixture({ detail: true })
+    })
+  })
+
+  const tools = await handler({ jsonrpc: '2.0', id: 110, method: 'tools/list' })
+  const descriptor = tools.result.tools.find((tool) => tool.name === 'get_table_standards')
+  assert.ok(descriptor)
+  assert.equal(descriptor.safety.readOnly, true)
+  assert.equal(descriptor.safety.writesProject, false)
+  assert.ok(descriptor.inputSchema.properties.templateId)
+  assert.ok(descriptor.inputSchema.properties.businessObject)
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 111,
+    method: 'tools/call',
+    params: {
+      name: 'get_table_standards',
+      arguments: { projectId: 8, templateId: 10 }
+    }
+  })
+
+  assert.equal(calls[0], 'http://dataspec.local/api/table-standards?projectId=8&templateId=10')
+  assert.equal(response.result.structuredContent.templates[0].templateId, 10)
+  assert.equal(response.result.structuredContent.safety.writesProject, false)
+  assert.equal(JSON.parse(response.result.content[0].text).nextActions[0], 'Inspect structure standards before generating DDL.')
+})
+
+test('get_table_standards tool rejects conflicting filters locally', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
+    calls.push(url)
+    return jsonResponse({
+      code: 200,
+      data: tableStandardsFixture({ detail: true })
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 112,
+    method: 'tools/call',
+    params: {
+      name: 'get_table_standards',
+      arguments: { projectId: 8, templateId: 10, businessObject: 'order' }
+    }
+  })
+
+  assert.equal(response.error.code, -32602)
+  assert.match(response.error.message, /templateId 与 businessObject/)
+  assert.equal(calls.length, 0)
+})
+
 test('export_evidence_package tool returns structured package without adding secrets', async () => {
   const calls = []
   const handler = createMcpHandler({
@@ -1876,6 +1969,55 @@ function evidencePackageFixture(overrides = {}) {
     artifacts: [{ name: 'fixedSql', mediaType: 'text/sql', summary: { available: true } }],
     nextActions: ['复核 fixedSql 后再应用补丁。'],
     suggestedCommands: ['dataspec evidence export --source-type SQL_CHECK --source-id 42 --format zip --output evidence.zip']
+  }
+}
+
+function tableStandardsFixture(overrides = {}) {
+  return {
+    kind: 'dataspec-table-standards',
+    schemaVersion: 1,
+    projectId: 7,
+    businessObjects: [
+      {
+        objectKey: 'order',
+        entityName: '订单',
+        tablePattern: 'order_*',
+        templateId: 10
+      }
+    ],
+    templates: [
+      {
+        templateId: 10,
+        templateCode: 'order_table',
+        tableNamePattern: 'order_*',
+        structureStandard: {
+          primaryKey: ['id'],
+          uniqueKeys: [{ name: 'uk_order_no', columns: ['order_no'] }],
+          indexes: [{ name: 'idx_order_user', columns: ['user_id'] }]
+        }
+      }
+    ],
+    relations: [
+      {
+        sourceObjectKey: 'order',
+        targetObjectKey: 'user',
+        relationType: 'many-to-one'
+      }
+    ],
+    summary: {
+      businessObjectCount: 1,
+      templateCount: 1,
+      relationCount: 1
+    },
+    safety: {
+      readOnly: true,
+      writesProject: false,
+      generatesDdl: false,
+      connectsDatabase: false,
+      sensitiveInputs: []
+    },
+    nextActions: ['Inspect structure standards before generating DDL.'],
+    ...overrides
   }
 }
 

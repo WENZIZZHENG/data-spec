@@ -188,7 +188,8 @@ class PerformanceBaselineTest {
                 new FieldConflictServiceImpl(fieldService),
                 usageExampleService,
                 mock(StandardReusePackService.class),
-                new StandardQueryServiceImpl(fieldService)
+                new StandardQueryServiceImpl(fieldService),
+                null
         );
     }
 

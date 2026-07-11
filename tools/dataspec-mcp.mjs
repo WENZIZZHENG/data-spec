@@ -62,6 +62,10 @@ const TOOL_SAFETY = {
     nextActions: ['PASS 后再复制或执行 AI 产物；WARN/FAIL 时先查看 blocking refs、replacement refs 和 nextActions。']
   },
   suggest_fields: READ_ONLY_TOOL_SAFETY,
+  get_table_standards: {
+    ...READ_ONLY_TOOL_SAFETY,
+    nextActions: ['先读取 table standards，再决定是否调用 generate_table_ddl；缺失或不安全结构标准时停止并让用户确认。']
+  },
   generate_table_ddl: {
     readOnly: false,
     writesProject: true,
@@ -86,9 +90,9 @@ const AGENT_GUIDANCE_TEMPLATES = [
       preferExistingFields: true,
       requireEvidencePackage: true
     },
-    resourceSequence: ['capability-catalog', 'schema-registry', 'ai-task-profiles', 'field-catalog', 'database-rules'],
+    resourceSequence: ['capability-catalog', 'schema-registry', 'ai-task-profiles', 'field-catalog', 'table-standards', 'database-rules'],
     toolSequence: ['search_fields', 'generate_table_ddl', 'lint_sql', 'export_evidence_package'],
-    stopConditions: ['missing project id', 'capability safety metadata unavailable', 'DDL contains high-risk unreviewed changes'],
+    stopConditions: ['missing project id', 'capability safety metadata unavailable', 'missing or unsafe structure standards for high-risk DDL work', 'DDL contains high-risk unreviewed changes'],
     evidenceRequirements: ['standard fields used', 'DDL preview result', 'lint result', 'next actions'],
     nextActions: ['Read capability safety before using generate_table_ddl or lint_sql.']
   },
@@ -148,6 +152,7 @@ const RESOURCE_TEMPLATE_KEYS = [
   'capability-catalog',
   'schema-registry',
   'field-catalog',
+  'table-standards',
   'workflow-recipes',
   'ai-task-profiles',
   'agent-guidance-pack'
@@ -217,6 +222,12 @@ const RESOURCE_DEFS = {
     description: '当前项目的标准字段目录，供 AI 生成或评审 SQL 时引用。',
     path: '/api/ai-context/field-catalog',
     mimeType: 'application/json'
+  },
+  'table-standards': {
+    name: 'DataSpec Table Standards',
+    description: '只读业务对象、关系、表模板和结构标准上下文，供 AI 在生成 DDL 前检查。',
+    mimeType: 'application/json',
+    tableStandardsResource: true
   },
   'database-rules': {
     name: 'DataSpec Database Rules',
@@ -897,7 +908,9 @@ async function readResource(params, context) {
               ? JSON.stringify(structuredContent = await fetchSessionBootstrapResource(context, projectId), null, 2)
               : def.taskRunResource
                 ? JSON.stringify(structuredContent = await fetchTaskRunResource(context, projectId), null, 2)
-                : await fetchAiContextText(context, def.path, projectId)
+                : def.tableStandardsResource
+                  ? JSON.stringify(structuredContent = await fetchTableStandardsResource(context, { projectId }), null, 2)
+                  : await fetchAiContextText(context, def.path, projectId)
   const result = {
     contents: [
       {
@@ -1274,6 +1287,27 @@ function listTools() {
         }
       },
       {
+        name: 'get_table_standards',
+        description: '读取项目表结构标准上下文；只返回业务对象、模板、关系、安全 metadata 和 nextActions，不生成 DDL、不连接数据库、不写项目状态。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            templateId: {
+              type: 'integer',
+              description: '可选表模板 ID，用于裁剪 table standards。'
+            },
+            businessObject: {
+              type: 'string',
+              description: '可选业务对象 key，用于裁剪 table standards。'
+            }
+          }
+        }
+      },
+      {
         name: 'generate_table_ddl',
         description: '根据 DataSpec 表模板生成 PostgreSQL DDL，并返回 lint 自检结果。',
         inputSchema: {
@@ -1407,6 +1441,9 @@ async function callTool(params, context) {
   }
   if (name === 'suggest_fields') {
     return await callSuggestFields(args, context)
+  }
+  if (name === 'get_table_standards') {
+    return await callGetTableStandards(args, context)
   }
   if (name === 'generate_table_ddl') {
     return await callGenerateTableDdl(args, context)
@@ -1593,6 +1630,19 @@ async function callSuggestFields(args, context) {
   return toolJsonResult(result)
 }
 
+async function callGetTableStandards(args, context) {
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  const templateId = args.templateId === undefined || args.templateId === null || args.templateId === ''
+    ? undefined
+    : parsePositiveInteger(args.templateId, 'templateId')
+  const businessObject = normalizeOptionalText(args.businessObject)
+  if (templateId !== undefined && businessObject !== undefined) {
+    throw new JsonRpcError(-32602, 'get_table_standards 需要在 templateId 与 businessObject 间二选一')
+  }
+  const result = await fetchTableStandardsResource(context, { projectId, templateId, businessObject })
+  return toolJsonResult(result)
+}
+
 async function callGenerateTableDdl(args, context) {
   const templateId = parsePositiveInteger(args.templateId, 'templateId')
   const tableName = args.tableName
@@ -1693,6 +1743,17 @@ async function fetchAiContextText(context, path, projectId, extraParams = {}) {
   appendOptionalParam(params, 'limit', extraParams.limit)
   const url = `${context.server}${path}?${params.toString()}`
   const response = await context.fetchFn(url, { headers: dataSpecHeaders(context.apiToken) })
+  return await readDataSpecJson(response)
+}
+
+async function fetchTableStandardsResource(context, { projectId, templateId, businessObject }) {
+  const params = new URLSearchParams()
+  params.set('projectId', String(projectId))
+  appendOptionalParam(params, 'templateId', templateId)
+  appendOptionalParam(params, 'businessObject', businessObject)
+  const response = await context.fetchFn(`${context.server}/api/table-standards?${params.toString()}`, {
+    headers: dataSpecHeaders(context.apiToken)
+  })
   return await readDataSpecJson(response)
 }
 

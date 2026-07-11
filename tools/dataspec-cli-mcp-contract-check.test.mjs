@@ -205,6 +205,49 @@ test('bundled fixtures include stable reference and post-check contracts', async
   assert.ok(checkTool.outputShape.includes('structuredContent.safeToUse'))
 })
 
+test('bundled fixtures include table standards CLI and MCP readonly contracts', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const listCommand = fixture.cliCommands.find((item) => item.id === 'table-standards-list')
+  const showCommand = fixture.cliCommands.find((item) => item.id === 'table-standards-show')
+  const resource = fixture.mcpResources.find((item) => item.uri === 'dataspec://project/<projectId>/table-standards')
+  const template = fixture.mcpResourceTemplates.find((item) =>
+    item.uriTemplate === 'dataspec://project/{projectId}/table-standards')
+  const tool = fixture.mcpTools.find((item) => item.name === 'get_table_standards')
+  const prompt = fixture.mcpPrompts.find((item) => item.name === 'create_table_with_dataspec')
+
+  assert.ok(listCommand)
+  assert.equal(listCommand.safety.readOnly, true)
+  assert.equal(listCommand.safety.writesProject, false)
+  assert.ok(listCommand.outputShape.includes('businessObjects[]'))
+  assert.ok(listCommand.outputShape.includes('safety.readOnly'))
+  assert.ok(listCommand.outputShape.includes('nextActions[]'))
+
+  assert.ok(showCommand)
+  assert.deepEqual(showCommand.oneOfRequiredOptions, ['template', 'business-object'])
+  assert.equal(showCommand.exitCodes['2'], 'argument or request error')
+  assert.ok(showCommand.recommendedNextActions.some((item) => /structure|DDL/.test(item)))
+
+  assert.ok(resource)
+  assert.equal(resource.safety.readOnly, true)
+  assert.ok(resource.outputShape.includes('businessObjects[]'))
+  assert.ok(resource.outputShape.includes('safety'))
+  assert.ok(resource.outputShape.includes('nextActions[]'))
+
+  assert.ok(template)
+  assert.equal(template.mimeType, 'application/json')
+
+  assert.ok(tool)
+  assert.equal(tool.safety.readOnly, true)
+  assert.equal(tool.safety.writesProject, false)
+  assert.ok(tool.inputProperties.includes('templateId'))
+  assert.ok(tool.inputProperties.includes('businessObject'))
+  assert.ok(tool.outputShape.includes('structuredContent.safety'))
+  assert.ok(tool.outputShape.includes('structuredContent.nextActions[]'))
+
+  assert.ok(prompt.dataspecGuidance.resourceSequence.includes('table-standards'))
+  assert.ok(prompt.dataspecGuidance.stopConditions.some((item) => /structure standards/.test(item)))
+})
+
 test('bundled fixtures include synthetic examples readonly contract', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'synthetic-examples-generate')

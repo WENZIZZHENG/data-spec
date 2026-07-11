@@ -23,7 +23,8 @@ public record AiContextScopeOptions(
         StandardQueryRequest standardQuery
 ) {
     private static final String DEFAULT_SCOPE = "all";
-    private static final Set<String> SUPPORTED_SCOPES = Set.of("all", "field", "domain", "tag", "table", "changed");
+    private static final Set<String> SUPPORTED_SCOPES = Set.of(
+            "all", "field", "domain", "tag", "table", "changed", "business-object", "table-template");
     private static final int MAX_LIMIT = 500;
 
     public AiContextScopeOptions {

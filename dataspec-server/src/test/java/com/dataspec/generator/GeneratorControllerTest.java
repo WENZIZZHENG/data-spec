@@ -2,6 +2,7 @@ package com.dataspec.generator;
 
 import com.dataspec.generator.controller.GeneratorController;
 import com.dataspec.generator.model.DdlGenerateResult;
+import com.dataspec.generator.model.DdlStructureSummary;
 import com.dataspec.generator.service.DdlGeneratorService;
 import com.dataspec.generator.service.HtmlDataDictionaryService;
 import com.dataspec.generator.service.MarkdownGeneratorService;
@@ -33,7 +34,8 @@ class GeneratorControllerTest {
                 "CREATE TABLE user_order (id bigserial);",
                 LintResult.of(List.of(), List.of()),
                 StandardSnapshotInfo.unversioned(1L),
-                List.of()
+                List.of(),
+                DdlStructureSummary.empty()
         );
         when(ddlGeneratorService.generateFromTemplate(1L, 10L, "user_order")).thenReturn(result);
 

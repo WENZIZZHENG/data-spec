@@ -13,6 +13,7 @@ public record DdlGenerateResult(
         String ddl,
         LintResult lintResult,
         StandardSnapshotInfo standardSnapshot,
-        List<DialectDiagnostic> dialectDiagnostics
+        List<DialectDiagnostic> dialectDiagnostics,
+        DdlStructureSummary structureSummary
 ) {
 }

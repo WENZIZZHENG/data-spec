@@ -47,3 +47,35 @@ test('migrates high-frequency list/detail APIs to typed helpers', () => {
     "typedGet('/api/ai-task-runs/recent-failures'"
   ], 'ai task run api')
 })
+
+test('keeps table standard API wrappers base-url relative and typed', () => {
+  const templateApi = readSource('src/api/template.ts')
+  const businessObjectApi = readSource('src/api/businessObject.ts')
+
+  assertContains(templateApi, [
+    'import type { Template, TemplateField, TemplateSaveReq }',
+    "request.get<unknown, Template[]>('/templates'",
+    'export function getTemplate(id: number)',
+    "request.get<unknown, TemplateResp>(`/templates/${id}`)",
+    'export function createTemplate(data: TemplateSaveReq)',
+    "request.post<unknown, TemplateResp>('/templates', data)",
+    'export function updateTemplate(id: number, data: TemplateSaveReq)',
+    "request.put<unknown, TemplateResp>(`/templates/${id}`, data)"
+  ], 'template table standard api')
+
+  assertContains(businessObjectApi, [
+    'import type { BusinessObjectRelationSummary, BusinessObjectStandard, BusinessObjectStandardReq }',
+    'export function listBusinessObjects(projectId: number)',
+    "request.get<unknown, BusinessObjectStandard[]>('/business-objects'",
+    'export function getBusinessObject(id: number)',
+    "request.get<unknown, BusinessObjectStandard>(`/business-objects/${id}`)",
+    'export function createBusinessObject(data: BusinessObjectStandardReq)',
+    "request.post<unknown, BusinessObjectStandard>('/business-objects', data)",
+    'export function updateBusinessObject(id: number, data: BusinessObjectStandardReq)',
+    "request.put<unknown, BusinessObjectStandard>(`/business-objects/${id}`, data)",
+    'export function deleteBusinessObject(id: number)',
+    "request.delete<unknown, void>(`/business-objects/${id}`)",
+    'export function getBusinessObjectRelationSummary(projectId: number)',
+    "request.get<unknown, BusinessObjectRelationSummary>('/business-objects/relation-summary'"
+  ], 'business object api')
+})
