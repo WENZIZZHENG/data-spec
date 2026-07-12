@@ -28,6 +28,9 @@ import {
   buildCodeFieldPatchPlan,
   formatCodeFieldPatchPlanMarkdown
 } from './dataspec-code-patch-plan.mjs'
+import {
+  runConsumerCompatibilityCli
+} from './dataspec-consumer-compat-check.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const CLI_VERSION = '0.1.0'
@@ -48,6 +51,9 @@ const CONTEXT_CACHE_DIR = path.join('.dataspec', 'context')
 const CACHE_METADATA_FILE = 'cache-metadata.json'
 const DEFAULT_CONTEXT_CACHE_TTL_DAYS = 7
 const MS_PER_DAY = 24 * 60 * 60 * 1000
+const TEST_DATA_MAX_FIELDS = 100
+const TEST_DATA_MAX_CASES_PER_FIELD = 3
+const TEST_DATA_MAX_SEED_ROWS = 50
 const ZIP_LOCAL_FILE_HEADER = 0x04034b50
 const ZIP_CENTRAL_DIRECTORY_HEADER = 0x02014b50
 const ZIP_END_OF_CENTRAL_DIRECTORY = 0x06054b50
@@ -194,6 +200,12 @@ export async function runCli(argv, io = processIo(), fetchFn = globalThis.fetch)
     }
     if (command === 'synthetic-examples' || command === 'synthetic-example') {
       return await runSyntheticExamples(rest, io, fetchFn)
+    }
+    if (command === 'test-data' || command === 'testdata') {
+      return await runTestData(rest, io, fetchFn)
+    }
+    if (command === 'consumer-compat' || command === 'consumercompat') {
+      return await runConsumerCompatibility(rest, io)
     }
     if (command === 'contract-import' || command === 'contractimport') {
       return await runContractImport(rest, io, fetchFn)
@@ -2201,6 +2213,78 @@ async function runSyntheticExamples(args, io, fetchFn) {
   io.writeOut(format === 'json'
     ? `${JSON.stringify(result, null, 2)}\n`
     : formatSyntheticExamplesText(result))
+  return 0
+}
+
+async function runConsumerCompatibility(args, io) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'check') {
+    throw new Error('consumer-compat 支持子命令: check')
+  }
+  return await runConsumerCompatibilityCli(rest, io)
+}
+
+async function runTestData(args, io, fetchFn) {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'generate') {
+    throw new Error('test-data 支持子命令: generate')
+  }
+  const { positional, options } = parseArgs(rest, [
+    'project',
+    'field',
+    'field-name',
+    'fieldName',
+    'object-scenario',
+    'objectScenario',
+    'max-fields',
+    'maxFields',
+    'cases-per-field',
+    'casesPerField',
+    'seed-row-count',
+    'seedRowCount',
+    'dialect',
+    'format',
+    'server',
+    'dataspec-token'
+  ], [], ['field', 'field-name', 'fieldName'])
+  if (positional.length > 0) {
+    throw new Error(`test-data generate 不接受位置参数: ${positional.join(', ')}`)
+  }
+  const config = loadDataSpecConfig(cliCwd(io))
+  const format = options.format ?? 'json'
+  if (format !== 'json' && format !== 'text') {
+    throw new Error('test-data generate 仅支持 --format text|json')
+  }
+  const projectId = parseProjectId(options.project ?? config.projectId)
+  const fieldNames = [
+    ...optionValues(options.field),
+    ...optionValues(options['field-name']),
+    ...optionValues(options.fieldName)
+  ].map((item) => String(item).trim()).filter(Boolean)
+  if (fieldNames.length > TEST_DATA_MAX_FIELDS) {
+    throw new Error(`maxFields 超过安全上限 ${TEST_DATA_MAX_FIELDS}`)
+  }
+  const req = removeUndefinedValues({
+    projectId,
+    fieldNames: fieldNames.length > 0 ? fieldNames : undefined,
+    objectScenario: options.objectScenario ?? options['object-scenario'],
+    maxFields: parseBoundedPositiveInteger(options.maxFields ?? options['max-fields'], 'maxFields', TEST_DATA_MAX_FIELDS),
+    casesPerField: parseBoundedPositiveInteger(options.casesPerField ?? options['cases-per-field'], 'casesPerField', TEST_DATA_MAX_CASES_PER_FIELD),
+    seedRowCount: parseBoundedPositiveInteger(options.seedRowCount ?? options['seed-row-count'], 'seedRowCount', TEST_DATA_MAX_SEED_ROWS),
+    dialect: options.dialect
+  })
+  const server = normalizeServer(options.server ?? config.server)
+  const apiToken = resolveDataSpecToken(options, config)
+  const response = await fetchFn(`${server}/api/test-data/package/generate`, {
+    method: 'POST',
+    headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(req)
+  })
+  const payload = await readJsonResponse(response)
+  const result = sanitizeSecretValue(unwrapResponse(payload))
+  io.writeOut(format === 'json'
+    ? `${JSON.stringify(result, null, 2)}\n`
+    : formatStandardTestDataPackageText(result))
   return 0
 }
 
@@ -4973,6 +5057,36 @@ function formatSyntheticExamplesText(result) {
   return `${lines.join('\n')}\n`
 }
 
+function formatStandardTestDataPackageText(result) {
+  const coverage = result.coverageReport ?? {}
+  const safety = result.safety ?? {}
+  const lines = [
+    'DataSpec Standard Test Data Package',
+    `projectId: ${result.projectId ?? '-'}`,
+    `specHash: ${redactSecrets(result.specHash ?? '-')}`,
+    `testDataCases: ${(result.testDataCases ?? []).length}`,
+    `seedProfiles: ${(result.seedProfiles ?? []).length}`,
+    `mockPayloads: ${(result.mockPayloads ?? []).length}`,
+    `selectedFieldCount: ${coverage.selectedFieldCount ?? '-'}`,
+    `generatedCaseCount: ${coverage.generatedCaseCount ?? '-'}`,
+    `missingConstraints: ${(coverage.missingConstraints ?? []).length}`,
+    `requiresBusinessReview: ${Boolean(coverage.requiresBusinessReview)}`,
+    `readOnly: ${Boolean(safety.readOnly)}`,
+    `writesProject: ${Boolean(safety.writesProject)}`,
+    `writesBusinessRepo: ${Boolean(safety.writesBusinessRepo)}`,
+    `containsRealBusinessRows: ${Boolean(safety.containsRealBusinessRows)}`,
+    `externalNetworkUsed: ${Boolean(safety.externalNetworkUsed)}`,
+    `externalLlmUsed: ${Boolean(safety.externalLlmUsed)}`
+  ]
+  appendTextList(lines, 'diagnostics', (result.diagnostics ?? []).map((item) => {
+    const code = item?.code ?? item?.id ?? 'DIAGNOSTIC'
+    const message = item?.message ?? item?.reason ?? ''
+    return redactSecrets(message ? `${code}: ${message}` : String(code))
+  }))
+  appendTextList(lines, 'next actions', (result.nextActions ?? []).map((item) => redactSecrets(item)))
+  return `${lines.join('\n')}\n`
+}
+
 function formatContractImportPreviewText(result) {
   const lines = [
     'DataSpec Contract Import Preview',
@@ -5294,6 +5408,17 @@ function parsePositiveInteger(value, label) {
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new Error(`无效 ${label}: ${value}`)
+  }
+  return parsed
+}
+
+function parseBoundedPositiveInteger(value, label, max) {
+  if (value === undefined || value === null || value === '') {
+    return undefined
+  }
+  const parsed = parsePositiveInteger(value, label)
+  if (parsed > max) {
+    throw new Error(`${label} 超过安全上限 ${max}: ${value}`)
   }
   return parsed
 }
@@ -7046,6 +7171,8 @@ Usage:
   node tools/dataspec-cli.mjs metric-definitions list --project <id> [--query <text>] [--status <status>] [--field-id <id>] [--metric-key <key>] [--limit <n>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs metric-definitions show <id> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs synthetic-examples generate [--project <id>] --scenario <user|order|payment|audit> [--max-cases <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs test-data generate [--project <id>] [--field <name> ...] [--object-scenario <name>] [--max-fields <n>] [--cases-per-field <n>] [--seed-row-count <n>] [--dialect <name>] [--format text|json] [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs consumer-compat check [--fixture <path>] [--format text|json]
   node tools/dataspec-cli.mjs contract-import preview [--project <id>] --source-kind <openapi|json-schema|protobuf> --input <path> [--max-candidates <n>] [--format text|json] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs schema-plan [--project <id>] --database-type <postgresql|mysql> --host <host> [--port <n>] --database <name> [--schema <schema>] --username <user> [--password-env <env>|--password <value>] --table <name> [--table <name> ...] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs comment-plan preview [--project <id>] --database-type <postgresql|mysql> --host <host> [--port <n>] --database <name> [--schema <schema>] --username <user> [--password-env <env>|--password <value>] --table <name> [--table <name> ...] [--metadata-cache-mode AUTO|REFRESH|BYPASS] --format text|json [--server <url>] [--dataspec-token <token>]
@@ -7096,6 +7223,8 @@ Options:
   table-standards 只读读取业务对象、模板结构标准、关系摘要、安全 metadata 和 nextActions；show 需在 --template 与 --business-object 间二选一
   field-knowledge、field-semantics 和 metric-definitions 只读读取字段知识卡、字段语义规则和指标口径；输出会再次脱敏，不执行计算、不写项目状态
   synthetic-examples generate 只读生成合成标准样例包，可作为 fixture、Prompt 评测或人工审核草案；不会写入项目标准或调用外部 LLM
+  test-data generate 只读调用标准测试数据包 API，生成 valid/invalid/boundary、mock、CSV 和 SQL seed 草稿；不会写业务仓库、读取真实业务行或调用外部 LLM
+  consumer-compat check 本地只读检查 DataSpec 自有消费端 golden payload 与 breaking rules，不需要服务端或真实凭据
   contract-import preview 只读读取本地 OpenAPI/JSON Schema/Protobuf 契约并生成候选预览；不会自动写入标准字段或候选 Inbox
   schema-plan 只生成数据库 schema change plan 预览，不执行迁移；推荐使用 --password-env 读取数据库密码
   comment-plan preview 只生成数据库 COMMENT 回写计划预览，不执行 SQL；text 输出仅供阅读，json 输出保留稳定字段

@@ -55,6 +55,7 @@ test('resources list and read use configured project', async () => {
     'dataspec://project/7/workflow-recipes',
     'dataspec://project/7/agent-guidance-pack',
     'dataspec://project/7/ai-task-profiles',
+    'dataspec://project/7/consumer-compatibility-suite',
     'dataspec://project/7/schema-registry',
     'dataspec://project/7/ai-task-runs'
   ])
@@ -1495,6 +1496,104 @@ test('get_table_standards tool rejects conflicting filters locally', async () =>
   assert.equal(calls.length, 0)
 })
 
+test('test data and consumer compatibility MCP descriptors are readonly', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
+
+  const tools = await handler({ jsonrpc: '2.0', id: 1121, method: 'tools/list' })
+  const generateTool = tools.result.tools.find((tool) => tool.name === 'generate_test_data_package')
+  const compatTool = tools.result.tools.find((tool) => tool.name === 'check_consumer_compatibility')
+  assert.ok(generateTool)
+  assert.ok(generateTool.inputSchema.properties.fieldNames.description)
+  assert.equal(generateTool.safety.readOnly, true)
+  assert.equal(generateTool.safety.writesProject, false)
+  assert.equal(generateTool.safety.writesBusinessRepo, false)
+  assert.equal(generateTool.safety.containsRealBusinessRows, false)
+  assert.equal(generateTool.safety.externalLlmUsed, false)
+  assert.ok(compatTool)
+  assert.equal(compatTool.safety.readOnly, true)
+  assert.equal(compatTool.safety.requiresServer, false)
+  assert.equal(compatTool.safety.externalNetworkUsed, false)
+
+  const resources = await handler({ jsonrpc: '2.0', id: 1122, method: 'resources/list' })
+  assert.ok(resources.result.resources.some((resource) => resource.uri === 'dataspec://project/7/consumer-compatibility-suite'))
+})
+
+test('generate_test_data_package tool calls readonly backend api and redacts output', async () => {
+  const calls = []
+  const handler = createMcpHandler({
+    projectId: 7,
+    server: 'http://dataspec.local',
+    apiToken: 'ds_mcp_token'
+  }, async (url, options = {}) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: testDataPackageFixture({
+        diagnostics: [{ code: 'REDACTED', message: 'token=raw-secret was removed' }]
+      })
+    })
+  })
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 1123,
+    method: 'tools/call',
+    params: {
+      name: 'generate_test_data_package',
+      arguments: {
+        projectId: 8,
+        fieldNames: ['amount_cent', 'status'],
+        objectScenario: 'order',
+        maxFields: 2,
+        casesPerField: 3,
+        seedRowCount: 2,
+        dialect: 'postgresql'
+      }
+    }
+  })
+
+  assert.equal(calls[0].url, 'http://dataspec.local/api/test-data/package/generate')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_mcp_token')
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    projectId: 8,
+    fieldNames: ['amount_cent', 'status'],
+    objectScenario: 'order',
+    maxFields: 2,
+    casesPerField: 3,
+    seedRowCount: 2,
+    dialect: 'postgresql'
+  })
+  assert.equal(response.result.structuredContent.kind, 'dataspec.standard-test-data-package')
+  assert.equal(response.result.structuredContent.safety.readOnly, true)
+  assert.doesNotMatch(response.result.content[0].text, /raw-secret/)
+})
+
+test('check_consumer_compatibility tool and resource run locally without backend', async () => {
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, failingFetch)
+
+  const read = await handler({
+    jsonrpc: '2.0',
+    id: 1124,
+    method: 'resources/read',
+    params: { uri: 'dataspec://project/7/consumer-compatibility-suite' }
+  })
+  const checked = await handler({
+    jsonrpc: '2.0',
+    id: 1125,
+    method: 'tools/call',
+    params: {
+      name: 'check_consumer_compatibility',
+      arguments: {}
+    }
+  })
+
+  assert.equal(read.result.contents[0].mimeType, 'application/json')
+  assert.equal(read.result.structuredContent.kind, 'dataspec-consumer-compatibility-suite')
+  assert.equal(checked.result.structuredContent.kind, 'dataspec.consumer-compatibility-suite.check')
+  assert.equal(checked.result.structuredContent.status, 'COMPATIBLE')
+  assert.ok(checked.result.structuredContent.adapterResults.some((item) => item.adapterId === 'standard-test-data-package'))
+})
+
 test('semantic knowledge resources are listed and read as structured json', async () => {
   const calls = []
   const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url) => {
@@ -2152,6 +2251,46 @@ function tableStandardsFixture(overrides = {}) {
       sensitiveInputs: []
     },
     nextActions: ['Inspect structure standards before generating DDL.'],
+    ...overrides
+  }
+}
+
+function testDataPackageFixture(overrides = {}) {
+  return {
+    kind: 'dataspec.standard-test-data-package',
+    schemaVersion: 1,
+    projectId: 7,
+    specHash: 'test-data-hash-order',
+    generationParams: {
+      fieldNames: ['amount_cent', 'status'],
+      objectScenario: 'order',
+      maxFields: 2,
+      casesPerField: 3,
+      seedRowCount: 2,
+      dialect: 'postgresql'
+    },
+    sourceSummary: {
+      standardFieldCount: 2,
+      enumValueCount: 2,
+      formatConstraintCount: 1,
+      fallbackUsed: false
+    },
+    testDataCases: [
+      { caseId: 'amount-valid', fieldName: 'amount_cent', caseType: 'VALID', value: 1200, expectedValidity: true }
+    ],
+    seedProfiles: [{ profileId: 'order-sql', format: 'SQL', executable: false, requiresReview: true }],
+    mockPayloads: [{ payloadId: 'order-json', format: 'JSON' }],
+    coverageReport: { selectedFieldCount: 2, generatedCaseCount: 1, missingConstraints: [] },
+    diagnostics: [],
+    safety: {
+      readOnly: true,
+      writesProject: false,
+      writesBusinessRepo: false,
+      containsRealBusinessRows: false,
+      externalNetworkUsed: false,
+      externalLlmUsed: false
+    },
+    nextActions: ['Review before copying into a business repository.'],
     ...overrides
   }
 }

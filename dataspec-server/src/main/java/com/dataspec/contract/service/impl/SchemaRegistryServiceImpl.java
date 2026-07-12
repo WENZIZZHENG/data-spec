@@ -1107,6 +1107,233 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                         "summary", orderedMap("businessObjectCount", 1, "templateCount", 1)
                 ))
         ));
+        add(map, contract(
+                "standard-test-data-package",
+                "标准测试数据包",
+                "标准驱动的 deterministic 测试数据包；只读生成 valid/invalid/boundary、mock、CSV 和 SQL seed 草稿，不包含真实业务数据行。",
+                List.of("kind", "schemaVersion", "projectId", "specHash", "generationParams", "sourceSummary",
+                        "sourceSummary.standardFieldCount", "sourceSummary.selectedFieldCount", "sourceSummary.enumValueCount",
+                        "testDataCases[]", "testDataCases[].caseId", "testDataCases[].fieldName",
+                        "testDataCases[].caseType", "testDataCases[].value", "testDataCases[].expectedValidity",
+                        "testDataCases[].reason", "testDataCases[].sourceRefs[]", "testDataCases[].requiresBusinessReview",
+                        "seedProfiles[]",
+                        "seedProfiles[].profileId", "seedProfiles[].format", "seedProfiles[].dialect",
+                        "seedProfiles[].content", "seedProfiles[].fieldNames[]", "seedProfiles[].sourceCaseIds[]",
+                        "seedProfiles[].executable", "seedProfiles[].requiresReview", "mockPayloads[]",
+                        "mockPayloads[].payloadId", "mockPayloads[].objectScenario", "mockPayloads[].payload",
+                        "mockPayloads[].sourceCaseIds[]", "coverageReport", "coverageReport.selectedFieldCount",
+                        "coverageReport.coveredFieldCount", "coverageReport.caseCount", "coverageReport.coverageLevel",
+                        "diagnostics[]", "safety", "safety.readOnly", "safety.writesProject",
+                        "safety.writesBusinessRepo", "safety.containsRealBusinessRows",
+                        "safety.externalNetworkUsed", "safety.externalLlmUsed", "nextActions[]"),
+                List.of(),
+                objectSchema("DataSpec Standard Test Data Package", List.of("kind", "schemaVersion", "projectId", "specHash"), orderedMap(
+                        "kind", describedStringProp("固定为 dataspec.standard-test-data-package。"),
+                        "schemaVersion", describedIntegerProp("测试数据包 schema 版本。"),
+                        "projectId", describedIntegerProp("生成数据包所属项目 ID。"),
+                        "specHash", describedStringProp("由字段标准摘要、选择器和 generationParams 计算的 deterministic hash。"),
+                        "generationParams", objectSchema("Test Data Generation Params", List.of(), orderedMap(
+                                "fieldNames", arrayOf(describedStringProp("字段选择器；输出前必须脱敏，不得包含 token/password/JDBC URL/Authorization 明文。")),
+                                "objectScenario", describedStringProp("轻量对象场景名，只影响 fallback 命名和 seed 草稿表名。"),
+                                "maxFields", describedIntegerProp("本次最多生成字段数。"),
+                                "casesPerField", describedIntegerProp("每字段最多用例数。"),
+                                "seedRowCount", describedIntegerProp("mock/CSV/SQL seed 草稿行数。"),
+                                "dialect", describedStringProp("SQL seed 草稿方言提示；不代表可直接执行。")
+                        )),
+                        "sourceSummary", objectSchema("Test Data Source Summary", List.of(), orderedMap(
+                                "standardFieldCount", describedIntegerProp("项目可用标准字段总数。"),
+                                "selectedFieldCount", describedIntegerProp("本次选中字段数。"),
+                                "enumValueCount", describedIntegerProp("使用到的枚举值数量。"),
+                                "fallbackUsed", describedBooleanProp("是否使用内置 fallback。"),
+                                "selectedFields", arrayOf(describedStringProp("本次选中的字段名，输出前按敏感文本规则脱敏。")),
+                                "sourceKinds", arrayOf(describedStringProp("来源类型，如 project-field、enum-value、fallback。"))
+                        )),
+                        "testDataCases", arrayOf(objectSchema("Standard Test Data Case", List.of("caseId", "fieldName", "caseType", "expectedValidity"), orderedMap(
+                                "caseId", describedStringProp("确定性用例 ID。"),
+                                "fieldName", describedStringProp("标准字段名；safe identifier。"),
+                                "caseType", describedEnumProp("用例类型。", "VALID", "INVALID", "BOUNDARY"),
+                                "value", describedValueProp("安全合成示例值；不得来自真实业务数据行。"),
+                                "expectedValidity", describedBooleanProp("该值按 DataSpec 约束是否应通过。"),
+                                "reason", describedStringProp("生成原因或命中的约束说明。"),
+                                "sourceRefs", arrayOf(describedStringProp("字段、枚举、语义或 fallback 来源引用。")),
+                                "requiresBusinessReview", describedBooleanProp("是否需要业务人工复核。")
+                        ))),
+                        "seedProfiles", arrayOf(objectSchema("Standard Test Data Seed Profile", List.of("profileId", "format", "executable", "requiresReview"), orderedMap(
+                                "profileId", describedStringProp("确定性 profile ID。"),
+                                "format", describedEnumProp("seed 草稿格式。", "JSON", "CSV", "SQL"),
+                                "dialect", describedStringProp("SQL seed 草稿方言提示；不代表可直接执行。"),
+                                "content", describedStringProp("mock/CSV/SQL seed 草稿内容；SQL seed 草稿默认不可直接执行。"),
+                                "fieldNames", arrayOf(describedStringProp("参与该草稿的字段名。")),
+                                "sourceCaseIds", arrayOf(describedStringProp("来源 case ID。")),
+                                "executable", describedBooleanProp("是否可直接执行；第一版 SQL seed 草稿必须为 false。"),
+                                "requiresReview", describedBooleanProp("复制到业务仓库、mock server 或测试前是否需要人工复核。")
+                        ))),
+                        "mockPayloads", arrayOf(objectSchema("Standard Test Data Mock Payload", List.of("payloadId", "payload"), orderedMap(
+                                "payloadId", describedStringProp("确定性 payload ID。"),
+                                "objectScenario", describedStringProp("轻量对象场景。"),
+                                "payload", objectProp(),
+                                "sourceCaseIds", arrayOf(describedStringProp("来源 valid case ID。")),
+                                "requiresBusinessReview", describedBooleanProp("是否需要人工复核。")
+                        ))),
+                        "coverageReport", objectSchema("Standard Test Data Coverage Report", List.of(), orderedMap(
+                                "selectedFieldCount", describedIntegerProp("选中的字段数。"),
+                                "coveredFieldCount", describedIntegerProp("生成至少一个 case 的字段数。"),
+                                "caseCount", describedIntegerProp("生成用例总数。"),
+                                "coverageLevel", describedEnumProp("覆盖级别。", "FIELD_ONLY", "OBJECT_LIGHTWEIGHT"),
+                                "missingConstraints", arrayOf(describedStringProp("缺少约束的字段或原因；用于业务复核。")),
+                                "unsupportedFields", arrayOf(describedStringProp("暂不能生成确定性 case 的字段名。"))
+                        )),
+                        "diagnostics", arrayOf(objectProp()),
+                        "safety", describedObjectSchema("Test Data Safety Metadata", "安全元数据，声明测试数据包只读、不写项目、不写业务仓库、不包含真实业务数据行、不调用外部网络或 LLM。", List.of("readOnly", "containsRealBusinessRows"), orderedMap(
+                                "readOnly", describedBooleanProp("是否只读；必须为 true。"),
+                                "writesProject", describedBooleanProp("是否写入 DataSpec 项目；必须为 false。"),
+                                "writesBusinessRepo", describedBooleanProp("是否写业务仓库文件；必须为 false。"),
+                                "containsRealBusinessRows", describedBooleanProp("是否包含真实业务数据行；必须为 false，不包含真实业务数据行。"),
+                                "externalNetworkUsed", describedBooleanProp("是否调用外部网络；必须为 false。"),
+                                "externalLlmUsed", describedBooleanProp("是否调用外部 LLM；必须为 false。"),
+                                "sensitiveInputCategories", arrayOf(describedStringProp("参与脱敏判定的敏感输入类别，如 standard-metadata。"))
+                        )),
+                        "nextActions", arrayOf(describedStringProp("后续建议；复制 mock 或 SQL seed 草稿前应检查 safety、coverageReport 和 seedProfiles。"))
+                )),
+                List.of(orderedMap(
+                        "kind", "dataspec.standard-test-data-package",
+                        "schemaVersion", 1,
+                        "projectId", 1,
+                        "specHash", "test-data-hash-order",
+                        "generationParams", orderedMap("fieldNames", List.of("order_id"), "maxFields", 1, "casesPerField", 3),
+                        "sourceSummary", orderedMap("standardFieldCount", 12, "selectedFieldCount", 1, "enumValueCount", 0,
+                                "fallbackUsed", false, "selectedFields", List.of("order_id"), "sourceKinds", List.of("project-field")),
+                        "testDataCases", List.of(orderedMap(
+                                "caseId", "order_id-valid-1",
+                                "fieldName", "order_id",
+                                "caseType", "VALID",
+                                "value", 1001,
+                                "expectedValidity", true,
+                                "requiresBusinessReview", false
+                        )),
+                        "seedProfiles", List.of(orderedMap("profileId", "seed-sql", "format", "SQL", "dialect", "generic",
+                                "content", "INSERT INTO demo_table (order_id) VALUES (1001);",
+                                "fieldNames", List.of("order_id"), "sourceCaseIds", List.of("order_id-valid-1"),
+                                "executable", false, "requiresReview", true)),
+                        "mockPayloads", List.of(orderedMap("payloadId", "mock-standard", "objectScenario", "standard",
+                                "payload", orderedMap("order_id", 1001), "sourceCaseIds", List.of("order_id-valid-1"),
+                                "requiresBusinessReview", true)),
+                        "coverageReport", orderedMap("selectedFieldCount", 1, "coveredFieldCount", 1, "caseCount", 1,
+                                "coverageLevel", "FIELD_ONLY", "missingConstraints", List.of(), "unsupportedFields", List.of()),
+                        "diagnostics", List.of(),
+                        "safety", orderedMap("readOnly", true, "writesProject", false, "writesBusinessRepo", false,
+                                "containsRealBusinessRows", false, "externalNetworkUsed", false, "externalLlmUsed", false),
+                        "nextActions", List.of("Review seedProfiles before copying drafts into business repositories.")
+                ))
+        ));
+        add(map, contract(
+                "consumer-compatibility-suite",
+                "消费端兼容套件",
+                "本地只读的 DataSpec 自有消费端兼容检查结果，覆盖 API、CLI、MCP、AI Context、Schema Registry 和 fixture contract。",
+                List.of("kind", "schemaVersion", "suiteVersion", "checkedAt", "minimumSupportedVersion", "status",
+                        "summary", "goldenPayloads[]", "breakingRules[]", "adapterResults[]", "diagnostics[]", "nextActions[]"),
+                List.of(),
+                objectSchema("DataSpec Consumer Compatibility Suite", List.of("kind", "schemaVersion", "status"), orderedMap(
+                        "kind", describedStringProp("兼容检查输出类型，固定为 dataspec.consumer-compatibility-suite.check。"),
+                        "schemaVersion", describedIntegerProp("兼容检查结果 schema 版本。"),
+                        "suiteVersion", describedStringProp("兼容套件版本。"),
+                        "checkedAt", describedStringProp("ISO-8601 检查时间。"),
+                        "minimumSupportedVersion", describedStringProp("当前套件声明的最小支持 DataSpec 版本。"),
+                        "status", describedEnumProp("整体兼容状态。", "COMPATIBLE", "BREAKING", "INVALID"),
+                        "summary", objectProp(),
+                        "goldenPayloads", arrayOf(objectProp()),
+                        "breakingRules", arrayOf(objectProp()),
+                        "adapterResults", arrayOf(objectSchema("Consumer Compatibility Adapter Result Ref", List.of("adapterId", "status"), orderedMap(
+                                "adapterId", describedStringProp("adapter 唯一 ID，如 schema-registry、mcp-descriptor 或 standard-test-data-package。"),
+                                "contractId", describedStringProp("关联 Schema Registry contractId；nullable。"),
+                                "status", describedEnumProp("adapter 兼容状态。", "COMPATIBLE", "BREAKING", "DEPRECATED", "OUT_OF_SCOPE"),
+                                "required", describedBooleanProp("该 adapter 是否为 DataSpec 自有必选消费端。"),
+                                "contractRefs", arrayOf(describedStringProp("adapter 依赖的 Schema Registry contractId。")),
+                                "stableFields", arrayOf(describedStringProp("adapter 声明需要保持兼容的 stable field path。")),
+                                "checkedStableFields", arrayOf(describedStringProp("本次已检查的 stable field path。")),
+                                "missingStableFields", arrayOf(describedStringProp("缺失或被删除的 stable field path。")),
+                                "typeMismatches", arrayOf(describedStringProp("类型或语义漂移说明。")),
+                                "additiveFields", arrayOf(describedStringProp("兼容的可选新增字段。")),
+                                "diagnostics", arrayOf(objectProp()),
+                                "migrationHints", arrayOf(describedStringProp("下游消费端迁移提示。"))
+                        ))),
+                        "diagnostics", arrayOf(objectProp()),
+                        "safety", describedObjectSchema("Consumer Compatibility Safety Metadata", "安全元数据，声明兼容检查本地只读、不写项目、不要求服务端、不调用外部网络或 LLM。", List.of("readOnly", "requiresServer"), orderedMap(
+                                "readOnly", describedBooleanProp("本地只读；必须为 true。"),
+                                "writesProject", describedBooleanProp("是否写入项目；必须为 false。"),
+                                "requiresServer", describedBooleanProp("是否需要 DataSpec server；本地只读检查必须为 false。"),
+                                "externalNetworkUsed", describedBooleanProp("是否调用外部网络；必须为 false。"),
+                                "externalLlmUsed", describedBooleanProp("是否调用外部 LLM；必须为 false。")
+                        )),
+                        "nextActions", arrayOf(describedStringProp("修复兼容问题的下一步建议。"))
+                )),
+                List.of(orderedMap(
+                        "kind", "dataspec.consumer-compatibility-suite.check",
+                        "schemaVersion", 1,
+                        "suiteVersion", "1.0.0",
+                        "status", "COMPATIBLE",
+                        "adapterResults", List.of(orderedMap("adapterId", "standard-test-data-package", "status", "COMPATIBLE")),
+                        "diagnostics", List.of(),
+                        "nextActions", List.of("Consumer compatibility suite 可作为本地门禁。")
+                ))
+        ));
+        add(map, contract(
+                "consumer-compatibility-adapter-result",
+                "消费端兼容适配器结果",
+                "单个 DataSpec 自有消费端 adapter 的兼容检查结果；用于定位 stable field、descriptor 或 fixture 漂移。",
+                List.of("adapterId", "contractId", "status", "required", "contractRefs[]", "stableFields[]",
+                        "checkedStableFields[]", "missingStableFields[]", "typeMismatches[]", "additiveFields[]",
+                        "diagnostics[]", "migrationHints[]"),
+                List.of(),
+                objectSchema("DataSpec Consumer Compatibility Adapter Result", List.of("adapterId", "status"), orderedMap(
+                        "adapterId", describedStringProp("adapter 唯一 ID，如 schema-registry、mcp-descriptor 或 standard-test-data-package。"),
+                        "contractId", describedStringProp("关联 Schema Registry contractId；nullable。"),
+                        "status", describedEnumProp("adapter 兼容状态。", "COMPATIBLE", "BREAKING", "DEPRECATED", "OUT_OF_SCOPE"),
+                        "required", describedBooleanProp("该 adapter 是否为 DataSpec 自有必选消费端。"),
+                        "contractRefs", arrayOf(describedStringProp("adapter 依赖的 Schema Registry contractId。")),
+                        "stableFields", arrayOf(describedStringProp("adapter 声明需要保持兼容的 stable field path。")),
+                        "checkedStableFields", arrayOf(describedStringProp("已检查的 stable field path。")),
+                        "missingStableFields", arrayOf(describedStringProp("缺失或被删除的 stable field path。")),
+                        "typeMismatches", arrayOf(describedStringProp("类型或语义漂移说明。")),
+                        "additiveFields", arrayOf(describedStringProp("兼容的可选新增字段。")),
+                        "diagnostics", arrayOf(objectProp()),
+                        "migrationHints", arrayOf(describedStringProp("下游消费端迁移提示。"))
+                )),
+                List.of(orderedMap(
+                        "adapterId", "mcp-descriptor",
+                        "contractId", "dataspec-mcp",
+                        "status", "COMPATIBLE",
+                        "required", true,
+                        "contractRefs", List.of("dataspec-mcp"),
+                        "stableFields", List.of("tools", "resources", "prompts"),
+                        "checkedStableFields", List.of("tools", "resources", "prompts"),
+                        "additiveFields", List.of("tools[].safety.externalLlmUsed")
+                ))
+        ));
+        add(map, contract(
+                "consumer-compatibility-breaking-rule",
+                "消费端兼容破坏性规则",
+                "描述删除、改名、改类型、必填性变化、安全 metadata 漂移等会破坏 DataSpec 自有消费端的规则。",
+                List.of("ruleId", "adapterId", "contractPath", "category", "severity", "description", "migrationHint"),
+                List.of(),
+                objectSchema("DataSpec Consumer Compatibility Breaking Rule", List.of("ruleId", "contractPath", "severity"), orderedMap(
+                        "ruleId", describedStringProp("规则 ID，稳定用于 diagnostics[].ruleId。"),
+                        "adapterId", describedStringProp("适用 adapter ID。"),
+                        "contractPath", describedStringProp("受影响契约路径，如 adapterResults[].status。"),
+                        "category", describedEnumProp("破坏性规则类别。", "REMOVED_FIELD", "RENAMED_FIELD", "TYPE_CHANGED", "SAFETY_METADATA_CHANGED", "SEMANTICS_CHANGED"),
+                        "severity", describedEnumProp("规则严重程度。", "ERROR", "WARN"),
+                        "description", describedStringProp("规则说明。"),
+                        "migrationHint", describedStringProp("AI 和开发者可读 migration hint；说明如何安全迁移或补兼容层。")
+                )),
+                List.of(orderedMap(
+                        "ruleId", "stable-field-removed",
+                        "adapterId", "schema-registry",
+                        "contractPath", "contracts[].stableFields[]",
+                        "category", "REMOVED_FIELD",
+                        "severity", "ERROR",
+                        "migrationHint", "Keep the field, add a deprecatedFields entry, or publish a schemaVersion migration note."
+                ))
+        ));
         return map;
     }
 
@@ -1146,6 +1373,14 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
         if (required != null && !required.isEmpty()) {
             schema.put("required", required);
         }
+        return schema;
+    }
+
+    private static Map<String, Object> describedObjectSchema(String title, String description,
+                                                             List<String> required,
+                                                             Map<String, Object> properties) {
+        Map<String, Object> schema = objectSchema(title, required, properties);
+        schema.put("description", description);
         return schema;
     }
 

@@ -13,12 +13,19 @@ import {
   createTaskCard,
   renderTaskCardMarkdown
 } from './dataspec-task-card.mjs'
+import {
+  loadConsumerCompatibilitySuite,
+  validateConsumerCompatibilitySuite
+} from './dataspec-consumer-compat-check.mjs'
 
 const DEFAULT_SERVER = 'http://localhost:8090'
 const SERVER_NAME = 'dataspec-mcp'
 const MCP_VERSION = '0.1.0'
 const EVIDENCE_SOURCE_TYPES = ['AI_JOB', 'SQL_CHECK', 'COVERAGE_REPORT', 'AI_BATCH_RUN', 'AI_TASK_RUN']
 const AI_OUTPUT_POST_CHECK_CONTENT_TYPES = ['SQL', 'DDL', 'MARKDOWN', 'JSON', 'TEXT']
+const TEST_DATA_MAX_FIELDS = 100
+const TEST_DATA_MAX_CASES_PER_FIELD = 3
+const TEST_DATA_MAX_SEED_ROWS = 50
 
 const READ_ONLY_TOOL_SAFETY = {
   readOnly: true,
@@ -81,6 +88,22 @@ const TOOL_SAFETY = {
   get_table_standards: {
     ...READ_ONLY_TOOL_SAFETY,
     nextActions: ['先读取 table standards，再决定是否调用 generate_table_ddl；缺失或不安全结构标准时停止并让用户确认。']
+  },
+  generate_test_data_package: {
+    ...READ_ONLY_TOOL_SAFETY,
+    writesBusinessRepo: false,
+    containsRealBusinessRows: false,
+    externalNetworkUsed: false,
+    externalLlmUsed: false,
+    sensitiveInputs: ['fieldNames', 'objectScenario'],
+    nextActions: ['仅把结果作为测试、mock 或 seed 草稿；复制到业务仓库前必须人工复核 safety、coverageReport 和 seedProfiles。']
+  },
+  check_consumer_compatibility: {
+    ...READ_ONLY_TOOL_SAFETY,
+    requiresServer: false,
+    externalNetworkUsed: false,
+    externalLlmUsed: false,
+    nextActions: ['若 status=BREAKING，先按 diagnostics[].path 修复 fixture、descriptor、schema 或迁移说明。']
   },
   generate_table_ddl: {
     readOnly: false,
@@ -174,6 +197,7 @@ const RESOURCE_TEMPLATE_KEYS = [
   'table-standards',
   'workflow-recipes',
   'ai-task-profiles',
+  'consumer-compatibility-suite',
   'agent-guidance-pack'
 ]
 
@@ -303,6 +327,15 @@ const RESOURCE_DEFS = {
     path: '/api/ai-profiles',
     mimeType: 'application/json',
     profileResource: true
+  },
+  'consumer-compatibility-suite': {
+    name: 'DataSpec Consumer Compatibility Suite',
+    description: '本地只读消费端兼容套件 fixture，覆盖 DataSpec 自有 API、CLI、MCP、AI Context 和 Schema Registry 契约。',
+    mimeType: 'application/json',
+    async localContent() {
+      return sanitizeSecretValue(await loadConsumerCompatibilitySuite())
+    },
+    safety: TOOL_SAFETY.check_consumer_compatibility
   },
   'schema-registry': {
     name: 'DataSpec Schema Registry',
@@ -1467,6 +1500,60 @@ function listTools() {
         }
       },
       {
+        name: 'generate_test_data_package',
+        description: '生成标准驱动测试数据包；只读调用 DataSpec 后端 API，不写项目标准、业务仓库或源数据库，不调用外部 LLM。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectId: {
+              type: 'integer',
+              description: '可选项目 ID，未提供时使用 MCP Server 启动项目。'
+            },
+            fieldNames: {
+              type: 'array',
+              description: '可选字段名筛选；为空时服务端按项目标准和 maxFields 选择。不得包含 token/password/JDBC URL/Authorization 明文。',
+              items: {
+                type: 'string',
+                description: '标准字段名。'
+              }
+            },
+            objectScenario: {
+              type: 'string',
+              description: '可选轻量对象场景，如 order、user、audit；仅影响 fallback 命名和 seed 草稿表名。'
+            },
+            maxFields: {
+              type: 'integer',
+              description: `最大字段数，MCP 本地安全上限为 ${TEST_DATA_MAX_FIELDS}。`
+            },
+            casesPerField: {
+              type: 'integer',
+              description: `每字段最多用例数，MCP 本地安全上限为 ${TEST_DATA_MAX_CASES_PER_FIELD}。`
+            },
+            seedRowCount: {
+              type: 'integer',
+              description: `mock/CSV/SQL seed 草稿行数，MCP 本地安全上限为 ${TEST_DATA_MAX_SEED_ROWS}。`
+            },
+            dialect: {
+              type: 'string',
+              description: 'SQL seed 草稿方言提示；仅作为说明，不代表可直接执行。'
+            }
+          }
+        }
+      },
+      {
+        name: 'check_consumer_compatibility',
+        description: '本地只读运行 DataSpec consumer compatibility suite；不要求 DataSpec server，不调用外部网络或 LLM。',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            fixturePath: {
+              type: 'string',
+              description: '可选本地 compatibility suite fixture 路径；默认使用 tools/fixtures/consumer-compatibility-suite.json。'
+            }
+          }
+        }
+      },
+      {
         name: 'generate_table_ddl',
         description: '根据 DataSpec 表模板生成 PostgreSQL DDL，并返回 lint 自检结果。',
         inputSchema: {
@@ -1615,6 +1702,12 @@ async function callTool(params, context) {
   }
   if (name === 'get_table_standards') {
     return await callGetTableStandards(args, context)
+  }
+  if (name === 'generate_test_data_package') {
+    return await callGenerateTestDataPackage(args, context)
+  }
+  if (name === 'check_consumer_compatibility') {
+    return await callCheckConsumerCompatibility(args)
   }
   if (name === 'generate_table_ddl') {
     return await callGenerateTableDdl(args, context)
@@ -1890,6 +1983,34 @@ async function callGetTableStandards(args, context) {
   }
   const result = await fetchTableStandardsResource(context, { projectId, templateId, businessObject })
   return toolJsonResult(result)
+}
+
+async function callGenerateTestDataPackage(args, context) {
+  const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
+  const req = removeUndefinedValues({
+    projectId,
+    fieldNames: optionalStringArray(args.fieldNames, 'fieldNames', TEST_DATA_MAX_FIELDS),
+    objectScenario: normalizeOptionalText(args.objectScenario),
+    maxFields: optionalBoundedPositiveInteger(args.maxFields, 'maxFields', TEST_DATA_MAX_FIELDS),
+    casesPerField: optionalBoundedPositiveInteger(args.casesPerField, 'casesPerField', TEST_DATA_MAX_CASES_PER_FIELD),
+    seedRowCount: optionalBoundedPositiveInteger(args.seedRowCount, 'seedRowCount', TEST_DATA_MAX_SEED_ROWS),
+    dialect: normalizeOptionalText(args.dialect)
+  })
+  const response = await context.fetchFn(`${context.server}/api/test-data/package/generate`, {
+    method: 'POST',
+    headers: dataSpecHeaders(context.apiToken, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify(req)
+  })
+  const result = await readDataSpecJson(response)
+  return toolJsonResult(sanitizeSecretValue(result))
+}
+
+async function callCheckConsumerCompatibility(args) {
+  const fixturePath = normalizeOptionalText(args.fixturePath)
+  const result = await validateConsumerCompatibilitySuite(
+    fixturePath === undefined ? {} : { fixturePath }
+  )
+  return toolJsonResult(sanitizeSecretValue(result))
 }
 
 async function callGenerateTableDdl(args, context) {
@@ -2542,6 +2663,35 @@ function optionalPositiveInteger(value, label) {
     return undefined
   }
   return parsePositiveInteger(value, label)
+}
+
+function optionalBoundedPositiveInteger(value, label, max) {
+  const parsed = optionalPositiveInteger(value, label)
+  if (parsed === undefined) {
+    return undefined
+  }
+  if (parsed > max) {
+    throw new JsonRpcError(-32602, `${label} 超过安全上限 ${max}: ${value}`)
+  }
+  return parsed
+}
+
+function optionalStringArray(value, label, maxItems) {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  if (!Array.isArray(value)) {
+    throw new JsonRpcError(-32602, `${label} 必须是字符串数组`)
+  }
+  if (value.length > maxItems) {
+    throw new JsonRpcError(-32602, `${label} 超过安全上限 ${maxItems}`)
+  }
+  const result = value.map((item) => String(item).trim()).filter(Boolean)
+  return result.length > 0 ? result : undefined
+}
+
+function removeUndefinedValues(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined))
 }
 
 function stringArg(value, message) {

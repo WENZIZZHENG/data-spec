@@ -1556,6 +1556,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/test-data/package/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["generatePackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/starter-kits": {
         parameters: {
             query?: never;
@@ -7362,6 +7378,119 @@ export interface components {
             data?: components["schemas"]["SyntheticStandardExamplePackage"];
             error?: components["schemas"]["ErrorDetail"];
         };
+        RStandardTestDataPackage: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardTestDataPackage"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 字段级测试数据用例，覆盖 valid、invalid 和 boundary 三类。 */
+        TestDataCase: {
+            caseId?: string;
+            fieldName?: string;
+            caseType?: string;
+            value?: string;
+            expectedValidity?: boolean;
+            reason?: string;
+            sourceRefs?: string[];
+            requiresBusinessReview?: boolean;
+        };
+        /** @description 测试数据包覆盖报告，说明字段、case 和缺口。 */
+        TestDataCoverageReport: {
+            /** Format: int32 */
+            selectedFieldCount?: number;
+            /** Format: int32 */
+            coveredFieldCount?: number;
+            /** Format: int32 */
+            caseCount?: number;
+            coverageLevel?: string;
+            missingConstraints?: string[];
+            unsupportedFields?: string[];
+        };
+        /** @description 测试数据包生成诊断；用于说明 fallback、脱敏、缺口或边界。 */
+        TestDataDiagnostic: {
+            code?: string;
+            severity?: string;
+            message?: string;
+        };
+        /** @description 结构化 mock payload，字段值均来自安全合成 valid case。 */
+        TestDataMockPayload: {
+            payloadId?: string;
+            objectScenario?: string;
+            payload?: {
+                [key: string]: Record<string, never>;
+            };
+            sourceCaseIds?: string[];
+            requiresBusinessReview?: boolean;
+        };
+        /** @description 测试数据包安全边界声明。 */
+        TestDataSafety: {
+            readOnly?: boolean;
+            writesProject?: boolean;
+            writesBusinessRepo?: boolean;
+            containsRealBusinessRows?: boolean;
+            externalNetworkUsed?: boolean;
+            externalLlmUsed?: boolean;
+            sensitiveInputCategories?: string[];
+        };
+        /** @description seed 或 mock 草稿片段；默认只作可审查样例，不自动写入数据库。 */
+        TestDataSeedProfile: {
+            profileId?: string;
+            format?: string;
+            dialect?: string;
+            content?: string;
+            fieldNames?: string[];
+            sourceCaseIds?: string[];
+            executable?: boolean;
+            requiresReview?: boolean;
+        };
+        /** @description 测试数据包来源标准摘要，说明所用字段、枚举和 fallback。 */
+        TestDataSourceSummary: {
+            /** Format: int32 */
+            standardFieldCount?: number;
+            /** Format: int32 */
+            selectedFieldCount?: number;
+            /** Format: int32 */
+            enumValueCount?: number;
+            fallbackUsed?: boolean;
+            selectedFields?: string[];
+            sourceKinds?: string[];
+        };
+        /** @description 标准驱动测试数据包；用于 AI、测试、mock、seed 草稿和边界用例复用。 */
+        StandardTestDataPackage: {
+            kind?: string;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: int64 */
+            projectId?: number;
+            specHash?: string;
+            generationParams?: {
+                [key: string]: Record<string, never>;
+            };
+            sourceSummary?: components["schemas"]["TestDataSourceSummary"];
+            testDataCases?: components["schemas"]["TestDataCase"][];
+            seedProfiles?: components["schemas"]["TestDataSeedProfile"][];
+            mockPayloads?: components["schemas"]["TestDataMockPayload"][];
+            coverageReport?: components["schemas"]["TestDataCoverageReport"];
+            diagnostics?: components["schemas"]["TestDataDiagnostic"][];
+            safety?: components["schemas"]["TestDataSafety"];
+            nextActions?: string[];
+        };
+        /** @description 标准测试数据包生成请求；只读取项目标准元数据，不采集真实业务数据行。 */
+        StandardTestDataPackageReq: {
+            /** Format: int64 */
+            projectId?: number;
+            fieldNames?: string[];
+            objectScenario?: string;
+            /** Format: int32 */
+            maxFields?: number;
+            /** Format: int32 */
+            casesPerField?: number;
+            /** Format: int32 */
+            seedRowCount?: number;
+            dialect?: string;
+        };
         SyntheticDdlPreviewInput: {
             id?: string;
             tableName?: string;
@@ -12718,6 +12847,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RSyntheticStandardExamplePackage"];
+                };
+            };
+        };
+    };
+    generatePackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardTestDataPackageReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardTestDataPackage"];
                 };
             };
         };

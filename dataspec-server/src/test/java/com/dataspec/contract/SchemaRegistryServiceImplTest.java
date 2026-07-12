@@ -56,7 +56,11 @@ class SchemaRegistryServiceImplTest {
                 "table-index-standard",
                 "table-foreign-key-standard",
                 "table-policy-standard",
-                "ai-context-table-standards"
+                "ai-context-table-standards",
+                "standard-test-data-package",
+                "consumer-compatibility-suite",
+                "consumer-compatibility-adapter-result",
+                "consumer-compatibility-breaking-rule"
         )));
         assertTrue(catalog.getContracts().stream().allMatch(item -> item.getJsonSchemaRef().startsWith("dataspec://contracts/")));
         assertTrue(catalog.getContracts().stream().allMatch(item -> item.getStableFields() != null && !item.getStableFields().isEmpty()));
@@ -237,6 +241,69 @@ class SchemaRegistryServiceImplTest {
         assertTrue(foreignKeySchema.contains("advisoryOnly"));
         assertFalse(foreignKeySchema.contains("NO_ACTION"));
         assertFalse(foreignKeySchema.contains("SET_NULL"));
+    }
+
+    @Test
+    void detailDescribesTestDataAndConsumerCompatibilityContracts() {
+        SchemaContract testData = service.getContract("standard-test-data-package");
+        assertTrue(testData.getStableFields().contains("testDataCases[]"));
+        assertTrue(testData.getStableFields().contains("testDataCases[].value"));
+        assertTrue(testData.getStableFields().contains("testDataCases[].reason"));
+        assertTrue(testData.getStableFields().contains("testDataCases[].sourceRefs[]"));
+        assertTrue(testData.getStableFields().contains("testDataCases[].requiresBusinessReview"));
+        assertTrue(testData.getStableFields().contains("seedProfiles[]"));
+        assertTrue(testData.getStableFields().contains("coverageReport"));
+        assertTrue(testData.getStableFields().contains("safety.readOnly"));
+        assertTrue(testData.getStableFields().contains("safety.writesProject"));
+        assertTrue(testData.getStableFields().contains("safety.writesBusinessRepo"));
+        assertTrue(testData.getStableFields().contains("safety.containsRealBusinessRows"));
+        assertTrue(testData.getStableFields().contains("safety.externalNetworkUsed"));
+        assertTrue(testData.getStableFields().contains("safety.externalLlmUsed"));
+        String testDataSchema = testData.getJsonSchema().get("properties").toString();
+        assertTrue(testDataSchema.contains("安全元数据"));
+        assertTrue(testDataSchema.contains("不包含真实业务数据行"));
+        assertTrue(testDataSchema.contains("SQL seed 草稿"));
+        assertTrue(testDataSchema.contains("nextActions"));
+        assertTrue(testDataSchema.contains("standardFieldCount"));
+        assertTrue(testDataSchema.contains("selectedFieldCount"));
+        assertTrue(testDataSchema.contains("enumValueCount"));
+        assertTrue(testDataSchema.contains("payloadId"));
+        assertTrue(testDataSchema.contains("objectScenario"));
+        assertTrue(testDataSchema.contains("coverageLevel"));
+        assertTrue(testDataSchema.contains("sensitiveInputCategories"));
+        assertFalse(testDataSchema.contains("样例来源；第一版只能来自标准元数据或内置 fallback"));
+        assertFalse(testDataSchema.contains("fieldCount"));
+        assertFalse(testDataSchema.contains("dialectNote"));
+        assertFalse(testDataSchema.contains("contentType"));
+        assertFalse(testDataSchema.contains("supportedCaseCount"));
+        assertFalse(testData.getExamples().toString().contains("Authorization: Bearer raw-secret"));
+        assertFalse(testData.getExamples().toString().contains("jdbc:postgresql://user:pass@"));
+
+        SchemaContract suite = service.getContract("consumer-compatibility-suite");
+        assertTrue(suite.getStableFields().contains("adapterResults[]"));
+        assertTrue(suite.getStableFields().contains("breakingRules[]"));
+        assertTrue(suite.getStableFields().contains("diagnostics[]"));
+        String suiteSchema = suite.getJsonSchema().get("properties").toString();
+        assertTrue(suiteSchema.contains("本地只读"));
+        assertTrue(suiteSchema.contains("adapterResults"));
+        assertTrue(suiteSchema.contains("contractRefs"));
+        assertTrue(suiteSchema.contains("stableFields"));
+        assertTrue(suiteSchema.contains("nextActions"));
+
+        SchemaContract adapterResult = service.getContract("consumer-compatibility-adapter-result");
+        assertTrue(adapterResult.getStableFields().contains("adapterId"));
+        assertTrue(adapterResult.getStableFields().contains("required"));
+        assertTrue(adapterResult.getStableFields().contains("contractRefs[]"));
+        assertTrue(adapterResult.getStableFields().contains("stableFields[]"));
+        assertTrue(adapterResult.getStableFields().contains("checkedStableFields[]"));
+        assertTrue(adapterResult.getStableFields().contains("additiveFields[]"));
+        assertTrue(adapterResult.getJsonSchema().get("properties").toString().contains("COMPATIBLE"));
+        assertTrue(adapterResult.getJsonSchema().get("properties").toString().contains("BREAKING"));
+
+        SchemaContract breakingRule = service.getContract("consumer-compatibility-breaking-rule");
+        assertTrue(breakingRule.getStableFields().contains("ruleId"));
+        assertTrue(breakingRule.getStableFields().contains("migrationHint"));
+        assertTrue(breakingRule.getJsonSchema().get("properties").toString().contains("migration hint"));
     }
 
     @Test

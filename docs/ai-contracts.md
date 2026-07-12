@@ -1,6 +1,6 @@
 # AI 输出契约
 
-本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、MCP agent guidance pack、CLI/MCP contract fixtures、AI Context、AI capability catalog、版本兼容握手、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、字段语义知识卡、业务对象与表结构标准、标准字段合并和 DDL 预览的自动化使用场景。
+本文件记录 DataSpec 第一版 AI 可消费稳定字段。它服务于 CLI、MCP、MCP agent guidance pack、CLI/MCP contract fixtures、AI Context、AI capability catalog、版本兼容握手、AI task profiles、SQL lint、AI evidence package、字段推荐、字段检索、字段语义知识卡、业务对象与表结构标准、标准测试数据包、消费端兼容套件、标准字段合并和 DDL 预览的自动化使用场景。
 
 ## 兼容策略
 
@@ -42,7 +42,7 @@ Contract summary 稳定字段：
 - `compatibility`
 - `docsRef`
 
-Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`standard-field-merge`、`enum-dict`、`enum-value-lifecycle`、`field-semantic-rule`、`field-knowledge-card`、`metric-definition-mapping`、`rule-config`、`template`、`business-object-standard`、`table-structure-standard`、`table-relation-hint`、`table-index-standard`、`table-foreign-key-standard`、`table-policy-standard`、`standard-snapshot`、`lint-result`、`ai-evidence-package`、`ai-context-manifest`、`ai-context-field-catalog`、`ai-context-field-semantics`、`ai-context-field-knowledge-cards`、`ai-context-metrics`、`ai-context-table-standards` 和 `ai-task-profile`。
+Contract detail 在 summary 基础上额外稳定提供 `jsonSchema` 和 `examples[]`。第一版核心 contract id 至少包含 `field`、`standard-field-merge`、`enum-dict`、`enum-value-lifecycle`、`field-semantic-rule`、`field-knowledge-card`、`metric-definition-mapping`、`rule-config`、`template`、`business-object-standard`、`table-structure-standard`、`table-relation-hint`、`table-index-standard`、`table-foreign-key-standard`、`table-policy-standard`、`standard-snapshot`、`standard-test-data-package`、`consumer-compatibility-suite`、`consumer-compatibility-adapter-result`、`consumer-compatibility-breaking-rule`、`lint-result`、`ai-evidence-package`、`ai-context-manifest`、`ai-context-field-catalog`、`ai-context-field-semantics`、`ai-context-field-knowledge-cards`、`ai-context-metrics`、`ai-context-table-standards` 和 `ai-task-profile`。
 
 `contract check` 的成功只说明 registry 结构对 AI 可用；它不会验证当前项目业务标准是否完整，也不会授权任何写入动作。
 
@@ -197,6 +197,24 @@ CLI `compat check` 兼容时退出码为 `0`，服务端报告 `compatibility.co
 ### standard-snapshot
 
 标准快照契约，覆盖 `specVersion`、`specHash`、来源和是否已版本化。
+
+### standard-test-data-package
+
+标准测试数据包契约，覆盖从项目字段标准、枚举、格式约束、敏感标记和轻量对象提示生成的 safe-to-share 测试样例。稳定字段包含 `kind`、`schemaVersion`、`projectId`、`specHash`、`generationParams`、`sourceSummary`、`testDataCases[]`、`seedProfiles[]`、`mockPayloads[]`、`coverageReport`、`diagnostics[]`、`safety` 和 `nextActions[]`。
+
+每个 `testDataCases[]` 至少稳定包含 `caseId`、`fieldName`、`caseType`、`value`、`expectedValidity`、`reason`、`sourceRefs[]` 和 `requiresBusinessReview`。`caseType` 表达 valid、invalid 或 boundary 用例；`seedProfiles[]` 中的 SQL/CSV 只是草稿，必须明确 executable/requiresReview 语义。该契约只读，不写 DataSpec 项目、不写业务仓库、不连接源数据库、不采样真实业务数据行、不调用外部 LLM；`safety` 稳定声明 `readOnly`、`writesProject`、`writesBusinessRepo`、`containsRealBusinessRows`、`externalNetworkUsed` 和 `externalLlmUsed`。
+
+### consumer-compatibility-suite
+
+消费端兼容套件契约，覆盖 DataSpec 自有 API、CLI、MCP、AI Context、Schema Registry 和测试数据包 golden payload 的本地兼容验收。稳定字段包含 `kind`、`schemaVersion`、`suiteVersion`、`checkedAt`、`minimumSupportedVersion`、`status`、`summary`、`goldenPayloads[]`、`breakingRules[]`、`adapterResults[]`、`diagnostics[]` 和 `nextActions[]`。`status` 稳定值至少包含 `COMPATIBLE`、`BREAKING` 和 `INVALID`。
+
+### consumer-compatibility-adapter-result
+
+兼容 adapter 结果契约，覆盖每个 DataSpec 自有消费端的检查结论。稳定字段包含 `adapterId`、`contractId`、`status`、`required`、`contractRefs[]`、`stableFields[]`、`checkedStableFields[]`、`missingStableFields[]`、`typeMismatches[]`、`additiveFields[]`、`diagnostics[]` 和 `migrationHints[]`。删除或改名 stable field、改变 output shape、移除安全 metadata 或让 fixture 示例暴露 raw secret 时，应返回 breaking/invalid 诊断。
+
+### consumer-compatibility-breaking-rule
+
+兼容 breaking rule 契约，覆盖本地 checker 使用的破坏性变更规则。稳定字段包含 `ruleId`、`adapterId`、`contractPath`、`category`、`severity`、`description` 和 `migrationHint`。该契约用于 AI 判断失败原因和迁移步骤，不是外部认证或发布审批结果。
 
 ### lint-result
 
@@ -411,6 +429,7 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - MCP `resources/templates/list` 输出 `resourceTemplates[]`，每项稳定包含 `uriTemplate`、`name`、`description` 和 `mimeType`；第一版覆盖 session bootstrap、capability catalog、schema registry、field catalog、workflow recipes、AI task profiles 和 agent guidance pack。
 - MCP first-class agent prompts 稳定包含 `create_table_with_dataspec`、`review_sql_with_dataspec`、`reverse_import_standards` 和 `answer_field_standard_question`；`prompts/list` 会在这些 prompt descriptor 上提供 `safety` 和 `dataspecGuidance`，其中 `dataspecGuidance` 包含 required inputs、safe defaults、resource sequence、tool sequence、stop conditions、evidence requirements 和 next actions；旧 prompt 名称继续兼容保留。
 - `node tools/dataspec-cli-mcp-contract-check.mjs --format json` 输出 `dataspec.cli-mcp-contract-fixtures.check`，稳定包含 `ok`、`fixtureKind`、`summary`、`diagnostics[]` 和 `nextActions[]`；该命令只读取本地 fixture 和本地 MCP descriptors，不调用后端、不连接数据库、不执行 MCP tool。
+- `node tools/dataspec-consumer-compat-check.mjs --format json` 输出 `dataspec.consumer-compatibility-suite.check`，稳定包含 suite status、summary、golden payload checks、breaking rule results、adapter results、diagnostics 和 nextActions；该命令只读取本地 fixture、descriptor 和 schema 文档，不调用后端、不连接数据库、不访问外部网络。
 - `node tools/dataspec-status-check.mjs --format json` 输出 `dataspec.status-check`，稳定包含 `status`、`summary`、`checks[]`、`issues[]` 和 `nextActions[]`；每个 check 保留 `id`、`name`、`status`、`issueCount`，并提供兼容新增的 `errorCount` / `warningCount` 方便 AI 区分 warning-only 检查；`summary.issueCodes[]` 兼容提供 `{code,count,severity}` 摘要，具体文件、行号和建议仍以 `issues[]` 为准；首条 `nextActions[]` 按当前最高 severity 给出处理建议，问题编码 next action 兼容展示 `code(count=N,severity=level)` 摘要。
 - Contract fixture 的兼容策略是 additive-friendly：新增可选 entry 字段或说明文本默认兼容；删除或重命名稳定 command/tool/resource/prompt、输入字段、输出 shape、安全 metadata、退出码或错误语义时，必须同步 fixture、OpenSpec 和测试。
 - CLI `lint`、`lint-files`、`suggest-field`、`search-fields`、`generate-ddl` 透传后端稳定字段。
@@ -423,6 +442,8 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - CLI `table-standards list/show` 输出 `.dataspec/table-standards.json` 兼容 shape 或指定业务对象/模板详情；命令只读调用后端，不写 DataSpec 标准、不连接业务库、不执行 DDL。
 - CLI `field-knowledge list/show`、`field-semantics list/show` 和 `metric-definitions list/show` 只读调用后端字段语义知识接口，输出知识卡、语义规则和指标口径 metadata guidance；这些命令不写 DataSpec 标准、不连接业务库、不执行 SQL 或真实计算。
 - CLI `generate-ddl --format json` 保留后端 `structureSummary`，不得把表级策略说明降级成不可解析文本。
+- CLI `test-data generate` 输出 `standard-test-data-package` 稳定字段；JSON 输出保留后端完整机器契约，text 输出只作为人读摘要。命令失败时退出码为 `2`，stdout/stderr 不得暴露 token、password、Authorization、完整 JDBC URL、DSN、连接串、private key 或源库业务行值。
+- CLI `consumer-compat check` 输出 `consumer-compatibility-suite` 稳定字段；兼容时退出码为 `0`，检测到 breaking/invalid fixture 时退出码为 `1`，参数错误或 suite 无法加载时退出码为 `2`。
 - CLI `evidence export` 输出 `AiEvidencePackage` JSON 或 zip；失败时返回参数错误退出码并输出脱敏错误。
 - MCP resources/tools 返回 `structuredContent` 和 `content[].text`；`content[].text` 应保持可解析 JSON 或明确文本 fallback。
 - MCP `ai-task-profiles` resource 输出 `AiTaskProfileCatalog` 兼容结构。
@@ -435,6 +456,8 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 - MCP `get_table_standards` tool 输出表结构标准兼容 shape，可按项目、业务对象或模板过滤；该工具只读，不执行数据库迁移或写入业务仓库。
 - MCP `get_field_knowledge_cards`、`get_field_semantics` 和 `get_metric_definitions` tools 只读返回字段知识卡、语义规则和指标口径，支持项目、fieldId、query/status/ruleType 等安全过滤；详情读取和列表过滤冲突时应在本地拒绝，避免 AI 误以为 detail 已按 query 裁剪。
 - MCP `generate_table_ddl` tool 返回后端 DDL preview 结构，并保留 `structureSummary`。
+- MCP `generate_test_data_package` tool 返回 `standard-test-data-package` JSON text 和 `structuredContent`，descriptor 必须包含 input schema description 和只读安全 metadata。
+- MCP `consumer-compatibility-suite` resource 和 `check_consumer_compatibility` tool 返回 `consumer-compatibility-suite` JSON text 和 `structuredContent`，descriptor 必须说明本地只读、不要求服务启动、不访问外部网络、不调用外部 LLM。
 - MCP `search_fields` tool 返回字段检索稳定字段，`content[].text` 保持可解析 JSON。
 - MCP `export_evidence_package` tool 返回 `AiEvidencePackage`，并保持后端脱敏结果。
 - 安全诊断在 API `error`、CLI `DataSpecError` 和 MCP `error.data.dataspecError` 中保留 `code`、`category`、`missing`、`operation`、`safety` 和 `nextActions`；`IDEMPOTENCY_KEY_REQUIRED` 表示高风险写入缺少必需的 `Idempotency-Key`，`DRY_RUN_REQUIRED` 表示确认写入缺少预览返回的 `dryRunToken`。CLI/MCP 透传这些诊断时会递归脱敏 token、password、Authorization、JDBC URL、DSN 和 connection string。

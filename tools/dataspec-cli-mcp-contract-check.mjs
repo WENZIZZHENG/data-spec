@@ -41,6 +41,8 @@ const REQUIRED_CLI_COMMANDS = [
   'metric-definitions-list',
   'metric-definitions-show',
   'synthetic-examples-generate',
+  'test-data-generate',
+  'consumer-compat-check',
   'contract-import-preview',
   'schema-plan',
   'comment-plan-preview'
@@ -61,6 +63,8 @@ const REQUIRED_MCP_TOOLS = [
   'check_ai_output',
   'suggest_fields',
   'generate_table_ddl',
+  'generate_test_data_package',
+  'check_consumer_compatibility',
   'get_ai_task_run',
   'export_evidence_package'
 ]
@@ -77,6 +81,7 @@ const REQUIRED_MCP_RESOURCES = [
   'workflow-recipes',
   'agent-guidance-pack',
   'ai-task-profiles',
+  'consumer-compatibility-suite',
   'schema-registry'
 ]
 
@@ -91,6 +96,7 @@ const REQUIRED_MCP_RESOURCE_TEMPLATES = [
   'dataspec://project/{projectId}/metric-definitions',
   'dataspec://project/{projectId}/workflow-recipes',
   'dataspec://project/{projectId}/ai-task-profiles',
+  'dataspec://project/{projectId}/consumer-compatibility-suite',
   'dataspec://project/{projectId}/agent-guidance-pack'
 ]
 
@@ -116,6 +122,23 @@ const REQUIRED_SAFETY_FIELDS = [
   'sensitiveInputs',
   'nextActions'
 ]
+
+const TEST_DATA_PACKAGE_SAFETY_REQUIREMENTS = {
+  readOnly: true,
+  writesProject: false,
+  writesBusinessRepo: false,
+  containsRealBusinessRows: false,
+  externalNetworkUsed: false,
+  externalLlmUsed: false
+}
+
+const CONSUMER_COMPAT_SAFETY_REQUIREMENTS = {
+  readOnly: true,
+  writesProject: false,
+  requiresServer: false,
+  externalNetworkUsed: false,
+  externalLlmUsed: false
+}
 
 const STANDARD_QUERY_DSL_FILTERS = [
   'category',
@@ -253,6 +276,7 @@ function validateCliCommands(commands, diagnostics) {
       diagnostics.push(diagnosticOf('INVALID_EXIT_CODES', `${basePath}.exitCodes`, 'exitCodes 必须是 object。'))
     }
     validateSafety(command.safety, `${basePath}.safety`, diagnostics)
+    validateSpecialSafetyContract(command.id, command.safety, `${basePath}.safety`, diagnostics)
     requireObject(command.successExample, `${basePath}.successExample`, diagnostics)
     requireObject(command.failureExample, `${basePath}.failureExample`, diagnostics)
     if (command.id === 'search-fields') {
@@ -312,6 +336,7 @@ function validateMcpTools(fixtures, liveTools, diagnostics) {
     requireObject(tool.successExample, `${basePath}.successExample`, diagnostics)
     requireObject(tool.failureExample, `${basePath}.failureExample`, diagnostics)
     validateSafety(tool.safety, `${basePath}.safety`, diagnostics)
+    validateSpecialSafetyContract(tool.name, tool.safety, `${basePath}.safety`, diagnostics)
     requireNonEmptyArray(tool.recommendedNextActions, `${basePath}.recommendedNextActions`, diagnostics)
     if (tool.name === 'search_fields') {
       validateStandardQueryDslFixture(tool, basePath, diagnostics, {
@@ -362,6 +387,7 @@ function validateMcpResources(fixtures, liveResources, diagnostics) {
     requireNonEmptyArray(resource.outputShape, `${basePath}.outputShape`, diagnostics)
     requireObject(resource.successExample, `${basePath}.successExample`, diagnostics)
     validateSafety(resource.safety, `${basePath}.safety`, diagnostics)
+    validateSpecialSafetyContract(resource.uri, resource.safety, `${basePath}.safety`, diagnostics)
     requireNonEmptyArray(resource.recommendedNextActions, `${basePath}.recommendedNextActions`, diagnostics)
     const liveResource = liveByUri.get(normalizeFixtureResourceUri(resource.uri))
     if (!liveResource) {
@@ -397,6 +423,7 @@ function validateMcpResourceTemplates(fixtures, liveResourceTemplates, diagnosti
     requireNonEmptyArray(template.outputShape, `${basePath}.outputShape`, diagnostics)
     requireObject(template.successExample, `${basePath}.successExample`, diagnostics)
     validateSafety(template.safety, `${basePath}.safety`, diagnostics)
+    validateSpecialSafetyContract(template.uriTemplate, template.safety, `${basePath}.safety`, diagnostics)
     requireNonEmptyArray(template.recommendedNextActions, `${basePath}.recommendedNextActions`, diagnostics)
     const liveTemplate = liveByUriTemplate.get(template.uriTemplate)
     if (!liveTemplate) {
@@ -540,6 +567,43 @@ function validateSafety(safety, pathName, diagnostics) {
   }
   if ('nextActions' in safety) {
     requireArray(safety.nextActions, `${pathName}.nextActions`, diagnostics)
+  }
+}
+
+function validateSpecialSafetyContract(contractId, safety, pathName, diagnostics) {
+  if (!safety || typeof safety !== 'object' || Array.isArray(safety)) {
+    return
+  }
+  if (contractId === 'test-data-generate' || contractId === 'generate_test_data_package') {
+    validateSafetyRequirements(
+      TEST_DATA_PACKAGE_SAFETY_REQUIREMENTS,
+      safety,
+      pathName,
+      'TEST_DATA_FIXTURE_SAFETY_MISMATCH',
+      diagnostics
+    )
+  }
+  if (
+    contractId === 'consumer-compat-check' ||
+    contractId === 'check_consumer_compatibility' ||
+    contractId === 'dataspec://project/<projectId>/consumer-compatibility-suite' ||
+    contractId === 'dataspec://project/{projectId}/consumer-compatibility-suite'
+  ) {
+    validateSafetyRequirements(
+      CONSUMER_COMPAT_SAFETY_REQUIREMENTS,
+      safety,
+      pathName,
+      'CONSUMER_COMPAT_FIXTURE_SAFETY_MISMATCH',
+      diagnostics
+    )
+  }
+}
+
+function validateSafetyRequirements(requirements, safety, pathName, code, diagnostics) {
+  for (const [field, expected] of Object.entries(requirements)) {
+    if (safety[field] !== expected) {
+      diagnostics.push(diagnosticOf(code, `${pathName}.${field}`, `safety.${field} 必须是 ${expected}。`))
+    }
   }
 }
 

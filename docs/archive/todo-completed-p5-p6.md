@@ -4,8 +4,8 @@
 
 本文件从根 TODO.md 机械迁移已完成的 P5/P6 待办详情，根待办只保留入口和当前候选池。每个条目保留原始状态、已完成能力、验证证据、产物、后续增强和边界；原条目未记录 commit 的地方不补猜。
 
-- 完成项数量：125
-- 当前未完成候选：63，详见 [P6 候选池](../todo-p6-candidates.md)
+- 完成项数量：127
+- 当前未完成候选：61，详见 [P6 候选池](../todo-p6-candidates.md)
 - P0-P4 已完成归档：[todo-completed-p0-p4.md](todo-completed-p0-p4.md)
 
 ## 历史追加记录（已降级为背景）
@@ -1037,6 +1037,13 @@
 - 已完成能力：新增字段语义规则、枚举值 lifecycle、字段知识卡、指标口径映射和字段命名翻译辅助；后端提供维护/只读 API，前端字段库、枚举字典、DDL/指标维护和 AI Context 页面可维护或查看语义证据；AI Context 导出 `.dataspec/field-knowledge-cards.json`、`.dataspec/field-semantics.json` 和 `.dataspec/metrics.json`；Schema Registry、数据字典、字段搜索/推荐、CLI、MCP 和 contract fixture 已接入新增只读契约。
 - 验证证据：见 `openspec/changes/add-field-semantics-knowledge-cards/tasks.md` 的 `Verification Evidence`；最终以本轮 OpenSpec strict、后端目标测试、tools 测试、前端测试/build、OpenAPI drift、secrets scan、独立评审和本地 commit 记录为准。
 - 后续增强：第一版只沉淀 metadata guidance，不执行真实单位换算或指标计算，不连接业务库统计枚举分布，不自动改生产 SQL，不接入外部翻译、BI 或血缘平台；后续若需要更强枚举 literal lint、指标计算校验或语义检索，可按独立主题继续推进。
+
+### P6-185 / P6-176：标准测试数据包与消费端兼容验收套件
+- 状态：第一版已完成实现、验证、独立评审和本地 commit 收口；OpenSpec change `add-standard-test-data-compat-suite` 按项目约定暂保留 active，不自动 archive。
+- 已完成能力：新增只读标准测试数据包 API `POST /api/test-data/package/generate`，按字段标准、枚举、格式约束、敏感标记和轻量对象提示生成 deterministic valid/invalid/boundary cases、mock payload、CSV 行和 SQL seed 草稿；新增 CLI `test-data generate`、MCP `generate_test_data_package`、Schema Registry `standard-test-data-package` 契约和前端 API type wiring。
+- 已完成能力：新增本地消费端兼容套件 `tools/fixtures/consumer-compatibility-suite.json` 与 `consumer-compat check`，覆盖 Schema Registry、AI Context、CLI JSON、MCP descriptor/resource/tool、CLI/MCP fixture 和测试数据包 golden payload；新增 `consumer-compatibility-suite`、`consumer-compatibility-adapter-result` 和 `consumer-compatibility-breaking-rule` 契约。
+- 验证证据：见 `openspec/changes/add-standard-test-data-compat-suite/tasks.md` 的 `Verification Evidence`；已完成后端目标/全量测试、tools 目标/全量测试、前端测试/build、OpenSpec strict/all、OpenAPI drift 环境风险记录、secrets scan、独立评审和本地 commit 记录。
+- 后续增强：第一版不采样真实业务数据、不写业务数据库或业务仓库、不调用外部 LLM，不做第三方认证体系；SQL seed 仅为草稿，必须保留 `executable=false` 或 `requiresReview=true` 语义。更完整的第三方 adapter、协议导出和业务规则级测试数据可由后续契约消费主题承接。
 
 ## 本轮候选覆盖归档（2026-07-09）
 

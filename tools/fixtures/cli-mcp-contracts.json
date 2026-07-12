@@ -389,6 +389,32 @@
       "recommendedNextActions": ["Use generated packages as backend fixtures or Prompt evaluation inputs.", "Convert useful cases into usage example drafts only after human review.", "Do not execute synthetic SQL directly against production databases."]
     },
     {
+      "id": "test-data-generate",
+      "command": "test-data generate --project <id> --format json",
+      "description": "Generate a read-only standard-driven test data package with valid, invalid, boundary, mock, CSV, and SQL seed draft examples.",
+      "requiredOptions": ["project"],
+      "optionalOptions": ["field", "object-scenario", "max-fields", "cases-per-field", "seed-row-count", "dialect", "format", "server", "dataspec-token"],
+      "outputShape": ["kind", "schemaVersion", "projectId", "specHash", "generationParams", "sourceSummary", "testDataCases[]", "testDataCases[].caseId", "testDataCases[].fieldName", "testDataCases[].caseType", "testDataCases[].expectedValidity", "seedProfiles[]", "seedProfiles[].executable", "seedProfiles[].requiresReview", "mockPayloads[]", "coverageReport", "diagnostics[]", "safety", "safety.readOnly", "safety.writesProject", "safety.writesBusinessRepo", "safety.containsRealBusinessRows", "safety.externalNetworkUsed", "safety.externalLlmUsed", "nextActions[]"],
+      "exitCodes": { "0": "test data package printed", "2": "argument, bounds, server, or request error" },
+      "safety": { "readOnly": true, "writesProject": false, "writesBusinessRepo": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "containsRealBusinessRows": false, "externalNetworkUsed": false, "externalLlmUsed": false, "sensitiveInputs": ["field", "object-scenario", "dataspec-token"], "nextActions": ["Review coverageReport, diagnostics, and seedProfiles before copying mock or seed drafts into business repositories."] },
+      "successExample": { "command": "node tools/dataspec-cli.mjs test-data generate --project 1 --field order_id --format json", "output": { "kind": "dataspec.standard-test-data-package", "specHash": "test-data-hash-order", "testDataCases": [{ "caseId": "order_id-valid-1", "fieldName": "order_id", "caseType": "VALID", "expectedValidity": true }], "seedProfiles": [{ "format": "SQL", "executable": false, "requiresReview": true }], "coverageReport": { "supportedCaseCount": 1 }, "safety": { "readOnly": true, "writesProject": false, "writesBusinessRepo": false, "containsRealBusinessRows": false, "externalNetworkUsed": false, "externalLlmUsed": false } } },
+      "failureExample": { "exitCode": 2, "diagnostic": { "code": "TEST_DATA_GENERATION_FAILED", "category": "VALIDATION" } },
+      "recommendedNextActions": ["Use JSON output for AI tests or mock fixtures.", "Review seedProfiles before any manual seed work.", "Treat coverageReport.missingConstraints as business review input."]
+    },
+    {
+      "id": "consumer-compat-check",
+      "command": "consumer-compat check --format json",
+      "description": "Run the local read-only consumer compatibility suite for DataSpec-owned API, CLI, MCP, AI Context, schema registry, and fixture contracts.",
+      "requiredOptions": [],
+      "optionalOptions": ["fixture", "format"],
+      "outputShape": ["kind", "schemaVersion", "suiteVersion", "checkedAt", "minimumSupportedVersion", "status", "summary", "goldenPayloads[]", "breakingRules[]", "adapterResults[]", "adapterResults[].adapterId", "adapterResults[].status", "diagnostics[]", "nextActions[]"],
+      "exitCodes": { "0": "all required consumer adapters are compatible", "1": "consumer compatibility status BREAKING or invalid fixtures", "2": "argument error or suite load failure" },
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "requiresServer": false, "externalNetworkUsed": false, "externalLlmUsed": false, "sensitiveInputs": ["fixture"], "nextActions": ["Fix diagnostics before publishing CLI, MCP, schema registry, or AI-facing contract changes."] },
+      "successExample": { "command": "node tools/dataspec-cli.mjs consumer-compat check --format json", "output": { "kind": "dataspec.consumer-compatibility-suite.check", "status": "COMPATIBLE", "adapterResults": [{ "adapterId": "standard-test-data-package", "status": "COMPATIBLE" }], "nextActions": ["Consumer compatibility suite 可作为本地门禁。"] } },
+      "failureExample": { "exitCode": 1, "diagnostic": { "code": "CONSUMER_COMPAT_BREAKING", "category": "CONTRACT" } },
+      "recommendedNextActions": ["Run after changing stable output fields, descriptors, schema registry entries, or fixture examples.", "When status is BREAKING, inspect diagnostics[].path and migration hints first."]
+    },
+    {
       "id": "contract-import-preview",
       "command": "contract-import preview --project <id> --source-kind <sourceKind> --input <path> --format json",
       "description": "Preview standard candidate fields from OpenAPI, JSON Schema, or Protobuf contracts without persisting candidates.",
@@ -598,6 +624,28 @@
       "recommendedNextActions": ["Read before generate_table_ddl.", "Stop when table standards are missing or unsafe for high-risk DDL work."]
     },
     {
+      "name": "generate_test_data_package",
+      "description": "生成标准驱动测试数据包；只读调用 DataSpec 后端 API，不写项目标准、业务仓库或源数据库，不调用外部 LLM。",
+      "inputProperties": ["projectId", "fieldNames", "objectScenario", "maxFields", "casesPerField", "seedRowCount", "dialect"],
+      "requiredInputs": [],
+      "outputShape": ["structuredContent", "structuredContent.kind", "structuredContent.schemaVersion", "structuredContent.projectId", "structuredContent.specHash", "structuredContent.testDataCases[]", "structuredContent.seedProfiles[]", "structuredContent.mockPayloads[]", "structuredContent.coverageReport", "structuredContent.safety", "structuredContent.nextActions[]", "content[0].text"],
+      "safety": { "readOnly": true, "writesProject": false, "writesBusinessRepo": false, "requiresDryRun": false, "supportsUndo": false, "requiresIdempotencyKey": false, "containsRealBusinessRows": false, "externalNetworkUsed": false, "externalLlmUsed": false, "sensitiveInputs": ["fieldNames", "objectScenario"], "nextActions": ["仅把结果作为测试、mock 或 seed 草稿；复制到业务仓库前必须人工复核 safety、coverageReport 和 seedProfiles。"] },
+      "successExample": { "arguments": { "projectId": 1, "fieldNames": ["order_id"], "casesPerField": 3 }, "output": { "kind": "dataspec.standard-test-data-package", "specHash": "test-data-hash-order", "testDataCases": [], "seedProfiles": [], "safety": { "readOnly": true, "containsRealBusinessRows": false } } },
+      "failureExample": { "diagnostic": { "code": "DATASPEC_SERVER_UNAVAILABLE" } },
+      "recommendedNextActions": ["Review safety, coverageReport, diagnostics, and seedProfiles before reusing generated mocks or seed drafts."]
+    },
+    {
+      "name": "check_consumer_compatibility",
+      "description": "本地只读运行 DataSpec consumer compatibility suite；不要求 DataSpec server，不调用外部网络或 LLM。",
+      "inputProperties": ["fixturePath"],
+      "requiredInputs": [],
+      "outputShape": ["structuredContent", "structuredContent.kind", "structuredContent.status", "structuredContent.adapterResults[]", "structuredContent.diagnostics[]", "structuredContent.nextActions[]", "content[0].text"],
+      "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "supportsUndo": false, "requiresIdempotencyKey": false, "requiresServer": false, "externalNetworkUsed": false, "externalLlmUsed": false, "sensitiveInputs": [], "nextActions": ["若 status=BREAKING，先按 diagnostics[].path 修复 fixture、descriptor、schema 或迁移说明。"] },
+      "successExample": { "arguments": {}, "output": { "kind": "dataspec.consumer-compatibility-suite.check", "status": "COMPATIBLE", "adapterResults": [] } },
+      "failureExample": { "diagnostic": { "code": "CONSUMER_COMPAT_SUITE_LOAD_FAILED" } },
+      "recommendedNextActions": ["Run after changing CLI, MCP, Schema Registry, AI Context, or fixture stable fields.", "Treat status=BREAKING as a contract gate failure."]
+    },
+    {
       "name": "export_evidence_package",
       "description": "Export read-only AI evidence package.",
       "inputProperties": ["sourceType", "sourceId", "projectId", "sourceTitle", "coverageReport", "standardSnapshot", "payloadSummary"],
@@ -633,6 +681,7 @@
     { "uri": "dataspec://project/<projectId>/workflow-recipes", "description": "AI/CLI/MCP 常用 DataSpec 任务计划，包含输入、步骤、失败恢复和下一步建议。", "outputShape": ["kind", "schemaVersion", "recipes[]"], "successExample": { "kind": "dataspec-ai-workflow-recipes" }, "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": [], "nextActions": ["Create a task card before multi-step work."] }, "recommendedNextActions": ["Create a task card before multi-step work."] },
     { "uri": "dataspec://project/<projectId>/agent-guidance-pack", "description": "MCP agent 任务引导包，说明常用任务的输入、安全默认值、资源顺序、工具顺序、停止条件和证据要求。", "outputShape": ["kind", "schemaVersion", "projectId", "compatibilityPolicy", "templates[]", "nextActions[]"], "successExample": { "kind": "dataspec-mcp-agent-guidance-pack" }, "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": [], "nextActions": ["Choose a guidance template before invoking tools."] }, "recommendedNextActions": ["Choose a guidance template before invoking tools."] },
     { "uri": "dataspec://project/<projectId>/ai-task-profiles", "description": "当前项目的 AI 任务模式，说明上下文范围、fixedSql 策略、输出格式和推荐命令。", "outputShape": ["kind", "schemaVersion", "profiles[]"], "successExample": { "kind": "dataspec-ai-task-profile-catalog" }, "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": [], "nextActions": ["Select profile before exporting context."] }, "recommendedNextActions": ["Select profile before exporting context."] },
+    { "uri": "dataspec://project/<projectId>/consumer-compatibility-suite", "name": "DataSpec Consumer Compatibility Suite", "description": "本地只读消费端兼容套件 fixture，覆盖 DataSpec 自有 API、CLI、MCP、AI Context 和 Schema Registry 契约。", "mimeType": "application/json", "outputShape": ["kind", "schemaVersion", "suiteVersion", "minimumSupportedVersion", "status", "summary", "goldenPayloads[]", "breakingRules[]", "adapterResults[]", "diagnostics[]", "nextActions[]"], "successExample": { "kind": "dataspec-consumer-compatibility-suite", "suiteVersion": "1.0.0", "adapterResults": [] }, "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "requiresServer": false, "externalNetworkUsed": false, "externalLlmUsed": false, "sensitiveInputs": [], "nextActions": ["Run check_consumer_compatibility before publishing stable contract changes."] }, "recommendedNextActions": ["Run check_consumer_compatibility before publishing stable contract changes.", "Fix diagnostics before relying on changed output shapes."] },
     { "uri": "dataspec://project/<projectId>/schema-registry", "description": "AI 可消费输出契约 registry，说明 schemaVersion、稳定字段、废弃字段和兼容策略。", "outputShape": ["kind", "schemaVersion", "contracts[]"], "successExample": { "kind": "dataspec-schema-registry" }, "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": [], "nextActions": ["Check stable fields before relying on outputs."] }, "recommendedNextActions": ["Check stable fields before relying on outputs."] }
   ],
   "mcpResourceTemplates": [
@@ -647,6 +696,7 @@
     { "uriTemplate": "dataspec://project/{projectId}/workflow-recipes", "name": "DataSpec Workflow Recipes", "description": "AI/CLI/MCP 常用 DataSpec 任务计划，包含输入、步骤、失败恢复和下一步建议。", "mimeType": "application/json", "outputShape": ["uriTemplate", "name", "description", "mimeType"], "successExample": { "uriTemplate": "dataspec://project/{projectId}/workflow-recipes" }, "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": [], "nextActions": ["Read concrete resource with selected projectId."] }, "recommendedNextActions": ["Read concrete resource with selected projectId."] },
     { "uriTemplate": "dataspec://project/{projectId}/agent-guidance-pack", "name": "DataSpec MCP Agent Guidance Pack", "description": "MCP agent 任务引导包，说明常用任务的输入、安全默认值、资源顺序、工具顺序、停止条件和证据要求。", "mimeType": "application/json", "outputShape": ["uriTemplate", "name", "description", "mimeType"], "successExample": { "uriTemplate": "dataspec://project/{projectId}/agent-guidance-pack" }, "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": [], "nextActions": ["Read guidance before selecting prompts or tools."] }, "recommendedNextActions": ["Read guidance before selecting prompts or tools."] },
     { "uriTemplate": "dataspec://project/{projectId}/ai-task-profiles", "name": "DataSpec AI Task Profiles", "description": "当前项目的 AI 任务模式，说明上下文范围、fixedSql 策略、输出格式和推荐命令。", "mimeType": "application/json", "outputShape": ["uriTemplate", "name", "description", "mimeType"], "successExample": { "uriTemplate": "dataspec://project/{projectId}/ai-task-profiles" }, "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": [], "nextActions": ["Read concrete resource with selected projectId."] }, "recommendedNextActions": ["Read concrete resource with selected projectId."] },
+    { "uriTemplate": "dataspec://project/{projectId}/consumer-compatibility-suite", "name": "DataSpec Consumer Compatibility Suite", "description": "本地只读消费端兼容套件 fixture，覆盖 DataSpec 自有 API、CLI、MCP、AI Context 和 Schema Registry 契约。", "mimeType": "application/json", "outputShape": ["uriTemplate", "name", "description", "mimeType"], "successExample": { "uriTemplate": "dataspec://project/{projectId}/consumer-compatibility-suite" }, "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "requiresServer": false, "externalNetworkUsed": false, "externalLlmUsed": false, "sensitiveInputs": [], "nextActions": ["Read concrete resource with selected projectId."] }, "recommendedNextActions": ["Read concrete resource with selected projectId."] },
     { "uriTemplate": "dataspec://project/{projectId}/schema-registry", "name": "DataSpec Schema Registry", "description": "AI 可消费输出契约 registry，说明 schemaVersion、稳定字段、废弃字段和兼容策略。", "mimeType": "application/json", "outputShape": ["uriTemplate", "name", "description", "mimeType"], "successExample": { "uriTemplate": "dataspec://project/{projectId}/schema-registry" }, "safety": { "readOnly": true, "writesProject": false, "requiresDryRun": false, "requiresIdempotencyKey": false, "sensitiveInputs": [], "nextActions": ["Read concrete resource with selected projectId."] }, "recommendedNextActions": ["Read concrete resource with selected projectId."] }
   ],
   "mcpPrompts": [

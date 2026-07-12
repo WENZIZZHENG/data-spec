@@ -208,6 +208,27 @@ test('keeps stable reference and ai output post-check OpenAPI contracts generate
   ], 'stable reference and post-check OpenAPI schema')
 })
 
+test('keeps standard test data package OpenAPI contract generated', () => {
+  const schema = readSource('src/api/schema.ts')
+  const types = readSource('src/types/index.ts')
+
+  assertContains(schema, [
+    '"/api/test-data/package/generate"',
+    'generatePackage',
+    'StandardTestDataPackageReq',
+    'StandardTestDataPackage',
+    'TestDataCase',
+    'TestDataSafety'
+  ], 'standard test data package OpenAPI schema')
+
+  assertContains(types, [
+    "export type StandardTestDataPackageReq = Schemas['StandardTestDataPackageReq']",
+    "export type StandardTestDataPackage = Schemas['StandardTestDataPackage']",
+    "export type TestDataCase = Schemas['TestDataCase']",
+    "export type TestDataSafety = Schemas['TestDataSafety']"
+  ], 'standard test data package types')
+})
+
 test('keeps field conflict naming risk view wired', () => {
   const view = readSource('src/views/FieldConflicts.vue')
   const utils = readSource('src/utils/fieldConflictDisplay.ts')

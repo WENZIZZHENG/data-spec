@@ -352,6 +352,76 @@ test('bundled fixtures include synthetic examples readonly contract', async () =
   assert.ok(command.recommendedNextActions.some((item) => item.includes('usage example') || item.includes('Prompt')))
 })
 
+test('bundled fixtures include test data and consumer compatibility readonly contracts', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const testDataCommand = fixture.cliCommands.find((item) => item.id === 'test-data-generate')
+  const compatCommand = fixture.cliCommands.find((item) => item.id === 'consumer-compat-check')
+  const testDataTool = fixture.mcpTools.find((item) => item.name === 'generate_test_data_package')
+  const compatTool = fixture.mcpTools.find((item) => item.name === 'check_consumer_compatibility')
+  const compatResource = fixture.mcpResources.find((item) =>
+    item.uri === 'dataspec://project/<projectId>/consumer-compatibility-suite')
+  const compatTemplate = fixture.mcpResourceTemplates.find((item) =>
+    item.uriTemplate === 'dataspec://project/{projectId}/consumer-compatibility-suite')
+
+  assert.ok(testDataCommand)
+  assert.equal(testDataCommand.command, 'test-data generate --project <id> --format json')
+  assert.deepEqual(testDataCommand.requiredOptions, ['project'])
+  assert.ok(testDataCommand.optionalOptions.includes('field'))
+  assert.ok(testDataCommand.optionalOptions.includes('cases-per-field'))
+  assert.ok(testDataCommand.outputShape.includes('testDataCases[]'))
+  assert.ok(testDataCommand.outputShape.includes('seedProfiles[]'))
+  assert.ok(testDataCommand.outputShape.includes('safety.containsRealBusinessRows'))
+  assert.equal(testDataCommand.safety.readOnly, true)
+  assert.equal(testDataCommand.safety.writesProject, false)
+  assert.equal(testDataCommand.safety.writesBusinessRepo, false)
+  assert.equal(testDataCommand.safety.containsRealBusinessRows, false)
+  assert.equal(testDataCommand.safety.externalNetworkUsed, false)
+  assert.equal(testDataCommand.safety.externalLlmUsed, false)
+  assert.ok(testDataCommand.recommendedNextActions.some((item) => /seed|mock|coverage/i.test(item)))
+
+  assert.ok(compatCommand)
+  assert.equal(compatCommand.command, 'consumer-compat check --format json')
+  assert.equal(compatCommand.safety.readOnly, true)
+  assert.equal(compatCommand.safety.writesProject, false)
+  assert.equal(compatCommand.safety.requiresServer, false)
+  assert.equal(compatCommand.safety.externalNetworkUsed, false)
+  assert.equal(compatCommand.safety.externalLlmUsed, false)
+  assert.ok(compatCommand.outputShape.includes('adapterResults[]'))
+  assert.ok(compatCommand.outputShape.includes('breakingRules[]'))
+  assert.equal(compatCommand.exitCodes['1'], 'consumer compatibility status BREAKING or invalid fixtures')
+
+  assert.ok(testDataTool)
+  assert.deepEqual(testDataTool.inputProperties, [
+    'projectId',
+    'fieldNames',
+    'objectScenario',
+    'maxFields',
+    'casesPerField',
+    'seedRowCount',
+    'dialect'
+  ])
+  assert.equal(testDataTool.safety.writesBusinessRepo, false)
+  assert.equal(testDataTool.safety.containsRealBusinessRows, false)
+  assert.equal(testDataTool.safety.externalNetworkUsed, false)
+  assert.equal(testDataTool.safety.externalLlmUsed, false)
+  assert.ok(testDataTool.outputShape.includes('structuredContent.testDataCases[]'))
+
+  assert.ok(compatTool)
+  assert.deepEqual(compatTool.inputProperties, ['fixturePath'])
+  assert.equal(compatTool.safety.requiresServer, false)
+  assert.equal(compatTool.safety.externalNetworkUsed, false)
+  assert.equal(compatTool.safety.externalLlmUsed, false)
+  assert.ok(compatTool.outputShape.includes('structuredContent.adapterResults[]'))
+
+  assert.ok(compatResource)
+  assert.equal(compatResource.mimeType, 'application/json')
+  assert.equal(compatResource.safety.requiresServer, false)
+  assert.ok(compatResource.outputShape.includes('adapterResults[]'))
+
+  assert.ok(compatTemplate)
+  assert.equal(compatTemplate.mimeType, 'application/json')
+})
+
 test('bundled fixtures include contract import preview readonly contract', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const command = fixture.cliCommands.find((item) => item.id === 'contract-import-preview')
@@ -545,6 +615,40 @@ test('fixture checker reports Standard Query DSL contract drift', async () => {
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'STANDARD_QUERY_DSL_SENSITIVE_INPUT_MISSING'))
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'STANDARD_QUERY_DSL_INPUT_MISSING'))
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'STANDARD_QUERY_DSL_OUTPUT_SHAPE_MISSING'))
+})
+
+test('fixture checker reports test data and consumer compatibility safety drift', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  fixture.cliCommands = fixture.cliCommands.map((command) => {
+    if (command.id === 'test-data-generate') {
+      return { ...command, safety: { ...command.safety, containsRealBusinessRows: true } }
+    }
+    if (command.id === 'consumer-compat-check') {
+      return { ...command, safety: { ...command.safety, requiresServer: true } }
+    }
+    return command
+  })
+  fixture.mcpTools = fixture.mcpTools.map((tool) =>
+    tool.name === 'check_consumer_compatibility'
+      ? { ...tool, safety: { ...tool.safety, externalNetworkUsed: true } }
+      : tool)
+  fixture.mcpResources = fixture.mcpResources.map((resource) =>
+    resource.uri === 'dataspec://project/<projectId>/consumer-compatibility-suite'
+      ? { ...resource, safety: { ...resource.safety, requiresServer: true } }
+      : resource)
+
+  const result = await validateContractFixtures({ fixture })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === 'TEST_DATA_FIXTURE_SAFETY_MISMATCH' &&
+    diagnostic.path.includes('containsRealBusinessRows')))
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === 'CONSUMER_COMPAT_FIXTURE_SAFETY_MISMATCH' &&
+    diagnostic.path.includes('requiresServer')))
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === 'CONSUMER_COMPAT_FIXTURE_SAFETY_MISMATCH' &&
+    diagnostic.path.includes('externalNetworkUsed')))
 })
 
 test('fixture checker reports MCP resource and prompt descriptor drift', async () => {

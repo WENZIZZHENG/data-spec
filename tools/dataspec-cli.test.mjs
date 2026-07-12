@@ -5142,6 +5142,188 @@ test('synthetic-examples generate redacts server diagnostics', async () => {
   assert.doesNotMatch(io.stderr, /raw-secret/)
 })
 
+test('test-data generate calls readonly package api and prints json', async () => {
+  const calls = []
+  const fetchFn = async (url, options = {}) => {
+    calls.push({ url, options })
+    return jsonCliResponse(testDataPackageFixture())
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'test-data',
+    'generate',
+    '--project',
+    '7',
+    '--field',
+    'amount_cent',
+    '--field',
+    'status',
+    '--object-scenario',
+    'order',
+    '--max-fields',
+    '2',
+    '--cases-per-field',
+    '3',
+    '--seed-row-count',
+    '2',
+    '--dialect',
+    'postgresql',
+    '--format',
+    'json',
+    '--server',
+    'http://dataspec.local',
+    '--dataspec-token',
+    'ds_cli_token'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  assert.equal(calls[0].url, 'http://dataspec.local/api/test-data/package/generate')
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer ds_cli_token')
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    projectId: 7,
+    fieldNames: ['amount_cent', 'status'],
+    objectScenario: 'order',
+    maxFields: 2,
+    casesPerField: 3,
+    seedRowCount: 2,
+    dialect: 'postgresql'
+  })
+  const output = JSON.parse(io.stdout)
+  assert.equal(output.kind, 'dataspec.standard-test-data-package')
+  assert.equal(output.specHash, 'test-data-hash-order')
+  assert.equal(output.safety.readOnly, true)
+  assert.equal(io.stderr, '')
+})
+
+test('test-data generate text prints concise safety and coverage summary', async () => {
+  const io = createIo()
+  const code = await runCli([
+    'test-data',
+    'generate',
+    '--project',
+    '7',
+    '--field',
+    'amount_cent',
+    '--format',
+    'text'
+  ], io, async () => jsonCliResponse(testDataPackageFixture()))
+
+  assert.equal(code, 0)
+  assert.match(io.stdout, /DataSpec Standard Test Data Package/)
+  assert.match(io.stdout, /specHash: test-data-hash-order/)
+  assert.match(io.stdout, /testDataCases: 3/)
+  assert.match(io.stdout, /seedProfiles: 1/)
+  assert.match(io.stdout, /missingConstraints: 1/)
+  assert.match(io.stdout, /readOnly: true/)
+  assert.match(io.stdout, /containsRealBusinessRows: false/)
+  assert.match(io.stdout, /next actions:/)
+})
+
+test('test-data generate rejects unsafe bounds before server call', async () => {
+  const io = createIo()
+  const code = await runCli([
+    'test-data',
+    'generate',
+    '--project',
+    '7',
+    '--max-fields',
+    '101',
+    '--format',
+    'json'
+  ], io, async () => {
+    throw new Error('test-data generate should validate bounds before fetch')
+  })
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /maxFields/)
+  assert.doesNotMatch(io.stderr, /test-data generate should validate bounds/)
+})
+
+test('test-data generate redacts server diagnostics', async () => {
+  const io = createIo()
+  const code = await runCli([
+    'test-data',
+    'generate',
+    '--project',
+    '7',
+    '--format',
+    'json'
+  ], io, async () => ({
+    ok: false,
+    status: 500,
+    json: async () => ({
+      message: 'test data failed token=plain-secret jdbc:postgresql://db.internal/app',
+      error: {
+        code: 'TEST_DATA_PACKAGE_UNAVAILABLE',
+        category: 'SERVER',
+        retryable: true,
+        suggestedAction: 'retry without Authorization: Bearer raw-secret'
+      }
+    })
+  }))
+
+  assert.equal(code, 2)
+  assert.match(io.stderr, /TEST_DATA_PACKAGE_UNAVAILABLE/)
+  assert.doesNotMatch(io.stderr, /plain-secret|raw-secret|db\.internal/)
+})
+
+test('consumer-compat check runs local suite without server', async () => {
+  const fetchFn = async () => {
+    throw new Error('consumer-compat check should not call server')
+  }
+  const io = createIo()
+
+  const code = await runCli([
+    'consumer-compat',
+    'check',
+    '--format',
+    'json'
+  ], io, fetchFn)
+
+  assert.equal(code, 0)
+  const output = JSON.parse(io.stdout)
+  assert.equal(output.kind, 'dataspec.consumer-compatibility-suite.check')
+  assert.equal(output.status, 'COMPATIBLE')
+  assert.ok(output.adapterResults.some((item) => item.adapterId === 'standard-test-data-package'))
+  assert.equal(io.stderr, '')
+})
+
+test('consumer-compat check returns 1 when local suite is breaking', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-consumer-compat-cli-'))
+  try {
+    const fixturePath = path.join(dir, 'suite.json')
+    await writeFile(fixturePath, JSON.stringify({
+      kind: 'dataspec-consumer-compatibility-suite',
+      schemaVersion: 1,
+      suiteVersion: 'test',
+      minimumSupportedVersion: '0.1.0',
+      adapters: [],
+      breakingRules: [],
+      goldenPayloads: []
+    }), 'utf8')
+    const io = createIo()
+
+    const code = await runCli([
+      'consumer-compat',
+      'check',
+      '--fixture',
+      fixturePath,
+      '--format',
+      'json'
+    ], io, async () => {
+      throw new Error('consumer-compat check should not call server')
+    })
+
+    assert.equal(code, 1)
+    const output = JSON.parse(io.stdout)
+    assert.equal(output.status, 'BREAKING')
+    assert.ok(output.diagnostics.some((item) => item.code === 'REQUIRED_ADAPTER_MISSING'))
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('contract-import preview calls preview api and prints json', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-contract-import-'))
   try {
@@ -7150,6 +7332,62 @@ function syntheticExamplesFixture(scenario = 'order') {
       sensitiveInputs: []
     },
     nextActions: ['人工审核后再采纳为 usage example']
+  }
+}
+
+function testDataPackageFixture(scenario = 'order') {
+  return {
+    kind: 'dataspec.standard-test-data-package',
+    schemaVersion: 1,
+    projectId: 7,
+    specHash: `test-data-hash-${scenario}`,
+    generationParams: {
+      fieldNames: ['amount_cent', 'status'],
+      objectScenario: scenario,
+      maxFields: 2,
+      casesPerField: 3,
+      seedRowCount: 2,
+      dialect: 'postgresql'
+    },
+    sourceSummary: {
+      standardFieldCount: 2,
+      enumValueCount: 2,
+      formatConstraintCount: 1,
+      semanticRuleCount: 1,
+      fallbackUsed: false
+    },
+    testDataCases: [
+      { caseId: 'amount-valid', fieldName: 'amount_cent', caseType: 'VALID', value: 1200, expectedValidity: true },
+      { caseId: 'amount-invalid', fieldName: 'amount_cent', caseType: 'INVALID', value: -1, expectedValidity: false },
+      { caseId: 'status-boundary', fieldName: 'status', caseType: 'BOUNDARY', value: 'PAID', expectedValidity: true }
+    ],
+    seedProfiles: [
+      {
+        profileId: 'order-postgresql-review',
+        format: 'SQL',
+        executable: false,
+        requiresReview: true,
+        rowCount: 2,
+        content: "INSERT INTO synthetic_order (amount_cent, status) VALUES (1200, 'PAID');"
+      }
+    ],
+    mockPayloads: [{ payloadId: 'order-json', format: 'JSON', rowCount: 2 }],
+    coverageReport: {
+      selectedFieldCount: 2,
+      generatedCaseCount: 3,
+      missingConstraints: ['customer_note lacks explicit format constraint'],
+      requiresBusinessReview: true
+    },
+    diagnostics: [{ code: 'MISSING_CONSTRAINT', message: 'customer_note needs review' }],
+    safety: {
+      readOnly: true,
+      writesProject: false,
+      writesBusinessRepo: false,
+      containsRealBusinessRows: false,
+      externalNetworkUsed: false,
+      externalLlmUsed: false
+    },
+    nextActions: ['Review seed drafts before copying into a business repository.']
   }
 }
 

@@ -1,11 +1,11 @@
 # DataSpec P6 候选池
 
-更新时间：2026-07-11
+更新时间：2026-07-12
 
 本文件承接根 TODO.md 中尚未完成的 P6 候选详情。后续开发先读根 TODO.md、候选评审和时间评估，再按任务范围读取本文件对应条目；不要默认线性顺扫全部候选。
 
-- 未完成候选数量：63
-- 本轮已完成主题包归档：5 项，详见 [archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
+- 未完成候选数量：61
+- 本轮已完成主题包归档：7 项，详见 [archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
 - 本轮已归档为现有能力覆盖：6 项，详见 [archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
 - 本轮已删除独立候选：9 项，详见 [archive/todo-removed-p6-candidates.md](archive/todo-removed-p6-candidates.md)
 - 已完成 P5/P6 详情：[archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
@@ -83,11 +83,6 @@
 - P6-171：标准规则向数据质量测试导出
 - P6-173：编辑器提示与 Code Action 轻量包
 - P6-174：跨协议 Schema 导出与标准适配层
-- P6-176：标准消费端兼容验收套件
-
-### 新近候选 P6-185
-
-- P6-185：标准驱动测试数据与边界用例包
 
 ## 候选详情
 
@@ -692,27 +687,6 @@
 - 落地产物：新增标准对象到 JSON Schema、OpenAPI schema fragment、Protobuf message 草稿和 Avro schema 的导出 API/CLI；输出 mapping report、兼容风险和不可表达约束列表。
 - 验收标准：同一字段标准可导出多个协议的结构化草稿；枚举、必填、敏感标记、格式和注释能被保留或明确标记为降级；导出结果有 fixture 快照测试。
 - 边界：第一版不自动改业务仓库代码，不保证复杂协议特性完全等价；以“AI 可读、人工可审”的草稿和映射报告为主。
-
-### P6-176：标准消费端兼容验收套件
-- 状态：待办。
-- 为什么做：DataSpec 会被前端、CLI、MCP、SDK、业务仓库和 AI 工具共同消费；仅后端测试通过不代表消费端解析稳定，需要一套可复用的兼容样例，防止字段改名或契约变更悄悄破坏外部使用。
-- 已有基础：已有 OpenAPI 防漂移、CLI/MCP 工具契约验收、示例契约快照、标准消费清单、标准消费端 SDK 和前端冒烟门禁。
-- 缺口：缺少 consumerCompatibilitySuite、goldenPayloads、minimumSupportedVersion、breakingChangeRules 和 adapterResults；每个消费端只能靠各自测试发现问题。
-- 参考项目：`Schemathesis/schemathesis` 的契约回归、`OpenAPITools/openapi-generator` 的生成兼容策略、`bufbuild/buf` 的 breaking change 检查和 `Redocly/redocly-cli` 的 OpenAPI lint；只借鉴兼容验收，不做公开认证体系。
-- 落地产物：新增标准消费端兼容套件目录和 CLI `compat check`；在现有 CLI/MCP contract fixture 基础上扩展字段、规则、枚举、Context、MCP resource、CLI JSON、API schema registry 和 schema export 的 golden payload；输出 breaking/compatible/deprecated 结果。
-- 验收标准：修改核心 DTO、API 字段或导出格式时能一键检查主要消费端契约；失败结果包含破坏字段、影响入口和迁移建议；自有消费端、关键 AI 入口和示例 adapter 有 golden 覆盖；CI/本地验证入口可复用。
-- 边界：不要求所有第三方工具接入，不阻止个人本地实验性变更；第一版覆盖 DataSpec 自有消费端和示例 adapter。
-
-### P6-185：标准驱动测试数据与边界用例包
-- 状态：待办。
-- 为什么做：AI 在业务仓库写单测、mock、seed 或示例 SQL 时，需要安全、符合标准的样例值，也需要典型无效值验证规则；不能从真实业务数据里复制样例。
-- 已有基础：已有字段格式约束、示例/反例库、受控脱敏样例采样、前端 mock 演示模式、数据质量测试导出和 fixture/golden 基线。
-- 缺口：缺少 testDataCase、validExamples、invalidExamples、boundaryExamples、seedProfile、mockPayload 和 coverageReport；现有样例分散在字段描述、fixture 和手写文档里。
-- 参考项目：`faker-js/faker` 的合成数据生成、`mswjs/msw` 的前端 mock、`storybookjs/storybook` 的状态样例和 `great-expectations/great_expectations` 的期望/反例组织；只生成安全样例，不采集真实数据行。
-- 落地产物：新增测试数据包生成 API/CLI；按字段标准、枚举、格式、敏感标记和业务对象生成 JSON/CSV/SQL seed/mock 草稿，同时输出 valid、invalid 和 boundary cases。
-- 验收标准：手机号、金额、时间、枚举、JSON 等字段能生成可解释样例；导出包可被前端 mock、后端测试、数据质量测试或 AI 生成单测复用；生成结果不包含原始业务数据。
-- 边界：不自动写入业务数据库，不保证满足所有业务规则；第一版聚焦字段级和轻量对象级样例。
-
 
 ## 参考项目索引
 
