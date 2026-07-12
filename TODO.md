@@ -1,46 +1,47 @@
 # DataSpec 待办路线图
 
-本文件只保留当前行动入口、优先级视图和文档索引。完整候选详情已拆到 [P6 候选池](docs/todo-p6-candidates.md)，已完成 P5/P6 详情已归档到 [P5/P6 完成归档](docs/archive/todo-completed-p5-p6.md)，删除 / 不做候选记录见 [删除候选归档](docs/archive/todo-removed-p6-candidates.md)。
+本文件只保留当前行动入口、优先级视图和文档索引。当前实施主题见 [P6 精简候选池](docs/todo-p6-candidates.md)，已完成详情见 [P5/P6 完成归档](docs/archive/todo-completed-p5-p6.md)，删除 / 不做记录见 [删除候选归档](docs/archive/todo-removed-p6-candidates.md)。
 
 ## 当前状态
 
-- 当前高优先级已清零；`P6-84` 前端可访问性与键盘操作基线已完成实现、验证和独立评审收口，下一项建议从前端稳定性主题的 `P6-86` 或独立候选 `P6-85` 中选择。
+- 高优先级已清零；`P6-84` 前端可访问性与键盘操作基线已完成。
+- 2026-07-12 已完成第二轮候选收束：60 个原候选中，36 个编号合并为 10 个实施主题，7 个由现有能力覆盖，17 个删除或等待外部触发。
+- 近期队列共 6 个主题，建议从 `P6-137` 配置 Schema 开始，再依次考虑 `P6-85`、`P6-86`、`P6-101`、`P6-111`、`P6-120`。
 - OpenSpec 当前 active changes：`add-standard-test-data-compat-suite`、`add-ai-context-safety-controls`、`add-stable-standard-refs-and-ai-output-checks`、`add-standard-query-dsl`、`add-business-object-table-standards` 与 `add-field-semantics-knowledge-cards` 均已完成实现、验证和独立评审；按项目约定暂保留 open，不自动 archive。
 - 已完成 P0-P4 详情见 [docs/archive/todo-completed-p0-p4.md](docs/archive/todo-completed-p0-p4.md)。
-- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 128 项。
-- 已删除 / 不做独立候选 9 项，详见 [docs/archive/todo-removed-p6-candidates.md](docs/archive/todo-removed-p6-candidates.md)。
-- 未完成 P6 候选共 60 项，详情见 [docs/todo-p6-candidates.md](docs/todo-p6-candidates.md)。
-- 候选池价值评审见 [docs/todo-p6-candidate-review.md](docs/todo-p6-candidate-review.md)。
-- 剩余待办时间评估见 [docs/todo-p6-remaining-estimates.md](docs/todo-p6-remaining-estimates.md)。
-- 任务卡可从 create-table/review-pr-sql/reverse-import-standards/export-min-context/standard-evidence-review/standard-maintenance workflow recipe 生成；该短摘要用于本地状态检查，详细能力见完成归档。
-- 真实自测库授权边界：用户已授权 localhost:5432/ai_test 作为可写的一次性 PostgreSQL 测试库；仅限测试库，不扩展到其他库，不把密码写入仓库，操作后记录验证范围与清理结果。
+- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 135 个原待办编号。
+- 已删除 / 不做或等待触发的独立候选 26 项，详见 [docs/archive/todo-removed-p6-candidates.md](docs/archive/todo-removed-p6-candidates.md)。
+- 清理前 60 项候选全文见 [docs/archive/todo-p6-candidates-2026-07-12.md](docs/archive/todo-p6-candidates-2026-07-12.md)。
+- 任务卡可从 `create-table`、`review-pr-sql`、`reverse-import-standards`、`export-min-context`、`standard-evidence-review`、`standard-maintenance` workflow recipe 生成；详细能力见完成归档。
+- 真实自测库授权边界：用户已授权 `localhost:5432/ai_test` 作为可写的一次性 PostgreSQL 测试库；仅限测试库，不扩展到其他库，不把密码写入仓库，操作后记录验证范围与清理结果。
 
 ## 下一步顺序
 
-1. 当前自动推进顺序：高优先级已完成；若继续前端稳定性主题，下一项建议 `P6-86` 前端性能体验指标与慢页面提示；若优先补本地维护能力，可选 `P6-85` 本地数据清理、重置与演示项目重建。
-2. 开工前读取对应候选详情和 [时间评估](docs/todo-p6-remaining-estimates.md)，再按任务类型决定快速、常规、SDD standard 或 SDD full。
-3. 新增想法优先合并到既有候选主题；确实无法承接时再新增编号，避免继续堆叠愿望清单。
-4. 完成任务后同步根入口、候选池、OpenSpec archive 或完成归档，避免已完成能力继续压在主待办里。
+1. `P6-137`：`.dataspec/config.json` Schema 与编辑器提示，约 0.5-1 个工作日。
+2. `P6-85`：本地数据清理、重置与演示项目重建，约 1-2 个工作日。
+3. `P6-86`：前端性能体验与字段库密集操作，约 2-4 个工作日。
+4. `P6-101`：环境运行指纹与漂移诊断，约 2-3 个工作日。
+5. `P6-111`：标准候选来源管道，约 3-5 个工作日。
+6. `P6-120`：AI 场景回放与规则回归基线，约 3-5 个工作日。
+
+开工前读取候选主题的近期范围和边界，再按任务风险决定快速、常规或 OpenSpec 流程。暂缓主题只有触发条件成立时才进入队列。
 
 ## 待办入口
 
-- [P6 候选池](docs/todo-p6-candidates.md)：保留所有未完成候选的完整背景、缺口、产物、验收标准和边界。
-- [P6 候选价值评审](docs/todo-p6-candidate-review.md)：记录哪些值得做、哪些应合并、哪些已删除或暂缓。
-- [P6 剩余待办时间评估](docs/todo-p6-remaining-estimates.md)：列出剩余 60 项候选和粗略开发时间。
+- [P6 精简候选池](docs/todo-p6-candidates.md)：10 个仍值得实施的主题、第一版边界和启动条件。
+- [P6 候选价值评审](docs/todo-p6-candidate-review.md)：记录 60 项候选的保留、合并、完成覆盖和删除依据。
+- [P6 剩余时间评估](docs/todo-p6-remaining-estimates.md)：按 10 个实施主题估算开发时间。
+- [P6 候选池历史快照](docs/archive/todo-p6-candidates-2026-07-12.md)：保留清理前 60 项完整背景和验收描述。
 - [P5/P6 完成归档](docs/archive/todo-completed-p5-p6.md)：保留已完成条目的验证证据、产物和后续增强。
-- [P6 删除候选归档](docs/archive/todo-removed-p6-candidates.md)：记录删除独立候选的原因和恢复触发条件。
+- [P6 删除候选归档](docs/archive/todo-removed-p6-candidates.md)：记录删除、暂不做和恢复触发条件。
 - [P0-P4 完成归档](docs/archive/todo-completed-p0-p4.md)：保留早期已完成能力的详细背景。
 
-## 当前候选池摘要
+## 当前主题摘要
 
-### 早期遗留候选
+### 近期 6 项
 
-4 项：P6-74、P6-80、P6-85、P6-86
+`P6-137`、`P6-85`、`P6-86`、`P6-101`、`P6-111`、`P6-120`。
 
-### 扩展候选池 P6-94 到 P6-128
+### 暂缓 4 项
 
-24 项：P6-95、P6-96、P6-98、P6-101、P6-102、P6-103、P6-104、P6-108、P6-109、P6-110、P6-111、P6-112、P6-113、P6-116、P6-117、P6-118、P6-119、P6-120、P6-121、P6-122、P6-123、P6-124、P6-126、P6-127
-
-### 扩展候选池 P6-129 到 P6-176
-
-32 项：P6-129、P6-130、P6-131、P6-133、P6-134、P6-135、P6-136、P6-137、P6-138、P6-139、P6-140、P6-141、P6-142、P6-143、P6-144、P6-145、P6-146、P6-149、P6-150、P6-151、P6-154、P6-155、P6-156、P6-157、P6-159、P6-160、P6-162、P6-163、P6-168、P6-171、P6-173、P6-174
+`P6-74`、`P6-104`、`P6-123`、`P6-129`。这些编号是合并主题锚点，不代表按编号线性开发。

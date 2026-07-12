@@ -1,12 +1,13 @@
 # DataSpec 删除 / 不做候选归档
 
-归档日期：2026-07-09
+首次归档：2026-07-09；最近更新：2026-07-12
 
 本文件记录从 P6 候选池删除的独立候选。删除含义是“不再作为独立默认后续开发项”，不是禁止未来任何相关能力；若后续出现明确用户痛点，可从对应主题包重新提出更小、更可验证的任务。
 
-- 本轮删除独立候选：9 项
-- 剩余候选：76 项，详见 [../todo-p6-candidates.md](../todo-p6-candidates.md)
+- 已删除 / 不做或等待触发的独立候选：26 项
+- 当前保留：10 个实施主题，详见 [../todo-p6-candidates.md](../todo-p6-candidates.md)
 - 候选评审依据：[../todo-p6-candidate-review.md](../todo-p6-candidate-review.md)
+- 2026-07-12 清理前全文：[todo-p6-candidates-2026-07-12.md](todo-p6-candidates-2026-07-12.md)
 
 ## 删除 / 不做条目
 
@@ -117,3 +118,34 @@
 - 落地产物：定义 `dataspec.event.v1` 事件模型；新增只读事件列表 API、CLI `events tail/replay` 和 `.dataspec/events.json` 本地 webhook 配置；事件 payload 默认脱敏并关联标准快照。
 - 验收标准：字段、规则、反向导入、Starter Kit、Context 导出等关键动作产生可查询事件；AI 可按 cursor 增量读取；本地 webhook 失败有重试摘要但不阻断主流程。
 - 边界：不引入 Kafka/RabbitMQ 等外部依赖，不做团队通知系统；第一版面向本机自动化和 AI agent 消费。
+
+## 2026-07-12 第二轮清理
+
+以下 17 项不再占用活跃队列。原始完整任务描述保存在 [候选池历史快照](todo-p6-candidates-2026-07-12.md)。
+
+### 等待明确外部触发
+
+| 编号 | 处理原因 | 恢复条件 |
+| --- | --- | --- |
+| P6-95 | 自定义规则 SDK 会引入插件执行与兼容边界，当前内置规则尚未形成高频缺口 | 至少两个真实项目反复需要同类自定义规则 |
+| P6-96 | 确定性检索、术语表、别名和查询 DSL 已覆盖当前规模 | 字段规模或同义词歧义证明现有检索不足 |
+| P6-102 | 连接器 registry 对当前 PostgreSQL/MySQL 范围过早 | 第三种数据库进入实际支持范围 |
+| P6-138 | Secret Provider 扩大凭据安全边界 | 重复输入凭据成为主要使用痛点，且有明确本地安全方案 |
+| P6-157 | 已有 Docker 本地启动和离线 AI Context，单机离线分发收益有限 | 换机或断网安装成为稳定需求 |
+| P6-163 | capability profile 应依附真实 connector 抽象，不独立建设 | P6-102 恢复并出现方言能力差异需求 |
+| P6-168 | 当前 MCP Context 裁剪和预算规划尚未触达大小限制 | 客户端实际出现 resource 超限或恢复读取需求 |
+| P6-171 | 没有明确 dbt、Great Expectations 等消费方 | 真实业务仓库采用确定的数据质量测试体系 |
+
+### 当前不值得独立建设
+
+| 编号 | 处理原因 |
+| --- | --- |
+| P6-116 | Dashboard 任务入口、演示项目、local smoke、workflow recipe 和 E2E 已覆盖上手路径，guided tour 维护收益偏低 |
+| P6-121 | Flyway、迁移测试和备份恢复是权威数据模型链路，额外手工 snapshot 容易形成双源 |
+| P6-130 | SQL formatter 偏离字段标准核心，且多方言确定性输出成本高；现有 lint/fixedSql 已覆盖关键结果 |
+| P6-134 | mock API 会制造第二套后端行为；真实 demo project、local startup 和 route harness 已够开发与演示 |
+| P6-140 | 各核心入口已有版本化结果、错误、证据与 nextActions；统一迁移所有 TaskResult 信封成本过高 |
+| P6-141 | SQL lint、DDL/Schema Plan 和方言诊断已覆盖当前验证需求；数据库 EXPLAIN 会新增权限与方言复杂度 |
+| P6-144 | 自动根因归因缺少足够可靠的事件关联，容易输出看似确定但不可信的结论 |
+| P6-150 | quality gate、GitHub inline review 和 evidence package 已覆盖合规反馈，单一分数对个人用户增益有限 |
+| P6-155 | 当前规则规模和冲突证据不足以支撑依赖图平台，问题出现时优先增强现有规则调试器 |

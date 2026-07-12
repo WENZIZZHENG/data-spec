@@ -1126,3 +1126,21 @@
 - 落地产物：新增标准维护任务拆分 API/CLI；把低质量字段、未纳管字段、导入候选、规则冲突、覆盖率缺口和 AI 反馈失败项聚合成 15/30/60 分钟任务包；每个任务包包含目标对象、来源证据、预计收益、验证命令和回滚/跳过说明。
 - 验收标准：打开项目后能生成“本次最值得处理的 3 个维护批次”；每个批次能跳转到候选、字段、规则或覆盖率来源；AI 可按批次逐步执行并产出 TaskResult；完成后健康摘要和任务建议会更新。
 - 边界：不做团队工时估算，不自动修改标准，不把估算当承诺；第一版按本地项目指标给出启发式建议。
+
+## 第二轮候选覆盖归档（2026-07-12）
+
+以下 7 个候选编号的核心用户价值已由现有能力覆盖，因此按完成覆盖归档，不再重复实现。原始候选全文见 [todo-p6-candidates-2026-07-12.md](todo-p6-candidates-2026-07-12.md)。
+
+| 编号 | 已覆盖内容 | 验证 / 产物证据 | 后续遗留 |
+| --- | --- | --- | --- |
+| P6-109 | AI 能力边界模拟与安全预检 | capability catalog、session bootstrap、task profile、write safety 与 OpenSpec readiness 已提供前置检查、写风险和停止条件；相关实现与测试随各自完成 commit 保留 | 只在发现新的真实越权路径时补安全用例 |
+| P6-135 | AI 任务预检与缺口补齐建议 | session bootstrap、capability check、task-card BLOCKED 状态和 readiness report 已输出缺失输入与 nextActions | 不再新增第二套通用 preflight DTO |
+| P6-131 | 受控样例值与合成回填 | synthetic examples 和 standard test data package 已提供脱敏、可复现的测试样例与边界用例 | 不读取真实业务数据行；若未来确需采样，重新按安全 SDD full 评审 |
+| P6-143 | Agent 专用项目启动包 | `dataspec init`、AI session bootstrap、MCP guidance pack 和 `.dataspec/config.json` 已形成项目启动入口 | 后续只补发现到的缺失指引，不再建设平行启动包 |
+| P6-146 | 个人标准健康摘要与下一步报告 | Standard Health 已提供健康快照、趋势、Top actions 和可复制改进计划 | 指标增强进入 Standard Health 主规格 |
+| P6-156 | OpenAPI/CLI/MCP 示例契约快照 | CLI/MCP contract fixtures、成功/失败示例、schema 校验和 drift check 已接入 tools 测试 | 新命令按现有 fixture 增量维护 |
+| P6-159 | AI 任务状态机与断点续跑 | AI task run 已持久化状态、失败步骤、partial artifacts、幂等键、retryable、resumeCommand，并由 API/CLI/MCP/前端消费 | 不引入外部队列或分布式工作流引擎 |
+
+- 归档日期：2026-07-12。
+- 评审证据：独立只读子 agent `019f5504-90ac-7212-8b71-7720c0999bf5` 完成覆盖核对后已关闭。
+- 验证方式：本轮只调整待办状态，复用上述能力各自归档中的实现与测试证据；文档一致性检查结果随本轮 commit 记录。
