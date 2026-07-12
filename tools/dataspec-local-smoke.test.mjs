@@ -164,6 +164,19 @@ test('local compose and Vite proxy keep startup contract wired', () => {
   assert.ok(viteConfig.includes('target: apiProxyTarget'))
 })
 
+test('frontend lockfile rejects npmmirror tarball URLs', () => {
+  const lockfile = readRepoFile('dataspec-web/pnpm-lock.yaml')
+  const mirrorTarballs = lockfile.match(
+    /tarball:\s*https:\/\/registry\.npmmirror\.com\/[^,}\s]+/g
+  ) || []
+
+  assert.deepEqual(
+    mirrorTarballs,
+    [],
+    'shared lockfile must not contain npmmirror tarball URLs rejected by the Docker toolchain'
+  )
+})
+
 function jsonResponse(body, status = 200) {
   return {
     ok: status >= 200 && status < 300,
