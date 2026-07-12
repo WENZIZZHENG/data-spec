@@ -63,3 +63,53 @@ Field standard search SHALL return field usage contract evidence when it helps e
 - **WHEN** a search query or structured question matches a field avoid condition or misuse example
 - **THEN** the search result includes a next action that requires confirmation before using that field
 - **AND** the field is not described as directly safe for that scenario
+
+### Requirement: Field search returns stable reference evidence
+Field standard search SHALL return stable references and explain historical-name resolution.
+
+#### Scenario: Search result includes stable refs
+- **WHEN** field search returns a match
+- **THEN** the item SHALL include `stableRef`, `canonicalRef`, and lifecycle status
+- **AND** existing score, matchReasons, recommendedUse, usage contract, and nextActions SHALL remain compatible.
+
+#### Scenario: Search matches alias history
+- **WHEN** a query matches an alias or historical field name
+- **THEN** search SHALL identify the matched alias or historical ref
+- **AND** it SHALL return the current field stableRef and replacement warning when applicable.
+
+### Requirement: Field search accepts Standard Query DSL
+Field standard search SHALL accept additive Standard Query DSL input without removing existing query and filter parameters.
+
+#### Scenario: Search with DSL
+- **WHEN** a caller searches fields with a Standard Query DSL targeting `FIELD`
+- **THEN** the response contains the same field item shape as existing field search
+- **AND** each returned item preserves field, score, matchReasons, recommendedUse, usageContractSummary, evidence, stableRef, canonicalRef, lifecycleStatus, and matchedAlias.
+
+#### Scenario: Search summary includes DSL explanation
+- **WHEN** a field search executes through DSL or legacy parameters mapped to DSL
+- **THEN** the response summary includes querySummary, appliedFilters, ignoredFilters, resultCount, returnedCount, truncated, and nextQueryHints.
+
+### Requirement: Field search DSL remains compatible
+Existing field search clients SHALL remain compatible when DSL metadata is added.
+
+#### Scenario: Existing GET field search still works
+- **WHEN** a caller uses existing `/api/fields/search` query parameters
+- **THEN** DataSpec returns the existing stable search result fields
+- **AND** additive DSL explanation fields do not change previous field search semantics.
+
+### Requirement: Field search semantic card evidence
+Field standard search SHALL use semantic rules, naming translations, enum lifecycle, and knowledge card summaries when explaining search results.
+
+#### Scenario: Search uses preferred and forbidden translations
+- **WHEN** a user or AI searches with a localized term, translation alias, preferred English name, or forbidden translation
+- **THEN** field search includes translation match reasons and warnings where applicable
+- **AND** forbidden translations do not boost a field as a direct safe recommendation.
+
+#### Scenario: Search result includes semantic summary
+- **WHEN** a matching field has semantic rules, enum lifecycle hints, metric references, or knowledge card risk notes
+- **THEN** each search item includes a concise semantic summary or next action
+- **AND** existing field, score, matchReasons, recommendedUse, usageContractSummary, evidence, stableRef, canonicalRef, lifecycleStatus, and matchedAlias remain compatible.
+
+#### Scenario: Search avoids noisy full knowledge card dumps
+- **WHEN** search returns multiple fields
+- **THEN** DataSpec returns bounded card summaries and links or ids for detail lookup rather than embedding every full card.

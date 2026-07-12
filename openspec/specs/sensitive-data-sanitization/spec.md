@@ -2,7 +2,6 @@
 
 ## Purpose
 定义 DataSpec 在错误、诊断、AI 证据包、备份扫描和 CLI 本地交付包等可复制出口中的敏感信息脱敏边界，避免 password、token、Authorization、Bearer、完整 JDBC URL 和连接串被返回、导出或写入面向 AI 的上下文。
-
 ## Requirements
 ### Requirement: Unified sensitive data sanitizer
 DataSpec SHALL provide a shared sanitizer for common technical secrets in backend and CLI-visible outputs.
@@ -43,3 +42,16 @@ DataSpec SHALL document and test the sanitizer boundary.
 #### Scenario: Document allowed persistence boundary
 - **WHEN** users read DataSpec documentation
 - **THEN** it SHALL state which connection/config fields may be stored and which secret-bearing fields are never exported or logged by first-version sanitization.
+
+### Requirement: AI Context export uses shared sanitizer
+DataSpec SHALL apply the shared sensitive data sanitizer to AI-consumable context outputs that may contain arbitrary business or user text.
+
+#### Scenario: Field metadata is sanitized for AI Context
+- **WHEN** field comments, aliases, default values, example values, format notes, usage contracts, or replacement guidance contain known technical secrets
+- **THEN** AI Context field catalog and prompt exports SHALL contain only sanitized values
+- **AND** the raw secret SHALL NOT appear in generated JSON, Markdown, YAML, prompt text, or zip package entries.
+
+#### Scenario: Prompt inputs are sanitized
+- **WHEN** create-table or fix-sql prompt generation receives business descriptions or SQL containing known technical secrets
+- **THEN** the returned prompt SHALL redact those secrets
+- **AND** the prompt SHALL still preserve enough non-sensitive text for local review.

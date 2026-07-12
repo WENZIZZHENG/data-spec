@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.12.0",
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
   "scripts": {
     "dev": "vite",
     "gen:api": "openapi-typescript http://localhost:8090/api-docs -o src/api/schema.ts",

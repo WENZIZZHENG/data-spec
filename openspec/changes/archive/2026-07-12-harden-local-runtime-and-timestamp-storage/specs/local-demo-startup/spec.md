@@ -1,8 +1,5 @@
-# local-demo-startup Specification
+## MODIFIED Requirements
 
-## Purpose
-Defines the local startup and smoke verification contract that lets DataSpec users and AI agents bring up PostgreSQL, the backend, and the web frontend with development defaults, then verify the demo project, dashboard, and SQL lint links with a repeatable command.
-## Requirements
 ### Requirement: Local Compose Startup
 
 DataSpec SHALL provide a reproducible local startup package that runs PostgreSQL, the backend service, and the web frontend with local-development defaults.
@@ -73,17 +70,3 @@ DataSpec SHALL provide a bounded local smoke verification command for the demo s
 - **WHEN** the backend or frontend cannot be reached before the timeout
 - **THEN** the smoke command exits non-zero
 - **AND** prints the failed check and a next action.
-
-### Requirement: Local Startup Documentation
-
-DataSpec SHALL document the difference between one-command local startup and manual development startup.
-
-#### Scenario: Read local startup instructions
-
-- **WHEN** a user reads README startup instructions
-- **THEN** they can find commands for compose startup, smoke verification, manual backend/frontend development mode, and local cleanup.
-
-#### Scenario: Explain local-only boundary
-
-- **WHEN** a user reads the local startup documentation
-- **THEN** DataSpec explains that the compose defaults are for personal local development and are not a production deployment recipe.

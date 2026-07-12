@@ -344,3 +344,96 @@ The DataSpec MCP server SHALL support listing project-scoped resource templates.
 #### Scenario: Projectless template discovery
 - **WHEN** the MCP server starts without a configured project id
 - **THEN** `resources/templates/list` still returns URI templates containing `{projectId}` placeholders rather than failing.
+
+### Requirement: MCP resolves standard references
+DataSpec MCP SHALL expose a read-only `resolve_standard_refs` tool with structured results.
+
+#### Scenario: Resolve references through MCP
+- **WHEN** an MCP client calls `resolve_standard_refs` with projectId, refType, and refs
+- **THEN** structuredContent SHALL match the stable API resolution contract
+- **AND** text content SHALL be parseable JSON.
+
+### Requirement: MCP checks AI output before use
+DataSpec MCP SHALL expose a read-only `check_ai_output` tool.
+
+#### Scenario: Post-check through MCP
+- **WHEN** an MCP client calls `check_ai_output` with projectId, content type, content, and optional snapshot reference
+- **THEN** structuredContent SHALL include PASS/WARN/FAIL status, safeToUse, issues, resolved refs, fixes, evidence links, and next actions
+- **AND** the tool descriptor SHALL state that it does not write standards, business files, or databases.
+
+#### Scenario: MCP output is secret-safe
+- **WHEN** tool input or backend diagnostics contain secret-like content
+- **THEN** MCP content and JSON-RPC error data SHALL NOT expose raw token, password, Authorization, JDBC URL, DSN, or connection string values.
+
+### Requirement: MCP runs Standard Query DSL
+DataSpec MCP SHALL expose a read-only Standard Query DSL tool or additive DSL input on `search_fields`.
+
+#### Scenario: MCP searches with DSL
+- **WHEN** an MCP client calls the DSL query tool or `search_fields` with Standard Query DSL input
+- **THEN** structuredContent includes normalized query, field results, applied filters, ignored filters, counts, and next query hints
+- **AND** text content is parseable JSON.
+
+#### Scenario: MCP DSL safety metadata
+- **WHEN** MCP tool descriptors are listed
+- **THEN** the DSL-capable tool descriptor states that it is read-only, project-scoped, does not write standards, business files, or databases, and treats `query`, `standardQuery`, and filter values as sensitive inputs.
+
+#### Scenario: MCP DSL output is secret-safe
+- **WHEN** DSL input or backend diagnostics contain secret-like content
+- **THEN** MCP content and JSON-RPC error data SHALL NOT expose raw token, password, Authorization, JDBC URL, DSN, or connection string values.
+
+### Requirement: MCP exposes table standards
+The DataSpec MCP server SHALL expose table structure standards as read-only context for AI clients.
+
+#### Scenario: List table standards resource
+- **WHEN** an MCP client calls `resources/list`
+- **THEN** the response includes a project table standards resource when a project id is configured
+- **AND** the resource description identifies it as read-only business object, relation, template, and structure-standard context.
+
+#### Scenario: Read table standards resource
+- **WHEN** an MCP client reads the table standards resource
+- **THEN** the MCP server fetches the DataSpec table standards API or AI Context table standards endpoint
+- **AND** returns JSON text and `structuredContent` with business objects, templates, relations, summary, safety metadata, and next actions.
+
+#### Scenario: Table standards tool
+- **WHEN** an MCP client calls a read-only `get_table_standards` tool with optional project, template, or business object filters
+- **THEN** the server returns the same table standards shape as JSON text and `structuredContent`
+- **AND** it does not create templates, update standards, generate DDL, connect to databases, or mutate project state.
+
+### Requirement: MCP create-table guidance uses table standards
+MCP prompts for table creation SHALL guide AI clients to read table standards before DDL generation.
+
+#### Scenario: Prompt resource sequence includes table standards
+- **WHEN** an MCP client gets `create_table_with_dataspec` or a compatible table design prompt
+- **THEN** the prompt guidance lists table standards before `generate_table_ddl`
+- **AND** stop conditions mention missing or unsafe structure standards for high-risk DDL work.
+
+#### Scenario: DDL tool preserves structure summary
+- **WHEN** an MCP client calls `generate_table_ddl`
+- **THEN** the structured response preserves the server `structureSummary` when present
+- **AND** recommended next actions tell the client to inspect lint, dialect diagnostics, and structure evidence before handing DDL to a user.
+
+### Requirement: MCP standard test data package tool
+The DataSpec MCP server SHALL expose a read-only tool for AI clients to generate standard-driven test data packages.
+
+#### Scenario: Call test data package tool
+- **WHEN** an MCP client calls `generate_test_data_package` with project id and bounded generation parameters
+- **THEN** the server calls the DataSpec test data package API
+- **AND** returns the package as JSON text and `structuredContent`
+- **AND** the tool descriptor includes input schema descriptions and read-only safety metadata.
+
+#### Scenario: Test data package tool redaction
+- **WHEN** backend output, arguments, errors, or examples contain token, password, Authorization header, API key, complete JDBC URL, DSN, connection string, private key, or source database row values
+- **THEN** MCP `tools/list`, `tools/call`, JSON text, `structuredContent`, and JSON-RPC errors do not expose raw sensitive values.
+
+### Requirement: MCP compatibility suite resource and tool
+The DataSpec MCP server SHALL expose the consumer compatibility suite as a local read-only resource and check tool for AI clients.
+
+#### Scenario: List compatibility resource and tool
+- **WHEN** an MCP client calls `resources/list` or `tools/list`
+- **THEN** the response includes a consumer compatibility suite resource and a `check_consumer_compatibility` tool
+- **AND** descriptors identify that the check is local, read-only, does not require a DataSpec server, and does not use external network or LLM calls.
+
+#### Scenario: Run compatibility check tool
+- **WHEN** an MCP client calls `check_consumer_compatibility`
+- **THEN** the server returns compatibility suite JSON text and `structuredContent` containing status, adapter results, diagnostics, and next actions
+- **AND** incompatible results are returned as successful tool content with `status=BREAKING` unless the local suite itself cannot be loaded.

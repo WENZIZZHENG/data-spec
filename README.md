@@ -97,7 +97,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 
 - JDK 21+
 - Maven 3.9+
-- Node.js 18+ / pnpm 8+
+- Node.js `>=22.12.0 <23` / pnpm 11.12.0
 - PostgreSQL 17+
 - Docker Compose（可选，用于一键本地体验）
 
@@ -106,10 +106,10 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 适合新机器、演示环境或让 AI agent 先验证项目可用性：
 
 ```bash
-docker compose -f docker-compose.local.yml up
+docker compose -f docker-compose.local.yml up -d --wait
 ```
 
-Compose 会启动 PostgreSQL、后端和前端；本地默认端口分别为 `5432`、`8090`、`5173`，后端会通过 Flyway 自动迁移本地 PostgreSQL。默认数据库账号只用于个人本地开发，不是生产部署方案。
+Compose 会启动 PostgreSQL、后端和前端，并在三个服务都健康后返回；本地默认端口分别为 `15432`、`8090`、`5173`，后端会通过 Flyway 自动迁移本地 PostgreSQL。三个端口默认只绑定 `127.0.0.1`，数据库弱口令和关闭鉴权的后端只用于个人本地开发，不是生产部署方案。
 
 启动后可运行 smoke 验证：
 
@@ -123,12 +123,14 @@ smoke 会等待前端和 `/api-docs` 可访问，创建或复用演示项目，�
 端口冲突时可覆盖对外端口：
 
 ```powershell
-$env:DATASPEC_DB_PORT="15432"
+$env:DATASPEC_DB_PORT="25432"
 $env:DATASPEC_SERVER_PORT="18090"
 $env:DATASPEC_WEB_PORT="15173"
-docker compose -f docker-compose.local.yml up
+docker compose -f docker-compose.local.yml up -d --wait
 node tools/dataspec-local-smoke.mjs --server http://localhost:18090 --web http://localhost:15173
 ```
+
+需要从其他设备访问时可显式设置 `DATASPEC_BIND_HOST=0.0.0.0`，并设置 `DATASPEC_SECURITY_ENABLED=true`、安全数据库口令和主机防火墙规则；不要把默认关闭鉴权的本地配置直接暴露到共享网络。Compose project name 默认从当前目录派生，并行 worktree 如有同名目录或端口冲突，可显式设置不同的 `COMPOSE_PROJECT_NAME` 和端口覆盖变量。
 
 停止和清理：
 

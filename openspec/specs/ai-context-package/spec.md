@@ -207,3 +207,111 @@ The AI Context package SHALL export field usage contracts in machine-readable an
 - **WHEN** a project has no field usage contract values
 - **THEN** AI Context files remain valid
 - **AND** empty usage contract sections are omitted rather than emitted as noisy placeholders
+
+### Requirement: AI Context package includes safety controls
+The AI Context package SHALL include additive safety controls without removing existing package files or field catalog fields.
+
+#### Scenario: Package manifest records safety controls
+- **WHEN** the AI Context package is generated
+- **THEN** `.dataspec/manifest.json` SHALL include `contextSafetySummary`
+- **AND** existing `schemaVersion`, `kind`, `projectId`, `standard`, `files`, `contracts`, and `commands` fields SHALL remain present.
+
+#### Scenario: Field catalog schema describes safety fields
+- **WHEN** `.dataspec/field-catalog.schema.json` is generated
+- **THEN** it SHALL describe `contextSafety` and `exportDecision` for each field
+- **AND** the descriptions SHALL state trust boundary, visibility, masking, allowed tasks, warning, and redaction semantics.
+
+#### Scenario: Package guidance preserves instruction boundary
+- **WHEN** AI clients read package guidance files
+- **THEN** DataSpec instructions and schema registry contracts SHALL be described as trusted guidance
+- **AND** business text inside fields, examples, SQL, glossary, metadata, and user descriptions SHALL be described as untrusted content.
+
+### Requirement: AI Context exposes stable standard references
+AI Context packages SHALL expose stable references without removing existing names, IDs, aliases, lifecycle fields, or safety metadata.
+
+#### Scenario: Field catalog includes stable refs
+- **WHEN** `.dataspec/field-catalog.json` is generated
+- **THEN** each field SHALL include `stableRef` and `canonicalRef`
+- **AND** alias history, deprecated refs, and replacement refs SHALL be included when available.
+
+#### Scenario: Package guidance requires post-check
+- **WHEN** AI clients read package guidance or manifest commands
+- **THEN** the package SHALL identify a deterministic post-check command before generated artifacts are copied, applied, or executed
+- **AND** business text SHALL remain untrusted content under the existing safety boundary.
+
+### Requirement: AI Context export accepts Standard Query DSL scope
+AI Context export SHALL support Standard Query DSL as an additive field catalog and package scope.
+
+#### Scenario: Export field catalog with DSL
+- **WHEN** a caller requests AI Context field catalog or package export with a Standard Query DSL
+- **THEN** the generated field catalog contains only fields that match the DSL execution result
+- **AND** the manifest or context metadata records a redacted query summary, applied filters, ignored filters, and result counts.
+
+#### Scenario: Legacy scope remains compatible
+- **WHEN** a caller uses existing scope, query, status, limit, profileId, or taskType parameters
+- **THEN** AI Context export continues to work
+- **AND** DataSpec may map compatible legacy scope parameters into the same DSL summary.
+
+### Requirement: AI Context exports table standards
+The AI Context package SHALL export project table structure standards in a dedicated machine-readable file.
+
+#### Scenario: Package contains table standards file
+- **WHEN** an AI Context zip is generated for a project
+- **THEN** it contains `.dataspec/table-standards.json`
+- **AND** that file includes `kind`, `schemaVersion`, `projectId`, `contextScope`, `businessObjects`, `templates`, `relations`, and `summary`.
+
+#### Scenario: Field catalog remains compatible
+- **WHEN** `.dataspec/table-standards.json` is added to the package
+- **THEN** existing `.dataspec/field-catalog.json`, `.dataspec/rules.yaml`, `.dataspec/manifest.json`, and `AGENTS.md.fragment` fields remain present
+- **AND** clients that ignore table standards can continue using the existing package layout.
+
+#### Scenario: Database rules mention table standards
+- **WHEN** `DATABASE_RULES.md` is generated for a project with business object or table structure standards
+- **THEN** it includes a concise table structure section with primary key, unique key, index, foreign key, audit, soft delete, relation, and common pitfall guidance
+- **AND** it tells AI clients not to execute generated DDL without human confirmation.
+
+### Requirement: AI Context table-standard scoping
+AI Context export SHALL support table-standard scoping without changing existing field scoping semantics.
+
+#### Scenario: Export by business object
+- **WHEN** a caller exports AI Context with scope `business-object` and a query matching an object key, entity name, or table pattern
+- **THEN** `.dataspec/table-standards.json` includes matching objects, related templates, relation edges, and referenced fields
+- **AND** `contextScope` records matched count, returned count, warnings, and truncation status.
+
+#### Scenario: Export by table template
+- **WHEN** a caller exports AI Context with scope `table-template` and a query matching a template name or table pattern
+- **THEN** `.dataspec/table-standards.json` includes the matching templates, structure standards, related business objects, and relation hints
+- **AND** field catalog scoping remains additive and does not hide required table-standard fields without a warning.
+
+#### Scenario: No table standards remain valid
+- **WHEN** a project has no business object or table structure standards
+- **THEN** the package still contains a valid `.dataspec/table-standards.json` with empty arrays and a summary
+- **AND** no noisy empty sections are added to human-readable guidance.
+
+### Requirement: AI Context Field Semantics Export
+The AI Context package SHALL export field semantics, knowledge cards, enum lifecycle, naming guidance, and metric mappings in bounded, secret-safe artifacts.
+
+#### Scenario: Package contains field knowledge cards artifact
+- **WHEN** an AI Context zip is generated for a project
+- **THEN** it contains a field knowledge card artifact with projectId, schemaVersion, contextScope, cards, and summary
+- **AND** manifest files list the artifact and report truncation when cards are bounded.
+
+#### Scenario: Package contains field semantics artifact
+- **WHEN** a project has field semantic rules or naming translation guidance
+- **THEN** AI Context includes an artifact that lists semantic rules, derived relationships, unit conversion notes, time granularity, source-of-truth guidance, preferred names, forbidden translations, and anti-patterns
+- **AND** empty projects remain compatible with valid empty arrays or omitted optional sections.
+
+#### Scenario: Package contains metric mapping artifact
+- **WHEN** a project has metric definitions
+- **THEN** AI Context includes a metric mapping artifact with metricKey, definition, field refs, filter rule, aggregation rule, time grain, example SQL summary, and evidence refs
+- **AND** the artifact is marked as metadata guidance, not executable SQL.
+
+#### Scenario: Package enum output carries lifecycle
+- **WHEN** AI Context exports enums
+- **THEN** enum values include optional lifecycle status, aliases, replacement value, validity window, and mapping hints
+- **AND** existing enum value and label fields remain present.
+
+#### Scenario: Database rules mention semantic guardrails
+- **WHEN** `DATABASE_RULES.md` is generated
+- **THEN** it includes concise guidance for high-risk unit conversion, source-of-truth, enum lifecycle, forbidden translation, and metric-boundary cases
+- **AND** it tells AI clients to open the detailed artifacts before generating DDL, SQL, mocks, or tests that depend on those semantics.

@@ -162,7 +162,8 @@ export async function runSmoke(options, deps = {}) {
   try {
     const response = await requestJson(fetchFn, joinUrl(options.server, '/api/projects/demo'), {
       method: 'POST',
-      token: options.token
+      token: options.token,
+      timeoutMs: options.timeoutMs
     })
     demoResult = unwrapData(response)
     projectId = demoResult?.project?.id || demoResult?.projectId || null
@@ -180,7 +181,8 @@ export async function runSmoke(options, deps = {}) {
 
   try {
     await requestJson(fetchFn, joinUrl(options.server, `/api/dashboard/summary?projectId=${encodeURIComponent(projectId)}`), {
-      token: options.token
+      token: options.token,
+      timeoutMs: options.timeoutMs
     })
     checks.push({
       name: 'dashboard-summary',
@@ -196,6 +198,7 @@ export async function runSmoke(options, deps = {}) {
     const lintResponse = await requestJson(fetchFn, joinUrl(options.server, '/api/lint'), {
       method: 'POST',
       token: options.token,
+      timeoutMs: options.timeoutMs,
       body: { projectId, sql: lintSql }
     })
     const lintResult = unwrapData(lintResponse)
@@ -274,11 +277,17 @@ function buildResult(ok, options, checks, projectId) {
 }
 
 async function waitForHttp(fetchFn, url, options) {
-  const attempts = Math.max(1, Math.ceil(options.timeoutMs / options.intervalMs))
+  const deadline = Date.now() + options.timeoutMs
   let lastError = null
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+  while (Date.now() < deadline) {
+    const remainingMs = Math.max(1, deadline - Date.now())
     try {
-      const response = await fetchFn(url, requestOptions({ token: options.token }))
+      const response = await fetchWithDeadline(
+        fetchFn,
+        url,
+        { token: options.token },
+        Math.min(options.intervalMs, remainingMs)
+      )
       if (response.ok) {
         return response
       }
@@ -286,23 +295,54 @@ async function waitForHttp(fetchFn, url, options) {
     } catch (error) {
       lastError = error
     }
-    if (attempt < attempts) {
-      await options.sleepFn(options.intervalMs)
+    const sleepMs = Math.min(options.intervalMs, Math.max(0, deadline - Date.now()))
+    if (sleepMs > 0) {
+      await options.sleepFn(sleepMs)
     }
   }
   throw new Error(`Timed out waiting for ${safeServiceUrl(url)}: ${redactText(lastError?.message)}`)
 }
 
 async function requestJson(fetchFn, url, options = {}) {
-  const response = await fetchFn(url, requestOptions(options))
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} from ${safeServiceUrl(url)}: ${await responseText(response)}`)
+  return withDeadline(url, options.timeoutMs || DEFAULT_TIMEOUT_MS, async (signal) => {
+    const response = await fetchFn(url, requestOptions({ ...options, signal }))
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} from ${safeServiceUrl(url)}: ${await responseText(response)}`)
+    }
+    const json = await response.json()
+    if (json && typeof json.code === 'number' && json.code >= 400) {
+      throw new Error(json.message || `DataSpec API returned code ${json.code}`)
+    }
+    return json
+  })
+}
+
+async function fetchWithDeadline(fetchFn, url, options, timeoutMs) {
+  return withDeadline(
+    url,
+    timeoutMs,
+    (signal) => fetchFn(url, requestOptions({ ...options, signal }))
+  )
+}
+
+/**
+ * 同时使用 Promise deadline 和 AbortController：前者保证忽略 signal 的调用也会返回，
+ * 后者负责释放原生 fetch 持有的 socket，避免超时后连接继续占用资源。
+ */
+async function withDeadline(url, timeoutMs, operation) {
+  const controller = new AbortController()
+  let timeoutId
+  const timeoutPromise = new Promise((resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Timed out requesting ${safeServiceUrl(url)} after ${timeoutMs}ms`))
+      controller.abort()
+    }, timeoutMs)
+  })
+  try {
+    return await Promise.race([operation(controller.signal), timeoutPromise])
+  } finally {
+    clearTimeout(timeoutId)
   }
-  const json = await response.json()
-  if (json && typeof json.code === 'number' && json.code >= 400) {
-    throw new Error(json.message || `DataSpec API returned code ${json.code}`)
-  }
-  return json
 }
 
 function requestOptions(options = {}) {
@@ -315,7 +355,8 @@ function requestOptions(options = {}) {
   return {
     method: options.method || 'GET',
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body)
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    signal: options.signal
   }
 }
 

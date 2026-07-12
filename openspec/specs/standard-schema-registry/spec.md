@@ -41,3 +41,76 @@ The registry SHALL define a compatibility policy for AI-consumed contract change
 - **WHEN** a field is deprecated but still present
 - **THEN** the contract lists the field path, replacement hint, deprecatedSince, removalAfter, and reason.
 
+### Requirement: Registry describes stable references and post-check results
+The standard schema registry SHALL describe the stable-reference and AI output post-check contracts.
+
+#### Scenario: Registry catalog includes new contracts
+- **WHEN** the registry catalog is generated
+- **THEN** it SHALL include contract summaries for standard reference resolution and AI output post-check results.
+
+#### Scenario: Contract detail describes stable fields
+- **WHEN** a caller requests either new contract detail
+- **THEN** the JSON Schema SHALL describe required fields, enums, array item semantics, compatibility policy, secret-safety constraints, and examples
+- **AND** additive stableRef fields on existing contracts SHALL be documented.
+
+### Requirement: Registry describes Standard Query DSL contracts
+The standard schema registry SHALL describe Standard Query DSL request, result, filter, summary, and validation error contracts.
+
+#### Scenario: Registry catalog includes DSL contracts
+- **WHEN** the registry catalog is generated
+- **THEN** it includes contract summaries for Standard Query DSL request and result objects.
+
+#### Scenario: Contract detail describes DSL fields
+- **WHEN** a caller requests Standard Query DSL contract detail
+- **THEN** the JSON Schema describes target, text, filters, operators, limit, strict, explain, normalized query, applied filters, ignored filters, counts, hints, supported fields, bounds, and secret-safety constraints.
+
+### Requirement: Registry contains table standard contracts
+The schema registry SHALL register the contracts used by business object and table structure standards.
+
+#### Scenario: Catalog lists table standard contracts
+- **WHEN** the schema registry catalog is generated
+- **THEN** it contains contract summaries for BusinessObjectStandard, TableStructureStandard, TableRelationHint, TableIndexStandard, TableForeignKeyStandard, TablePolicyStandard, and AI Context table standards
+- **AND** every summary includes schema version, stable fields, JSON Schema reference, docs reference, and compatibility policy.
+
+#### Scenario: Contract detail describes stable fields
+- **WHEN** a client requests one of the table standard contract details
+- **THEN** the response describes each stable field, nested object, array shape, nullability, allowed enum values, and redaction boundary
+- **AND** unknown contract ids continue to return the existing readable failure with supported ids.
+
+### Requirement: Registry compatibility for additive table standards
+The schema registry SHALL mark table standard additions as compatible when existing stable fields are preserved.
+
+#### Scenario: Add optional table-standard fields
+- **WHEN** business object, table structure, DDL preview, or AI Context contracts gain optional table-standard fields
+- **THEN** the registry compatibility policy marks the change as additive
+- **AND** it documents that removing or renaming stable table-standard fields requires a schema version bump and migration note.
+
+### Requirement: Registry includes field semantics contracts
+The schema registry SHALL describe the AI-consumed contracts introduced for field semantics and knowledge cards.
+
+#### Scenario: Registry lists new semantic contracts
+- **WHEN** a client lists the schema registry catalog
+- **THEN** it includes contracts for FieldSemanticRule, FieldKnowledgeCard, EnumValueLifecycle, MetricDefinitionMapping, and AI Context field semantics artifacts
+- **AND** each contract includes schemaVersion, stable fields, docsRef, jsonSchemaRef, compatibility policy, and examples when available.
+
+#### Scenario: Contract detail describes secret-safe fields
+- **WHEN** a client shows a semantic contract detail
+- **THEN** text fields that can contain user-maintained guidance include descriptions requiring secret-safe content and no sampled business rows.
+
+#### Scenario: Additive compatibility is explicit
+- **WHEN** existing Field, Enum, AI Context field catalog, or data dictionary contracts gain optional semantic fields
+- **THEN** the registry marks the additions as compatible and documents stable field paths for AI clients.
+
+### Requirement: Registry covers test data and compatibility contracts
+Schema Registry SHALL register the standard test data package and consumer compatibility suite contracts for AI and local validation consumers.
+
+#### Scenario: Catalog lists new contracts
+- **WHEN** a client requests the schema registry catalog
+- **THEN** the catalog includes contract summaries for `standard-test-data-package`, `consumer-compatibility-suite`, `consumer-compatibility-adapter-result`, and `consumer-compatibility-breaking-rule`
+- **AND** each summary includes schema version, stable fields, deprecated fields, JSON Schema reference, docs reference, and compatibility policy.
+
+#### Scenario: Contract details include safety descriptions
+- **WHEN** a client requests a test data or compatibility contract detail
+- **THEN** the detail includes JSON Schema descriptions for safety metadata, generated examples, adapter results, diagnostics, stable fields, deprecated fields, and next actions
+- **AND** secret-like example values are redacted or represented as placeholders.
+

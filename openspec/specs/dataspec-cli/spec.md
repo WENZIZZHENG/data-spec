@@ -764,3 +764,102 @@ The DataSpec repository SHALL keep contract fixture coverage for the `comment-pl
 #### Scenario: Fixture rejects unsafe COMMENT plan examples
 - **WHEN** the comment plan fixture includes raw token, password, Authorization header, API key, complete JDBC URL, DSN, connection string, or sampled source row values
 - **THEN** the fixture check fails.
+
+### Requirement: CLI resolves standard references
+DataSpec CLI SHALL expose project-scoped standard reference resolution with stable JSON output.
+
+#### Scenario: Resolve reference from CLI
+- **WHEN** an AI agent runs `dataspec ref resolve` with projectId, ref type, and one or more references
+- **THEN** stdout SHALL contain the same structured resolution results as the API
+- **AND** the command SHALL be read-only.
+
+### Requirement: CLI checks AI output
+DataSpec CLI SHALL expose deterministic AI output post-checks for file and stdin input.
+
+#### Scenario: Check output file
+- **WHEN** an AI agent runs `dataspec ai-output check` with projectId, content type, and a file or stdin
+- **THEN** stdout SHALL contain the stable post-check JSON contract
+- **AND** the process SHALL return exit code 0 for PASS, 1 for WARN or FAIL, and 2 for argument, config, or API errors.
+
+#### Scenario: CLI errors are secret-safe
+- **WHEN** input, API diagnostics, or local config contain secret-like text
+- **THEN** stdout and stderr SHALL NOT expose raw token, password, Authorization, JDBC URL, DSN, or connection string values.
+
+### Requirement: CLI runs Standard Query DSL
+DataSpec CLI SHALL expose a read-only Standard Query DSL search entry point with stable JSON output.
+
+#### Scenario: CLI searches with DSL JSON
+- **WHEN** an AI agent runs a Standard Query DSL CLI command with projectId and a DSL JSON object or file
+- **THEN** stdout contains the stable DSL result JSON contract
+- **AND** the command exits 0 when the query succeeds and 2 for argument, validation, config, or API errors.
+
+#### Scenario: CLI search-fields accepts DSL
+- **WHEN** an AI agent runs `search-fields` with DSL input
+- **THEN** the CLI sends the DSL to the DataSpec server and prints the same stable field search JSON shape as the API.
+
+#### Scenario: CLI DSL errors are secret-safe
+- **WHEN** CLI query input, local config, or backend diagnostics contain secret-like text
+- **THEN** stdout and stderr SHALL NOT expose raw token, password, Authorization, JDBC URL, DSN, or connection string values.
+
+### Requirement: CLI exposes table standards
+The DataSpec CLI SHALL expose read-only commands for table structure standards so AI agents can inspect them before generating DDL.
+
+#### Scenario: List table standards as JSON
+- **WHEN** a user runs `dataspec table-standards list --project <id> --format json`
+- **THEN** the CLI calls the configured DataSpec server table standards endpoint
+- **AND** it prints stable JSON containing business object summaries, template summaries, relation counts, safety metadata, and next actions.
+
+#### Scenario: Show table standards as JSON
+- **WHEN** a user runs `dataspec table-standards show --project <id> --template <id> --format json` or `--business-object <key>`
+- **THEN** the CLI prints the matching table standard detail without executing DDL or writing project state
+- **AND** it exits with code `2` for invalid arguments or backend failures using a non-sensitive diagnostic.
+
+#### Scenario: CLI table standards fixture coverage
+- **WHEN** a developer runs the CLI/MCP contract fixture check
+- **THEN** it verifies fixture entries for table-standard CLI commands
+- **AND** the fixtures document required options, output shape, exit codes, safety metadata, examples, and recommended next actions.
+
+### Requirement: CLI preserves DDL structure summary
+The CLI SHALL preserve table structure standard fields returned by DDL preview.
+
+#### Scenario: Generate DDL prints structure summary
+- **WHEN** a user runs `dataspec generate-ddl --project <id> --template <id> --table <name> --format json`
+- **THEN** the JSON output preserves `structureSummary` and existing `ddl`, `lintResult`, `standardSnapshot`, and `dialectDiagnostics`
+- **AND** text output includes a concise structure summary when such data is returned by the server.
+
+### Requirement: CLI standard test data package command
+The DataSpec CLI SHALL expose a read-only `test-data generate` command for generating standard-driven test data packages.
+
+#### Scenario: Generate test data package as JSON
+- **WHEN** a user runs `dataspec test-data generate --project <id> --format json`
+- **THEN** the CLI calls the configured DataSpec server test data package endpoint
+- **AND** it prints the returned package JSON without removing stable fields
+- **AND** it exits with code `0` when the request succeeds.
+
+#### Scenario: Generate test data package as text
+- **WHEN** a user runs `dataspec test-data generate --project <id> --format text`
+- **THEN** the CLI prints a concise summary containing `specHash`, case counts, seed profile counts, coverage summary, safety summary, diagnostics, and next actions
+- **AND** the text output is not the stable machine-readable contract.
+
+#### Scenario: Test data command failure
+- **WHEN** arguments are invalid, selectors are unsupported, bounds are exceeded, or the server request fails
+- **THEN** the CLI exits with code `2`
+- **AND** stdout and stderr do not expose token, password, Authorization header, API key, complete JDBC URL, DSN, connection string, private key, or source database row values.
+
+### Requirement: CLI consumer compatibility check command
+The DataSpec CLI SHALL expose a local read-only `consumer-compat check` command for consumer compatibility suite validation.
+
+#### Scenario: Run compatibility check as JSON
+- **WHEN** a user runs `dataspec consumer-compat check --format json`
+- **THEN** the CLI runs the local compatibility suite without requiring a running DataSpec server
+- **AND** it prints stable JSON containing suite status, summary, golden payload checks, breaking rule results, adapter results, diagnostics, and next actions.
+
+#### Scenario: Compatibility check exit codes
+- **WHEN** all required adapters are compatible
+- **THEN** the CLI exits with code `0`
+- **AND** when the suite detects breaking or invalid fixtures it exits with code `1`
+- **AND** when arguments are invalid or the suite cannot be loaded it exits with code `2`.
+
+#### Scenario: Compatibility check output is secret-safe
+- **WHEN** fixtures, diagnostics, examples, or recommended commands contain token, password, Authorization header, API key, complete JDBC URL, DSN, connection string, or private key patterns
+- **THEN** the CLI redacts runtime output where possible and reports unsafe fixture paths without exposing the raw value.

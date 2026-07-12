@@ -119,3 +119,49 @@ The CLI/MCP contract fixtures SHALL document the `code-patch plan` command as a 
 #### Scenario: Code patch plan fixture safety metadata
 - **WHEN** the fixture check reads the `code-patch-plan` entry
 - **THEN** its safety metadata declares `readOnly=true`, `writesProject=false`, `requiresDryRun=true`, `requiresIdempotencyKey=false`, `externalNetworkUsed=false`, `externalLlmUsed=false`, and no raw sensitive example values.
+
+### Requirement: Stable-reference and post-check fixtures
+CLI/MCP contract fixtures SHALL cover standard reference resolution and AI output post-check entry points.
+
+#### Scenario: Fixtures describe new CLI and MCP contracts
+- **WHEN** fixture validation runs
+- **THEN** fixtures SHALL include CLI command shape, exit codes, MCP tool descriptors, input schema descriptions, output shape, safety metadata, success examples, failure examples, and recommended next actions for resolve and post-check.
+
+#### Scenario: Fixture checker detects drift
+- **WHEN** CLI/MCP descriptors remove or rename stable fields, change PASS/WARN/FAIL semantics, weaken read-only safety, or expose secret-like examples
+- **THEN** fixture validation SHALL fail with a readable diagnostic.
+
+### Requirement: Standard Query DSL fixtures
+CLI/MCP contract fixtures SHALL cover Standard Query DSL entry points and additive `search-fields` / `search_fields` DSL parameters.
+
+#### Scenario: Fixtures describe DSL contracts
+- **WHEN** fixture validation runs
+- **THEN** fixtures include CLI command shape, MCP tool descriptors, input schema descriptions, output shape, safety metadata, success examples, failure examples, and recommended next actions for DSL queries.
+
+#### Scenario: Fixture checker detects DSL drift
+- **WHEN** CLI/MCP descriptors remove or rename DSL fields, weaken read-only safety, change supported filter semantics, or expose secret-like examples
+- **THEN** fixture validation fails with a readable diagnostic.
+
+### Requirement: CLI fixture covers test data generation
+The CLI/MCP contract fixtures SHALL document the `test-data generate` command as a read-only AI-facing workflow.
+
+#### Scenario: Test data fixture is validated
+- **WHEN** a developer runs the CLI/MCP contract fixture check
+- **THEN** the fixture set includes `test-data-generate`
+- **AND** the entry lists required options, optional options, output shape, exit codes, safety metadata, success example, failure example, and recommended next actions.
+
+#### Scenario: Test data fixture safety metadata
+- **WHEN** the fixture check reads the `test-data-generate` entry
+- **THEN** its safety metadata declares `readOnly=true`, `writesProject=false`, `writesBusinessRepo=false`, `containsRealBusinessRows=false`, `externalNetworkUsed=false`, `externalLlmUsed=false`, and no raw sensitive example values.
+
+### Requirement: CLI fixture covers consumer compatibility check
+The CLI/MCP contract fixtures SHALL document the `consumer-compat check` command as a local read-only compatibility workflow.
+
+#### Scenario: Compatibility fixture is validated
+- **WHEN** a developer runs the CLI/MCP contract fixture check
+- **THEN** the fixture set includes `consumer-compat-check`
+- **AND** the entry lists required options, optional options, output shape, exit codes, safety metadata, success example, failure example, and recommended next actions.
+
+#### Scenario: Compatibility fixture safety metadata
+- **WHEN** the fixture check reads the `consumer-compat-check` entry
+- **THEN** its safety metadata declares `readOnly=true`, `writesProject=false`, `requiresServer=false`, `externalNetworkUsed=false`, `externalLlmUsed=false`, and no raw sensitive example values.

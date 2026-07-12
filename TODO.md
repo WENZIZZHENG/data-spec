@@ -7,7 +7,7 @@
 - 高优先级已清零；`P6-84` 前端可访问性与键盘操作基线已完成。
 - 2026-07-12 已完成第二轮候选收束：60 个原候选中，36 个编号合并为 10 个实施主题，7 个由现有能力覆盖，17 个删除或等待外部触发。
 - 近期队列共 6 个主题，建议从 `P6-137` 配置 Schema 开始，再依次考虑 `P6-85`、`P6-86`、`P6-101`、`P6-111`、`P6-120`。
-- OpenSpec 当前 active changes：`add-standard-test-data-compat-suite`、`add-ai-context-safety-controls`、`add-stable-standard-refs-and-ai-output-checks`、`add-standard-query-dsl`、`add-business-object-table-standards` 与 `add-field-semantics-knowledge-cards` 均已完成实现、验证和独立评审；按项目约定暂保留 open，不自动 archive。
+- OpenSpec 当前 active changes 为 0；2026-07-12 已按实现顺序同步主规格并归档 7 个既有完成 change，以及本地运行与时间存储强化 change。
 - 已完成 P0-P4 详情见 [docs/archive/todo-completed-p0-p4.md](docs/archive/todo-completed-p0-p4.md)。
 - 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 135 个原待办编号。
 - 已删除 / 不做或等待触发的独立候选 26 项，详见 [docs/archive/todo-removed-p6-candidates.md](docs/archive/todo-removed-p6-candidates.md)。
