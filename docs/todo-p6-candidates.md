@@ -4,8 +4,8 @@
 
 本文件承接根 TODO.md 中尚未完成的 P6 候选详情。后续开发先读根 TODO.md、候选评审和时间评估，再按任务范围读取本文件对应条目；不要默认线性顺扫全部候选。
 
-- 未完成候选数量：61
-- 本轮已完成主题包归档：7 项，详见 [archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
+- 未完成候选数量：60
+- 本轮已完成主题包 / 高价值候选归档：8 项，详见 [archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
 - 本轮已归档为现有能力覆盖：6 项，详见 [archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
 - 本轮已删除独立候选：9 项，详见 [archive/todo-removed-p6-candidates.md](archive/todo-removed-p6-candidates.md)
 - 已完成 P5/P6 详情：[archive/todo-completed-p5-p6.md](archive/todo-completed-p5-p6.md)
@@ -18,7 +18,6 @@
 
 - P6-74：标准变更演练沙箱与样例回归
 - P6-80：规则与模板变更 diff 包
-- P6-84：前端可访问性与键盘操作基线
 - P6-85：本地数据清理、重置与演示项目重建
 - P6-86：前端性能体验指标与慢页面提示
 
@@ -103,15 +102,6 @@
 - 落地产物：新增规则/模板变更 diff 包；记录 before/after、changedParams、affectedRules、affectedTemplates、sampleResultDiff、compatibilityNotes、rollbackPlan 和 reviewChecklist。
 - 验收标准：调整一条规则参数或模板后，能看到命中样例和生成结果差异；AI 可读取 diff 包决定是否需要补测试或更新 Context；回滚说明不依赖人工记忆。
 - 边界：不做审批流，不替代 OpenSpec proposal，不要求所有历史模板补齐 diff；优先覆盖新变更。
-
-### P6-84：前端可访问性与键盘操作基线
-- 状态：待办。
-- 为什么做：DataSpec 会成为日常工作台，字段库、反向导入、SQL 校验和命令面板都需要键盘可操作、焦点清晰、表单标签明确；这也会让 AI/browser automation 更稳定。
-- 已有基础：已有 Vue 3、Element Plus、Monaco、前端关键流程 smoke、命令面板待办、统一前端状态待办和浏览器级 E2E 待办。
-- 缺口：当前页面主要关注功能可用，缺少焦点顺序、aria label、表格操作按钮名称、弹窗焦点恢复、键盘快捷入口和颜色对比度基线。
-- 落地产物：为核心页面建立可访问性检查清单和少量自动化规则；补齐关键按钮/输入的可读名称、焦点状态、弹窗关闭/恢复逻辑和键盘路径；把检查接入可选前端验证。
-- 验收标准：不用鼠标也能完成项目切换、SQL 校验、查看记录、字段库筛选和反向导入预览的核心路径；关键按钮对自动化工具有稳定名称；可访问性检查不出现高危问题。
-- 边界：不一次性改完整视觉系统，不承诺 WCAG 全量认证；第一版聚焦高频工作流和自动化稳定性。
 
 ### P6-85：本地数据清理、重置与演示项目重建
 - 状态：待办。

@@ -4,12 +4,12 @@
 
 ## 当前状态
 
-- 当前高优先级正在按用户要求自动推进；`P6-185 + P6-176` 已随 OpenSpec change `add-standard-test-data-compat-suite` 完成实现、验证、独立评审和 commit 收口，当前自动进入 `P6-84` 前端可访问性与键盘操作基线。
+- 当前高优先级已清零；`P6-84` 前端可访问性与键盘操作基线已完成实现、验证和独立评审收口，下一项建议从前端稳定性主题的 `P6-86` 或独立候选 `P6-85` 中选择。
 - OpenSpec 当前 active changes：`add-standard-test-data-compat-suite`、`add-ai-context-safety-controls`、`add-stable-standard-refs-and-ai-output-checks`、`add-standard-query-dsl`、`add-business-object-table-standards` 与 `add-field-semantics-knowledge-cards` 均已完成实现、验证和独立评审；按项目约定暂保留 open，不自动 archive。
 - 已完成 P0-P4 详情见 [docs/archive/todo-completed-p0-p4.md](docs/archive/todo-completed-p0-p4.md)。
-- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 127 项。
+- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 128 项。
 - 已删除 / 不做独立候选 9 项，详见 [docs/archive/todo-removed-p6-candidates.md](docs/archive/todo-removed-p6-candidates.md)。
-- 未完成 P6 候选共 61 项，详情见 [docs/todo-p6-candidates.md](docs/todo-p6-candidates.md)。
+- 未完成 P6 候选共 60 项，详情见 [docs/todo-p6-candidates.md](docs/todo-p6-candidates.md)。
 - 候选池价值评审见 [docs/todo-p6-candidate-review.md](docs/todo-p6-candidate-review.md)。
 - 剩余待办时间评估见 [docs/todo-p6-remaining-estimates.md](docs/todo-p6-remaining-estimates.md)。
 - 任务卡可从 create-table/review-pr-sql/reverse-import-standards/export-min-context/standard-evidence-review/standard-maintenance workflow recipe 生成；该短摘要用于本地状态检查，详细能力见完成归档。
@@ -17,7 +17,7 @@
 
 ## 下一步顺序
 
-1. 当前自动推进顺序：进入 `P6-84` 前端可访问性与键盘操作基线；完成后再从 [候选评审](docs/todo-p6-candidate-review.md) 的“高价值保留”或主题包中选择下一项。
+1. 当前自动推进顺序：高优先级已完成；若继续前端稳定性主题，下一项建议 `P6-86` 前端性能体验指标与慢页面提示；若优先补本地维护能力，可选 `P6-85` 本地数据清理、重置与演示项目重建。
 2. 开工前读取对应候选详情和 [时间评估](docs/todo-p6-remaining-estimates.md)，再按任务类型决定快速、常规、SDD standard 或 SDD full。
 3. 新增想法优先合并到既有候选主题；确实无法承接时再新增编号，避免继续堆叠愿望清单。
 4. 完成任务后同步根入口、候选池、OpenSpec archive 或完成归档，避免已完成能力继续压在主待办里。
@@ -26,7 +26,7 @@
 
 - [P6 候选池](docs/todo-p6-candidates.md)：保留所有未完成候选的完整背景、缺口、产物、验收标准和边界。
 - [P6 候选价值评审](docs/todo-p6-candidate-review.md)：记录哪些值得做、哪些应合并、哪些已删除或暂缓。
-- [P6 剩余待办时间评估](docs/todo-p6-remaining-estimates.md)：列出剩余 61 项候选和粗略开发时间。
+- [P6 剩余待办时间评估](docs/todo-p6-remaining-estimates.md)：列出剩余 60 项候选和粗略开发时间。
 - [P5/P6 完成归档](docs/archive/todo-completed-p5-p6.md)：保留已完成条目的验证证据、产物和后续增强。
 - [P6 删除候选归档](docs/archive/todo-removed-p6-candidates.md)：记录删除独立候选的原因和恢复触发条件。
 - [P0-P4 完成归档](docs/archive/todo-completed-p0-p4.md)：保留早期已完成能力的详细背景。
@@ -35,7 +35,7 @@
 
 ### 早期遗留候选
 
-5 项：P6-74、P6-80、P6-84、P6-85、P6-86
+4 项：P6-74、P6-80、P6-85、P6-86
 
 ### 扩展候选池 P6-94 到 P6-128
 

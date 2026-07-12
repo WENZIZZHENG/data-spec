@@ -4,8 +4,8 @@
 
 本文件从根 TODO.md 机械迁移已完成的 P5/P6 待办详情，根待办只保留入口和当前候选池。每个条目保留原始状态、已完成能力、验证证据、产物、后续增强和边界；原条目未记录 commit 的地方不补猜。
 
-- 完成项数量：127
-- 当前未完成候选：61，详见 [P6 候选池](../todo-p6-candidates.md)
+- 完成项数量：128
+- 当前未完成候选：60，详见 [P6 候选池](../todo-p6-candidates.md)
 - P0-P4 已完成归档：[todo-completed-p0-p4.md](todo-completed-p0-p4.md)
 
 ## 历史追加记录（已降级为背景）
@@ -1037,6 +1037,14 @@
 - 已完成能力：新增字段语义规则、枚举值 lifecycle、字段知识卡、指标口径映射和字段命名翻译辅助；后端提供维护/只读 API，前端字段库、枚举字典、DDL/指标维护和 AI Context 页面可维护或查看语义证据；AI Context 导出 `.dataspec/field-knowledge-cards.json`、`.dataspec/field-semantics.json` 和 `.dataspec/metrics.json`；Schema Registry、数据字典、字段搜索/推荐、CLI、MCP 和 contract fixture 已接入新增只读契约。
 - 验证证据：见 `openspec/changes/add-field-semantics-knowledge-cards/tasks.md` 的 `Verification Evidence`；最终以本轮 OpenSpec strict、后端目标测试、tools 测试、前端测试/build、OpenAPI drift、secrets scan、独立评审和本地 commit 记录为准。
 - 后续增强：第一版只沉淀 metadata guidance，不执行真实单位换算或指标计算，不连接业务库统计枚举分布，不自动改生产 SQL，不接入外部翻译、BI 或血缘平台；后续若需要更强枚举 literal lint、指标计算校验或语义检索，可按独立主题继续推进。
+
+### P6-84：前端可访问性与键盘操作基线
+- 状态：已完成第一版，按常规模式交付；不涉及 API、存储或 OpenSpec 契约变更。
+- 已完成能力：应用外壳新增 skip link、`main` landmark、主导航 landmark 和路由切换主内容聚焦；命令面板支持可读快捷键入口、搜索框自动聚焦、禁用命令语义和执行命令时目标页面 / 弹窗接管焦点；项目列表、SQL 校验、字段库和反向导入补齐高频按钮 / 输入的稳定可读名称，并保持 Label in Name；新增弹窗关闭后恢复触发焦点的 `useDialogFocusReturn` composable；SQL 记录详情、项目弹窗、API Token 弹窗和连接预设弹窗已接入焦点恢复。
+- 已完成能力：新增源码级可访问性基线测试 `dataspec-web/tests/accessibilityBaseline.test.ts` 并接入 `npm test`；新增 Playwright 键盘 E2E `dataspec-web/tests/e2e/accessibility-keyboard.spec.ts`，覆盖项目创建、skip link、命令面板快捷键 / 执行命令、SQL 校验、记录详情焦点恢复和字段库筛选；E2E route harness 补齐只读背景 API fixture，避免正常后台请求被误报为未覆盖。
+- 验证证据：`node --test tests/accessibilityBaseline.test.ts` 通过；`npx.cmd playwright test tests/e2e/accessibility-keyboard.spec.ts` 通过；`npm.cmd test` 187 pass；`npm.cmd run build` 通过，仅保留既有 Rolldown pure annotation、chunk size 和 plugin timing warning；`git diff --check` 通过，仅有 Windows LF/CRLF 提示。
+- 独立评审证据：子 agent `019f54ee-3927-7013-a998-6c41a74ff896` 已完成并关闭；评审发现 2 个 Important 和 2 个 Minor，已修复 Label in Name、命令面板执行后焦点抢占、Monaco 外层多余 tab stop 和主导航 landmark 语义问题，并复跑验证通过。
+- 后续增强：第一版不承诺 WCAG 全量认证，不重做完整视觉系统；前端性能指标、端到端上手引导、问题反馈采集和字段库密集键盘编辑继续由 `P6-86`、`P6-116`、`P6-122` 和 `P6-151` 承接。
 
 ### P6-185 / P6-176：标准测试数据包与消费端兼容验收套件
 - 状态：第一版已完成实现、验证、独立评审和本地 commit 收口；OpenSpec change `add-standard-test-data-compat-suite` 按项目约定暂保留 active，不自动 archive。

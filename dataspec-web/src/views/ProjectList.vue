@@ -35,23 +35,28 @@
       </el-table-column>
       <el-table-column label="操作" width="300" fixed="right">
         <template #default="{ row }">
-          <el-button text type="primary" @click.stop="handleSelectProject(row)">
+          <el-button text type="primary" :aria-label="projectActionLabel(row, '选择')" @click.stop="handleSelectProject(row)">
             选择
           </el-button>
-          <el-button text type="primary" @click.stop="openStarterKitDialog(row)">
+          <el-button text type="primary" :aria-label="projectActionLabel(row, '应用 Starter Kit')" @click.stop="openStarterKitDialog(row)">
             Starter Kit
           </el-button>
-          <el-button text type="primary" @click.stop="openEditDialog(row)">
+          <el-button text type="primary" :aria-label="projectActionLabel(row, '编辑')" @click.stop="openEditDialog(row)">
             编辑
           </el-button>
-          <el-button text type="danger" @click.stop="handleDelete(row)">
+          <el-button text type="danger" :aria-label="projectActionLabel(row, '删除')" @click.stop="handleDelete(row)">
             删除
           </el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editingProject ? '编辑项目' : '新建项目'" width="460px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editingProject ? '编辑项目' : '新建项目'"
+      width="460px"
+      @closed="projectDialogFocus.restoreFocus"
+    >
         <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
           <el-form-item label="项目名称" prop="name">
           <div class="full-width" :data-testid="stableTestIds.projects.projectNameInput">
@@ -118,6 +123,7 @@
       v-model="starterKitDialogVisible"
       :title="starterKitTarget ? `应用 Starter Kit：${starterKitTarget.name ?? ''}` : '应用 Starter Kit'"
       width="640px"
+      @closed="starterKitDialogFocus.restoreFocus"
     >
       <el-form label-width="96px">
         <el-form-item label="选择模板">
@@ -198,6 +204,7 @@ import {
   listStarterKits
 } from '@/api/starterKit'
 import { useProjectStore } from '@/stores/project'
+import { useDialogFocusReturn } from '@/composables/useDialogFocusReturn'
 import type {
   CreateProjectReq,
   Project,
@@ -221,6 +228,8 @@ const applyStarterKitKeys = ref<string[]>([])
 const starterKitApplying = ref(false)
 const starterKitInstallations = ref<StarterKitInstallationInfo[]>([])
 const installationsLoading = ref(false)
+const projectDialogFocus = useDialogFocusReturn(dialogVisible)
+const starterKitDialogFocus = useDialogFocusReturn(starterKitDialogVisible)
 
 const form = reactive<CreateProjectReq>({
   name: '',
@@ -249,12 +258,14 @@ function resetForm(project?: Project) {
 }
 
 function openCreateDialog() {
+  projectDialogFocus.rememberFocus()
   editingProject.value = null
   resetForm()
   dialogVisible.value = true
 }
 
 function openEditDialog(project: Project) {
+  projectDialogFocus.rememberFocus()
   editingProject.value = project
   resetForm(project)
   dialogVisible.value = true
@@ -262,6 +273,10 @@ function openEditDialog(project: Project) {
 
 function handleSelectProject(project: Project) {
   projectStore.setCurrentProject(project)
+}
+
+function projectActionLabel(project: Project, action: string) {
+  return `${action}项目 ${project.name || `#${project.id ?? '-'}`}`
 }
 
 async function handleSubmit() {
@@ -339,6 +354,7 @@ function starterKitSummaryMessage(prefix: string, results: StarterKitApplyResult
 }
 
 async function openStarterKitDialog(project: Project) {
+  starterKitDialogFocus.rememberFocus()
   starterKitTarget.value = project
   applyStarterKitKeys.value = []
   starterKitDialogVisible.value = true

@@ -1,9 +1,19 @@
 <template>
-  <el-dialog v-model="visible" width="760px" title="命令面板" class="command-palette-dialog" @open="handleOpen">
+  <el-dialog
+    v-model="visible"
+    width="760px"
+    title="命令面板"
+    class="command-palette-dialog"
+    @open="handleOpen"
+    @opened="focusSearchInput"
+    @closed="handleClosed"
+  >
     <div class="command-palette">
       <el-input
+        ref="searchInputRef"
         v-model="keyword"
         placeholder="搜索页面、最近记录或常用动作"
+        aria-label="命令搜索"
         clearable
         autofocus
         class="command-search"
@@ -31,6 +41,8 @@
             type="button"
             class="command-item"
             :class="{ disabled: item.disabled }"
+            :aria-label="commandItemLabel(item)"
+            :disabled="item.disabled"
             @click="executeCommand(item)"
           >
             <span class="item-main">
@@ -46,12 +58,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, shallowRef } from 'vue'
+import { computed, nextTick, ref, shallowRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { listAiJobs } from '@/api/aiJob'
 import { listLintRecords } from '@/api/lint'
 import { listReverseImportDecisions } from '@/api/reverseImport'
+import { useDialogFocusReturn } from '@/composables/useDialogFocusReturn'
 import {
   buildCommandPaletteItems,
   commandPaletteStorageKey,
@@ -65,6 +78,7 @@ import type { AiJobRecordListItem, ReverseImportDecision, SqlCheckRecord } from 
 import type { CommandPaletteItem, RecentCommandEntry } from '@/utils/commandPalette'
 
 const visible = defineModel<boolean>({ default: false })
+const dialogFocus = useDialogFocusReturn(visible)
 
 const props = defineProps<{
   projectId?: number | null
@@ -72,7 +86,9 @@ const props = defineProps<{
 
 const router = useRouter()
 const keyword = ref('')
+const searchInputRef = ref<{ focus: () => void } | null>(null)
 const loading = ref(false)
+const restoreFocusAfterClose = ref(true)
 const lintRecords = shallowRef<SqlCheckRecord[]>([])
 const reverseDecisions = shallowRef<ReverseImportDecision[]>([])
 const aiJobs = shallowRef<AiJobRecordListItem[]>([])
@@ -100,6 +116,19 @@ async function handleOpen() {
   keyword.value = ''
   localRecentEntries.value = readRecentCommandEntries()
   await loadRemoteRecent()
+}
+
+async function focusSearchInput() {
+  await nextTick()
+  searchInputRef.value?.focus()
+}
+
+async function handleClosed() {
+  if (restoreFocusAfterClose.value) {
+    await dialogFocus.restoreFocus()
+    return
+  }
+  restoreFocusAfterClose.value = true
 }
 
 async function loadRemoteRecent() {
@@ -142,8 +171,15 @@ async function executeCommand(item: CommandPaletteItem) {
     title: item.title
   })
   localRecentEntries.value = readRecentCommandEntries()
+  // 执行命令会进入目标页面或打开目标弹窗，关闭面板时不应把焦点抢回旧入口。
+  restoreFocusAfterClose.value = false
   visible.value = false
   await router.push(item.route)
+}
+
+function commandItemLabel(item: CommandPaletteItem) {
+  const state = item.disabled ? `，不可用：${item.disabledReason || '当前命令不可用'}` : ''
+  return `${item.title}${item.description ? `，${item.description}` : ''}${state}`
 }
 
 defineExpose({
@@ -201,9 +237,15 @@ defineExpose({
   background: #f8fbff;
 }
 
-.command-item.disabled {
+.command-item.disabled,
+.command-item:disabled {
   cursor: not-allowed;
   opacity: 0.58;
+}
+
+.command-item:focus-visible {
+  outline: 2px solid #409eff;
+  outline-offset: 2px;
 }
 
 .item-main {

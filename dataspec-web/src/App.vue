@@ -1,7 +1,8 @@
 <template>
+  <a class="skip-link" href="#main-content">跳到主内容</a>
   <el-container class="app-container">
     <!-- 侧边栏导航 -->
-    <el-aside width="220px" class="app-aside">
+    <el-aside width="220px" class="app-aside" role="navigation" aria-label="主导航">
       <div class="app-logo">
         <el-icon :size="24"><DataAnalysis /></el-icon>
         <span class="logo-text">DataSpec</span>
@@ -193,18 +194,30 @@
           </el-breadcrumb>
         </div>
         <div class="header-right">
-          <el-button size="small" @click="openCommandPalette">
+          <el-button
+            size="small"
+            aria-label="打开命令面板"
+            aria-keyshortcuts="Control+K Meta+K"
+            @click="openCommandPalette"
+          >
             <el-icon><Search /></el-icon>
             <span>命令面板</span>
           </el-button>
           <el-tag v-if="authStore.operatorName" effect="plain" type="success">
             {{ authStore.operatorName }}
           </el-tag>
-          <el-button size="small" @click="authStore.openLoginDialog">
+          <el-button size="small" @click="openLoginDialog">
             <el-icon><Lock /></el-icon>
             <span>API Token</span>
           </el-button>
-          <el-button v-if="authStore.hasToken" size="small" text @click="handleLogout">
+          <el-button
+            v-if="authStore.hasToken"
+            size="small"
+            text
+            aria-label="退出 API Token 登录"
+            title="退出 API Token 登录"
+            @click="handleLogout"
+          >
             <el-icon><SwitchButton /></el-icon>
           </el-button>
           <span class="project-label">当前项目：</span>
@@ -212,6 +225,7 @@
             v-model="projectSelectValue"
             placeholder="请选择项目"
             :loading="projectStore.loading"
+            aria-label="当前项目"
             style="width: 200px"
           >
             <el-option label="（未选择）" :value="0" />
@@ -224,7 +238,13 @@
           </el-select>
         </div>
       </el-header>
-      <el-main class="app-main">
+      <el-main
+        id="main-content"
+        class="app-main"
+        role="main"
+        tabindex="-1"
+        :aria-label="routeTitle || '工作台'"
+      >
         <router-view />
       </el-main>
     </el-container>
@@ -234,7 +254,12 @@
       :project-id="projectStore.currentProjectId"
     />
 
-    <el-dialog v-model="authStore.loginDialogVisible" title="API Token" width="420px">
+    <el-dialog
+      v-model="authStore.loginDialogVisible"
+      title="API Token"
+      width="420px"
+      @closed="authDialogFocus.restoreFocus"
+    >
       <el-form @submit.prevent="handleLogin">
         <el-form-item label="Token">
           <el-input
@@ -255,12 +280,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
 import { AUTH_CLEARED_EVENT } from '@/api/authStorage'
+import { useDialogFocusReturn } from '@/composables/useDialogFocusReturn'
 import { readPositiveIntQuery, replaceRouteQuery } from '@/utils/urlState'
 import CommandPaletteDialog from '@/components/CommandPaletteDialog.vue'
 
@@ -270,6 +296,7 @@ const projectStore = useProjectStore()
 const authStore = useAuthStore()
 const tokenInput = ref('')
 const commandPaletteVisible = ref(false)
+const authDialogFocus = useDialogFocusReturn(toRef(authStore, 'loginDialogVisible'))
 
 // 当前激活的菜单项，与路由路径同步
 const activeMenu = computed(() => route.path)
@@ -304,6 +331,18 @@ watch(
   () => applyRouteProjectId()
 )
 
+watch(
+  () => route.path,
+  () => {
+    void focusMainContent()
+  }
+)
+
+async function focusMainContent() {
+  await nextTick()
+  document.getElementById('main-content')?.focus({ preventScroll: true })
+}
+
 function applyRouteProjectId() {
   const routeProjectId = readPositiveIntQuery(route.query, 'projectId')
   if (!routeProjectId || projectStore.loading) {
@@ -326,6 +365,11 @@ async function syncProjectQuery(projectId: number | null) {
 
 function openCommandPalette() {
   commandPaletteVisible.value = true
+}
+
+function openLoginDialog() {
+  authDialogFocus.rememberFocus()
+  authStore.openLoginDialog()
 }
 
 function handleCommandPaletteShortcut(event: KeyboardEvent) {
@@ -375,7 +419,7 @@ const handleLogout = () => {
 }
 
 .logo-text {
-  letter-spacing: 1px;
+  letter-spacing: 0;
 }
 
 .app-menu {

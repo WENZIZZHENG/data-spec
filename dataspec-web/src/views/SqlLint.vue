@@ -7,12 +7,13 @@
           type="primary"
           :loading="linting"
           :data-testid="stableTestIds.sqlLint.runButton"
+          aria-label="执行校验 SQL"
           @click="handleLint"
         >
           <el-icon><CaretRight /></el-icon>
           执行校验
         </el-button>
-        <el-button :loading="debugging" @click="handleDebug">
+        <el-button :loading="debugging" aria-label="打开规则调试" @click="handleDebug">
           <el-icon><Search /></el-icon>
           规则调试
         </el-button>
@@ -28,6 +29,7 @@
           class="profile-select"
           clearable
           placeholder="默认模式"
+          aria-label="AI 模式"
           @change="handleProfileChange"
         >
           <el-option
@@ -50,7 +52,12 @@
       />
       <div class="policy-control">
         <span class="policy-label">修复模式</span>
-        <el-radio-group v-model="fixPolicyMode" size="small" :disabled="profileFixPolicyActive">
+        <el-radio-group
+          v-model="fixPolicyMode"
+          size="small"
+          :disabled="profileFixPolicyActive"
+          aria-label="修复模式"
+        >
           <el-radio-button label="GENERATE">生成</el-radio-button>
           <el-radio-button label="DRY_RUN">dry-run</el-radio-button>
           <el-radio-button label="DISABLED">关闭</el-radio-button>
@@ -63,6 +70,7 @@
           size="small"
           class="risk-select"
           :disabled="profileFixPolicyActive"
+          aria-label="最高风险"
         >
           <el-option label="低" value="LOW" />
           <el-option label="中" value="MEDIUM" />
@@ -306,7 +314,7 @@
             >
               <div class="fixed-sql-header">
                 <span>修正 SQL</span>
-                <el-button size="small" text type="primary" @click="handleCopySql">
+                <el-button size="small" text type="primary" aria-label="复制修正 SQL" @click="handleCopySql">
                   <el-icon><CopyDocument /></el-icon>
                   复制
                 </el-button>
@@ -432,7 +440,8 @@
                     type="primary"
                     :loading="recordDetailLoading && loadingRecordId === row.id"
                     :data-testid="stableTestIds.sqlLint.recordDetailButton"
-                    @click="handleViewRecord(row.id)"
+                    aria-label="查看详情 SQL 检查记录"
+                    @click="handleOpenRecordDetail(row.id)"
                   >
                     查看详情
                   </el-button>
@@ -456,7 +465,12 @@
       </el-collapse>
     </div>
 
-    <el-dialog v-model="recordDialogVisible" title="检查记录详情" width="860px">
+    <el-dialog
+      v-model="recordDialogVisible"
+      title="检查记录详情"
+      width="860px"
+      @closed="recordDialogFocus.restoreFocus"
+    >
       <div
         v-if="activeRecord?.record"
         class="record-detail"
@@ -603,6 +617,7 @@ import { listAiProfiles } from '@/api/aiProfile'
 import { downloadEvidencePackage, generateEvidencePackage } from '@/api/evidence'
 import { debugLintSql, getLintRecord, lintSql, listLintRecords } from '@/api/lint'
 import StateBlock from '@/components/StateBlock.vue'
+import { useDialogFocusReturn } from '@/composables/useDialogFocusReturn'
 import { useRequestState } from '@/composables/useRequestState'
 import { useProjectStore } from '@/stores/project'
 import {
@@ -664,6 +679,7 @@ const projectStore = useProjectStore()
 const route = useRoute()
 const router = useRouter()
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
+const recordDialogFocus = useDialogFocusReturn(recordDialogVisible)
 
 const DEFAULT_SQL = `CREATE TABLE users (
     id bigserial PRIMARY KEY,
@@ -737,6 +753,7 @@ onMounted(() => {
       language: 'sql',
       theme: 'vs-dark',
       automaticLayout: true,
+      ariaLabel: 'SQL 编辑器',
       minimap: { enabled: false },
       fontSize: 14,
       lineNumbers: 'on',
@@ -970,6 +987,11 @@ async function handleViewRecord(id?: number) {
     recordDetailLoading.value = false
     loadingRecordId.value = null
   }
+}
+
+function handleOpenRecordDetail(id?: number) {
+  recordDialogFocus.rememberFocus()
+  void handleViewRecord(id)
 }
 
 async function openRecordFromRoute() {

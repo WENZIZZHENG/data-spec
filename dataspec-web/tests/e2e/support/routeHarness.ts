@@ -115,6 +115,10 @@ export async function installDataSpecRouteHarness(page: Page): Promise<DataSpecR
       await ok(route, { profiles: [], defaultProfileId: '', selectedProfileId: '' })
       return
     }
+    if (method === 'GET' && pathname === '/api/ai-jobs') {
+      await ok(route, { records: [], total: 0, current: 1, size: 5, pages: 0 })
+      return
+    }
     if (method === 'POST' && pathname === '/api/lint') {
       state.lintRecordCreated = true
       await ok(route, lintResult())
@@ -156,6 +160,10 @@ export async function installDataSpecRouteHarness(page: Page): Promise<DataSpecR
       await ok(route, commentPatchPlan())
       return
     }
+    if (method === 'GET' && pathname === '/api/reverse-import/decisions') {
+      await ok(route, [])
+      return
+    }
     if (method === 'GET' && pathname === '/api/fields/all') {
       await ok(route, fields)
       return
@@ -166,6 +174,10 @@ export async function installDataSpecRouteHarness(page: Page): Promise<DataSpecR
     }
     if (method === 'GET' && pathname === '/api/fields/groups') {
       await ok(route, { totalFieldCount: fields.length, groups: [] })
+      return
+    }
+    if (method === 'GET' && pathname === '/api/field-semantics') {
+      await ok(route, [])
       return
     }
     if (method === 'GET' && pathname === '/api/domains') {

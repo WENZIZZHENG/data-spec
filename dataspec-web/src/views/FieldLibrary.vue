@@ -31,9 +31,16 @@
             :prefix-icon="Search"
             clearable
             placeholder="搜索字段名、显示名、别名、分类、注释或替代说明"
+            aria-label="筛选标准字段"
           />
         </div>
-        <el-select v-model="fieldStatusFilter" clearable class="status-filter" placeholder="全部状态">
+        <el-select
+          v-model="fieldStatusFilter"
+          clearable
+          class="status-filter"
+          placeholder="全部状态"
+          aria-label="筛选字段状态"
+        >
           <el-option
             v-for="option in lifecycleStatusOptions"
             :key="option.value"
@@ -90,6 +97,8 @@
             class="group-option"
             :class="{ active: activeGroupKey === group.optionKey }"
             type="button"
+            :aria-pressed="activeGroupKey === group.optionKey"
+            :aria-label="`${group.displayName}，${group.fieldCount} 个字段`"
             @click="selectGroup(group.optionKey)"
           >
             <span class="group-name">{{ group.displayName }}</span>
@@ -194,13 +203,13 @@
           <el-table-column prop="comment" label="注释" min-width="220" show-overflow-tooltip />
           <el-table-column label="操作" width="410" fixed="right">
             <template #default="{ row }">
-              <el-button text type="primary" @click="openImpactDialog(row)">影响</el-button>
-              <el-button text type="primary" @click="openSourceDialog(row)">来源</el-button>
-              <el-button text type="primary" @click="openChangeLogDialog(row)">变更</el-button>
-              <el-button text type="primary" @click="openMergeDialog(row)">合并</el-button>
-              <el-button text type="primary" @click="openKnowledgeCardDrawer(row)">知识卡</el-button>
-              <el-button text type="primary" @click="openEditDialog(row)">编辑</el-button>
-              <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
+              <el-button text type="primary" :aria-label="fieldActionLabel(row, '查看影响')" @click="openImpactDialog(row)">影响</el-button>
+              <el-button text type="primary" :aria-label="fieldActionLabel(row, '查看来源')" @click="openSourceDialog(row)">来源</el-button>
+              <el-button text type="primary" :aria-label="fieldActionLabel(row, '查看变更')" @click="openChangeLogDialog(row)">变更</el-button>
+              <el-button text type="primary" :aria-label="fieldActionLabel(row, '合并')" @click="openMergeDialog(row)">合并</el-button>
+              <el-button text type="primary" :aria-label="fieldActionLabel(row, '查看知识卡')" @click="openKnowledgeCardDrawer(row)">知识卡</el-button>
+              <el-button text type="primary" :aria-label="fieldActionLabel(row, '编辑')" @click="openEditDialog(row)">编辑</el-button>
+              <el-button text type="danger" :aria-label="fieldActionLabel(row, '删除')" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -2070,6 +2079,10 @@ function fieldGroupLabel(field: Field) {
     parts.push(field.category)
   }
   return parts.length > 0 ? parts.join(' / ') : '未分组'
+}
+
+function fieldActionLabel(field: Field, action: string) {
+  return `${action}字段 ${field.name || field.displayName || `#${field.id ?? '-'}`}`
 }
 
 function replacementFieldLabel(field: Field) {

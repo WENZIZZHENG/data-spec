@@ -15,6 +15,7 @@
           :disabled="!canGeneratePreview"
           :loading="previewLoading"
           :data-testid="stableTestIds.reverseImport.generatePreviewButton"
+          aria-label="生成预览 反向导入"
           @click="handleGeneratePreview"
         >
           <el-icon><View /></el-icon>
@@ -59,13 +60,14 @@
               </el-upload>
               <el-button :disabled="!sqlText" @click="clearSql">清空</el-button>
             </div>
-            <el-input
-              v-model="sqlText"
-              type="textarea"
-              :rows="12"
-              spellcheck="false"
-              placeholder="CREATE TABLE ..."
-            />
+              <el-input
+                v-model="sqlText"
+                type="textarea"
+                :rows="12"
+                spellcheck="false"
+                placeholder="CREATE TABLE ..."
+                aria-label="SQL DDL 输入"
+              />
           </section>
         </el-tab-pane>
 
@@ -86,7 +88,13 @@
                 <div class="section-header compact-header">
                   <h3>连接信息</h3>
                   <div class="inline-actions">
-                    <el-button size="small" :loading="presetLoading" @click="loadPresets">
+                    <el-button
+                      size="small"
+                      :loading="presetLoading"
+                      aria-label="刷新连接预设"
+                      title="刷新连接预设"
+                      @click="loadPresets"
+                    >
                       <el-icon><Refresh /></el-icon>
                     </el-button>
                     <el-tag :type="connectionTagType" effect="plain">{{ connectionStatusText }}</el-tag>
@@ -172,6 +180,7 @@
                     :disabled="!canUseDatabaseConnection"
                     :loading="tableLoading"
                     :data-testid="stableTestIds.reverseImport.loadTablesButton"
+                    aria-label="加载表 数据库"
                     @click="handleLoadTables"
                   >
                     <el-icon><Refresh /></el-icon>
@@ -185,6 +194,7 @@
                     :disabled="!canBrowseMetadata"
                     :loading="metadataLoading"
                     :data-testid="stableTestIds.reverseImport.browseMetadataButton"
+                    aria-label="浏览元数据 数据库"
                     @click="handleBrowseMetadata"
                   >
                     <el-icon><View /></el-icon>
@@ -287,6 +297,7 @@
                     :prefix-icon="Search"
                     clearable
                     placeholder="搜索 schema、表名或注释"
+                    aria-label="数据库表筛选"
                   />
                   <el-input-number v-model="scanPageSize" :min="1" :max="100" size="small" controls-position="right" />
                   <el-button :disabled="filteredDatabaseTables.length === 0" @click="selectVisibleTables">全选当前</el-button>
@@ -698,7 +709,12 @@
         </el-button>
       </div>
 
-      <el-dialog v-model="presetDialogVisible" title="保存连接预设" width="460px">
+      <el-dialog
+        v-model="presetDialogVisible"
+        title="保存连接预设"
+        width="460px"
+        @closed="presetDialogFocus.restoreFocus"
+      >
         <el-form label-width="82px">
           <el-form-item label="预设名">
             <el-input v-model="presetForm.name" maxlength="100" show-word-limit placeholder="例如：本地只读库" />
@@ -1005,6 +1021,7 @@ import {
   testDatabaseConnection
 } from '@/api/reverseImport'
 import { createClientIdempotencyKey } from '@/api/idempotency'
+import { useDialogFocusReturn } from '@/composables/useDialogFocusReturn'
 import { useProjectStore } from '@/stores/project'
 import {
   attachCandidateConfirmReasons,
@@ -1145,6 +1162,7 @@ const importLoading = ref(false)
 const presetLoading = ref(false)
 const presetSaving = ref(false)
 const presetDialogVisible = ref(false)
+const presetDialogFocus = useDialogFocusReturn(presetDialogVisible)
 const restoringMemory = ref(false)
 const databaseTables = ref<DatabaseTableInfo[]>([])
 const metadataBrowser = ref<DatabaseMetadataBrowser | null>(null)
@@ -1592,6 +1610,7 @@ async function loadPresets() {
 }
 
 function openPresetDialog() {
+  presetDialogFocus.rememberFocus()
   presetForm.name = selectedPreset.value?.name?.trim() || defaultPresetName()
   presetDialogVisible.value = true
 }
