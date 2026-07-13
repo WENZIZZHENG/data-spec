@@ -172,7 +172,6 @@ import { ElMessage } from 'element-plus'
 import { DocumentCopy, Search } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { searchFields } from '@/api/field'
-import { listAllBusinessGlossary } from '@/api/glossary'
 import { listRuleConfigs } from '@/api/rule'
 import ProjectRequired from '@/components/ProjectRequired.vue'
 import StateBlock from '@/components/StateBlock.vue'
@@ -244,15 +243,13 @@ async function handleAsk() {
   errorMessage.value = ''
   try {
     await replaceRouteQuery(router, route, { q: normalizedQuestion })
-    const [fieldSearch, glossary, rules] = await Promise.all([
+    const [fieldSearch, rules] = await Promise.all([
       searchFields({ projectId, query: normalizedQuestion, limit: 8 }),
-      listAllBusinessGlossary(projectId, 'enabled'),
       listRuleConfigs(projectId)
     ])
     const nextAnswer = buildStandardQuestionAnswer({
       question: normalizedQuestion,
       fieldSearch,
-      glossary,
       rules
     })
     if (requestGuard.isCurrent(requestSnapshot, projectStore.currentProjectId, question.value)) {

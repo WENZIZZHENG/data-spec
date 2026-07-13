@@ -9,6 +9,15 @@ export type DemoProjectResult = Schemas['DemoProjectResult']
 export type Field = Schemas['Field']
 export type FieldReq = Schemas['FieldReq']
 export type FieldSuggestion = Schemas['FieldSuggestion']
+
+/** 后端统一生成的查询 token evidence；所有文本已脱敏且长度有界。 */
+export type QueryTokenEvidence = Schemas['QueryTokenEvidence']
+
+/** 确定性命名 token 的词法类型；仅描述边界，不代表业务分类。 */
+export type QueryTokenKind = NonNullable<QueryTokenEvidence['tokenKind']>
+
+/** 当前项目 glossary 对查询 token 的保守解析状态。 */
+export type QueryTokenResolutionStatus = NonNullable<QueryTokenEvidence['resolutionStatus']>
 export type FieldKnowledgeCardListResp = Schemas['FieldKnowledgeCardListResp']
 export type FieldKnowledgeCardResp = Schemas['FieldKnowledgeCardResp']
 export type FieldSemanticRuleReq = Schemas['FieldSemanticRuleReq']
@@ -108,6 +117,8 @@ export interface StandardQueryNormalized {
   explain?: boolean
   /** 是否严格校验。 */
   strict?: boolean
+  /** FIELD text 的确定性 token evidence；explain=false 时可为空。 */
+  queryTokens?: QueryTokenEvidence[]
 }
 
 /** Standard Query DSL 执行摘要；服务端保证文本、建议和过滤值为 secret-safe summary。 */
@@ -170,8 +181,13 @@ export type FieldSearchSummary = Schemas['FieldSearchSummary'] & {
   dslIgnoredFilters?: StandardQueryIgnoredFilter[]
   /** 字段搜索对应的 DSL 下一步查询建议；等价于 querySummary.nextQueryHints。 */
   nextQueryHints?: string[]
+  /** 字段搜索使用的确定性 token evidence；文本已脱敏且数量有界。 */
+  queryTokens?: QueryTokenEvidence[]
 }
-export type FieldSearchResult = Schemas['FieldSearchResult']
+export type FieldSearchResult = Omit<Schemas['FieldSearchResult'], 'summary'> & {
+  /** 字段搜索摘要；在生成 Schema 更新前兼容 additive queryTokens。 */
+  summary?: FieldSearchSummary
+}
 export type Domain = Schemas['Domain']
 export type FieldGroupItem = Schemas['FieldGroupItem']
 export type FieldGroupSummary = Schemas['FieldGroupSummary']

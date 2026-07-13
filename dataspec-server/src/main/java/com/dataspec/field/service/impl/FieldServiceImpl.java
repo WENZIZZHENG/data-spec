@@ -2,7 +2,6 @@ package com.dataspec.field.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.businessglossary.model.GlossaryMatch;
-import com.dataspec.businessglossary.service.BusinessGlossaryService;
 import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.common.exception.BizException;
@@ -33,6 +32,13 @@ import com.dataspec.fieldsemantic.model.FieldSemanticRuleResp;
 import com.dataspec.fieldsemantic.service.FieldSemanticRuleService;
 import com.dataspec.metric.model.MetricDefinitionResp;
 import com.dataspec.metric.service.MetricDefinitionService;
+import com.dataspec.querynormalization.model.NameLexicalToken;
+import com.dataspec.querynormalization.model.QueryNormalizationResult;
+import com.dataspec.querynormalization.model.QueryTokenEvidence;
+import com.dataspec.querynormalization.model.QueryTokenResolution;
+import com.dataspec.querynormalization.model.QueryTokenResolutionStatus;
+import com.dataspec.querynormalization.service.QueryNormalizationService;
+import com.dataspec.querynormalization.tokenizer.NameLexicalTokenizer;
 import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.security.context.ProjectAccessGuard;
 import com.dataspec.standardref.service.StandardReferenceFormatter;
@@ -81,10 +87,12 @@ public class FieldServiceImpl implements FieldService {
     private static final long FIELD_SEARCH_WARN_MS = 500;
     private static final Set<String> GROUPING_UPDATE_KEYS = Set.of("domainId", "category", "tags");
     private static final Set<String> BULK_UPDATE_KEYS = Set.of("status", "category", "tags", "sensitive", "codeSetId", "aliases");
+    private static final NameLexicalTokenizer LEXICAL_TOKENIZER = new NameLexicalTokenizer();
     private static final Map<String, String> FALLBACK_TERMS = fallbackTerms();
     private static final Map<String, SemanticGroup> SEMANTIC_GROUPS = semanticGroups();
     private static final int SPECIFIC_SEMANTIC_SCORE = 88;
     private static final int GENERIC_SEMANTIC_SCORE = 24;
+    private static final int DIRECT_NAME_PRIORITY_SCORE = 130;
     /** 中文场景词很短，至少两个连续片段重叠才视为契约禁用命中，避免只因“金额”等通用词误降级。 */
     private static final int USAGE_CONTRACT_HAN_BIGRAM_MATCH_THRESHOLD = 2;
     private static final String FIELD_RECOMMENDATION_DOCS = "README.md#字段推荐与字段标准检索";
@@ -96,7 +104,7 @@ public class FieldServiceImpl implements FieldService {
     private final StandardChangeLogService changeLogService;
     private final FieldHistoricalAliasService fieldHistoricalAliasService;
     private final ObjectMapper objectMapper;
-    private final BusinessGlossaryService businessGlossaryService;
+    private final QueryNormalizationService queryNormalizationService;
     private final FieldSemanticRuleService fieldSemanticRuleService;
     private final MetricDefinitionService metricDefinitionService;
 
@@ -132,15 +140,15 @@ public class FieldServiceImpl implements FieldService {
             throw new BizException("项目ID不能为空");
         }
         ProjectAccessGuard.requireProjectAccess(req.projectId());
-        SearchCriteria criteria = searchCriteria(req);
+        String query = FieldGroupingSummaries.normalizeText(req.query());
+        QueryNormalizationResult normalization = normalizeQuery(req.projectId(), query);
+        SearchCriteria criteria = searchCriteria(req, query, normalization);
         if (!criteria.hasQuery() && !criteria.hasAnyFilter()) {
             throw new BizException("字段检索需要 query 或至少一个过滤条件");
         }
 
         Set<Long> sourceFieldIds = loadSourceFieldIds(req.projectId(), criteria.sourceBatchId());
-        List<GlossaryMatch> glossaryMatches = criteria.hasQuery()
-                ? businessGlossaryService.match(req.projectId(), criteria.query())
-                : List.of();
+        List<GlossaryMatch> glossaryMatches = normalization.glossaryMatches();
         List<Field> candidates = fieldRepository.findAllByProjectId(req.projectId()).stream()
                 .filter(field -> matchesSearchFilters(field, criteria, sourceFieldIds))
                 .toList();
@@ -154,7 +162,8 @@ public class FieldServiceImpl implements FieldService {
                     field,
                     criteria,
                     glossaryMatches,
-                    historicalAliasesFor(historicalAliases, field));
+                    historicalAliasesFor(historicalAliases, field),
+                    normalization);
             if (item != null) {
                 matched.add(item);
             }
@@ -165,7 +174,8 @@ public class FieldServiceImpl implements FieldService {
 
         boolean truncated = matched.size() > criteria.limit();
         List<FieldSearchItem> returned = matched.stream().limit(criteria.limit()).toList();
-        List<String> hints = searchHints(criteria, candidates.size(), matched.size(), truncated);
+        List<String> hints = new ArrayList<>(searchHints(criteria, candidates.size(), matched.size(), truncated));
+        hints.addAll(normalizationHints(normalization));
         List<StandardQueryAppliedFilter> dslAppliedFilters = dslAppliedFilters(criteria);
         StandardQuerySummary querySummary = new StandardQuerySummary(
                 "FIELD",
@@ -184,11 +194,12 @@ public class FieldServiceImpl implements FieldService {
                 querySummary,
                 dslAppliedFilters,
                 List.of(),
-                hints);
+                hints,
+                normalization.queryTokens());
 
         return new FieldSearchResult(
                 req.projectId(),
-                criteria.query(),
+                SensitiveDataSanitizer.redactText(criteria.query()),
                 summary,
                 returned,
                 resultNextActions(returned, truncated));
@@ -413,13 +424,14 @@ public class FieldServiceImpl implements FieldService {
         }
 
         int safeLimit = normalizeLimit(limit);
-        String queryCompact = compact(query);
-        Set<String> queryTokens = tokens(query);
-        Set<String> querySemanticGroups = semanticGroupsForText(query);
+        QueryNormalizationResult normalization = normalizeQuery(projectId, query);
+        String queryCompact = compact(normalization.normalizedText());
+        Set<String> queryTokens = normalization.normalizedTokenSet();
+        Set<String> querySemanticGroups = semanticGroupsForText(normalization.normalizedText());
         if (queryCompact.isBlank() && queryTokens.isEmpty()) {
             throw new BizException("字段描述缺少可匹配内容");
         }
-        List<GlossaryMatch> glossaryMatches = businessGlossaryService.match(projectId, query);
+        List<GlossaryMatch> glossaryMatches = normalization.glossaryMatches();
         List<FieldSuggestion> suggestions = new ArrayList<>();
         FieldSuggestion blockedByUsageContract = null;
         int blockedScore = -1;
@@ -433,7 +445,7 @@ public class FieldServiceImpl implements FieldService {
             if (forbiddenTranslationMatches(field, queryCompact, queryTokens)) {
                 if (blockedScore < 1) {
                     blockedScore = 1;
-                    blockedByUsageContract = forbiddenTranslationBlockedSuggestion(field, query);
+                    blockedByUsageContract = forbiddenTranslationBlockedSuggestion(field, normalization);
                 }
                 continue;
             }
@@ -455,7 +467,7 @@ public class FieldServiceImpl implements FieldService {
             if (usageContractContradictsScenario(field, query)) {
                 if (score > blockedScore) {
                     blockedScore = score;
-                    blockedByUsageContract = usageContractBlockedSuggestion(field, score, reason, query);
+                    blockedByUsageContract = usageContractBlockedSuggestion(field, score, reason, normalization);
                 }
                 continue;
             }
@@ -464,13 +476,15 @@ public class FieldServiceImpl implements FieldService {
             if (evaluation.historicalAlias() != null) {
                 evidence.add(historicalEvidence(evaluation.historicalAlias(), match));
             }
+            evidence.addAll(queryEvidenceForField(field, normalization));
             suggestions.add(new FieldSuggestion(
                     field,
                     score,
                     reason,
                     field.getName(),
                     true,
-                    List.copyOf(evidence)));
+                    List.copyOf(evidence),
+                    normalization.queryTokens()));
         }
 
         suggestions.sort(Comparator
@@ -484,36 +498,55 @@ public class FieldServiceImpl implements FieldService {
             return List.of(blockedByUsageContract);
         }
 
+        String fallbackReason = appendReason(
+                "未命中已有标准字段，按描述生成候选名",
+                normalizationCaution(normalization));
+        List<ExplainTrace> fallbackEvidence = new ArrayList<>();
+        fallbackEvidence.add(new ExplainTrace(
+                "FIELD_SUGGESTION",
+                null,
+                null,
+                fallbackReason,
+                0,
+                "fallback_name",
+                FIELD_RECOMMENDATION_DOCS));
+        fallbackEvidence.addAll(queryEvidenceForField(null, normalization));
         return List.of(new FieldSuggestion(
                 null,
                 0,
-                "未命中已有标准字段，按描述生成候选名",
-                generateFallbackName(query),
+                fallbackReason,
+                generateFallbackName(normalization.normalizedText()),
                 false,
-                List.of(new ExplainTrace(
-                        "FIELD_SUGGESTION",
-                        null,
-                        null,
-                        "未命中已有标准字段，按描述生成候选名",
-                        0,
-                        "fallback_name",
-                        FIELD_RECOMMENDATION_DOCS))));
+                List.copyOf(fallbackEvidence),
+                normalization.queryTokens()));
     }
 
-    private FieldSuggestion usageContractBlockedSuggestion(Field field, int score, String reason, String query) {
+    private FieldSuggestion usageContractBlockedSuggestion(
+            Field field,
+            int score,
+            String reason,
+            QueryNormalizationResult normalization
+    ) {
         String matchReason = "命中已有字段，但字段使用契约提示当前场景需人工确认，按描述生成候选名";
+        List<ExplainTrace> evidence = new ArrayList<>();
+        evidence.add(fieldEvidence(field, score, appendReason(reason, "字段使用契约禁用场景需人工确认")));
+        evidence.addAll(queryEvidenceForField(field, normalization));
         return new FieldSuggestion(
                 null,
                 0,
                 matchReason,
-                generateFallbackName(query),
+                generateFallbackName(normalization.normalizedText()),
                 false,
-                List.of(fieldEvidence(field, score, appendReason(reason, "字段使用契约禁用场景需人工确认"))));
+                List.copyOf(evidence),
+                normalization.queryTokens());
     }
 
-    private FieldSuggestion forbiddenTranslationBlockedSuggestion(Field field, String query) {
+    private FieldSuggestion forbiddenTranslationBlockedSuggestion(
+            Field field,
+            QueryNormalizationResult normalization
+    ) {
         String preferredName = FieldGroupingSummaries.normalizeText(field.getPreferredEnglishName());
-        String recommendedName = preferredName == null ? generateFallbackName(query) : preferredName;
+        String recommendedName = preferredName == null ? generateFallbackName(normalization.normalizedText()) : preferredName;
         String matchReason = "查询命中字段 `" + field.getName() + "` 的禁用翻译，不能直接采用该翻译；"
                 + (preferredName == null
                 ? "请人工确认标准字段或补充 preferredEnglishName。"
@@ -524,19 +557,23 @@ public class FieldServiceImpl implements FieldService {
                 matchReason,
                 recommendedName,
                 false,
-                List.of(fieldEvidence(field, 1, matchReason)));
+                List.of(fieldEvidence(field, 1, matchReason)),
+                normalization.queryTokens());
     }
 
-    private SearchCriteria searchCriteria(FieldSearchReq req) {
-        String query = FieldGroupingSummaries.normalizeText(req.query());
+    private SearchCriteria searchCriteria(
+            FieldSearchReq req,
+            String query,
+            QueryNormalizationResult normalization
+    ) {
         String category = FieldGroupingSummaries.normalizeText(req.category());
         String tag = FieldGroupingSummaries.normalizeText(req.tag());
         String status = normalizeOptionalStatus(req.status());
         return new SearchCriteria(
                 query,
-                compact(query),
-                tokens(query),
-                semanticGroupsForText(query),
+                compact(normalization.normalizedText()),
+                normalization.normalizedTokenSet(),
+                semanticGroupsForText(normalization.normalizedText()),
                 category,
                 tag,
                 status,
@@ -612,7 +649,8 @@ public class FieldServiceImpl implements FieldService {
             Field field,
             SearchCriteria criteria,
             List<GlossaryMatch> glossaryMatches,
-            List<FieldHistoricalAlias> historicalAliases
+            List<FieldHistoricalAlias> historicalAliases,
+            QueryNormalizationResult normalization
     ) {
         int score = 1;
         List<String> reasons = new ArrayList<>();
@@ -654,6 +692,7 @@ public class FieldServiceImpl implements FieldService {
         if (evaluation.historicalAlias() != null) {
             evidence.add(historicalEvidence(evaluation.historicalAlias(), evaluation.match()));
         }
+        evidence.addAll(queryEvidenceForField(field, normalization));
         return new FieldSearchItem(
                 field,
                 score,
@@ -681,6 +720,115 @@ public class FieldServiceImpl implements FieldService {
                 Math.max(0, Math.min(score, 100)),
                 null,
                 FIELD_RECOMMENDATION_DOCS);
+    }
+
+    private QueryNormalizationResult normalizeQuery(Long projectId, String query) {
+        if (query == null) {
+            return new QueryNormalizationResult("", List.of(), List.of(), List.of(), List.of());
+        }
+        return queryNormalizationService.normalize(projectId, query);
+    }
+
+    private List<String> normalizationHints(QueryNormalizationResult normalization) {
+        List<String> hints = new ArrayList<>();
+        if (normalization.queryTokens().stream().anyMatch(token ->
+                token.resolutionStatus() == QueryTokenResolutionStatus.AMBIGUOUS)) {
+            hints.add("查询包含歧义术语或缩写；请确认 canonical 字段或修正项目 glossary。");
+        }
+        if (normalization.queryTokens().stream().anyMatch(token ->
+                token.resolutionStatus() == QueryTokenResolutionStatus.DISABLED)) {
+            hints.add("查询命中项目 glossary 禁用词；结果不得直接作为高置信标准采纳。");
+        }
+        return List.copyOf(hints);
+    }
+
+    private String normalizationCaution(QueryNormalizationResult normalization) {
+        List<String> hints = normalizationHints(normalization);
+        return hints.isEmpty() ? null : String.join(" ", hints);
+    }
+
+    private List<ExplainTrace> queryEvidenceForField(
+            Field field,
+            QueryNormalizationResult normalization
+    ) {
+        List<ExplainTrace> evidence = new ArrayList<>();
+        if (normalization.lexicalTokens().size() > 1) {
+            evidence.add(new ExplainTrace(
+                    "QUERY_TOKEN",
+                    null,
+                    null,
+                    SensitiveDataSanitizer.redactText("确定性命名拆分: " + normalization.normalizedText()),
+                    100,
+                    "NAME_SPLIT",
+                    FIELD_RECOMMENDATION_DOCS));
+        }
+        for (QueryTokenResolution resolution : normalization.tokenResolutions()) {
+            QueryTokenEvidence token = resolution.evidence();
+            if (token.resolutionStatus() == QueryTokenResolutionStatus.RESOLVED && field != null) {
+                GlossaryMatch source = glossarySourceForField(field, resolution.glossaryMatches());
+                if (source == null) {
+                    continue;
+                }
+                String ruleCode = "ABBREVIATION".equals(source.matchType())
+                        ? "ABBREVIATION_EXPANSION"
+                        : "GLOSSARY_LONGEST_MATCH";
+                Long sourceId = stableGlossarySourceId(source);
+                Integer confidence = Math.max(0, Math.min(source.score(), 100));
+                evidence.add(new ExplainTrace(
+                        "BUSINESS_GLOSSARY",
+                        sourceId,
+                        null,
+                        SensitiveDataSanitizer.redactText(token.reason()),
+                        confidence,
+                        ruleCode,
+                        FIELD_RECOMMENDATION_DOCS));
+            } else if (token.resolutionStatus() == QueryTokenResolutionStatus.AMBIGUOUS) {
+                evidence.add(new ExplainTrace(
+                        "BUSINESS_GLOSSARY",
+                        null,
+                        null,
+                        SensitiveDataSanitizer.redactText(token.reason()),
+                        0,
+                        "ABBREVIATION_AMBIGUOUS",
+                        FIELD_RECOMMENDATION_DOCS));
+            } else if (token.resolutionStatus() == QueryTokenResolutionStatus.DISABLED) {
+                evidence.add(new ExplainTrace(
+                        "BUSINESS_GLOSSARY",
+                        token.glossaryIds().size() == 1 ? token.glossaryIds().getFirst() : null,
+                        null,
+                        SensitiveDataSanitizer.redactText(token.reason()),
+                        0,
+                        "DISABLED_TERM",
+                        FIELD_RECOMMENDATION_DOCS));
+            }
+        }
+        return List.copyOf(evidence);
+    }
+
+    private GlossaryMatch glossarySourceForField(
+            Field field,
+            List<GlossaryMatch> glossaryMatches
+    ) {
+        return glossaryMatches.stream()
+                .filter(match -> match.resolutionStatus() == QueryTokenResolutionStatus.RESOLVED)
+                .filter(match -> glossaryAppliesToField(field, match))
+                .max(Comparator.comparingInt(GlossaryMatch::score))
+                .orElse(null);
+    }
+
+    private List<Long> glossarySourceIds(GlossaryMatch source) {
+        if (source.glossaryIds() != null && !source.glossaryIds().isEmpty()) {
+            return source.glossaryIds();
+        }
+        return source.glossaryId() == null ? List.of() : List.of(source.glossaryId());
+    }
+
+    private Long stableGlossarySourceId(GlossaryMatch source) {
+        List<Long> sourceIds = glossarySourceIds(source).stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        return sourceIds.size() == 1 ? sourceIds.getFirst() : null;
     }
 
     private List<String> filterReasons(SearchCriteria criteria) {
@@ -1516,7 +1664,7 @@ public class FieldServiceImpl implements FieldService {
         for (String alias : splitCsv(field.getAliases())) {
             best = best.max(scoreText("别名", alias, queryCompact, queryTokens, 98, 82, 32));
         }
-        best = best.max(scoreSemanticGroups(querySemanticGroups, semanticGroupsForField(field)));
+        best = best.max(scoreSemanticGroups(querySemanticGroups, field));
         return best;
     }
 
@@ -1536,8 +1684,12 @@ public class FieldServiceImpl implements FieldService {
     private ScoredMatch scoreFieldWithGlossary(Field field, String queryCompact, Set<String> queryTokens,
                                                Set<String> querySemanticGroups,
                                                List<GlossaryMatch> glossaryMatches) {
-        return scoreField(field, queryCompact, queryTokens, querySemanticGroups)
-                .max(scoreGlossary(field, glossaryMatches));
+        ScoredMatch direct = scoreField(field, queryCompact, queryTokens, querySemanticGroups);
+        // 当前字段名、显示名和别名的精确命中属于更强事实，不能被间接 glossary 展开反超。
+        if (direct.score() >= 90) {
+            return new ScoredMatch(Math.max(direct.score(), DIRECT_NAME_PRIORITY_SCORE), direct.reason());
+        }
+        return direct.max(scoreGlossary(field, glossaryMatches));
     }
 
     private EvaluatedMatch scoreFieldWithHistory(
@@ -1588,7 +1740,9 @@ public class FieldServiceImpl implements FieldService {
     private ScoredMatch scoreGlossary(Field field, List<GlossaryMatch> glossaryMatches) {
         ScoredMatch best = ScoredMatch.none();
         for (GlossaryMatch match : glossaryMatches) {
-            if (match.disabledTerm() || !glossaryAppliesToField(field, match)) {
+            if (match.disabledTerm()
+                    || match.resolutionStatus() != QueryTokenResolutionStatus.RESOLVED
+                    || !glossaryAppliesToField(field, match)) {
                 continue;
             }
             best = best.max(new ScoredMatch(match.score(), match.reason()));
@@ -1602,14 +1756,12 @@ public class FieldServiceImpl implements FieldService {
                 || match.exampleFields().contains(field.getName());
     }
 
-    private ScoredMatch scoreSemanticGroups(Set<String> querySemanticGroups, Set<String> fieldSemanticGroups) {
+    private ScoredMatch scoreSemanticGroups(Set<String> querySemanticGroups, Field field) {
         ScoredMatch best = ScoredMatch.none();
+        List<TokenizedText> fieldTexts = semanticTextsForField(field);
         for (String groupKey : querySemanticGroups) {
-            if (!fieldSemanticGroups.contains(groupKey)) {
-                continue;
-            }
             SemanticGroup group = SEMANTIC_GROUPS.get(groupKey);
-            if (group == null) {
+            if (group == null || !matchesSemanticGroup(fieldTexts, group)) {
                 continue;
             }
             int score = group.generic() ? GENERIC_SEMANTIC_SCORE : SPECIFIC_SEMANTIC_SCORE;
@@ -1618,12 +1770,24 @@ public class FieldServiceImpl implements FieldService {
         return best;
     }
 
+    private boolean matchesSemanticGroup(List<TokenizedText> fieldTexts, SemanticGroup group) {
+        for (TokenizedText fieldText : fieldTexts) {
+            for (String keyword : group.keywords()) {
+                if (matchesSemanticKeyword(fieldText.compact(), fieldText.tokens(), keyword)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private ScoredMatch scoreText(String label, String value, String queryCompact, Set<String> queryTokens,
                                   int exactScore, int containsScore, int tokenScore) {
         if (value == null || value.isBlank()) {
             return ScoredMatch.none();
         }
-        String valueCompact = compact(value);
+        TokenizedText tokenizedValue = tokenizeText(value);
+        String valueCompact = tokenizedValue.compact();
         if (valueCompact.isBlank()) {
             return ScoredMatch.none();
         }
@@ -1633,7 +1797,7 @@ public class FieldServiceImpl implements FieldService {
         if (queryCompact.contains(valueCompact) || valueCompact.contains(queryCompact)) {
             return new ScoredMatch(containsScore, label + "匹配");
         }
-        for (String token : tokens(value)) {
+        for (String token : tokenizedValue.tokens()) {
             if (isMeaningfulToken(token) && matchesQueryToken(queryCompact, queryTokens, token)) {
                 return new ScoredMatch(tokenScore, label + "关键词匹配: " + token);
             }
@@ -1655,34 +1819,29 @@ public class FieldServiceImpl implements FieldService {
     }
 
     private static Set<String> tokens(String value) {
-        Set<String> tokens = new LinkedHashSet<>();
-        if (value == null || value.isBlank()) {
-            return tokens;
-        }
-        String normalized = camelToSnake(value).toLowerCase(Locale.ROOT)
-                .replace('_', ' ')
-                .replaceAll("[^\\p{IsHan}a-z0-9]+", " ");
-        for (String token : normalized.split("\\s+")) {
-            if (!token.isBlank()) {
-                tokens.add(token);
-            }
-        }
-        return tokens;
+        return tokenizeText(value).tokens();
     }
 
     private static String compact(String value) {
-        if (value == null) {
-            return "";
+        return tokenizeText(value).compact();
+    }
+
+    private static TokenizedText tokenizeText(String value) {
+        List<NameLexicalToken> lexicalTokens = LEXICAL_TOKENIZER.tokenize(value);
+        if (lexicalTokens.isEmpty()) {
+            return TokenizedText.empty();
         }
-        return camelToSnake(value).toLowerCase(Locale.ROOT)
-                .replaceAll("[^\\p{IsHan}a-z0-9]+", "");
+        Set<String> normalizedTokens = lexicalTokens.stream()
+                .map(NameLexicalToken::normalized)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        return new TokenizedText(
+                lexicalTokens.stream()
+                        .map(NameLexicalToken::normalized)
+                        .collect(java.util.stream.Collectors.joining()),
+                java.util.Collections.unmodifiableSet(normalizedTokens));
     }
 
-    private static String camelToSnake(String value) {
-        return value.replaceAll("([a-z0-9])([A-Z])", "$1_$2");
-    }
-
-    private static Set<String> semanticGroupsForField(Field field) {
+    private static List<TokenizedText> semanticTextsForField(Field field) {
         List<String> values = new ArrayList<>();
         values.add(field.getName());
         values.add(field.getDisplayName());
@@ -1703,7 +1862,10 @@ public class FieldServiceImpl implements FieldService {
         values.add(field.getTranslationNotes());
         values.add(field.getSemanticSummary());
         values.addAll(splitCsv(field.getAliases()));
-        return semanticGroupsForTexts(values);
+        return values.stream()
+                .map(FieldServiceImpl::tokenizeText)
+                .filter(value -> !value.compact().isBlank())
+                .toList();
     }
 
     private List<String> usageContractSummary(Field field) {
@@ -1739,14 +1901,15 @@ public class FieldServiceImpl implements FieldService {
     }
 
     private boolean usageContractMatchesCompact(String scenarioCompact, String contractText) {
-        String contractCompact = compact(contractText);
+        TokenizedText tokenizedContract = tokenizeText(contractText);
+        String contractCompact = tokenizedContract.compact();
         if (contractCompact.isBlank()) {
             return false;
         }
         if (contractCompact.contains(scenarioCompact) || scenarioCompact.contains(contractCompact)) {
             return true;
         }
-        for (String token : tokens(contractText)) {
+        for (String token : tokenizedContract.tokens()) {
             if (!containsHan(token) && token.length() >= 3 && scenarioCompact.contains(token)) {
                 return true;
             }
@@ -1765,28 +1928,15 @@ public class FieldServiceImpl implements FieldService {
         return count;
     }
 
-    private static Set<String> semanticGroupsForTexts(Iterable<String> values) {
-        Set<String> groups = new LinkedHashSet<>();
-        for (String value : values) {
-            groups.addAll(semanticGroupsForText(value));
-        }
-        return groups;
-    }
-
     private static Set<String> semanticGroupsForText(String value) {
         Set<String> groups = new LinkedHashSet<>();
-        if (value == null || value.isBlank()) {
+        TokenizedText tokenizedValue = tokenizeText(value);
+        if (tokenizedValue.compact().isBlank()) {
             return groups;
         }
-        String valueCompact = compact(value);
-        Set<String> valueTokens = tokens(value);
         for (SemanticGroup group : SEMANTIC_GROUPS.values()) {
-            for (String keyword : group.keywords()) {
-                String keywordCompact = compact(keyword);
-                if (keywordCompact.isBlank()) {
-                    continue;
-                }
-                if (matchesSemanticKeyword(valueCompact, valueTokens, keywordCompact)) {
+            for (String keywordCompact : group.keywords()) {
+                if (matchesSemanticKeyword(tokenizedValue.compact(), tokenizedValue.tokens(), keywordCompact)) {
                     groups.add(group.canonical());
                     break;
                 }
@@ -1917,7 +2067,11 @@ public class FieldServiceImpl implements FieldService {
 
     private static void putGroup(Map<String, SemanticGroup> groups, String canonical, boolean generic,
                                  String... keywords) {
-        groups.put(canonical, new SemanticGroup(canonical, Set.of(keywords), generic));
+        Set<String> normalizedKeywords = java.util.Arrays.stream(keywords)
+                .map(FieldServiceImpl::compact)
+                .filter(keyword -> !keyword.isBlank())
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        groups.put(canonical, new SemanticGroup(canonical, normalizedKeywords, generic));
     }
 
     private static String nullToEmpty(String value) {
@@ -1944,6 +2098,12 @@ public class FieldServiceImpl implements FieldService {
     }
 
     private record SemanticGroup(String canonical, Set<String> keywords, boolean generic) {
+    }
+
+    private record TokenizedText(String compact, Set<String> tokens) {
+        static TokenizedText empty() {
+            return new TokenizedText("", Set.of());
+        }
     }
 
     private record UsageContractPart(String label, String value) {

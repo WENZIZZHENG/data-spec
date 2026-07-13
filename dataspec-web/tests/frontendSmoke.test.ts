@@ -54,13 +54,34 @@ test('keeps critical frontend routes and navigation entries wired', () => {
   }
 })
 
-test('keeps standard question glossary lookup aligned with enabled status contract', () => {
+test('keeps standard question normalization sourced from field search evidence', () => {
   const view = readSource('src/views/StandardQuestion.vue')
+  const questionUtil = readSource('src/utils/standardQuestion.ts')
 
-  assertContains(view, [
-    "listAllBusinessGlossary(projectId, 'enabled')"
-  ], 'StandardQuestion glossary status')
-  assert.ok(!view.includes("listAllBusinessGlossary(projectId, 'ACTIVE')"))
+  assert.ok(!view.includes('listAllBusinessGlossary'))
+  assertContains(questionUtil, [
+    'fieldSearch.summary?.queryTokens',
+    "item.resolutionStatus === 'AMBIGUOUS'"
+  ], 'StandardQuestion query token evidence')
+})
+
+test('keeps deterministic query token OpenAPI contracts generated', () => {
+  const schema = readSource('src/api/schema.ts')
+
+  assertContains(schema, [
+    'QueryTokenEvidence:',
+    'queryTokens?: components["schemas"]["QueryTokenEvidence"][]',
+    'tokenKind?: "WORD" | "ACRONYM" | "NUMBER" | "UNIT" | "HAN"',
+    'resolutionStatus?: "RESOLVED" | "AMBIGUOUS" | "DISABLED" | "UNRESOLVED"',
+    'canonicalTerm?: string | null',
+    'canonicalFieldId?: number | null',
+    'canonicalFieldName?: string | null',
+    'glossaryIds?: number[]',
+    '@description 支撑该解析状态的当前项目 glossary 条目 ID；最多返回 8 个。',
+    '@description 字段搜索使用的确定性 query token 证据；文本已脱敏，数量有界。',
+    '@description 字段推荐使用的确定性 query token 证据；文本已脱敏，数量有界。',
+    '@description FIELD text 使用的确定性 query token evidence；文本已脱敏，explain=false 时为空。'
+  ], 'OpenAPI deterministic query token contract')
 })
 
 test('keeps field usage contract editing and evidence display wired', () => {

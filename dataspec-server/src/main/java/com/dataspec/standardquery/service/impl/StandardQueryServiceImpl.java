@@ -311,7 +311,10 @@ public class StandardQueryServiceImpl implements StandardQueryService {
                 List.of(),
                 plan.limit,
                 plan.explain,
-                plan.strict);
+                plan.strict,
+                plan.explain && fieldSummary != null && fieldSummary.queryTokens() != null
+                        ? fieldSummary.queryTokens()
+                        : List.of());
         return new StandardQueryResult(
                 plan.projectId,
                 normalized,

@@ -1791,7 +1791,9 @@ class AiContextExportServiceTest {
                 mock(com.dataspec.changelog.service.StandardChangeLogService.class),
                 mock(com.dataspec.fieldhistory.service.FieldHistoricalAliasService.class),
                 new ObjectMapper(),
-                glossaryService,
+                new com.dataspec.querynormalization.service.impl.QueryNormalizationServiceImpl(
+                        new com.dataspec.querynormalization.tokenizer.NameLexicalTokenizer(),
+                        glossaryService),
                 semanticRuleService,
                 metricDefinitionService);
         return new StandardQueryServiceImpl(searchFieldService);

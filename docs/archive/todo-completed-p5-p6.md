@@ -1,11 +1,11 @@
 # DataSpec 已完成待办归档（P5/P6）
 
-归档日期：2026-07-13
+归档日期：2026-07-14
 
 本文件从根 TODO.md 机械迁移已完成的 P5/P6 待办详情，根待办只保留入口和当前候选池。每个条目保留原始状态、已完成能力、验证证据、产物、后续增强和边界；原条目未记录 commit 的地方不补猜。
 
-- 完成项数量：136
-- 当前未完成主题：9，详见 [P6 候选池](../todo-p6-candidates.md)
+- 完成项数量：137
+- 当前未完成主题：8，详见 [P6 候选池](../todo-p6-candidates.md)
 - P0-P4 已完成归档：[todo-completed-p0-p4.md](todo-completed-p0-p4.md)
 
 ## 历史追加记录（已降级为背景）
@@ -207,7 +207,7 @@
 - 边界：不内置外部 LLM，不自动修改业务仓库，第一版以命令/文档/JSON 契约为主。
 
 ### P6-12：AI 输出契约稳定性与兼容测试
-- 状态：已完成第一版，已新增 [docs/ai-contracts.md](docs/ai-contracts.md) 和后端/CLI/MCP contract fixture 测试。
+- 状态：已完成第一版，已新增 [docs/ai-contracts.md](../ai-contracts.md) 和后端/CLI/MCP contract fixture 测试。
 - 为什么做：DataSpec 优先给 AI 使用，最怕的是字段目录、规则、lint 结果、推荐结果或 MCP 输出字段悄悄漂移，导致 agent 读错上下文或自动化脚本失效。
 - 已有基础：已有 OpenAPI 契约检查、AI Context JSON Schema、CLI/MCP JSON 输出、字段推荐和 SQL lint 结构化结果。
 - 已完成能力：第一版稳定字段清单覆盖 AI Context manifest/field-catalog/rules/workflows、`LintResult`/`LintIssue`/`fixedSql`、字段推荐、DDL 预览、CLI JSON 和 MCP resources/tools；后端测试锁定稳定字段路径、类型和核心枚举，Node 测试锁定 CLI/MCP JSON 结构并验证兼容新增字段不会破坏测试。
@@ -1061,6 +1061,15 @@
 - 已完成能力：新增本地消费端兼容套件 `tools/fixtures/consumer-compatibility-suite.json` 与 `consumer-compat check`，覆盖 Schema Registry、AI Context、CLI JSON、MCP descriptor/resource/tool、CLI/MCP fixture 和测试数据包 golden payload；新增 `consumer-compatibility-suite`、`consumer-compatibility-adapter-result` 和 `consumer-compatibility-breaking-rule` 契约。
 - 验证证据：见 `openspec/changes/add-standard-test-data-compat-suite/tasks.md` 的 `Verification Evidence`；已完成后端目标/全量测试、tools 目标/全量测试、前端测试/build、OpenSpec strict/all、OpenAPI drift 环境风险记录、secrets scan、独立评审和本地 commit 记录。
 - 后续增强：第一版不采样真实业务数据、不写业务数据库或业务仓库、不调用外部 LLM，不做第三方认证体系；SQL seed 仅为草稿，必须保留 `executable=false` 或 `requiresReview=true` 语义。更完整的第三方 adapter、协议导出和业务规则级测试数据可由后续契约消费主题承接。
+
+### P6-189：确定性数标命名解析与缩写治理
+- 状态：第一版已完成实现、验证和独立评审；OpenSpec change `add-deterministic-name-tokenization` 已同步主规格，归档到 `openspec/changes/archive/2026-07-13-add-deterministic-name-tokenization/`（OpenSpec CLI 使用 UTC 日期命名）。
+- 已完成能力：新增共享 `NameLexicalTokenizer` 与 project-scoped `QueryNormalizationService`，按 Unicode code point 稳定处理 separator、camelCase、连续 acronym、数字和单位；项目启用 glossary 提供中文最长匹配、term/synonym/root/abbreviation、disabled term 和保守歧义解析，不猜测未配置缩写。
+- 已完成能力：字段搜索、字段推荐和 Standard Query 复用同一 secret-safe normalization；Field Search summary、Field Suggestion、Standard Query normalized、OpenAPI、CLI/MCP fixture 和标准问答前端消费 additive `queryTokens`；Explain Trace 使用内部 exact `GlossaryMatch` 关联生成稳定 `NAME_SPLIT`、`GLOSSARY_LONGEST_MATCH`、`ABBREVIATION_EXPANSION`、`ABBREVIATION_AMBIGUOUS` 和 `DISABLED_TERM` 证据。
+- 安全与兼容：内部完整 token 只用于匹配，公共 evidence 独立限长限量并经 `SensitiveDataSanitizer` 脱敏；人工确认状态优先保留，supplementary code point 不会被 UTF-16 截断或绕过最小长度；不改数据库 schema、既有必填字段或错误码。
+- 验证证据：后端定向 113 pass、全量 725 pass；tools 438 total，436 pass / 2 platform skips；前端 191 pass，build 通过；OpenAPI drift 通过；OpenSpec strict valid、all 136 pass；`git diff --check` 通过。详细命令和环境 warning 见归档 change 的 `tasks.md`。
+- 评审证据：初始只读 agent `019f5c3f-00c5-7570-abc8-5edc4b89986b` 和最终只读 agent `019f5c71-0b3a-7831-8520-2ff3fbaa6c43` 已完成并关闭；所有 token 截断、Unicode、歧义保留、Explain Trace 来源、secret-safe scoring 和契约 findings 均已修复，最终复评结论为“无 findings”。
+- 后续增强：`P6-120` 继续固化 Top-1/Top-3、误召回和 AI 链路回归；`P6-111` 可复用未知词、歧义缩写和禁用命名 evidence 进入 dry-run 候选 Inbox。第一版不引入 jieba/Python、外部 LLM、向量数据库、拼音猜测或自动写 glossary。
 
 ## 本轮候选覆盖归档（2026-07-09）
 

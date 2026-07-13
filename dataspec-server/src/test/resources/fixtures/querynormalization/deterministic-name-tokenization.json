@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "lexicalCases": [
+    {
+      "id": "acronym-camel-number",
+      "input": "HTTPStatus2Code",
+      "normalizedTokens": ["http", "status", "2", "code"],
+      "tokenKinds": ["ACRONYM", "WORD", "NUMBER", "WORD"]
+    },
+    {
+      "id": "separated-abbreviations",
+      "input": "ord_amt",
+      "normalizedTokens": ["ord", "amt"],
+      "tokenKinds": ["WORD", "WORD"]
+    },
+    {
+      "id": "number-unit-han-acronym",
+      "input": "100ms/会员ID",
+      "normalizedTokens": ["100", "ms", "会员", "id"],
+      "tokenKinds": ["NUMBER", "UNIT", "HAN", "ACRONYM"]
+    },
+    {
+      "id": "supplementary-han",
+      "input": "\ud840\udc00字段",
+      "normalizedTokens": ["\ud840\udc00字段"],
+      "tokenKinds": ["HAN"]
+    }
+  ],
+  "recommendationCases": [
+    {
+      "id": "direct-name-precedes-expanded-abbreviation",
+      "query": "amt",
+      "limit": 5,
+      "fields": [
+        {
+          "id": 22,
+          "name": "amt",
+          "displayName": "AMT",
+          "dataType": "varchar(20)",
+          "status": "enabled"
+        },
+        {
+          "id": 23,
+          "name": "order_amount",
+          "displayName": "订单金额",
+          "dataType": "bigint",
+          "status": "enabled"
+        }
+      ],
+      "glossaryMatches": [
+        {
+          "glossaryId": 9,
+          "term": "订单金额",
+          "matchedToken": "amt",
+          "matchType": "ABBREVIATION",
+          "score": 104,
+          "canonicalFieldId": 23,
+          "canonicalFieldName": "order_amount",
+          "exampleFields": ["order_amount"],
+          "disabledTerm": false,
+          "reason": "术语表：amt -> order_amount",
+          "resolutionStatus": "RESOLVED",
+          "glossaryIds": [9]
+        }
+      ],
+      "expectedOrder": ["amt", "order_amount"],
+      "expectedResolutionStatuses": ["RESOLVED"],
+      "expectedTopExisting": true,
+      "strictTopScore": true
+    },
+    {
+      "id": "longest-chinese-canonical-is-top1",
+      "query": "会员手机号",
+      "limit": 5,
+      "fields": [
+        {
+          "id": 30,
+          "name": "mobile_no",
+          "displayName": "手机号",
+          "dataType": "varchar(20)",
+          "status": "enabled"
+        },
+        {
+          "id": 31,
+          "name": "member_id",
+          "displayName": "会员ID",
+          "dataType": "bigint",
+          "status": "enabled"
+        }
+      ],
+      "glossaryMatches": [
+        {
+          "glossaryId": 10,
+          "term": "会员手机号",
+          "matchedToken": "会员手机号",
+          "matchType": "TERM",
+          "score": 122,
+          "canonicalFieldId": 30,
+          "canonicalFieldName": "mobile_no",
+          "exampleFields": ["mobile_no"],
+          "disabledTerm": false,
+          "reason": "术语表：会员手机号 -> mobile_no",
+          "resolutionStatus": "RESOLVED",
+          "glossaryIds": [10]
+        }
+      ],
+      "expectedOrder": ["mobile_no", "member_id"],
+      "expectedResolutionStatuses": ["RESOLVED"],
+      "expectedTopExisting": true,
+      "strictTopScore": true
+    },
+    {
+      "id": "configured-ord-amt-resolves-without-guessing",
+      "query": "ord_amt",
+      "limit": 5,
+      "fields": [
+        {
+          "id": 40,
+          "name": "order_amount",
+          "displayName": "订单金额",
+          "dataType": "bigint",
+          "status": "enabled"
+        }
+      ],
+      "glossaryMatches": [
+        {
+          "glossaryId": 11,
+          "term": "订单金额",
+          "matchedToken": "ord",
+          "matchType": "ABBREVIATION",
+          "score": 104,
+          "canonicalFieldId": 40,
+          "canonicalFieldName": "order_amount",
+          "exampleFields": ["order_amount"],
+          "disabledTerm": false,
+          "reason": "术语表：ord -> order_amount",
+          "resolutionStatus": "RESOLVED",
+          "glossaryIds": [11]
+        },
+        {
+          "glossaryId": 12,
+          "term": "订单金额",
+          "matchedToken": "amt",
+          "matchType": "ABBREVIATION",
+          "score": 104,
+          "canonicalFieldId": 40,
+          "canonicalFieldName": "order_amount",
+          "exampleFields": ["order_amount"],
+          "disabledTerm": false,
+          "reason": "术语表：amt -> order_amount",
+          "resolutionStatus": "RESOLVED",
+          "glossaryIds": [12]
+        }
+      ],
+      "expectedOrder": ["order_amount"],
+      "expectedResolutionStatuses": ["RESOLVED", "RESOLVED"],
+      "expectedTopExisting": true,
+      "strictTopScore": false
+    },
+    {
+      "id": "ambiguous-abbreviation-does-not-promote-canonical",
+      "query": "amt",
+      "limit": 5,
+      "fields": [
+        {
+          "id": 50,
+          "name": "order_amount",
+          "displayName": "订单金额",
+          "dataType": "bigint",
+          "status": "enabled"
+        }
+      ],
+      "glossaryMatches": [
+        {
+          "glossaryId": 13,
+          "term": null,
+          "matchedToken": "amt",
+          "matchType": "ABBREVIATION",
+          "score": 0,
+          "canonicalFieldId": null,
+          "canonicalFieldName": null,
+          "exampleFields": [],
+          "disabledTerm": false,
+          "reason": "同一缩写指向多个 canonical 字段",
+          "resolutionStatus": "AMBIGUOUS",
+          "glossaryIds": [13, 14]
+        }
+      ],
+      "expectedOrder": ["amt"],
+      "expectedResolutionStatuses": ["AMBIGUOUS"],
+      "expectedTopExisting": false,
+      "strictTopScore": false
+    }
+  ]
+}

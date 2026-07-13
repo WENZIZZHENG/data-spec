@@ -248,6 +248,50 @@ class StandardQueryServiceImplTest {
         assertFalse(strictEx.getMessage().contains("raw.jwt"));
     }
 
+    @Test
+    void search_exposesTheSameFieldTokenNormalizationWhenExplainIsEnabled() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(
+                field(20L, "http_status_2_code", "HTTP 状态码", "int", "HTTP 状态码", "", "enabled")));
+        StandardQueryService service = service(repository);
+
+        StandardQueryResult result = service.search(new StandardQueryRequest(
+                1L,
+                "FIELD",
+                "HTTPStatus2Code",
+                List.of(),
+                null,
+                10,
+                true,
+                false));
+
+        assertEquals(List.of("http", "status", "2", "code"), result.normalizedQuery().queryTokens().stream()
+                .map(token -> token.normalizedToken())
+                .toList());
+        assertEquals("http_status_2_code", result.fields().getFirst().field().getName());
+    }
+
+    @Test
+    void search_explainFalseStillUsesSharedTokenizerButOmitsTokenEvidence() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(
+                field(21L, "http_status_2_code", "HTTP 状态码", "int", "HTTP 状态码", "", "enabled")));
+        StandardQueryService service = service(repository);
+
+        StandardQueryResult result = service.search(new StandardQueryRequest(
+                1L,
+                "FIELD",
+                "HTTPStatus2Code",
+                List.of(),
+                null,
+                10,
+                false,
+                false));
+
+        assertEquals("http_status_2_code", result.fields().getFirst().field().getName());
+        assertTrue(result.normalizedQuery().queryTokens().isEmpty());
+    }
+
     private StandardQueryService service(FieldRepository repository) {
         com.dataspec.fieldsemantic.service.FieldSemanticRuleService semanticRuleService =
                 mock(com.dataspec.fieldsemantic.service.FieldSemanticRuleService.class);
@@ -271,7 +315,9 @@ class StandardQueryServiceImplTest {
                 mock(com.dataspec.changelog.service.StandardChangeLogService.class),
                 mock(com.dataspec.fieldhistory.service.FieldHistoricalAliasService.class),
                 new ObjectMapper(),
-                mock(com.dataspec.businessglossary.service.BusinessGlossaryService.class),
+                new com.dataspec.querynormalization.service.impl.QueryNormalizationServiceImpl(
+                        new com.dataspec.querynormalization.tokenizer.NameLexicalTokenizer(),
+                        mock(com.dataspec.businessglossary.service.BusinessGlossaryService.class)),
                 semanticRuleService,
                 metricDefinitionService);
         return new StandardQueryServiceImpl(fieldService);

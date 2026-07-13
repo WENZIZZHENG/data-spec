@@ -6476,6 +6476,9 @@ function buildLocalBatchId(projectId, items, summary) {
   return `local-${hash}`
 }
 
+const QUERY_TOKEN_EVIDENCE_KINDS = new Set(['WORD', 'ACRONYM', 'NUMBER', 'UNIT', 'HAN'])
+const QUERY_TOKEN_EVIDENCE_STATUSES = new Set(['RESOLVED', 'AMBIGUOUS', 'DISABLED', 'UNRESOLVED'])
+
 function sanitizeSecretValue(value) {
   if (typeof value === 'string') {
     return sanitizeSecretText(value)
@@ -6484,12 +6487,27 @@ function sanitizeSecretValue(value) {
     return value.map((item) => sanitizeSecretValue(item))
   }
   if (value && typeof value === 'object') {
+    const queryTokenEvidence = isQueryTokenEvidence(value)
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [
       key,
-      isSensitiveSecretKey(key) ? '***' : sanitizeSecretValue(item)
+      isSensitiveSecretKey(key) && !(queryTokenEvidence && isQueryTokenEvidenceTextKey(key))
+        ? '***'
+        : sanitizeSecretValue(item)
     ]))
   }
   return value
+}
+
+function isQueryTokenEvidence(value) {
+  return typeof value.token === 'string' &&
+    typeof value.normalizedToken === 'string' &&
+    QUERY_TOKEN_EVIDENCE_KINDS.has(value.tokenKind) &&
+    QUERY_TOKEN_EVIDENCE_STATUSES.has(value.resolutionStatus)
+}
+
+function isQueryTokenEvidenceTextKey(key) {
+  // token 在该契约中是命名证据而非凭据；只保留字段结构，字段值仍递归脱敏。
+  return key === 'token' || key === 'normalizedToken'
 }
 
 function sanitizeSecretText(value) {

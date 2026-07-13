@@ -169,6 +169,20 @@ test('bundled fixtures include context-quality check readonly contract', async (
   assert.ok(command.recommendedNextActions.some((item) => item.includes('budget-plan') || item.includes('export-context')))
 })
 
+test('bundled Standard Query fixtures expose deterministic token evidence', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'search-fields')
+  const tool = fixture.mcpTools.find((item) => item.name === 'search_fields')
+
+  assert.ok(command.outputShape.includes('normalizedQuery.queryTokens[]'))
+  assert.ok(command.outputShape.includes('normalizedQuery.queryTokens[].resolutionStatus'))
+  assert.ok(command.outputShape.includes('normalizedQuery.queryTokens[].canonicalFieldId'))
+  assert.ok(tool.outputShape.includes('structuredContent.normalizedQuery.queryTokens[]'))
+  assert.ok(tool.outputShape.includes('structuredContent.normalizedQuery.queryTokens[].resolutionStatus'))
+  assert.equal(command.successExample.output.normalizedQuery.queryTokens[0].resolutionStatus, 'RESOLVED')
+  assert.equal(tool.successExample.output.normalizedQuery.queryTokens[0].canonicalFieldName, 'order_amount')
+})
+
 test('bundled fixtures include stable reference and post-check contracts', async () => {
   const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
   const refCommand = fixture.cliCommands.find((item) => item.id === 'ref-resolve')

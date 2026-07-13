@@ -1,5 +1,6 @@
 package com.dataspec.standardquery.model;
 
+import com.dataspec.querynormalization.model.QueryTokenEvidence;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -15,6 +16,7 @@ import java.util.List;
  * @param limit 生效的返回上限。
  * @param explain 是否返回解释。
  * @param strict 是否严格校验。
+ * @param queryTokens FIELD text 使用的确定性 token evidence；explain=false 时可为空
  */
 @Schema(description = "归一化后的 Standard Query DSL；不包含 raw secret，可作为执行摘要和复用输入。")
 public record StandardQueryNormalized(
@@ -31,6 +33,21 @@ public record StandardQueryNormalized(
         @Schema(description = "是否返回解释信息。")
         boolean explain,
         @Schema(description = "是否严格校验。")
-        boolean strict
+        boolean strict,
+        @ArraySchema(
+                arraySchema = @Schema(description = "FIELD text 使用的确定性 query token evidence；文本已脱敏，explain=false 时为空。"),
+                schema = @Schema(description = "单条 Standard Query FIELD text token 解析证据。"))
+        List<QueryTokenEvidence> queryTokens
 ) {
+    public StandardQueryNormalized(
+            String target,
+            String text,
+            List<StandardQueryAppliedFilter> filters,
+            List<String> sort,
+            int limit,
+            boolean explain,
+            boolean strict
+    ) {
+        this(target, text, filters, sort, limit, explain, strict, List.of());
+    }
 }

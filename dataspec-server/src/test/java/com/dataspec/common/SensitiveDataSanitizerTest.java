@@ -48,6 +48,15 @@ class SensitiveDataSanitizerTest {
     }
 
     @Test
+    void limitsTextWithoutSplittingSupplementaryCodePoints() {
+        String supplementaryHan = new String(Character.toChars(0x20000));
+
+        String sanitized = SensitiveDataSanitizer.redactText("a".repeat(63) + supplementaryHan + "b", 64);
+
+        assertEquals("a".repeat(63) + supplementaryHan + "...", sanitized);
+    }
+
+    @Test
     void sanitizesNestedPayloadByKeyAndValue() {
         Object sanitized = SensitiveDataSanitizer.sanitizeValue(Map.of(
                 "projectId", 7,

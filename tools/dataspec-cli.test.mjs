@@ -1093,7 +1093,29 @@ test('search-fields accepts inline DSL JSON and posts secret-safe stable json', 
         code: 200,
         data: {
           projectId: 7,
-          normalizedQuery: { target: 'FIELD', text: '订单金额', limit: 5 },
+          normalizedQuery: {
+            target: 'FIELD',
+            text: '订单金额',
+            limit: 5,
+            queryTokens: [
+              {
+                token: 'ord',
+                normalizedToken: 'ord',
+                tokenKind: 'WORD',
+                resolutionStatus: 'UNRESOLVED',
+                glossaryIds: [],
+                reason: '当前项目 glossary 未提供唯一解析'
+              },
+              {
+                token: 'token=raw-secret-123',
+                normalizedToken: 'authorization=Bearer raw.jwt',
+                tokenKind: 'WORD',
+                resolutionStatus: 'UNRESOLVED',
+                glossaryIds: [],
+                reason: '敏感输入已脱敏'
+              }
+            ]
+          },
           querySummary: {
             target: 'FIELD',
             text: 'token=raw-secret-123',
@@ -1132,7 +1154,14 @@ test('search-fields accepts inline DSL JSON and posts secret-safe stable json', 
   assert.equal(body.projectId, 7)
   assert.equal(body.target, 'FIELD')
   assert.equal(body.filters[0].field, 'category')
-  assert.equal(JSON.parse(io.stdout).fields[0].field.name, 'amount_cent')
+  const output = JSON.parse(io.stdout)
+  assert.equal(output.fields[0].field.name, 'amount_cent')
+  assert.equal(output.normalizedQuery.queryTokens[0].token, 'ord')
+  assert.equal(output.normalizedQuery.queryTokens[0].normalizedToken, 'ord')
+  assert.notEqual(output.normalizedQuery.queryTokens[1].token, '***')
+  assert.notEqual(output.normalizedQuery.queryTokens[1].normalizedToken, '***')
+  assert.match(output.normalizedQuery.queryTokens[1].token, /\*\*\*|\[REDACTED\]/)
+  assert.match(output.normalizedQuery.queryTokens[1].normalizedToken, /\*\*\*|\[REDACTED\]/)
   assert.doesNotMatch(io.stdout, /raw-secret-123|raw\.jwt/)
   assert.match(io.stdout, /\*\*\*|\[REDACTED\]/)
 })

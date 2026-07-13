@@ -25,6 +25,9 @@ import com.dataspec.fieldhistory.model.FieldHistoricalAlias;
 import com.dataspec.fieldhistory.service.FieldHistoricalAliasService;
 import com.dataspec.fieldsemantic.service.FieldSemanticRuleService;
 import com.dataspec.metric.service.MetricDefinitionService;
+import com.dataspec.querynormalization.model.QueryTokenResolutionStatus;
+import com.dataspec.querynormalization.service.impl.QueryNormalizationServiceImpl;
+import com.dataspec.querynormalization.tokenizer.NameLexicalTokenizer;
 import com.dataspec.reverseimport.repository.FieldSourceRepository;
 import com.dataspec.security.context.DataSpecSecurityContext;
 import com.dataspec.security.model.ApiTokenPrincipal;
@@ -33,6 +36,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1051,6 +1057,15 @@ class FieldServiceImplTest {
 
         assertEquals("mobile_no", suggestions.getFirst().recommendedName());
         assertTrue(suggestions.getFirst().matchReason().contains("术语表"));
+        assertEquals(QueryTokenResolutionStatus.RESOLVED,
+                suggestions.getFirst().queryTokens().stream()
+                        .filter(token -> "手机号".equals(token.normalizedToken()))
+                        .findFirst()
+                        .orElseThrow()
+                        .resolutionStatus());
+        assertTrue(suggestions.getFirst().evidence().stream().anyMatch(trace ->
+                "BUSINESS_GLOSSARY".equals(trace.sourceType())
+                        && "GLOSSARY_LONGEST_MATCH".equals(trace.ruleCode())));
     }
 
     @Test
@@ -1071,6 +1086,322 @@ class FieldServiceImplTest {
 
         assertEquals("amount_cent", result.items().getFirst().field().getName());
         assertTrue(result.items().getFirst().matchReasons().stream().anyMatch(reason -> reason.contains("术语表")));
+        assertEquals(QueryTokenResolutionStatus.RESOLVED,
+                result.summary().queryTokens().stream()
+                        .filter(token -> "费用".equals(token.normalizedToken()))
+                        .findFirst()
+                        .orElseThrow()
+                        .resolutionStatus());
+        assertTrue(result.items().getFirst().evidence().stream().anyMatch(trace ->
+                "BUSINESS_GLOSSARY".equals(trace.sourceType())
+                        && "GLOSSARY_LONGEST_MATCH".equals(trace.ruleCode())));
+    }
+
+    @Test
+    void search_tokenizesAcronymCamelAndNumberNameOnce() {
+        FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(glossaryService.match(1L, "HTTPStatus2Code")).thenReturn(List.of());
+        Field field = field("http_status_2_code", "HTTP 状态码", "int", "HTTP 状态码", "", "enabled");
+        field.setId(21L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(field));
+        FieldServiceImpl service = service(
+                repository,
+                mock(FieldSourceRepository.class),
+                mock(StandardChangeLogService.class),
+                glossaryService);
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "HTTPStatus2Code", null, null, null, null, null, 10));
+
+        assertEquals("http_status_2_code", result.items().getFirst().field().getName());
+        assertEquals(List.of("http", "status", "2", "code"), result.summary().queryTokens().stream()
+                .map(token -> token.normalizedToken())
+                .toList());
+        assertTrue(result.items().getFirst().evidence().stream().anyMatch(trace ->
+                "QUERY_TOKEN".equals(trace.sourceType()) && "NAME_SPLIT".equals(trace.ruleCode())));
+        verify(glossaryService, times(1)).match(1L, "HTTPStatus2Code");
+    }
+
+    @Test
+    void search_doesNotTreatLongSharedPrefixAsAFieldTokenMatch() {
+        String sharedPrefix = "a".repeat(64);
+        String query = sharedPrefix + "x";
+        FieldRepository repository = mock(FieldRepository.class);
+        Field field = field(sharedPrefix + "y", "长字段", "varchar(100)", null, "", "enabled");
+        field.setId(25L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(field));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, query, null, null, null, null, null, 10));
+
+        assertTrue(result.items().isEmpty());
+    }
+
+    @Test
+    void search_scoresOnlyTheSecretSafeNormalizedQuery() {
+        FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        Field rawSecretName = field("very_secret_value", "敏感原值", "varchar(100)", null, "", "enabled");
+        rawSecretName.setId(27L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(rawSecretName));
+        when(glossaryService.match(1L, "password=[REDACTED]")).thenReturn(List.of());
+        FieldServiceImpl service = service(
+                repository,
+                mock(FieldSourceRepository.class),
+                mock(StandardChangeLogService.class),
+                glossaryService);
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "password=very-secret-value", null, null, null, null, null, 10));
+
+        assertTrue(result.items().isEmpty());
+        assertFalse(result.query().contains("very-secret-value"));
+        verify(glossaryService).match(1L, "password=[REDACTED]");
+    }
+
+    @Test
+    void suggest_keepsGlossaryTraceForLongAbbreviationEvidence() {
+        String abbreviation = "a".repeat(70);
+        FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        Field amount = field("order_amount", "订单金额", "bigint", null, "", "enabled");
+        amount.setId(26L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(amount));
+        when(glossaryService.match(1L, abbreviation)).thenReturn(List.of(
+                new GlossaryMatch(34L, "订单金额", abbreviation, "ABBREVIATION", 104, 26L,
+                        "order_amount", Set.of(), false, "术语表：长缩写 -> order_amount")));
+        FieldServiceImpl service = service(
+                repository,
+                mock(FieldSourceRepository.class),
+                mock(StandardChangeLogService.class),
+                glossaryService);
+
+        FieldSuggestion suggestion = service.suggest(1L, abbreviation, 5).getFirst();
+
+        assertTrue(suggestion.evidence().stream().anyMatch(trace ->
+                Long.valueOf(34L).equals(trace.sourceId())
+                        && "ABBREVIATION_EXPANSION".equals(trace.ruleCode())));
+    }
+
+    @Test
+    void suggest_distinguishesLongTermAndAbbreviationFromTheSameGlossaryEntry() {
+        String sharedPrefix = "a".repeat(61);
+        String longTerm = sharedPrefix + "term";
+        String longAbbreviation = sharedPrefix + "abbr";
+        String query = longTerm + "_" + longAbbreviation;
+        FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        Field amount = field("order_amount", "订单金额", "bigint", null, "", "enabled");
+        amount.setId(28L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(amount));
+        when(glossaryService.match(1L, query)).thenReturn(List.of(
+                new GlossaryMatch(35L, longTerm, longTerm, "TERM", 122, 28L,
+                        "order_amount", Set.of(), false, "术语表：长术语 -> order_amount"),
+                new GlossaryMatch(35L, longTerm, longAbbreviation, "ABBREVIATION", 104, 28L,
+                        "order_amount", Set.of(), false, "术语表：长缩写 -> order_amount")));
+        FieldServiceImpl service = service(
+                repository,
+                mock(FieldSourceRepository.class),
+                mock(StandardChangeLogService.class),
+                glossaryService);
+
+        FieldSuggestion suggestion = service.suggest(1L, query, 5).getFirst();
+
+        assertTrue(suggestion.evidence().stream().anyMatch(trace ->
+                Long.valueOf(35L).equals(trace.sourceId())
+                        && "GLOSSARY_LONGEST_MATCH".equals(trace.ruleCode())));
+        assertTrue(suggestion.evidence().stream().anyMatch(trace ->
+                Long.valueOf(35L).equals(trace.sourceId())
+                        && "ABBREVIATION_EXPANSION".equals(trace.ruleCode())));
+    }
+
+    @Test
+    void suggest_keepsDirectFieldNameAheadOfExpandedAbbreviation() {
+        FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        Field direct = field("amt", "AMT", "varchar(20)", null, "", "enabled");
+        direct.setId(22L);
+        Field expanded = field("order_amount", "订单金额", "bigint", null, "", "enabled");
+        expanded.setId(23L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(expanded, direct));
+        when(glossaryService.match(1L, "amt")).thenReturn(List.of(
+                new GlossaryMatch(9L, "订单金额", "amt", "ABBREVIATION", 104, 23L,
+                        "order_amount", Set.of("order_amount"), false, "术语表：amt -> order_amount")));
+        FieldServiceImpl service = service(
+                repository,
+                mock(FieldSourceRepository.class),
+                mock(StandardChangeLogService.class),
+                glossaryService);
+
+        List<FieldSuggestion> suggestions = service.suggest(1L, "amt", 5);
+
+        assertEquals("amt", suggestions.getFirst().recommendedName());
+        assertTrue(suggestions.getFirst().score() > suggestions.get(1).score());
+    }
+
+    @Test
+    void suggest_correlatesEachGlossaryTraceWithItsQueryTokenSource() {
+        FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        Field amount = field("order_amount", "订单金额", "bigint", null, "", "enabled");
+        amount.setId(23L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(amount));
+        when(glossaryService.match(1L, "order_amt")).thenReturn(List.of(
+                new GlossaryMatch(31L, "订单", "order", "TERM", 122, 23L,
+                        "order_amount", Set.of(), false, "术语表：order -> order_amount"),
+                new GlossaryMatch(32L, "订单金额", "amt", "ABBREVIATION", 104, 23L,
+                        "order_amount", Set.of(), false, "术语表：amt -> order_amount")));
+        FieldServiceImpl service = service(
+                repository,
+                mock(FieldSourceRepository.class),
+                mock(StandardChangeLogService.class),
+                glossaryService);
+
+        FieldSuggestion suggestion = service.suggest(1L, "order_amt", 5).getFirst();
+
+        assertTrue(suggestion.evidence().stream().anyMatch(trace ->
+                Long.valueOf(31L).equals(trace.sourceId())
+                        && "GLOSSARY_LONGEST_MATCH".equals(trace.ruleCode())));
+        assertTrue(suggestion.evidence().stream().anyMatch(trace ->
+                Long.valueOf(32L).equals(trace.sourceId())
+                        && "ABBREVIATION_EXPANSION".equals(trace.ruleCode())));
+    }
+
+    @Test
+    void search_explainsGlossaryMatchThatAppliesThroughExampleFieldOnly() {
+        FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        Field amount = field("payment_amount", "支付金额", "bigint", null, "", "enabled");
+        amount.setId(24L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(amount));
+        when(glossaryService.match(1L, "fee")).thenReturn(List.of(
+                new GlossaryMatch(33L, "费用", "fee", "SYNONYM", 116, null,
+                        null, Set.of("payment_amount"), false, "术语表：fee -> payment_amount")));
+        FieldServiceImpl service = service(
+                repository,
+                mock(FieldSourceRepository.class),
+                mock(StandardChangeLogService.class),
+                glossaryService);
+
+        FieldSearchItem item = service.search(new FieldSearchReq(
+                1L, "fee", null, null, null, null, null, 10)).items().getFirst();
+
+        assertTrue(item.evidence().stream().anyMatch(trace ->
+                Long.valueOf(33L).equals(trace.sourceId())
+                        && "GLOSSARY_LONGEST_MATCH".equals(trace.ruleCode())));
+    }
+
+    @Test
+    void suggest_ambiguousAbbreviationRequestsConfirmationWithoutChoosingCanonical() {
+        FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of());
+        when(glossaryService.match(1L, "amt")).thenReturn(List.of(new GlossaryMatch(
+                10L,
+                null,
+                "amt",
+                "ABBREVIATION",
+                0,
+                null,
+                null,
+                Set.of(),
+                false,
+                "同一缩写指向多个 canonical 字段",
+                QueryTokenResolutionStatus.AMBIGUOUS,
+                List.of(10L, 11L))));
+        FieldServiceImpl service = service(
+                repository,
+                mock(FieldSourceRepository.class),
+                mock(StandardChangeLogService.class),
+                glossaryService);
+
+        FieldSuggestion fallback = service.suggest(1L, "amt", 5).getFirst();
+
+        assertFalse(fallback.existing());
+        assertTrue(fallback.matchReason().contains("歧义") || fallback.matchReason().contains("人工确认"));
+        assertEquals(QueryTokenResolutionStatus.AMBIGUOUS,
+                fallback.queryTokens().getFirst().resolutionStatus());
+    }
+
+    @Test
+    void suggest_directFieldKeepsPriorityAndExplainsAmbiguousAbbreviation() {
+        FieldRepository repository = mock(FieldRepository.class);
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        Field direct = field("amt", "AMT", "varchar(20)", null, "", "enabled");
+        direct.setId(22L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(direct));
+        when(glossaryService.match(1L, "amt")).thenReturn(List.of(new GlossaryMatch(
+                10L,
+                null,
+                "amt",
+                "ABBREVIATION",
+                0,
+                null,
+                null,
+                Set.of(),
+                false,
+                "同一缩写指向多个 canonical 字段",
+                QueryTokenResolutionStatus.AMBIGUOUS,
+                List.of(10L, 11L))));
+        FieldServiceImpl service = service(
+                repository,
+                mock(FieldSourceRepository.class),
+                mock(StandardChangeLogService.class),
+                glossaryService);
+
+        FieldSuggestion suggestion = service.suggest(1L, "amt", 5).getFirst();
+
+        assertTrue(suggestion.existing());
+        assertEquals("amt", suggestion.recommendedName());
+        assertTrue(suggestion.evidence().stream().anyMatch(trace ->
+                "ABBREVIATION_AMBIGUOUS".equals(trace.ruleCode()) && Integer.valueOf(0).equals(trace.confidence())));
+    }
+
+    @Test
+    void suggest_matchesDeterministicGoldenRecommendationFixture() throws Exception {
+        JsonNode fixture = objectMapper.readTree(readResource(
+                "fixtures/querynormalization/deterministic-name-tokenization.json"));
+
+        assertEquals(1, fixture.path("schemaVersion").asInt());
+        for (JsonNode scenario : fixture.path("recommendationCases")) {
+            FieldRepository repository = mock(FieldRepository.class);
+            BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+            List<Field> fields = fieldsFromFixture(scenario.path("fields"));
+            String query = scenario.path("query").asText();
+            when(repository.findAllByProjectId(1L)).thenReturn(fields);
+            when(glossaryService.match(1L, query)).thenReturn(glossaryMatchesFromFixture(
+                    scenario.path("glossaryMatches")));
+            FieldServiceImpl service = service(
+                    repository,
+                    mock(FieldSourceRepository.class),
+                    mock(StandardChangeLogService.class),
+                    glossaryService);
+
+            List<FieldSuggestion> suggestions = service.suggest(1L, query, scenario.path("limit").asInt());
+            List<String> expectedOrder = stringValues(scenario.path("expectedOrder"));
+            String scenarioId = scenario.path("id").asText();
+
+            assertTrue(suggestions.size() >= expectedOrder.size(), scenarioId);
+            assertEquals(
+                    expectedOrder,
+                    suggestions.stream()
+                            .limit(expectedOrder.size())
+                            .map(FieldSuggestion::recommendedName)
+                            .toList(),
+                    scenarioId);
+            assertEquals(
+                    stringValues(scenario.path("expectedResolutionStatuses")),
+                    suggestions.getFirst().queryTokens().stream()
+                            .map(token -> token.resolutionStatus().name())
+                            .toList(),
+                    scenarioId);
+            assertEquals(scenario.path("expectedTopExisting").asBoolean(), suggestions.getFirst().existing(), scenarioId);
+            if (scenario.path("strictTopScore").asBoolean()) {
+                assertTrue(suggestions.getFirst().score() > suggestions.get(1).score(), scenarioId);
+            }
+        }
     }
 
     @Test
@@ -1494,6 +1825,69 @@ class FieldServiceImplTest {
         return field;
     }
 
+    private List<Field> fieldsFromFixture(JsonNode values) {
+        List<Field> fields = new ArrayList<>();
+        for (JsonNode value : values) {
+            Field field = field(
+                    value.path("name").asText(),
+                    nullableText(value.path("displayName")),
+                    value.path("dataType").asText(),
+                    nullableText(value.path("comment")),
+                    nullableText(value.path("aliases")),
+                    value.path("status").asText("enabled"));
+            field.setId(value.path("id").asLong());
+            fields.add(field);
+        }
+        return List.copyOf(fields);
+    }
+
+    private List<GlossaryMatch> glossaryMatchesFromFixture(JsonNode values) {
+        List<GlossaryMatch> matches = new ArrayList<>();
+        for (JsonNode value : values) {
+            matches.add(new GlossaryMatch(
+                    nullableLong(value.path("glossaryId")),
+                    nullableText(value.path("term")),
+                    value.path("matchedToken").asText(),
+                    value.path("matchType").asText(),
+                    value.path("score").asInt(),
+                    nullableLong(value.path("canonicalFieldId")),
+                    nullableText(value.path("canonicalFieldName")),
+                    Set.copyOf(stringValues(value.path("exampleFields"))),
+                    value.path("disabledTerm").asBoolean(),
+                    value.path("reason").asText(),
+                    QueryTokenResolutionStatus.valueOf(value.path("resolutionStatus").asText()),
+                    longValues(value.path("glossaryIds"))));
+        }
+        return List.copyOf(matches);
+    }
+
+    private List<String> stringValues(JsonNode values) {
+        return java.util.stream.StreamSupport.stream(values.spliterator(), false)
+                .map(JsonNode::asText)
+                .toList();
+    }
+
+    private List<Long> longValues(JsonNode values) {
+        return java.util.stream.StreamSupport.stream(values.spliterator(), false)
+                .map(JsonNode::asLong)
+                .toList();
+    }
+
+    private String nullableText(JsonNode value) {
+        return value == null || value.isMissingNode() || value.isNull() ? null : value.asText();
+    }
+
+    private Long nullableLong(JsonNode value) {
+        return value == null || value.isMissingNode() || value.isNull() ? null : value.asLong();
+    }
+
+    private String readResource(String path) throws IOException {
+        try (var input = getClass().getClassLoader().getResourceAsStream(path)) {
+            assertNotNull(input, "测试资源不存在: " + path);
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
     private StandardChangeLog fieldLog(Long id, Long projectId, Long fieldId, String action, String beforeJson) {
         StandardChangeLog log = new StandardChangeLog();
         log.setId(id);
@@ -1540,7 +1934,7 @@ class FieldServiceImplTest {
                 changeLogService,
                 historyService,
                 objectMapper,
-                glossaryService,
+                new QueryNormalizationServiceImpl(new NameLexicalTokenizer(), glossaryService),
                 semanticRuleService,
                 metricDefinitionService);
     }

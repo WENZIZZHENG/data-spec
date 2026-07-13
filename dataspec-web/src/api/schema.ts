@@ -4344,6 +4344,36 @@ export interface components {
             /** @description 本次搜索命中的别名或历史名；非别名命中时为空。 */
             matchedAlias?: string;
         };
+        /** @description 查询 token 的确定性解析证据；文本已脱敏，数组和原因均有固定上限。 */
+        QueryTokenEvidence: {
+            /** @description 经脱敏和限长的输入 token。 */
+            token?: string;
+            /** @description 使用 Locale.ROOT 小写后的脱敏规范 token。 */
+            normalizedToken?: string;
+            /**
+             * @description 确定性词法 token 类型；仅描述命名边界，不代表业务分类。
+             * @enum {string}
+             */
+            tokenKind?: "WORD" | "ACRONYM" | "NUMBER" | "UNIT" | "HAN";
+            /**
+             * @description 查询 token 的词典解析状态；歧义、禁用和未解析状态均不得绑定高置信 canonical 字段。
+             * @enum {string}
+             */
+            resolutionStatus?: "RESOLVED" | "AMBIGUOUS" | "DISABLED" | "UNRESOLVED";
+            /** @description 唯一 canonical 术语；AMBIGUOUS、DISABLED、UNRESOLVED 时为空 */
+            canonicalTerm?: string | null;
+            /**
+             * Format: int64
+             * @description 唯一 canonical 字段 ID；未绑定或非 RESOLVED 时为空
+             */
+            canonicalFieldId?: number | null;
+            /** @description 唯一 canonical 字段名；未绑定或非 RESOLVED 时为空 */
+            canonicalFieldName?: string | null;
+            /** @description 支撑该解析状态的当前项目 glossary 条目 ID；最多返回 8 个。 */
+            glossaryIds?: number[];
+            /** @description 经脱敏和限长的确定性解析原因。 */
+            reason?: string;
+        };
         RStandardQueryResult: {
             /** Format: int32 */
             code?: number;
@@ -4390,6 +4420,8 @@ export interface components {
             explain?: boolean;
             /** @description 是否严格校验。 */
             strict?: boolean;
+            /** @description FIELD text 使用的确定性 query token evidence；文本已脱敏，explain=false 时为空。 */
+            queryTokens?: components["schemas"]["QueryTokenEvidence"][];
         };
         /** @description Standard Query DSL 只读查询结果；v1 目标为 FIELD 时返回字段标准命中项。 */
         StandardQueryResult: {
@@ -8362,6 +8394,8 @@ export interface components {
             recommendedName?: string;
             existing?: boolean;
             evidence?: components["schemas"]["ExplainTrace"][];
+            /** @description 字段推荐使用的确定性 query token 证据；文本已脱敏，数量有界。 */
+            queryTokens?: components["schemas"]["QueryTokenEvidence"][];
         };
         RListFieldSuggestion: {
             /** Format: int32 */
@@ -8394,6 +8428,8 @@ export interface components {
             dslAppliedFilters?: components["schemas"]["StandardQueryAppliedFilter"][];
             dslIgnoredFilters?: components["schemas"]["StandardQueryIgnoredFilter"][];
             nextQueryHints?: string[];
+            /** @description 字段搜索使用的确定性 query token 证据；文本已脱敏，数量有界。 */
+            queryTokens?: components["schemas"]["QueryTokenEvidence"][];
         };
         RFieldSearchResult: {
             /** Format: int32 */

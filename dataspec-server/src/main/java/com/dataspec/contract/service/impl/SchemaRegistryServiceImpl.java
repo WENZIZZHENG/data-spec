@@ -853,6 +853,8 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                 "Standard Query DSL 结果",
                 "项目内只读 Standard Query DSL 查询结果；包含归一化查询、可解释摘要、应用/忽略过滤和字段命中。",
                 List.of("projectId", "normalizedQuery", "querySummary", "appliedFilters[]", "ignoredFilters[]",
+                        "normalizedQuery.queryTokens[]", "normalizedQuery.queryTokens[].resolutionStatus",
+                        "normalizedQuery.queryTokens[].canonicalFieldId", "normalizedQuery.queryTokens[].glossaryIds[]",
                         "resultCount", "returnedCount", "truncated", "nextQueryHints[]", "fields[]",
                         "validationError.supportedFields", "validationError.bounds"),
                 List.of(),
@@ -865,7 +867,18 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                                 "sort", arrayOf(describedStringProp("已接受的排序字段；v1 为空列表。")),
                                 "limit", describedIntegerProp("生效返回上限。"),
                                 "strict", describedBooleanProp("是否严格校验。"),
-                                "explain", describedBooleanProp("是否返回解释信息。")
+                                "explain", describedBooleanProp("是否返回解释信息。"),
+                                "queryTokens", arrayOf(objectSchema("Query Token Evidence", List.of("token", "normalizedToken", "tokenKind", "resolutionStatus", "glossaryIds"), orderedMap(
+                                        "token", describedStringProp("经脱敏和限长的输入 token。"),
+                                        "normalizedToken", describedStringProp("使用 Locale.ROOT 小写后的脱敏规范 token。"),
+                                        "tokenKind", describedEnumProp("确定性词法边界类型；不代表业务分类。", "WORD", "ACRONYM", "NUMBER", "UNIT", "HAN"),
+                                        "resolutionStatus", describedEnumProp("项目 glossary 解析状态；AMBIGUOUS、DISABLED 和 UNRESOLVED 不得绑定高置信 canonical 字段。", "RESOLVED", "AMBIGUOUS", "DISABLED", "UNRESOLVED"),
+                                        "canonicalTerm", describedStringProp("唯一 canonical 术语；非 RESOLVED 时为空。"),
+                                        "canonicalFieldId", describedIntegerProp("唯一 canonical 字段 ID；未绑定或非 RESOLVED 时为空。"),
+                                        "canonicalFieldName", describedStringProp("唯一 canonical 字段名；未绑定或非 RESOLVED 时为空。"),
+                                        "glossaryIds", arrayOf(describedIntegerProp("支撑解析状态的当前项目 glossary ID；数量有界。")),
+                                        "reason", describedStringProp("经脱敏和限长的确定性解析原因。")
+                                )))
                         )),
                         "querySummary", objectSchema("Standard Query Summary", List.of("target", "resultCount", "returnedCount", "truncated"), orderedMap(
                                 "target", describedEnumProp("查询目标。", "FIELD"),
@@ -902,7 +915,20 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                 )),
                 List.of(orderedMap(
                         "projectId", 1,
-                        "normalizedQuery", orderedMap("target", "FIELD", "text", "订单金额", "limit", 20),
+                        "normalizedQuery", orderedMap(
+                                "target", "FIELD",
+                                "text", "订单金额",
+                                "limit", 20,
+                                "queryTokens", List.of(orderedMap(
+                                        "token", "订单金额",
+                                        "normalizedToken", "订单金额",
+                                        "tokenKind", "HAN",
+                                        "resolutionStatus", "RESOLVED",
+                                        "canonicalTerm", "订单金额",
+                                        "canonicalFieldId", 100,
+                                        "canonicalFieldName", "order_amount",
+                                        "glossaryIds", List.of(10),
+                                        "reason", "项目 glossary 已唯一解析"))),
                         "querySummary", orderedMap("target", "FIELD", "resultCount", 1, "returnedCount", 1, "truncated", false),
                         "appliedFilters", List.of(orderedMap("field", "category", "op", "eq", "redactedValue", "money")),
                         "ignoredFilters", List.of(),

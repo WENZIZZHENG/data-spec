@@ -1,4 +1,4 @@
-import type { BusinessGlossary, Field, FieldSearchItem, FieldSearchResult, RuleConfig } from '@/types'
+import type { BusinessGlossary, Field, FieldSearchItem, FieldSearchResult, QueryTokenEvidence, RuleConfig } from '@/types'
 
 // 中文场景词很短，至少两个连续片段重叠才视为契约禁用命中，避免只因“金额”等通用词误降级。
 const USAGE_CONTRACT_HAN_BIGRAM_MATCH_THRESHOLD = 2
@@ -13,8 +13,8 @@ export interface StandardQuestionInput {
   question: string
   /** 字段检索结果，作为回答标准字段问题的主证据来源。 */
   fieldSearch: FieldSearchResult
-  /** 业务术语表，补充同义词、缩写和 canonical field 证据。 */
-  glossary: BusinessGlossary[]
+  /** @deprecated 仅保留旧调用兼容；术语解析以 fieldSearch.summary.queryTokens 为唯一事实来源。 */
+  glossary?: BusinessGlossary[]
   /** 当前项目规则配置，补充命名、敏感字段和格式约束证据。 */
   rules: RuleConfig[]
 }
@@ -175,20 +175,30 @@ export function buildStandardQuestionAnswer(input: StandardQuestionInput): Stand
   const question = input.question.trim()
   const matchedFields = normalizeMatchedFields(input.fieldSearch.items ?? [])
   const topField = matchedFields[0]
-  const glossaryEvidence = findGlossaryEvidence(question, input.glossary, topField?.id)
+  const queryTokens = input.fieldSearch.summary?.queryTokens ?? []
+  const topFieldItem = findSearchItemForField(input.fieldSearch.items ?? [], topField)
+  const fieldQueryEvidence = queryEvidenceForField(queryTokens, topField, topFieldItem)
+  const glossaryEvidence = resolvedGlossaryEvidence(fieldQueryEvidence)
+  const queryTokenIssues = queryTokenMissingEvidence(queryTokens)
   const relatedRules = resolveRelatedRules(question, matchedFields, input.rules)
 
   const baseConfidence = resolveConfidence(topField)
   const conflicts = detectConflictingStandards(matchedFields)
   const usageContractConflict = usageContractContradictsQuestion(question, topField)
   const missingFacts = buildMissingFacts(question, topField)
-  const missingEvidence = buildMissingEvidence(topField, missingFacts, conflicts, usageContractConflict)
+  const missingEvidence = buildMissingEvidence(
+    topField,
+    missingFacts,
+    conflicts,
+    usageContractConflict,
+    queryTokenIssues
+  )
   const candidateOnly = topField?.status === 'draft'
   const answerStatus = resolveAnswerStatus(topField, baseConfidence, missingEvidence, conflicts)
   const answerability = resolveAnswerability(answerStatus)
   const confidence = resolveAnswerConfidence(baseConfidence, answerStatus, missingEvidence, conflicts)
   const confidenceReason = buildConfidenceReason(answerStatus, confidence, topField, missingEvidence, conflicts, usageContractConflict)
-  const evidence = buildEvidence(input.fieldSearch, matchedFields, glossaryEvidence, relatedRules)
+  const evidence = buildEvidence(input.fieldSearch, matchedFields, fieldQueryEvidence, relatedRules)
   const evidenceRefs = buildEvidenceRefs(evidence)
   const unresolvedQuestions = buildUnresolvedQuestions(confidence, topField)
   const suggestedNextQuery = buildSuggestedNextQuery(question, topField, answerStatus, missingFacts, conflicts)
@@ -329,7 +339,7 @@ function buildAnswerText(
   confidence: StandardQuestionConfidence,
   question: string,
   topField: StandardQuestionMatchedField | undefined,
-  glossaryEvidence: BusinessGlossary[],
+  glossaryEvidence: QueryTokenEvidence[],
   usageContractConflict: boolean
 ) {
   if (!topField) {
@@ -337,7 +347,7 @@ function buildAnswerText(
   }
   const fieldLabel = topField.displayName ? `${topField.name}（${topField.displayName}）` : topField.name
   const glossaryText = glossaryEvidence.length > 0
-    ? `术语证据：${glossaryEvidence.slice(0, 2).map((item) => item.term).filter(Boolean).join('、')}。`
+    ? `术语证据：${glossaryEvidence.slice(0, 2).map((item) => item.canonicalTerm || item.normalizedToken).filter(Boolean).join('、')}。`
     : ''
   const sensitiveText = topField.sensitive ? '这是敏感字段。' : ''
   const formatText = topField.formatSummary ? `${topField.formatSummary}。` : ''
@@ -476,7 +486,8 @@ function buildMissingEvidence(
   field: StandardQuestionMatchedField | undefined,
   missingFacts: string[],
   conflicts: StandardQuestionConflict[],
-  usageContractConflict: boolean
+  usageContractConflict: boolean,
+  queryTokenIssues: string[]
 ) {
   if (!field) {
     return ['字段标准证据']
@@ -509,6 +520,7 @@ function buildMissingEvidence(
   if (usageContractConflict) {
     missing.push('使用契约禁用场景确认')
   }
+  missing.push(...queryTokenIssues)
   return uniqueText(missing)
 }
 
@@ -580,7 +592,7 @@ function buildAnswerabilityActions(
 function buildEvidence(
   fieldSearch: FieldSearchResult,
   fields: StandardQuestionMatchedField[],
-  glossary: BusinessGlossary[],
+  glossary: QueryTokenEvidence[],
   rules: StandardQuestionRelatedRule[]
 ): StandardQuestionEvidence[] {
   return [
@@ -599,9 +611,15 @@ function buildEvidence(
     })),
     ...glossary.slice(0, 5).map((item): StandardQuestionEvidence => ({
       type: 'glossary',
-      title: item.term || `术语 #${item.id ?? '-'}`,
-      description: uniqueText([item.description, item.synonyms ? `同义词：${item.synonyms}` : '', item.abbreviations ? `缩写：${item.abbreviations}` : '']).join('；'),
-      ref: item.canonicalFieldId ? `field:${item.canonicalFieldId}` : undefined
+      title: item.canonicalTerm || item.normalizedToken || item.token || '查询术语',
+      description: uniqueText([
+        tokenResolutionText(item.resolutionStatus),
+        item.canonicalFieldName ? `canonical 字段：${item.canonicalFieldName}` : '',
+        item.reason
+      ]).join('；'),
+      ref: item.canonicalFieldId && fieldSearch.projectId
+        ? `field:${fieldSearch.projectId}:${item.canonicalFieldId}`
+        : undefined
     })),
     ...rules.slice(0, 3).map((rule): StandardQuestionEvidence => ({
       type: 'rule',
@@ -674,26 +692,67 @@ function buildUnresolvedQuestions(confidence: StandardQuestionConfidence, field:
   return []
 }
 
-function findGlossaryEvidence(question: string, glossary: BusinessGlossary[], fieldId?: number) {
-  const normalizedQuestion = question.toLowerCase()
-  return glossary.filter((item) => {
-    if (fieldId && item.canonicalFieldId === fieldId) {
+function findSearchItemForField(
+  items: FieldSearchItem[],
+  field: StandardQuestionMatchedField | undefined
+) {
+  if (!field) {
+    return undefined
+  }
+  return items.find((item) => field.id
+    ? item.field?.id === field.id
+    : item.field?.name === field.name)
+}
+
+function queryEvidenceForField(
+  tokens: QueryTokenEvidence[],
+  field: StandardQuestionMatchedField | undefined,
+  item: FieldSearchItem | undefined
+) {
+  const glossarySourceIds = new Set((item?.evidence ?? [])
+    .filter((trace) => trace.sourceType === 'BUSINESS_GLOSSARY' && trace.sourceId != null)
+    .map((trace) => trace.sourceId as number))
+  return tokens.filter((token) => {
+    if (token.resolutionStatus !== 'RESOLVED') {
       return true
     }
-    return splitGlossaryTerms(item)
-      .some((token) => normalizedQuestion.includes(token.toLowerCase()))
+    if (token.canonicalFieldId != null && field?.id != null) {
+      return token.canonicalFieldId === field.id
+    }
+    if (token.canonicalFieldName && field?.name) {
+      return token.canonicalFieldName === field.name
+    }
+    return (token.glossaryIds ?? []).some((id) => glossarySourceIds.has(id))
   })
 }
 
-function splitGlossaryTerms(item: BusinessGlossary) {
-  return uniqueText([
-    item.term,
-    ...splitList(item.synonyms),
-    ...splitList(item.rootTerms),
-    ...splitList(item.abbreviations),
-    ...splitList(item.disabledTerms),
-    ...splitList(item.exampleFields)
-  ])
+function resolvedGlossaryEvidence(tokens: QueryTokenEvidence[]) {
+  return tokens.filter((item) => item.resolutionStatus === 'RESOLVED')
+}
+
+function queryTokenMissingEvidence(tokens: QueryTokenEvidence[]) {
+  return uniqueText(tokens.map((item) => {
+    if (item.resolutionStatus === 'AMBIGUOUS') {
+      return '歧义术语或缩写的 canonical 确认'
+    }
+    if (item.resolutionStatus === 'DISABLED') {
+      return '禁用术语的人工确认'
+    }
+    return ''
+  }))
+}
+
+function tokenResolutionText(status?: string) {
+  if (status === 'RESOLVED') {
+    return '项目 glossary 已唯一解析'
+  }
+  if (status === 'AMBIGUOUS') {
+    return '项目 glossary 解析存在歧义，需要人工确认'
+  }
+  if (status === 'DISABLED') {
+    return '命中项目 glossary 禁用词，需要人工确认'
+  }
+  return '项目 glossary 未解析'
 }
 
 function splitList(value?: string | null) {

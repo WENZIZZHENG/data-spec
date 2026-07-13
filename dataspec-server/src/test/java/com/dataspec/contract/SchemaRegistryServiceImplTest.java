@@ -202,6 +202,10 @@ class SchemaRegistryServiceImplTest {
         assertTrue(result.getStableFields().contains("appliedFilters[]"));
         assertTrue(result.getStableFields().contains("ignoredFilters[]"));
         assertTrue(result.getStableFields().contains("nextQueryHints[]"));
+        assertTrue(result.getStableFields().contains("normalizedQuery.queryTokens[]"));
+        assertTrue(result.getStableFields().contains("normalizedQuery.queryTokens[].resolutionStatus"));
+        assertTrue(result.getStableFields().contains("normalizedQuery.queryTokens[].canonicalFieldId"));
+        assertTrue(result.getStableFields().contains("normalizedQuery.queryTokens[].glossaryIds[]"));
         String resultSchema = result.getJsonSchema().get("properties").toString();
         assertTrue(resultSchema.contains("resultCount"));
         assertTrue(resultSchema.contains("returnedCount"));
@@ -209,6 +213,10 @@ class SchemaRegistryServiceImplTest {
         assertTrue(resultSchema.contains("supportedFields"));
         assertTrue(resultSchema.contains("bounds"));
         assertTrue(resultSchema.contains("secret-safety"));
+        assertTrue(resultSchema.contains("queryTokens"));
+        assertTrue(resultSchema.contains("AMBIGUOUS"));
+        assertTrue(resultSchema.contains("glossaryIds"));
+        assertTrue(resultSchema.contains("脱敏"));
     }
 
     @Test

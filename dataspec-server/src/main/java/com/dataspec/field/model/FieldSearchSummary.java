@@ -3,6 +3,7 @@ package com.dataspec.field.model;
 import com.dataspec.standardquery.model.StandardQueryAppliedFilter;
 import com.dataspec.standardquery.model.StandardQueryIgnoredFilter;
 import com.dataspec.standardquery.model.StandardQuerySummary;
+import com.dataspec.querynormalization.model.QueryTokenEvidence;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -26,7 +27,11 @@ public record FieldSearchSummary(
         @ArraySchema(schema = @Schema(description = "字段搜索对应的 DSL 忽略过滤条件；legacy 搜索通常为空。"))
         List<StandardQueryIgnoredFilter> dslIgnoredFilters,
         @ArraySchema(schema = @Schema(description = "字段搜索对应的 DSL 下一步查询建议；等价于 querySummary.nextQueryHints。"))
-        List<String> nextQueryHints
+        List<String> nextQueryHints,
+        @ArraySchema(
+                arraySchema = @Schema(description = "字段搜索使用的确定性 query token 证据；文本已脱敏，数量有界。"),
+                schema = @Schema(description = "单条字段搜索 query token 解析证据。"))
+        List<QueryTokenEvidence> queryTokens
 ) {
     public FieldSearchSummary(
             int totalCandidates,
@@ -36,6 +41,32 @@ public record FieldSearchSummary(
             Map<String, Object> appliedFilters,
             List<String> hints
     ) {
-        this(totalCandidates, matchedCount, returnedCount, truncated, appliedFilters, hints, null, List.of(), List.of(), List.of());
+        this(totalCandidates, matchedCount, returnedCount, truncated, appliedFilters, hints, null, List.of(), List.of(), List.of(), List.of());
+    }
+
+    public FieldSearchSummary(
+            int totalCandidates,
+            int matchedCount,
+            int returnedCount,
+            boolean truncated,
+            Map<String, Object> appliedFilters,
+            List<String> hints,
+            StandardQuerySummary querySummary,
+            List<StandardQueryAppliedFilter> dslAppliedFilters,
+            List<StandardQueryIgnoredFilter> dslIgnoredFilters,
+            List<String> nextQueryHints
+    ) {
+        this(
+                totalCandidates,
+                matchedCount,
+                returnedCount,
+                truncated,
+                appliedFilters,
+                hints,
+                querySummary,
+                dslAppliedFilters,
+                dslIgnoredFilters,
+                nextQueryHints,
+                List.of());
     }
 }

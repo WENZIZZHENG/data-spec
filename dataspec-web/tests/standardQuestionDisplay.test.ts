@@ -11,7 +11,21 @@ test('builds readonly standard answer with matched field evidence', () => {
   const fieldSearch: FieldSearchResult = {
     projectId: 7,
     query: '手机号标准字段叫什么',
-    summary: { matchedCount: 1, returnedCount: 1 },
+    summary: {
+      matchedCount: 1,
+      returnedCount: 1,
+      queryTokens: [{
+        token: '手机号',
+        normalizedToken: '手机号',
+        tokenKind: 'HAN',
+        resolutionStatus: 'RESOLVED',
+        canonicalTerm: '手机号',
+        canonicalFieldId: 11,
+        canonicalFieldName: 'user_mobile',
+        glossaryIds: [21],
+        reason: '术语表：手机号 -> user_mobile'
+      }]
+    },
     items: [{
       score: 96,
       field: {
@@ -65,6 +79,7 @@ test('builds readonly standard answer with matched field evidence', () => {
   assert.equal(answer.matchedFields[0].sensitive, true)
   assert.ok(answer.evidence.some((item) => item.type === 'field' && item.title.includes('user_mobile')))
   assert.ok(answer.evidence.some((item) => item.type === 'glossary' && item.title.includes('手机号')))
+  assert.ok(answer.evidenceRefs.includes('glossary:field:7:11'))
   assert.ok(answer.relatedRules.some((item) => item.ruleCode === 'FIELD_NAMING'))
   assert.ok(answer.suggestedNextActions.some((item) => item.includes('复制答案')))
 
@@ -98,6 +113,104 @@ test('marks unresolved answer when no standard field evidence is found', () => {
   assert.ok(answer.suggestedNextActions.some((item) => item.includes('候选 Inbox')))
   assert.ok(answer.nextActions.some((item) => item.includes('候选 Inbox')))
   assert.match(answer.suggestedNextQuery, /积分等级/)
+})
+
+test('requires confirmation for server-reported ambiguous abbreviation even with client glossary data', () => {
+  const answer = buildStandardQuestionAnswer({
+    question: 'amt 应该用哪个字段',
+    fieldSearch: {
+      projectId: 7,
+      query: 'amt 应该用哪个字段',
+      summary: {
+        matchedCount: 1,
+        returnedCount: 1,
+        queryTokens: [{
+          token: 'amt',
+          normalizedToken: 'amt',
+          tokenKind: 'WORD',
+          resolutionStatus: 'AMBIGUOUS',
+          glossaryIds: [41, 42],
+          reason: '同一 token 指向多个 canonical 字段，需要人工确认'
+        }]
+      },
+      items: [{
+        score: 96,
+        field: {
+          id: 11,
+          name: 'order_amount',
+          displayName: '订单金额',
+          dataType: 'bigint',
+          status: 'enabled'
+        },
+        matchReasons: ['字段名精确匹配']
+      }]
+    },
+    glossary: [{
+      id: 41,
+      term: '订单金额',
+      abbreviations: 'amt',
+      canonicalFieldId: 11,
+      status: 'enabled'
+    }],
+    rules: []
+  })
+
+  assert.equal(answer.answerStatus, 'NEEDS_CONFIRMATION')
+  assert.equal(answer.answerability, 'PARTIAL')
+  assert.ok(answer.missingEvidence.some((item) => item.includes('歧义')))
+  assert.ok(answer.evidence.some((item) => item.type === 'glossary' && item.description.includes('人工确认')))
+})
+
+test('links canonical-less glossary evidence only to the field trace that used it', () => {
+  const fieldSearch: FieldSearchResult = {
+    projectId: 7,
+    query: 'fee',
+    summary: {
+      matchedCount: 2,
+      returnedCount: 2,
+      queryTokens: [{
+        token: 'fee',
+        normalizedToken: 'fee',
+        tokenKind: 'WORD',
+        resolutionStatus: 'RESOLVED',
+        canonicalTerm: '费用',
+        glossaryIds: [33],
+        reason: '术语表：fee -> payment_amount'
+      }]
+    },
+    items: [{
+      score: 99,
+      field: { id: 11, name: 'fee', displayName: '费用代码', status: 'enabled' },
+      matchReasons: ['字段名精确匹配'],
+      evidence: [{ sourceType: 'FIELD', sourceId: 11 }]
+    }, {
+      score: 95,
+      field: { id: 12, name: 'payment_amount', displayName: '支付金额', status: 'enabled' },
+      matchReasons: ['术语表匹配'],
+      evidence: [{ sourceType: 'BUSINESS_GLOSSARY', sourceId: 33 }]
+    }]
+  }
+
+  const unrelatedTop = buildStandardQuestionAnswer({
+    question: 'fee',
+    fieldSearch,
+    glossary: [],
+    rules: []
+  })
+
+  assert.ok(!unrelatedTop.answer.includes('术语证据'))
+  assert.ok(!unrelatedTop.evidence.some((item) => item.type === 'glossary'))
+
+  fieldSearch.items![0]!.evidence = [{ sourceType: 'BUSINESS_GLOSSARY', sourceId: 33 }]
+  const linkedTop = buildStandardQuestionAnswer({
+    question: 'fee',
+    fieldSearch,
+    glossary: [],
+    rules: []
+  })
+
+  assert.ok(linkedTop.answer.includes('术语证据'))
+  assert.ok(linkedTop.evidence.some((item) => item.type === 'glossary' && item.title.includes('费用')))
 })
 
 test('downgrades confidence for deprecated matched field', () => {

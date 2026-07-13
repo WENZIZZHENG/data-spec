@@ -282,7 +282,7 @@ function validateCliCommands(commands, diagnostics) {
     if (command.id === 'search-fields') {
       validateStandardQueryDslFixture(command, basePath, diagnostics, {
         requiredInputs: ['query', 'dsl', 'dsl-file', 'stdin'],
-        requiredOutputShape: ['normalizedQuery', 'querySummary', 'appliedFilters[]', 'ignoredFilters[]', 'nextQueryHints[]'],
+        requiredOutputShape: ['normalizedQuery', 'normalizedQuery.queryTokens[]', 'normalizedQuery.queryTokens[].resolutionStatus', 'querySummary', 'appliedFilters[]', 'ignoredFilters[]', 'nextQueryHints[]'],
         requiredSensitiveInputs: ['query', 'dsl', 'dsl-file', 'stdin']
       })
     }
@@ -341,7 +341,7 @@ function validateMcpTools(fixtures, liveTools, diagnostics) {
     if (tool.name === 'search_fields') {
       validateStandardQueryDslFixture(tool, basePath, diagnostics, {
         requiredInputs: ['standardQuery'],
-        requiredOutputShape: ['structuredContent.normalizedQuery', 'structuredContent.querySummary', 'structuredContent.appliedFilters[]', 'structuredContent.ignoredFilters[]', 'structuredContent.nextQueryHints[]'],
+        requiredOutputShape: ['structuredContent.normalizedQuery', 'structuredContent.normalizedQuery.queryTokens[]', 'structuredContent.normalizedQuery.queryTokens[].resolutionStatus', 'structuredContent.querySummary', 'structuredContent.appliedFilters[]', 'structuredContent.ignoredFilters[]', 'structuredContent.nextQueryHints[]'],
         requiredSensitiveInputs: ['query', 'standardQuery', 'filters']
       })
     }
