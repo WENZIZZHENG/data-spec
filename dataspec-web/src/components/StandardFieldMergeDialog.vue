@@ -5,7 +5,7 @@
         <el-row :gutter="12">
           <el-col :xs="24" :sm="12">
             <el-form-item label="保留字段">
-              <el-select v-model="targetFieldId" filterable class="full-width">
+              <el-select v-model="targetFieldId" filterable :loading="optionsLoading" class="full-width">
                 <el-option
                   v-for="option in options"
                   :key="`target-${option.fieldId}`"
@@ -18,7 +18,7 @@
           </el-col>
           <el-col :xs="24" :sm="12">
             <el-form-item label="来源字段">
-              <el-select v-model="sourceFieldId" filterable class="full-width">
+              <el-select v-model="sourceFieldId" filterable :loading="optionsLoading" class="full-width">
                 <el-option
                   v-for="option in options"
                   :key="`source-${option.fieldId}`"
@@ -149,9 +149,15 @@ import type {
 const visible = defineModel<boolean>({ default: false })
 
 const props = defineProps<{
+  /** 当前项目 ID；缺失时禁止预览和提交。 */
   projectId?: number | null
+  /** 可跨分页选择的字段候选。 */
   options: StandardFieldMergeOption[]
+  /** 候选字段是否仍在按需加载。 */
+  optionsLoading?: boolean
+  /** 默认保留字段 ID。 */
   initialTargetId?: number | null
+  /** 默认来源字段 ID。 */
   initialSourceId?: number | null
 }>()
 

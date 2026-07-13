@@ -20,6 +20,7 @@ import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
 import com.dataspec.field.model.FieldGroupingSummaries;
 import com.dataspec.field.model.FieldSearchItem;
+import com.dataspec.field.model.FieldSearchPage;
 import com.dataspec.field.model.FieldSearchReq;
 import com.dataspec.field.model.FieldSearchResult;
 import com.dataspec.field.model.FieldSearchSummary;
@@ -82,6 +83,8 @@ public class FieldServiceImpl implements FieldService {
     private static final int MAX_SUGGEST_LIMIT = 20;
     private static final int DEFAULT_SEARCH_LIMIT = 20;
     private static final int MAX_SEARCH_LIMIT = 50;
+    private static final int DEFAULT_SEARCH_PAGE_SIZE = 20;
+    private static final int MAX_SEARCH_PAGE_SIZE = 100;
     private static final long FIELD_READ_WARN_MS = 500;
     private static final long FIELD_SUGGEST_WARN_MS = 500;
     private static final long FIELD_SEARCH_WARN_MS = 500;
@@ -170,11 +173,22 @@ public class FieldServiceImpl implements FieldService {
         }
         matched.sort(Comparator
                 .comparingInt(FieldSearchItem::score).reversed()
-                .thenComparing(item -> nullToEmpty(item.field().getName())));
+                .thenComparing(item -> nullToEmpty(item.field().getName()))
+                .thenComparing(item -> item.field().getId(), Comparator.nullsLast(Long::compareTo)));
 
-        boolean truncated = matched.size() > criteria.limit();
-        List<FieldSearchItem> returned = matched.stream().limit(criteria.limit()).toList();
-        List<String> hints = new ArrayList<>(searchHints(criteria, candidates.size(), matched.size(), truncated));
+        long offset = criteria.offset();
+        List<FieldSearchItem> returned = matched.stream()
+                .skip(offset)
+                .limit(criteria.size())
+                .toList();
+        boolean truncated = matched.size() > returned.size();
+        boolean hasNext = criteria.paginated() && offset + returned.size() < matched.size();
+        List<String> hints = new ArrayList<>(searchHints(
+                criteria,
+                candidates.size(),
+                matched.size(),
+                truncated,
+                hasNext));
         hints.addAll(normalizationHints(normalization));
         List<StandardQueryAppliedFilter> dslAppliedFilters = dslAppliedFilters(criteria);
         StandardQuerySummary querySummary = new StandardQuerySummary(
@@ -196,13 +210,24 @@ public class FieldServiceImpl implements FieldService {
                 List.of(),
                 hints,
                 normalization.queryTokens());
+        long pages = criteria.pageCount(matched.size());
+        FieldSearchPage page = criteria.paginated()
+                ? new FieldSearchPage(
+                        criteria.current(),
+                        criteria.size(),
+                        matched.size(),
+                        pages,
+                        matched.size() > 0 && criteria.current() > 1,
+                        hasNext)
+                : null;
 
         return new FieldSearchResult(
                 req.projectId(),
                 SensitiveDataSanitizer.redactText(criteria.query()),
                 summary,
                 returned,
-                resultNextActions(returned, truncated));
+                resultNextActions(returned, matched.size(), truncated, hasNext, criteria),
+                page);
     }
 
     @Override
@@ -569,6 +594,7 @@ public class FieldServiceImpl implements FieldService {
         String category = FieldGroupingSummaries.normalizeText(req.category());
         String tag = FieldGroupingSummaries.normalizeText(req.tag());
         String status = normalizeOptionalStatus(req.status());
+        boolean paginated = req.current() != null || req.size() != null;
         return new SearchCriteria(
                 query,
                 compact(normalization.normalizedText()),
@@ -579,7 +605,12 @@ public class FieldServiceImpl implements FieldService {
                 status,
                 req.sensitive(),
                 req.sourceBatchId(),
-                normalizeSearchLimit(req.limit()),
+                paginated ? normalizeSearchCurrent(req.current()) : 1,
+                paginated ? normalizeSearchPageSize(req.size()) : normalizeSearchLimit(req.limit()),
+                paginated,
+                normalizeSearchDomainId(req.domainId()),
+                req.ungrouped(),
+                Boolean.TRUE.equals(req.includeAllStatuses()),
                 req.extraFilters() == null ? Map.of() : req.extraFilters());
     }
 
@@ -594,7 +625,10 @@ public class FieldServiceImpl implements FieldService {
     }
 
     private boolean matchesSearchFilters(Field field, SearchCriteria criteria, Set<Long> sourceFieldIds) {
-        if (criteria.status() == null && !criteria.hasReferenceFilter() && !isEnabledStatus(field.getStatus())) {
+        if (criteria.status() == null
+                && !criteria.includeAllStatuses()
+                && !criteria.hasReferenceFilter()
+                && !isEnabledStatus(field.getStatus())) {
             return false;
         }
         if (criteria.category() != null && !criteria.category().equals(FieldGroupingSummaries.normalizeText(field.getCategory()))) {
@@ -612,7 +646,19 @@ public class FieldServiceImpl implements FieldService {
         if (criteria.sourceBatchId() != null && !sourceFieldIds.contains(field.getId())) {
             return false;
         }
+        if (criteria.domainId() != null && !criteria.domainId().equals(field.getDomainId())) {
+            return false;
+        }
+        if (criteria.ungrouped() != null && criteria.ungrouped() != isUngroupedField(field)) {
+            return false;
+        }
         return matchesDslExtraFilters(field, criteria.extraFilters());
+    }
+
+    private boolean isUngroupedField(Field field) {
+        return field.getDomainId() == null
+                && FieldGroupingSummaries.normalizeText(field.getCategory()) == null
+                && FieldGroupingSummaries.splitTags(field.getTags()).isEmpty();
     }
 
     private boolean matchesDslExtraFilters(Field field, Map<String, Object> extraFilters) {
@@ -1088,7 +1134,13 @@ public class FieldServiceImpl implements FieldService {
                 .toList();
     }
 
-    private List<String> searchHints(SearchCriteria criteria, int totalCandidates, int matchedCount, boolean truncated) {
+    private List<String> searchHints(
+            SearchCriteria criteria,
+            int totalCandidates,
+            int matchedCount,
+            boolean truncated,
+            boolean hasNext
+    ) {
         List<String> hints = new ArrayList<>();
         if (criteria.sourceBatchId() != null && totalCandidates == 0) {
             hints.add("sourceBatchId 未命中当前项目字段来源。");
@@ -1097,7 +1149,11 @@ public class FieldServiceImpl implements FieldService {
             hints.add("未命中字段标准；可补充字段别名、调整 query，或进入标准候选 Inbox。");
         }
         if (truncated) {
-            hints.add("结果已截断；可增加更具体 query/category/tag/status 过滤。");
+            if (hasNext) {
+                hints.add("结果已分页；可继续翻页，或增加更具体 query/category/tag/status 过滤。");
+            } else if (!criteria.paginated()) {
+                hints.add("结果已截断；可增加更具体 query/category/tag/status 过滤。");
+            }
         }
         return List.copyOf(hints);
     }
@@ -1148,13 +1204,24 @@ public class FieldServiceImpl implements FieldService {
         }
     }
 
-    private List<String> resultNextActions(List<FieldSearchItem> items, boolean truncated) {
+    private List<String> resultNextActions(
+            List<FieldSearchItem> items,
+            int matchedCount,
+            boolean truncated,
+            boolean hasNext,
+            SearchCriteria criteria
+    ) {
         if (items.isEmpty()) {
+            if (criteria.paginated() && matchedCount > 0) {
+                return List.of("当前页没有结果，请返回较早页码或收窄查询条件。");
+            }
             return List.of("进入标准候选 Inbox 或字段推荐流程，补充缺失标准字段。");
         }
         List<String> actions = new ArrayList<>();
         actions.add("优先查看首个高分字段，并在 DDL/SQL 修复中沿用其标准字段名。");
-        if (truncated) {
+        if (hasNext) {
+            actions.add("结果较多时可继续翻页；导出给 AI 前仍应收窄查询条件。");
+        } else if (truncated && !criteria.paginated()) {
             actions.add("结果较多时先收窄查询条件，再导出给 AI 使用。");
         }
         return List.copyOf(actions);
@@ -1170,6 +1237,36 @@ public class FieldServiceImpl implements FieldService {
             return DEFAULT_SEARCH_LIMIT;
         }
         return Math.min(limit, MAX_SEARCH_LIMIT);
+    }
+
+    private int normalizeSearchCurrent(Integer current) {
+        if (current == null) {
+            return 1;
+        }
+        if (current <= 0) {
+            throw new BizException("current 必须从 1 开始");
+        }
+        return current;
+    }
+
+    private int normalizeSearchPageSize(Integer size) {
+        if (size == null) {
+            return DEFAULT_SEARCH_PAGE_SIZE;
+        }
+        if (size <= 0 || size > MAX_SEARCH_PAGE_SIZE) {
+            throw new BizException("size 必须在 1 到 " + MAX_SEARCH_PAGE_SIZE + " 之间");
+        }
+        return size;
+    }
+
+    private Long normalizeSearchDomainId(Long domainId) {
+        if (domainId == null) {
+            return null;
+        }
+        if (domainId <= 0) {
+            throw new BizException("domainId 必须为正整数");
+        }
+        return domainId;
     }
 
     private void applyPersonalMetadataDefaults(Field field) {
@@ -2119,9 +2216,22 @@ public class FieldServiceImpl implements FieldService {
             String status,
             Boolean sensitive,
             Long sourceBatchId,
-            int limit,
+            int current,
+            int size,
+            boolean paginated,
+            Long domainId,
+            Boolean ungrouped,
+            boolean includeAllStatuses,
             Map<String, Object> extraFilters
     ) {
+        long offset() {
+            return paginated ? (long) (current - 1) * size : 0;
+        }
+
+        long pageCount(long total) {
+            return total == 0 ? 0 : (total + size - 1) / size;
+        }
+
         boolean hasQuery() {
             return !queryCompact.isBlank() || !queryTokens.isEmpty();
         }
@@ -2132,6 +2242,8 @@ public class FieldServiceImpl implements FieldService {
                     || status != null
                     || sensitive != null
                     || sourceBatchId != null
+                    || domainId != null
+                    || ungrouped != null
                     || (extraFilters != null && !extraFilters.isEmpty());
         }
 
@@ -2157,10 +2269,24 @@ public class FieldServiceImpl implements FieldService {
             if (sourceBatchId != null) {
                 filters.put("sourceBatchId", sourceBatchId);
             }
+            if (domainId != null) {
+                filters.put("domainId", domainId);
+            }
+            if (ungrouped != null) {
+                filters.put("ungrouped", ungrouped);
+            }
+            if (includeAllStatuses) {
+                filters.put("includeAllStatuses", true);
+            }
             if (extraFilters != null && !extraFilters.isEmpty()) {
                 filters.putAll(extraFilters);
             }
-            filters.put("limit", limit);
+            if (paginated) {
+                filters.put("current", current);
+                filters.put("size", size);
+            } else {
+                filters.put("limit", size);
+            }
             return filters;
         }
     }

@@ -17,6 +17,7 @@ import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.service.FieldService;
 import com.dataspec.reverseimport.model.FieldSourceDetail;
 import com.dataspec.reverseimport.service.ReverseImportSourceService;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -92,16 +93,35 @@ public class FieldController {
     /** 检索字段标准，返回命中原因和 AI 下一步建议 */
     @GetMapping("/search")
     public R<FieldSearchResult> search(
+            @Parameter(description = "字段所属项目 ID，搜索结果不得跨项目。")
             @RequestParam Long projectId,
+            @Parameter(description = "字段名、显示名、别名或业务语义关键词。")
             @RequestParam(required = false) String query,
+            @Parameter(description = "字段分类精确过滤条件。")
             @RequestParam(required = false) String category,
+            @Parameter(description = "字段标签精确过滤条件。")
             @RequestParam(required = false) String tag,
+            @Parameter(description = "字段生命周期状态过滤条件，如 enabled、draft、deprecated。")
             @RequestParam(required = false) String status,
+            @Parameter(description = "是否敏感字段的精确过滤条件。")
             @RequestParam(required = false) Boolean sensitive,
+            @Parameter(description = "反向导入来源批次 ID。")
             @RequestParam(required = false) Long sourceBatchId,
-            @RequestParam(required = false) Integer limit) {
+            @Parameter(description = "legacy 首批返回上限；仅在未提供 current/size 时生效，最大 50。")
+            @RequestParam(required = false) Integer limit,
+            @Parameter(description = "服务端搜索页码，从 1 开始；与 size 任一存在即启用分页模式。")
+            @RequestParam(required = false) Integer current,
+            @Parameter(description = "服务端搜索页大小，范围 1-100；与 current 任一存在即启用分页模式。")
+            @RequestParam(required = false) Integer size,
+            @Parameter(description = "字段数据域 ID 精确过滤条件。")
+            @RequestParam(required = false) Long domainId,
+            @Parameter(description = "true 仅返回未归组字段，false 仅返回已归组字段。")
+            @RequestParam(required = false) Boolean ungrouped,
+            @Parameter(description = "true 表示包含全部生命周期状态；未提供时保留 legacy 的 enabled 默认过滤。")
+            @RequestParam(required = false) Boolean includeAllStatuses) {
         return R.ok(fieldService.search(new FieldSearchReq(
-                projectId, query, category, tag, status, sensitive, sourceBatchId, limit)));
+                projectId, query, category, tag, status, sensitive, sourceBatchId, limit,
+                current, size, domainId, ungrouped, includeAllStatuses)));
     }
 
     /** 根据业务描述推荐标准字段 */

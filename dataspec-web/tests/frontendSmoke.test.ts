@@ -1418,6 +1418,20 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
     'fieldSearchSummary',
     'fieldSearchItems',
     'fieldSearchNextActions',
+    'pageFields(projectId, pagination.current, pagination.size)',
+    'current: pagination.current',
+    'size: pagination.size',
+    'request.domainId = Number(groupKey)',
+    'request.ungrouped = true',
+    'request.includeAllStatuses = true',
+    'const FIELD_SEARCH_DEBOUNCE_MS = 300',
+    'const FIELD_SLOW_STATE_MS = 600',
+    'role="status"',
+    'loadSequence',
+    'metadataSequence',
+    'loadFieldMetadata(projectId)',
+    'ensureFieldOptions()',
+    'invalidateFieldOptions()',
     'fieldStatusFilter',
     'lifecycleStatusOptions',
     'replacementFieldOptions',
@@ -1456,7 +1470,10 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
     'handleUndoChange'
   ], 'FieldLibrary.vue')
 
+  assert.equal(view.includes('const pagedFields = computed'), false, 'FieldLibrary should not paginate with browser slicing')
+
   assertContains(api, [
+    "request.get<unknown, PageResult<Field>>('/fields'",
     "request.get<unknown, Field[]>('/fields/all'",
     "request.get<unknown, FieldSearchResult>('/fields/search'",
     "request.get<unknown, FieldGroupSummary>('/fields/groups'",
@@ -1481,6 +1498,32 @@ test('keeps field library filtering, grouping, bulk maintenance, and undo flow w
     "request.post<unknown, StandardChangePreview>(`/standard-changes/preview/rules/${id}`",
     "request.post<unknown, StandardChangePreview>(`/standard-changes/preview/rules/${id}/toggle`"
   ], 'standard change api')
+})
+
+test('keeps field search pagination generated from the OpenAPI contract', () => {
+  const schema = readSource('src/api/schema.ts')
+
+  assertContains(schema, [
+    'FieldSearchPage: {',
+    '@description 当前页码，从 1 开始。',
+    '@description 当前页大小，范围 1-100。',
+    '@description 确定性过滤和评分后的总命中数。',
+    '@description 匹配数量、过滤条件和确定性查询证据摘要。',
+    'summary?: components["schemas"]["FieldSearchSummary"]',
+    '@description 当前返回窗口中的字段匹配项。',
+    'items?: components["schemas"]["FieldSearchItem"][]',
+    '@description 面向用户或 AI 的安全后续动作。',
+    'nextActions?: string[]',
+    '@description 服务端分页元数据；legacy limit-only 调用为空以保持原有语义。',
+    'page?: components["schemas"]["FieldSearchPage"] | null',
+    '@description legacy 首批返回上限；仅在未提供 current/size 时生效，最大 50。',
+    '@description 服务端搜索页码，从 1 开始；与 size 任一存在即启用分页模式。',
+    '@description 服务端搜索页大小，范围 1-100；与 current 任一存在即启用分页模式。',
+    '@description 字段数据域 ID 精确过滤条件。',
+    '@description true 仅返回未归组字段，false 仅返回已归组字段。',
+    '@description true 表示包含全部生命周期状态；未提供时保留 legacy 的 enabled 默认过滤。',
+    'includeAllStatuses?: boolean'
+  ], 'field search pagination OpenAPI contract')
 })
 
 test('keeps DDL generation and AI Context export flows project-scoped', () => {

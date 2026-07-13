@@ -358,11 +358,12 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 稳定字段：
 
-- `FieldSearchResult`: `projectId`、`query`、`summary`、`items[]`、`nextActions[]`。
+- `FieldSearchResult`: `projectId`、`query`、`summary`、`items[]`、`nextActions[]`、可空 `page`。
 - `FieldSearchSummary`: `totalCandidates`、`matchedCount`、`returnedCount`、`truncated`、`appliedFilters`、`hints[]`。
 - `FieldSearchItem`: `field`、`score`、`matchReasons[]`、`recommendedUse`、`nextActions[]`、`evidence[]`。
+- `FieldSearchPage`: `current`、`size`、`total`、`pages`、`hasPrevious`、`hasNext`。
 
-字段检索是只读能力。AI 可依赖 `matchReasons[]` 和 `evidence[]` 判断命中来源，依赖 `recommendedUse`、语义摘要和 `nextActions[]` 决定收窄检索、采用标准字段或进入候选补全流程。默认检索只返回 `enabled` 字段；显式传入非 enabled `status` 时，返回项必须说明状态、替代字段或替代原因。命中禁用翻译、source-of-truth、单位换算、枚举 lifecycle 或指标边界时，结果可增加 warning/next action，但不得把 forbidden translation 作为安全推荐。不得把 `score` 当作跨版本绝对分值，只能用于同一次结果内排序参考。Explain Trace 不包含业务数据行、token、password 或完整 JDBC URL。
+字段检索是只读能力。传入 `current` 或 `size` 时启用服务端分页并返回 `page`；只传 legacy `limit` 时继续返回排序后的前 N 项，`page` 保持 null，不改变既有调用语义。分页结果按 `score DESC`、字段名 ASC、字段 ID ASC 稳定排序；`hasNext=false` 时不得提示继续翻页。过滤条件支持 `category`、`tag`、`status`、`sensitive`、`sourceBatchId`、`domainId`、`ungrouped` 和 additive `includeAllStatuses`；省略 `includeAllStatuses` 仍保持默认只检索 `enabled` 字段。AI 可依赖 `matchReasons[]` 和 `evidence[]` 判断命中来源，依赖 `recommendedUse`、语义摘要和 `nextActions[]` 决定收窄检索、采用标准字段或进入候选补全流程。显式传入非 enabled `status` 时，返回项必须说明状态、替代字段或替代原因。命中禁用翻译、source-of-truth、单位换算、枚举 lifecycle 或指标边界时，结果可增加 warning/next action，但不得把 forbidden translation 作为安全推荐。不得把 `score` 当作跨版本绝对分值，只能用于同一次结果内排序参考。Explain Trace 不包含业务数据行、token、password 或完整 JDBC URL。
 
 ## 标准字段合并
 

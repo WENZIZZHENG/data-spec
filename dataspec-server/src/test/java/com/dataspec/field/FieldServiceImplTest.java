@@ -1018,6 +1018,158 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void search_pagesDeterministicResultsBeyondLegacyLimit() {
+        FieldRepository repository = mock(FieldRepository.class);
+        List<Field> candidates = new ArrayList<>();
+        for (int index = 1; index <= 75; index++) {
+            Field candidate = field(
+                    "field_%03d".formatted(index),
+                    "字段 %03d".formatted(index),
+                    "varchar(20)",
+                    "分页字段",
+                    "",
+                    "enabled");
+            candidate.setId((long) index);
+            candidates.add(candidate);
+        }
+        when(repository.findAllByProjectId(1L)).thenReturn(candidates);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "field", null, null, null, null, null, 5, 3, 20));
+
+        assertEquals(20, result.items().size());
+        assertEquals("field_041", result.items().getFirst().field().getName());
+        assertEquals("field_060", result.items().getLast().field().getName());
+        assertEquals(3, result.page().current());
+        assertEquals(20, result.page().size());
+        assertEquals(75, result.page().total());
+        assertEquals(4, result.page().pages());
+        assertTrue(result.page().hasPrevious());
+        assertTrue(result.page().hasNext());
+        assertEquals(75, result.summary().matchedCount());
+        assertEquals(20, result.summary().returnedCount());
+        assertTrue(result.summary().truncated());
+        assertTrue(result.summary().hints().stream().anyMatch(hint -> hint.contains("结果已分页")));
+
+        FieldSearchResult lastPage = service.search(new FieldSearchReq(
+                1L, "field", null, null, null, null, null, 5, 4, 20));
+        assertEquals(15, lastPage.items().size());
+        assertFalse(lastPage.page().hasNext());
+        assertTrue(lastPage.summary().truncated());
+        assertFalse(lastPage.summary().hints().stream().anyMatch(hint -> hint.contains("继续翻页")));
+        assertFalse(lastPage.nextActions().stream().anyMatch(action -> action.contains("继续翻页")));
+    }
+
+    @Test
+    void search_usesFieldIdAsFinalPaginationTieBreaker() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field field30 = field("duplicate_name", "重复字段", "varchar(20)", "重复字段", "", "enabled");
+        field30.setId(30L);
+        Field field10 = field("duplicate_name", "重复字段", "varchar(20)", "重复字段", "", "enabled");
+        field10.setId(10L);
+        Field field20 = field("duplicate_name", "重复字段", "varchar(20)", "重复字段", "", "enabled");
+        field20.setId(20L);
+        List<Field> firstOrder = List.of(field30, field10, field20);
+        List<Field> secondOrder = List.of(field20, field30, field10);
+        when(repository.findAllByProjectId(1L))
+                .thenReturn(firstOrder, firstOrder, secondOrder, secondOrder);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        List<Long> firstIds = new ArrayList<>();
+        firstIds.addAll(service.search(new FieldSearchReq(
+                        1L, "duplicate", null, null, null, null, null, null, 1, 2))
+                .items().stream().map(item -> item.field().getId()).toList());
+        firstIds.addAll(service.search(new FieldSearchReq(
+                        1L, "duplicate", null, null, null, null, null, null, 2, 2))
+                .items().stream().map(item -> item.field().getId()).toList());
+        List<Long> secondIds = new ArrayList<>();
+        secondIds.addAll(service.search(new FieldSearchReq(
+                        1L, "duplicate", null, null, null, null, null, null, 1, 2))
+                .items().stream().map(item -> item.field().getId()).toList());
+        secondIds.addAll(service.search(new FieldSearchReq(
+                        1L, "duplicate", null, null, null, null, null, null, 2, 2))
+                .items().stream().map(item -> item.field().getId()).toList());
+
+        assertEquals(List.of(10L, 20L, 30L), firstIds);
+        assertEquals(firstIds, secondIds);
+    }
+
+    @Test
+    void search_keepsLegacyLimitAndOmitsPageMetadata() {
+        FieldRepository repository = mock(FieldRepository.class);
+        List<Field> candidates = new ArrayList<>();
+        for (int index = 1; index <= 75; index++) {
+            Field candidate = field(
+                    "field_%03d".formatted(index),
+                    "字段 %03d".formatted(index),
+                    "varchar(20)",
+                    "分页字段",
+                    "",
+                    "enabled");
+            candidate.setId((long) index);
+            candidates.add(candidate);
+        }
+        when(repository.findAllByProjectId(1L)).thenReturn(candidates);
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "field", null, null, null, null, null, 100));
+
+        assertEquals(50, result.items().size());
+        assertNull(result.page());
+        assertTrue(result.summary().truncated());
+        assertTrue(result.summary().hints().stream().anyMatch(hint -> hint.contains("结果已截断")));
+    }
+
+    @Test
+    void search_returnsEmptyWindowForPageAfterLastMatch() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field candidate = field("field_001", "字段 001", "varchar(20)", "分页字段", "", "enabled");
+        candidate.setId(1L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(candidate));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "field", null, null, null, null, null, null, 2, 20));
+
+        assertTrue(result.items().isEmpty());
+        assertEquals(1, result.page().total());
+        assertEquals(1, result.page().pages());
+        assertTrue(result.page().hasPrevious());
+        assertFalse(result.page().hasNext());
+        assertTrue(result.nextActions().getFirst().contains("当前页没有结果"));
+    }
+
+    @Test
+    void search_zeroMatchPageDoesNotExposePhantomNavigation() {
+        FieldRepository repository = mock(FieldRepository.class);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of());
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult result = service.search(new FieldSearchReq(
+                1L, "missing", null, null, null, null, null, null, 2, 20));
+
+        assertEquals(0, result.page().total());
+        assertEquals(0, result.page().pages());
+        assertFalse(result.page().hasPrevious());
+        assertFalse(result.page().hasNext());
+    }
+
+    @Test
+    void search_rejectsInvalidPaginationBounds() {
+        FieldServiceImpl service = service(mock(FieldRepository.class), mock(StandardChangeLogService.class));
+
+        BizException currentError = assertThrows(BizException.class, () -> service.search(new FieldSearchReq(
+                1L, "field", null, null, null, null, null, null, 0, 20)));
+        BizException sizeError = assertThrows(BizException.class, () -> service.search(new FieldSearchReq(
+                1L, "field", null, null, null, null, null, null, 1, 101)));
+
+        assertTrue(currentError.getMessage().contains("current"));
+        assertTrue(sizeError.getMessage().contains("size"));
+    }
+
+    @Test
     void search_returnsUsageContractSummaryAndConfirmationActionForAvoidMatch() {
         FieldRepository repository = mock(FieldRepository.class);
         Field amount = field("amount_cent", "订单金额", "bigint", "订单金额以分存储", "amount", "enabled");
@@ -1497,6 +1649,67 @@ class FieldServiceImplTest {
         assertTrue(result.items().getFirst().matchReasons().contains("导入批次过滤命中: 77"));
         assertEquals(77L, result.summary().appliedFilters().get("sourceBatchId"));
         assertEquals(1, result.summary().matchedCount());
+    }
+
+    @Test
+    void search_filtersByDomainAndUngroupedState() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field domainField = field("customer_id", "客户 ID", "bigint", "客户主键", "reference", "enabled");
+        domainField.setId(10L);
+        domainField.setDomainId(9L);
+        Field ungroupedField = field("legacy_code", "历史编码", "varchar(20)", "待归组字段", "", "enabled");
+        ungroupedField.setId(11L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(domainField, ungroupedField));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult domainResult = service.search(new FieldSearchReq(
+                1L, null, null, null, null, null, null, null,
+                1, 20, 9L, null));
+        FieldSearchResult ungroupedResult = service.search(new FieldSearchReq(
+                1L, null, null, null, null, null, null, null,
+                1, 20, null, true));
+
+        assertEquals(List.of("customer_id"), domainResult.items().stream()
+                .map(item -> item.field().getName())
+                .toList());
+        assertEquals(9L, domainResult.summary().appliedFilters().get("domainId"));
+        assertEquals(List.of("legacy_code"), ungroupedResult.items().stream()
+                .map(item -> item.field().getName())
+                .toList());
+        assertEquals(true, ungroupedResult.summary().appliedFilters().get("ungrouped"));
+    }
+
+    @Test
+    void search_includeAllStatusesPreservesDomainAndUngroupedResults() {
+        FieldRepository repository = mock(FieldRepository.class);
+        Field draftDomainField = field(
+                "draft_customer_id", "草稿客户 ID", "bigint", "草稿字段", "reference", "draft");
+        draftDomainField.setId(20L);
+        draftDomainField.setDomainId(9L);
+        Field disabledUngroupedField = field(
+                "disabled_legacy_code", "停用历史编码", "varchar(20)", "停用字段", "", "disabled");
+        disabledUngroupedField.setId(21L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(draftDomainField, disabledUngroupedField));
+        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+
+        FieldSearchResult legacyDomainResult = service.search(new FieldSearchReq(
+                1L, null, null, null, null, null, null, null,
+                1, 20, 9L, null));
+        FieldSearchResult allDomainResult = service.search(new FieldSearchReq(
+                1L, null, null, null, null, null, null, null,
+                1, 20, 9L, null, true));
+        FieldSearchResult allUngroupedResult = service.search(new FieldSearchReq(
+                1L, null, null, null, null, null, null, null,
+                1, 20, null, true, true));
+
+        assertTrue(legacyDomainResult.items().isEmpty());
+        assertEquals(List.of("draft_customer_id"), allDomainResult.items().stream()
+                .map(item -> item.field().getName())
+                .toList());
+        assertEquals(List.of("disabled_legacy_code"), allUngroupedResult.items().stream()
+                .map(item -> item.field().getName())
+                .toList());
+        assertEquals(true, allDomainResult.summary().appliedFilters().get("includeAllStatuses"));
     }
 
     @Test

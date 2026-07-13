@@ -1079,6 +1079,16 @@
 - 评审证据：只读 agent `019f5cbc-b06f-7d52-bfda-2550e68f40ef`、`019f5cc7-f3fd-7090-95a1-b02149bf07df`、`019f5ccf-249f-7e40-84a6-6ef2568a3cf3` 均已完成并关闭；误召回恒真门禁、空 Context、维护确认边界、URL userinfo、严格整数契约和搜索证据 findings 均已修复，并由目标/全量测试与真实 smoke 复验。
 - 后续增强：第一版不调用外部 LLM，不建设 A/B、向量或通用评测平台；更大字段库下的分页、搜索完整性和交互性能由 `P6-86` 承接。
 
+### P6-86 / P6-122 / P6-145 / P6-151：字段库服务端分页与密集操作性能闭环
+- 状态：第一版已于 2026-07-14 完成实现、验证和独立评审；OpenSpec change `paginate-field-library-search` 已同步 `field-standard-search` 主规格并归档。
+- 已完成能力：字段搜索新增 additive `current` / `size` 和 nullable `page`，保留 legacy `limit` 首 N 项兼容；支持 `includeAllStatuses`、`domainId`、`ungrouped` 过滤，结果按 score 降序、字段名升序、字段 ID 升序稳定分页，超过 50 条的后续结果均可到达，越界页返回空窗口和可恢复提示。
+- 已完成能力：字段库无筛选列表和有条件搜索均改用服务端窗口；关键词使用 300ms 防抖、输入意图同步废弃旧请求和 600ms 可访问慢状态；元数据使用独立序列，替代/合并全量候选只在工作流打开时按项目加载并缓存。
+- 移动体验：应用壳在移动端使用覆盖式导航；抽屉打开时主内容和 skip link 为 inert，backdrop 不可聚焦，关闭或点击当前路由后焦点返回菜单按钮；字段库状态、分组、表格和分页保持可滚动且不发生页面横向溢出。
+- 契约与文档：OpenAPI customizer 为 `$ref` schema 补回 request/response 属性说明并避免递归；README 与 AI 契约记录分页参数、过滤条件、稳定排序、legacy `limit` 和 nullable `page` 语义。
+- 验证证据：后端全量 `734/734`，评审修复后 `FieldServiceImplTest` `79/79`；前端 `192/192`，build 通过；完整 Playwright `9/9`，字段库专项 `6/6`；tools `443 total / 441 pass / 2 platform skips`；OpenAPI drift、OpenSpec strict/all 和 `git diff --check` 均通过。详细命令、环境 warning 和 Browser 实测见归档 change 的 `tasks.md`。
+- 评审证据：第一轮只读 agent `019f5d46-998d-7020-be94-49379b2b3520` 与最终只读 agent `019f5d5e-f538-79a1-aa85-f6a7809ca02c` 均已关闭；请求竞态、移动焦点与 inert、nullable page、末页提示和公共文档 findings 均已修复，最终结论为 `Approve`。
+- 后续增强：第一版不建设通用遥测或虚拟化框架；只有真实万级字段库测量仍证明局部渲染是瓶颈时，再按具体页面补虚拟化或密集编辑优化。
+
 ## 本轮候选覆盖归档（2026-07-09）
 
 以下条目原位于 P6 候选池，经评审确认已被现有能力覆盖，归档为不再独立排期的完成项。

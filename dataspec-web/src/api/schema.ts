@@ -8404,14 +8404,52 @@ export interface components {
             data?: components["schemas"]["FieldSuggestion"][];
             error?: components["schemas"]["ErrorDetail"];
         };
-        FieldSearchResult: {
-            /** Format: int64 */
-            projectId?: number;
-            query?: string;
-            summary?: components["schemas"]["FieldSearchSummary"];
-            items?: components["schemas"]["FieldSearchItem"][];
-            nextActions?: string[];
+        /** @description 字段搜索服务端分页元数据；legacy limit-only 调用不返回。 */
+        FieldSearchPage: {
+            /**
+             * Format: int32
+             * @description 当前页码，从 1 开始。
+             */
+            current?: number;
+            /**
+             * Format: int32
+             * @description 当前页大小，范围 1-100。
+             */
+            size?: number;
+            /**
+             * Format: int64
+             * @description 确定性过滤和评分后的总命中数。
+             */
+            total?: number;
+            /**
+             * Format: int64
+             * @description 总页数；无命中时为 0。
+             */
+            pages?: number;
+            /** @description true 表示当前页之前仍有可访问结果。 */
+            hasPrevious?: boolean;
+            /** @description true 表示当前页之后仍有可访问结果。 */
+            hasNext?: boolean;
         };
+        /** @description 项目级字段标准检索结果；只读且不会修改字段标准。 */
+        FieldSearchResult: {
+            /**
+             * Format: int64
+             * @description 字段所属项目 ID。
+             */
+            projectId?: number;
+            /** @description 脱敏后的查询文本；仅结构化过滤时可为空。 */
+            query?: string;
+            /** @description 匹配数量、过滤条件和确定性查询证据摘要。 */
+            summary?: components["schemas"]["FieldSearchSummary"];
+            /** @description 当前返回窗口中的字段匹配项。 */
+            items?: components["schemas"]["FieldSearchItem"][];
+            /** @description 面向用户或 AI 的安全后续动作。 */
+            nextActions?: string[];
+            /** @description 服务端分页元数据；legacy limit-only 调用为空以保持原有语义。 */
+            page?: components["schemas"]["FieldSearchPage"] | null;
+        };
+        /** @description 匹配数量、过滤条件和确定性查询证据摘要。 */
         FieldSearchSummary: {
             /** Format: int32 */
             totalCandidates?: number;
@@ -13855,14 +13893,32 @@ export interface operations {
     search_1: {
         parameters: {
             query: {
+                /** @description 字段所属项目 ID，搜索结果不得跨项目。 */
                 projectId: number;
+                /** @description 字段名、显示名、别名或业务语义关键词。 */
                 query?: string;
+                /** @description 字段分类精确过滤条件。 */
                 category?: string;
+                /** @description 字段标签精确过滤条件。 */
                 tag?: string;
+                /** @description 字段生命周期状态过滤条件，如 enabled、draft、deprecated。 */
                 status?: string;
+                /** @description 是否敏感字段的精确过滤条件。 */
                 sensitive?: boolean;
+                /** @description 反向导入来源批次 ID。 */
                 sourceBatchId?: number;
+                /** @description legacy 首批返回上限；仅在未提供 current/size 时生效，最大 50。 */
                 limit?: number;
+                /** @description 服务端搜索页码，从 1 开始；与 size 任一存在即启用分页模式。 */
+                current?: number;
+                /** @description 服务端搜索页大小，范围 1-100；与 current 任一存在即启用分页模式。 */
+                size?: number;
+                /** @description 字段数据域 ID 精确过滤条件。 */
+                domainId?: number;
+                /** @description true 仅返回未归组字段，false 仅返回已归组字段。 */
+                ungrouped?: boolean;
+                /** @description true 表示包含全部生命周期状态；未提供时保留 legacy 的 enabled 默认过滤。 */
+                includeAllStatuses?: boolean;
             };
             header?: never;
             path?: never;

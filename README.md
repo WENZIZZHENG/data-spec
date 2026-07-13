@@ -503,9 +503,10 @@ curl "http://localhost:8090/api/fields/suggest?projectId=1&query=用户手机号
 ```bash
 curl "http://localhost:8090/api/fields/search?projectId=1&query=用户手机号&limit=20"
 curl "http://localhost:8090/api/fields/search?projectId=1&category=user&status=enabled&limit=20"
+curl "http://localhost:8090/api/fields/search?projectId=1&query=用户&current=2&size=20&includeAllStatuses=true"
 ```
 
-检索结果会返回 `summary`、`items[]` 和 `nextActions`。每个 item 包含标准字段、确定性分数、`matchReasons`、推荐使用范围、字段级下一步建议和 `evidence[]`；支持关键词、中文描述、别名、拼音缩写、业务术语表、category、tag、status、sensitive 和 sourceBatchId 过滤。默认检索只返回 `enabled` 字段；显式传 `status=draft|deprecated|disabled` 时，会返回对应历史字段并在 `recommendedUse`/`nextActions` 中说明状态、替代字段或替代原因。省略 query 且不提供任何结构化过滤时会返回校验错误，避免 AI 一次性拉取整个字段库。前端字段库的搜索框、生命周期状态筛选和 category/tag 分组会复用该检索结果并展示命中原因；清空搜索条件后仍使用原有字段列表。
+检索结果会返回 `summary`、`items[]` 和 `nextActions`。每个 item 包含标准字段、确定性分数、`matchReasons`、推荐使用范围、字段级下一步建议和 `evidence[]`；支持关键词、中文描述、别名、拼音缩写、业务术语表、category、tag、status、sensitive、sourceBatchId、domainId 和 ungrouped 过滤。传入 `current` 或 `size` 时启用服务端分页，并增加可空 `page` 元数据：`current`、`size`、`total`、`pages`、`hasPrevious`、`hasNext`；分页结果按 score 降序、字段名升序、字段 ID 升序稳定排列，后续页面不会被 legacy 50 条上限截断。只传 `limit` 的旧调用继续返回排序后的前 N 项，`page` 为 null；`includeAllStatuses=true` 可显式包含所有生命周期状态，省略时仍默认只返回 `enabled` 字段。显式传 `status=draft|deprecated|disabled` 时，会返回对应历史字段并在 `recommendedUse`/`nextActions` 中说明状态、替代字段或替代原因。省略 query 且不提供任何结构化过滤时会返回校验错误，避免 AI 一次性拉取整个字段库。前端字段库的搜索框、生命周期状态筛选和 category/tag 分组会复用该检索结果并展示命中原因；清空搜索条件后仍使用服务端字段分页列表。
 
 ## DDL 生成
 

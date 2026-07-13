@@ -11,6 +11,7 @@ import com.dataspec.field.model.FieldGroupSummary;
 import com.dataspec.field.model.FieldGroupingBatchUpdateReq;
 import com.dataspec.field.model.FieldGroupingBatchUpdateResult;
 import com.dataspec.field.model.FieldSearchReq;
+import com.dataspec.field.model.FieldSearchPage;
 import com.dataspec.field.model.FieldSearchResult;
 import com.dataspec.field.model.FieldSearchSummary;
 import com.dataspec.field.model.FieldSuggestion;
@@ -51,19 +52,25 @@ class FieldControllerTest {
     @Test
     void search_forwardsFiltersToService() {
         FieldService service = mock(FieldService.class);
-        FieldSearchReq req = new FieldSearchReq(1L, "手机号", "contact", "pii", "enabled", true, 8L, 10);
+        FieldSearchReq req = new FieldSearchReq(
+                1L, "手机号", "contact", "pii", "enabled", true, 8L, 10,
+                3, 25, 9L, false, true);
         FieldSearchResult result = new FieldSearchResult(
                 1L,
                 "手机号",
                 new FieldSearchSummary(1, 1, 0, false, Map.of("category", "contact"), List.of()),
                 List.of(),
-                List.of("继续收窄查询"));
+                List.of("继续收窄查询"),
+                new FieldSearchPage(3, 25, 51, 3, true, false));
         when(service.search(req)).thenReturn(result);
         FieldController controller = new FieldController(service, mock(ReverseImportSourceService.class));
 
-        var response = controller.search(1L, "手机号", "contact", "pii", "enabled", true, 8L, 10);
+        var response = controller.search(
+                1L, "手机号", "contact", "pii", "enabled", true, 8L, 10,
+                3, 25, 9L, false, true);
 
         assertEquals("手机号", response.getData().query());
+        assertEquals(3, response.getData().page().current());
         verify(service).search(req);
     }
 

@@ -1,11 +1,36 @@
 <template>
-  <a class="skip-link" href="#main-content">跳到主内容</a>
+  <a
+    class="skip-link"
+    href="#main-content"
+    :aria-hidden="isMobile && mobileNavOpen ? 'true' : undefined"
+    :inert="isMobile && mobileNavOpen ? true : undefined"
+  >跳到主内容</a>
   <el-container class="app-container">
     <!-- 侧边栏导航 -->
-    <el-aside width="220px" class="app-aside" role="navigation" aria-label="主导航">
+    <el-aside
+      id="primary-navigation"
+      width="220px"
+      class="app-aside"
+      :class="{ 'mobile-open': mobileNavOpen }"
+      role="navigation"
+      aria-label="主导航"
+      :aria-hidden="isMobile && !mobileNavOpen ? 'true' : undefined"
+      :inert="isMobile && !mobileNavOpen ? true : undefined"
+      @keydown.tab="trapMobileNavigationFocus"
+    >
       <div class="app-logo">
         <el-icon :size="24"><DataAnalysis /></el-icon>
         <span class="logo-text">DataSpec</span>
+        <el-button
+          id="mobile-nav-close"
+          class="mobile-nav-close"
+          text
+          aria-label="关闭主导航"
+          title="关闭主导航"
+          @click="closeMobileNavigation"
+        >
+          <el-icon><Close /></el-icon>
+        </el-button>
       </div>
       <el-menu
         :default-active="activeMenu"
@@ -14,6 +39,7 @@
         background-color="#1d1e2c"
         text-color="#a3a6b4"
         active-text-color="#409eff"
+        @select="handleMobileMenuSelect"
       >
         <el-menu-item index="/dashboard">
           <el-icon><DataAnalysis /></el-icon>
@@ -182,8 +208,19 @@
       </el-menu>
     </el-aside>
 
+    <div
+      v-if="isMobile && mobileNavOpen"
+      class="mobile-nav-backdrop"
+      aria-hidden="true"
+      @click="closeMobileNavigation"
+    />
+
     <!-- 右侧内容区 -->
-    <el-container>
+    <el-container
+      class="app-content"
+      :aria-hidden="isMobile && mobileNavOpen ? 'true' : undefined"
+      :inert="isMobile && mobileNavOpen ? true : undefined"
+    >
       <el-header class="app-header">
         <div class="header-left">
           <el-breadcrumb separator="/">
@@ -195,20 +232,37 @@
         </div>
         <div class="header-right">
           <el-button
+            id="mobile-menu-button"
+            class="mobile-menu-button"
+            aria-label="打开主导航"
+            title="打开主导航"
+            aria-controls="primary-navigation"
+            :aria-expanded="mobileNavOpen"
+            @click="openMobileNavigation"
+          >
+            <el-icon><Menu /></el-icon>
+          </el-button>
+          <el-button
             size="small"
+            class="compact-header-action"
             aria-label="打开命令面板"
             aria-keyshortcuts="Control+K Meta+K"
             @click="openCommandPalette"
           >
             <el-icon><Search /></el-icon>
-            <span>命令面板</span>
+            <span class="header-action-label">命令面板</span>
           </el-button>
           <el-tag v-if="authStore.operatorName" effect="plain" type="success">
             {{ authStore.operatorName }}
           </el-tag>
-          <el-button size="small" @click="openLoginDialog">
+          <el-button
+            size="small"
+            class="compact-header-action"
+            aria-label="API Token"
+            @click="openLoginDialog"
+          >
             <el-icon><Lock /></el-icon>
-            <span>API Token</span>
+            <span class="header-action-label">API Token</span>
           </el-button>
           <el-button
             v-if="authStore.hasToken"
@@ -223,10 +277,10 @@
           <span class="project-label">当前项目：</span>
           <el-select
             v-model="projectSelectValue"
+            class="project-select"
             placeholder="请选择项目"
             :loading="projectStore.loading"
             aria-label="当前项目"
-            style="width: 200px"
           >
             <el-option label="（未选择）" :value="0" />
             <el-option
@@ -296,7 +350,10 @@ const projectStore = useProjectStore()
 const authStore = useAuthStore()
 const tokenInput = ref('')
 const commandPaletteVisible = ref(false)
+const isMobile = ref(false)
+const mobileNavOpen = ref(false)
 const authDialogFocus = useDialogFocusReturn(toRef(authStore, 'loginDialogVisible'))
+let mobileMediaQuery: MediaQueryList | null = null
 
 // 当前激活的菜单项，与路由路径同步
 const activeMenu = computed(() => route.path)
@@ -308,6 +365,9 @@ const projectSelectValue = computed({
 })
 
 onMounted(async () => {
+  mobileMediaQuery = window.matchMedia('(max-width: 720px)')
+  updateMobileViewport(mobileMediaQuery)
+  mobileMediaQuery.addEventListener('change', updateMobileViewport)
   authStore.restore()
   await projectStore.loadProjects()
   applyRouteProjectId()
@@ -316,6 +376,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  mobileMediaQuery?.removeEventListener('change', updateMobileViewport)
   window.removeEventListener(AUTH_CLEARED_EVENT, authStore.handleAuthCleared)
   window.removeEventListener('keydown', handleCommandPaletteShortcut)
 })
@@ -334,6 +395,7 @@ watch(
 watch(
   () => route.path,
   () => {
+    mobileNavOpen.value = false
     void focusMainContent()
   }
 )
@@ -367,12 +429,71 @@ function openCommandPalette() {
   commandPaletteVisible.value = true
 }
 
+async function openMobileNavigation() {
+  mobileNavOpen.value = true
+  await nextTick()
+  document.getElementById('mobile-nav-close')?.focus({ preventScroll: true })
+}
+
+async function closeMobileNavigation() {
+  mobileNavOpen.value = false
+  await nextTick()
+  document.getElementById('mobile-menu-button')?.focus({ preventScroll: true })
+}
+
+function handleMobileMenuSelect(index: string) {
+  if (!isMobile.value) {
+    return
+  }
+  // 选择当前路由不会触发 route watcher，必须在这里恢复菜单按钮焦点。
+  if (index === route.path) {
+    void closeMobileNavigation()
+  } else {
+    mobileNavOpen.value = false
+  }
+}
+
+function trapMobileNavigationFocus(event: KeyboardEvent) {
+  if (!mobileNavOpen.value) {
+    return
+  }
+  const navigation = document.getElementById('primary-navigation')
+  if (!navigation) {
+    return
+  }
+  // Element Plus 菜单项采用 roving tabindex；抽屉打开时手动循环，避免焦点落到遮罩后的页面。
+  const focusable = Array.from(navigation.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [role="menuitem"]'
+  )).filter((element) => element.offsetParent !== null && element.getAttribute('aria-disabled') !== 'true')
+  if (focusable.length === 0) {
+    return
+  }
+  const currentIndex = focusable.indexOf(document.activeElement as HTMLElement)
+  const nextIndex = event.shiftKey
+    ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+    : (currentIndex < 0 || currentIndex === focusable.length - 1 ? 0 : currentIndex + 1)
+  event.preventDefault()
+  focusable[nextIndex]?.focus({ preventScroll: true })
+}
+
+function updateMobileViewport(media: MediaQueryList | MediaQueryListEvent) {
+  isMobile.value = media.matches
+  if (!media.matches) {
+    mobileNavOpen.value = false
+  }
+}
+
 function openLoginDialog() {
   authDialogFocus.rememberFocus()
   authStore.openLoginDialog()
 }
 
 function handleCommandPaletteShortcut(event: KeyboardEvent) {
+  if (event.key === 'Escape' && mobileNavOpen.value) {
+    event.preventDefault()
+    void closeMobileNavigation()
+    return
+  }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault()
     openCommandPalette()
@@ -399,11 +520,18 @@ const handleLogout = () => {
 <style scoped>
 .app-container {
   height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  overflow: hidden;
 }
 
 .app-aside {
   background-color: #1d1e2c;
   overflow-y: auto;
+}
+
+.app-content {
+  min-width: 0;
 }
 
 .app-logo {
@@ -420,6 +548,12 @@ const handleLogout = () => {
 
 .logo-text {
   letter-spacing: 0;
+}
+
+.mobile-menu-button,
+.mobile-nav-close,
+.mobile-nav-backdrop {
+  display: none;
 }
 
 .app-menu {
@@ -444,6 +578,7 @@ const handleLogout = () => {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .project-label {
@@ -451,8 +586,90 @@ const handleLogout = () => {
   color: #606266;
 }
 
+.project-select {
+  width: 200px;
+}
+
 .app-main {
   background-color: #f5f7fa;
   padding: 20px;
+}
+
+@media (max-width: 720px) {
+  .app-aside {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 1100;
+    width: min(280px, calc(100vw - 48px)) !important;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .app-aside.mobile-open {
+    transform: translateX(0);
+  }
+
+  .app-logo {
+    justify-content: flex-start;
+    padding: 0 10px 0 18px;
+  }
+
+  .logo-text {
+    flex: 1;
+  }
+
+  .mobile-nav-close,
+  .mobile-menu-button {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+
+  .mobile-nav-close {
+    color: #fff;
+  }
+
+  .mobile-nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgb(0 0 0 / 48%);
+  }
+
+  .app-header {
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .header-left,
+  .project-label,
+  .header-action-label {
+    display: none;
+  }
+
+  .header-right {
+    flex: 1;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .compact-header-action {
+    flex: 0 0 auto;
+    margin-left: 0;
+  }
+
+  .project-select {
+    flex: 1 1 120px;
+    width: auto;
+    min-width: 96px;
+    max-width: 160px;
+  }
+
+  .app-main {
+    padding: 12px;
+  }
 }
 </style>

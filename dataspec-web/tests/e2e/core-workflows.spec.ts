@@ -223,8 +223,14 @@ async function installApiMocks(page: Page) {
       await ok(route, fields)
       return
     }
+    if (method === 'GET' && pathname === '/api/fields') {
+      const current = positiveInt(url.searchParams.get('current'), 1)
+      const size = positiveInt(url.searchParams.get('size'), 20)
+      await ok(route, fieldPage(fields, current, size))
+      return
+    }
     if (method === 'GET' && pathname === '/api/fields/search') {
-      await ok(route, fieldSearchResult())
+      await ok(route, fieldSearchResult(url))
       return
     }
     if (method === 'GET' && pathname === '/api/fields/groups') {
@@ -232,6 +238,10 @@ async function installApiMocks(page: Page) {
       return
     }
     if (method === 'GET' && pathname === '/api/domains') {
+      await ok(route, [])
+      return
+    }
+    if (method === 'GET' && pathname === '/api/field-semantics') {
       await ok(route, [])
       return
     }
@@ -439,23 +449,48 @@ function reverseImportPreview() {
   }
 }
 
-function fieldSearchResult() {
-  const field = fields[0]
+function fieldSearchResult(url: URL) {
+  const current = positiveInt(url.searchParams.get('current'), 1)
+  const size = positiveInt(url.searchParams.get('size'), 20)
+  const matchedFields = fields.filter((field) => field.name === 'buyer_mobile')
+  const page = fieldPage(matchedFields, current, size)
   return {
     summary: {
-      matchedCount: 1,
-      returnedCount: 1,
+      matchedCount: page.total,
+      returnedCount: page.records.length,
       hints: ['手机号命中显示名和别名']
     },
-    items: [
-      {
+    items: page.records.map((field) => ({
         field,
         score: 0.98,
         matchReasons: ['显示名命中：买家手机号'],
         recommendedUse: '用于订单买家联系方式展示，敏感场景需脱敏',
         evidence: [{ sourceType: 'FIELD', sourceId: field.id, reason: '字段名和显示名匹配' }]
-      }
-    ],
-    nextActions: ['确认是否需要手机号脱敏展示']
+      })),
+    nextActions: ['确认是否需要手机号脱敏展示'],
+    page: {
+      current: page.current,
+      size: page.size,
+      total: page.total,
+      pages: page.pages,
+      hasPrevious: page.current > 1,
+      hasNext: page.current < page.pages
+    }
   }
+}
+
+function fieldPage<T>(items: T[], current: number, size: number) {
+  const start = (current - 1) * size
+  return {
+    records: items.slice(start, start + size),
+    total: items.length,
+    current,
+    size,
+    pages: items.length === 0 ? 0 : Math.ceil(items.length / size)
+  }
+}
+
+function positiveInt(value: string | null, fallback: number) {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
 }

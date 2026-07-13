@@ -81,7 +81,9 @@ export const stableTestIds = {
     toolbar: 'fields.toolbar',
     searchInput: 'fields.searchInput',
     searchInsight: 'fields.searchInsight',
-    table: 'fields.table'
+    table: 'fields.table',
+    slowState: 'fields.slowState',
+    pagination: 'fields.pagination'
   },
   aiContext: {
     page: 'aiContext.page',

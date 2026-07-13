@@ -8,7 +8,7 @@
         </p>
       </div>
       <div class="header-actions">
-        <el-button :loading="loading" @click="loadFields">
+        <el-button :loading="loading" @click="refreshFields">
           <el-icon><Refresh /></el-icon>
           刷新
         </el-button>
@@ -49,7 +49,7 @@
           />
         </el-select>
         <div class="toolbar-actions">
-          <span class="toolbar-count">匹配 {{ filteredFields.length }} / {{ fields.length }}</span>
+          <span class="toolbar-count">当前页 {{ fields.length }} / 共 {{ fieldTotal }}</span>
           <el-button :disabled="selectedFields.length === 0" @click="openBatchDialog">
             批量归组
           </el-button>
@@ -71,7 +71,7 @@
         <div class="search-insight-main">
           <span class="search-insight-label">字段标准检索</span>
           <span>
-            命中 {{ fieldSearchSummary?.matchedCount ?? filteredFields.length }}，
+            命中 {{ fieldSearchSummary?.matchedCount ?? fieldTotal }}，
             返回 {{ fieldSearchSummary?.returnedCount ?? fields.length }}
           </span>
         </div>
@@ -106,16 +106,30 @@
           </button>
         </aside>
 
-        <el-table
-          v-loading="loading"
-          :data="pagedFields"
-          row-key="id"
-          stripe
-          class="field-table"
-          :data-testid="stableTestIds.fields.table"
-          empty-text="暂无标准字段"
-          @selection-change="handleSelectionChange"
-        >
+        <div class="field-table-region">
+          <div
+            class="slow-loading-status"
+            :class="{ visible: slowLoading }"
+            role="status"
+            aria-live="polite"
+            :data-testid="stableTestIds.fields.slowState"
+          >
+            <template v-if="slowLoading">
+              <el-icon class="slow-loading-icon is-loading"><Loading /></el-icon>
+              <span>字段较多，正在加载当前页…</span>
+            </template>
+          </div>
+
+          <el-table
+            v-loading="loading"
+            :data="fields"
+            row-key="id"
+            stripe
+            class="field-table"
+            :data-testid="stableTestIds.fields.table"
+            empty-text="暂无标准字段"
+            @selection-change="handleSelectionChange"
+          >
           <el-table-column type="selection" width="44" />
           <el-table-column label="字段名" min-width="190" fixed="left">
             <template #default="{ row }">
@@ -212,7 +226,8 @@
               <el-button text type="danger" :aria-label="fieldActionLabel(row, '删除')" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
-        </el-table>
+          </el-table>
+        </div>
       </div>
 
       <div class="pagination-row">
@@ -220,8 +235,9 @@
           v-model:current-page="pagination.current"
           v-model:page-size="pagination.size"
           :page-sizes="[10, 20, 50, 100]"
-          :total="filteredFields.length"
+          :total="fieldTotal"
           layout="total, sizes, prev, pager, next"
+          :data-testid="stableTestIds.fields.pagination"
           @size-change="handleSizeChange"
           @current-change="handlePageChange"
         />
@@ -348,6 +364,7 @@
                 v-model="form.replacementFieldId"
                 clearable
                 filterable
+                :loading="fieldOptionsLoading"
                 class="full-width"
                 placeholder="选择同项目字段"
               >
@@ -870,6 +887,7 @@
       v-model="mergeDialogVisible"
       :project-id="projectStore.currentProjectId"
       :options="fieldMergeOptions"
+      :options-loading="fieldOptionsLoading"
       :initial-target-id="mergeInitialTargetId"
       @applied="handleMergeApplied"
     />
@@ -962,10 +980,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Link, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Link, Loading, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { listChangeLogs } from '@/api/changeLog'
 import { listDomains } from '@/api/domain'
 import StandardFieldMergeDialog from '@/components/StandardFieldMergeDialog.vue'
@@ -979,6 +997,7 @@ import {
   getFieldImpactReport,
   listFields,
   listFieldSources,
+  pageFields,
   previewFieldBulkUpdate,
   searchFields,
   undoFieldChange,
@@ -1029,16 +1048,20 @@ import type {
 const projectStore = useProjectStore()
 const route = useRoute()
 const router = useRouter()
-const fields = ref<Field[]>([])
+const fields = shallowRef<Field[]>([])
+const fieldOptions = shallowRef<Field[]>([])
+const fieldTotal = ref(0)
 const groupSummary = ref<FieldGroupSummary | null>(null)
 const domains = ref<Domain[]>([])
 const fieldKeyword = ref(routeKeyword(route.query.keyword))
 const fieldStatusFilter = ref('')
-const fieldSearchItems = ref<FieldSearchItem[]>([])
+const fieldSearchItems = shallowRef<FieldSearchItem[]>([])
 const fieldSearchSummary = ref<FieldSearchSummary | null>(null)
 const fieldSearchNextActions = ref<string[]>([])
 const sourceBatchIdFilter = computed(() => readPositiveIntQuery(route.query, 'sourceBatchId'))
 const loading = ref(false)
+const slowLoading = ref(false)
+const fieldOptionsLoading = ref(false)
 const submitting = ref(false)
 const batchSubmitting = ref(false)
 const bulkPreviewLoading = ref(false)
@@ -1073,6 +1096,18 @@ const selectedFields = ref<Field[]>([])
 const activeGroupKey = ref('all')
 const mergeInitialTargetId = ref<number | null>(null)
 let loadSequence = 0
+let metadataSequence = 0
+let fieldOptionsSequence = 0
+let fieldOptionsProjectId: number | null = null
+let fieldSearchTimer: ReturnType<typeof setTimeout> | undefined
+
+const FIELD_SEARCH_DEBOUNCE_MS = 300
+const FIELD_SLOW_STATE_MS = 600
+
+type FieldLoadOptions = {
+  /** true 时同时刷新分组、数据域和语义规则等低频元数据。 */
+  reloadMetadata?: boolean
+}
 
 const pagination = reactive({
   current: 1,
@@ -1212,7 +1247,7 @@ const groupOptions = computed(() => [
   {
     optionKey: 'all',
     displayName: '全部字段',
-    fieldCount: groupSummary.value?.totalFieldCount ?? fields.value.length
+    fieldCount: groupSummary.value?.totalFieldCount ?? fieldTotal.value
   },
   ...(groupSummary.value?.groups ?? []).map((group) => ({
     optionKey: groupOptionKey(group),
@@ -1281,46 +1316,14 @@ const knowledgeCardSections = computed(() => {
     { title: '使用示例', items: card.usageExamples ?? [] }
   ]
 })
-const filteredFields = computed(() => {
-  const keyword = fieldKeyword.value.trim().toLowerCase()
-  if (hasFieldSearchConditions.value) {
-    return fields.value.filter((field) => matchesActiveGroup(field) && matchesFieldStatus(field))
-  }
-  return fields.value.filter((field) =>
-    matchesActiveGroup(field) && matchesFieldStatus(field) && (!keyword || [
-        field.name,
-        field.displayName,
-        field.aliases,
-        field.category,
-        field.tags,
-        field.comment,
-        field.replacementReason,
-        field.formatType,
-        field.formatPattern,
-        field.formatUnit,
-        field.formatPrecision,
-        field.formatTimezone,
-        field.formatNullPolicy,
-        field.formatNotes,
-        fieldFormatSummary(field),
-        field.dataType,
-        fieldGroupLabel(field)
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(keyword)))
-  )
-})
-const pagedFields = computed(() => {
-  const start = (pagination.current - 1) * pagination.size
-  return filteredFields.value.slice(start, start + pagination.size)
-})
 const bulkChangedItems = computed(() => bulkPreview.value?.items?.filter((item) => item.changed) ?? [])
+const selectableFieldOptions = computed(() => fieldOptions.value.length ? fieldOptions.value : fields.value)
 const replacementFieldOptions = computed(() =>
-  fields.value.filter((field): field is Field & { id: number } =>
+  selectableFieldOptions.value.filter((field): field is Field & { id: number } =>
     typeof field.id === 'number' && field.id !== editingField.value?.id)
 )
 const fieldMergeOptions = computed<StandardFieldMergeOption[]>(() =>
-  fields.value
+  selectableFieldOptions.value
     .filter((field): field is Field & { id: number } => typeof field.id === 'number')
     .map((field) => ({
       fieldId: field.id,
@@ -1340,11 +1343,13 @@ onMounted(() => {
 watch(
   () => projectStore.currentProjectId,
   () => {
+    cancelScheduledFieldLoad()
+    invalidateFieldOptions()
     pagination.current = 1
     openedRouteFieldId.value = null
     activeGroupKey.value = 'all'
     selectedFields.value = []
-    void loadFields()
+    void loadFields({ reloadMetadata: true })
   },
   { immediate: true }
 )
@@ -1359,7 +1364,19 @@ watch(
   }
 )
 
-watch([fieldKeyword, fieldStatusFilter, activeGroupKey], () => {
+watch(
+  fieldKeyword,
+  () => {
+    pagination.current = 1
+    selectedFields.value = []
+    scheduleFieldLoad()
+  },
+  // 关键词变化必须在输入事件内废弃旧请求，不能等到 Vue 下一轮 watcher flush。
+  { flush: 'sync' }
+)
+
+watch([fieldStatusFilter, activeGroupKey], () => {
+  cancelScheduledFieldLoad()
   pagination.current = 1
   selectedFields.value = []
   void syncFieldUrlState({ fieldId: null })
@@ -1388,17 +1405,27 @@ watch(
 watch(
   () => route.query.sourceBatchId,
   () => {
+    cancelScheduledFieldLoad()
     pagination.current = 1
     selectedFields.value = []
     void loadFields()
   }
 )
 
-async function loadFields() {
+onBeforeUnmount(() => {
+  cancelScheduledFieldLoad()
+  loadSequence += 1
+  metadataSequence += 1
+  fieldOptionsSequence += 1
+})
+
+async function loadFields(options: FieldLoadOptions = {}) {
   const sequence = ++loadSequence
   const projectId = projectStore.currentProjectId
   if (!projectId) {
+    metadataSequence += 1
     fields.value = []
+    fieldTotal.value = 0
     domains.value = []
     groupSummary.value = null
     fieldSearchItems.value = []
@@ -1406,20 +1433,33 @@ async function loadFields() {
     fieldSearchNextActions.value = []
     fieldSemanticRules.value = []
     loading.value = false
+    slowLoading.value = false
     return
   }
   loading.value = true
+  slowLoading.value = false
+  const slowStateTimer = setTimeout(() => {
+    if (sequence === loadSequence) {
+      slowLoading.value = true
+    }
+  }, FIELD_SLOW_STATE_MS)
   try {
     const searchRequest = buildFieldSearchRequest(projectId)
-    const fieldRequest = searchRequest ? searchFields(searchRequest) : listFields(projectId)
-    const [fieldResult, summary, domainList] = await Promise.all([
+    const fieldRequest = searchRequest
+      ? searchFields(searchRequest)
+      : pageFields(projectId, pagination.current, pagination.size)
+    const reloadMetadata = options.reloadMetadata || !groupSummary.value
+    const metadataRequest = reloadMetadata
+      ? loadFieldMetadata(projectId)
+      : Promise.resolve()
+    const [fieldResult] = await Promise.all([
       fieldRequest,
-      getFieldGroupSummary(projectId),
-      listDomains(projectId)
+      metadataRequest
     ])
     if (sequence !== loadSequence) {
       return
     }
+    let serverPages = 0
     if (searchRequest) {
       const searchResult = fieldResult as Awaited<ReturnType<typeof searchFields>>
       fieldSearchItems.value = searchResult.items ?? []
@@ -1428,30 +1468,62 @@ async function loadFields() {
       fields.value = fieldSearchItems.value
         .map((item) => item.field)
         .filter((field): field is Field => Boolean(field))
+      fieldTotal.value = Number(searchResult.page?.total ?? searchResult.summary?.matchedCount ?? fields.value.length)
+      serverPages = Number(searchResult.page?.pages ?? Math.ceil(fieldTotal.value / pagination.size))
+      if (searchResult.page) {
+        pagination.current = searchResult.page.current ?? pagination.current
+        pagination.size = searchResult.page.size ?? pagination.size
+      }
     } else {
+      const pageResult = fieldResult as Awaited<ReturnType<typeof pageFields>>
       fieldSearchItems.value = []
       fieldSearchSummary.value = null
       fieldSearchNextActions.value = []
-      fields.value = fieldResult as Awaited<ReturnType<typeof listFields>> ?? []
+      fields.value = pageResult.records ?? []
+      fieldTotal.value = Number(pageResult.total ?? fields.value.length)
+      serverPages = Number(pageResult.pages ?? Math.ceil(fieldTotal.value / pagination.size))
+      pagination.current = Number(pageResult.current ?? pagination.current)
+      pagination.size = Number(pageResult.size ?? pagination.size)
     }
-    groupSummary.value = summary
-    domains.value = domainList ?? []
-    fieldSemanticRules.value = await listFieldSemanticRules({ projectId })
+    if (fieldTotal.value > 0 && serverPages > 0 && pagination.current > serverPages) {
+      pagination.current = serverPages
+      void loadFields(options)
+      return
+    }
     selectedFields.value = []
     ensureActiveGroupExists()
     await openFieldFromRoute()
   } finally {
+    clearTimeout(slowStateTimer)
     if (sequence === loadSequence) {
       loading.value = false
+      slowLoading.value = false
     }
   }
+}
+
+async function loadFieldMetadata(projectId: number) {
+  const sequence = ++metadataSequence
+  const [summary, domainList, semanticRules] = await Promise.all([
+    getFieldGroupSummary(projectId),
+    listDomains(projectId),
+    listFieldSemanticRules({ projectId })
+  ])
+  if (sequence !== metadataSequence || projectStore.currentProjectId !== projectId) {
+    return
+  }
+  groupSummary.value = summary
+  domains.value = domainList ?? []
+  fieldSemanticRules.value = semanticRules ?? []
+  ensureActiveGroupExists()
 }
 
 function buildFieldSearchRequest(projectId: number): FieldSearchReq | null {
   const query = fieldKeyword.value.trim()
   const request: FieldSearchReq = {
     projectId,
-    limit: 50
+    current: pagination.current,
+    size: pagination.size
   }
   if (query) {
     request.query = query
@@ -1463,22 +1535,97 @@ function buildFieldSearchRequest(projectId: number): FieldSearchReq | null {
   if (groupType === 'tag' && groupKey) {
     request.tag = groupKey
   }
+  if (groupType === 'domain' && Number(groupKey) > 0) {
+    request.domainId = Number(groupKey)
+  }
+  if (groupType === 'ungrouped') {
+    request.ungrouped = true
+  }
   if (sourceBatchIdFilter.value) {
     request.sourceBatchId = sourceBatchIdFilter.value
   }
   if (fieldStatusFilter.value) {
     request.status = fieldStatusFilter.value
+  } else {
+    request.includeAllStatuses = true
   }
-  return request.query || request.category || request.tag || request.status || request.sourceBatchId ? request : null
+  return request.query
+    || request.category
+    || request.tag
+    || request.status
+    || request.sourceBatchId
+    || request.domainId
+    || request.ungrouped
+    ? request
+    : null
+}
+
+function scheduleFieldLoad() {
+  cancelScheduledFieldLoad()
+  // 输入意图一变化就使在途响应失效，避免旧响应在防抖窗口内覆盖新关键词状态。
+  loadSequence += 1
+  fieldSearchTimer = setTimeout(() => {
+    fieldSearchTimer = undefined
+    void syncFieldUrlState({ fieldId: null })
+    void loadFields()
+  }, FIELD_SEARCH_DEBOUNCE_MS)
+}
+
+function cancelScheduledFieldLoad() {
+  if (fieldSearchTimer) {
+    clearTimeout(fieldSearchTimer)
+    fieldSearchTimer = undefined
+  }
+}
+
+function refreshFields() {
+  cancelScheduledFieldLoad()
+  invalidateFieldOptions()
+  void loadFields({ reloadMetadata: true })
+}
+
+async function ensureFieldOptions() {
+  const projectId = projectStore.currentProjectId
+  if (!projectId || fieldOptionsProjectId === projectId) {
+    return
+  }
+  const sequence = ++fieldOptionsSequence
+  fieldOptionsProjectId = projectId
+  fieldOptionsLoading.value = true
+  try {
+    const options = await listFields(projectId)
+    if (sequence === fieldOptionsSequence && projectStore.currentProjectId === projectId) {
+      fieldOptions.value = options ?? []
+    }
+  } catch {
+    if (sequence === fieldOptionsSequence) {
+      fieldOptionsProjectId = null
+    }
+  } finally {
+    if (sequence === fieldOptionsSequence) {
+      fieldOptionsLoading.value = false
+    }
+  }
+}
+
+function invalidateFieldOptions() {
+  fieldOptionsSequence += 1
+  fieldOptionsProjectId = null
+  fieldOptions.value = []
+  fieldOptionsLoading.value = false
 }
 
 function handleSizeChange(size: number) {
+  cancelScheduledFieldLoad()
   pagination.size = size
   pagination.current = 1
+  void loadFields()
 }
 
 function handlePageChange(page: number) {
+  cancelScheduledFieldLoad()
   pagination.current = page
+  void loadFields()
 }
 
 function selectGroup(optionKey: string) {
@@ -1554,7 +1701,8 @@ async function handleBatchSubmit() {
     ElMessage.success(`已更新 ${result.updatedCount ?? selectedFields.value.length} 个字段`)
     batchDialogVisible.value = false
     selectedFields.value = []
-    await loadFields()
+    invalidateFieldOptions()
+    await loadFields({ reloadMetadata: true })
   } finally {
     batchSubmitting.value = false
   }
@@ -1662,7 +1810,8 @@ async function handleBulkSubmit() {
     ElMessage.success(`已维护 ${result.updatedCount ?? changedCount} 个字段`)
     bulkDialogVisible.value = false
     selectedFields.value = []
-    await loadFields()
+    invalidateFieldOptions()
+    await loadFields({ reloadMetadata: true })
   } finally {
     bulkSubmitting.value = false
   }
@@ -1721,12 +1870,14 @@ function openCreateDialog() {
   editingField.value = null
   resetForm()
   dialogVisible.value = true
+  void ensureFieldOptions()
 }
 
 function openEditDialog(field: Field) {
   editingField.value = field
   resetForm(field)
   dialogVisible.value = true
+  void ensureFieldOptions()
   if (field.id) {
     void syncFieldUrlState({ fieldId: field.id })
   }
@@ -1738,10 +1889,12 @@ function openMergeDialog(field: Field) {
   }
   mergeInitialTargetId.value = field.id
   mergeDialogVisible.value = true
+  void ensureFieldOptions()
 }
 
 async function handleMergeApplied() {
-  await loadFields()
+  invalidateFieldOptions()
+  await loadFields({ reloadMetadata: true })
 }
 
 async function openFieldFromRoute() {
@@ -1899,7 +2052,8 @@ async function handleUndoChange(log: StandardChangeLog) {
   try {
     await undoFieldChange(fieldId, log.id)
     ElMessage.success('字段已回退')
-    await loadFields()
+    invalidateFieldOptions()
+    await loadFields({ reloadMetadata: true })
     await loadChangeLogs()
   } finally {
     undoSubmitting.value = null
@@ -1931,7 +2085,8 @@ async function handleSubmit() {
       ElMessage.success('字段已创建')
     }
     dialogVisible.value = false
-    await loadFields()
+    invalidateFieldOptions()
+    await loadFields({ reloadMetadata: true })
   } finally {
     submitting.value = false
   }
@@ -1991,7 +2146,8 @@ async function handleDelete(field: Field) {
   }
   await deleteField(field.id)
   ElMessage.success('字段已删除')
-  await loadFields()
+  invalidateFieldOptions()
+  await loadFields({ reloadMetadata: true })
 }
 
 function groupOptionKey(group: FieldGroupItem) {
@@ -2000,7 +2156,7 @@ function groupOptionKey(group: FieldGroupItem) {
 
 function isSearchableGroupKey(optionKey: string) {
   const [groupType, groupKey] = optionKey.split(':')
-  return Boolean(groupKey && (groupType === 'category' || groupType === 'tag'))
+  return Boolean(groupKey && ['category', 'tag', 'domain', 'ungrouped'].includes(groupType))
 }
 
 function groupDisplayName(group: FieldGroupItem) {
@@ -2017,30 +2173,6 @@ function groupDisplayName(group: FieldGroupItem) {
     return `标签：${group.groupName || group.groupKey || '-'}`
   }
   return group.groupName || group.groupKey || '其他'
-}
-
-function matchesActiveGroup(field: Field) {
-  if (activeGroupKey.value === 'all') {
-    return true
-  }
-  const [groupType, groupKey] = activeGroupKey.value.split(':')
-  if (groupType === 'domain') {
-    return String(field.domainId ?? '') === groupKey
-  }
-  if (groupType === 'category') {
-    return (field.category ?? '').trim() === groupKey
-  }
-  if (groupType === 'tag') {
-    return splitTags(field.tags).includes(groupKey)
-  }
-  if (groupType === 'ungrouped') {
-    return isUngrouped(field)
-  }
-  return true
-}
-
-function matchesFieldStatus(field: Field) {
-  return !fieldStatusFilter.value || field.status === fieldStatusFilter.value
 }
 
 function fieldSearchReasons(field: Field) {
@@ -2183,7 +2315,7 @@ function formatExampleForPreview(value: string) {
 
 function replacementSummary(field: Field) {
   if (field.replacementFieldId) {
-    const replacement = fields.value.find((item) => item.id === field.replacementFieldId)
+    const replacement = selectableFieldOptions.value.find((item) => item.id === field.replacementFieldId)
     return replacement ? `替代：${replacement.name}` : `替代：#${field.replacementFieldId}`
   }
   return field.replacementReason ? `说明：${field.replacementReason}` : ''
@@ -2197,14 +2329,6 @@ function domainNameById(value?: string) {
 function domainLabel(domain: Domain) {
   const name = domain.name || `#${domain.id ?? '-'}`
   return domain.code ? `${name} (${domain.code})` : name
-}
-
-function splitTags(value?: string) {
-  return Array.from(new Set((value ?? '')
-    .split(/[,，]/)
-    .map((item) => item.trim())
-    .filter(Boolean)))
-    .sort()
 }
 
 function parseExamplesJson(value?: string | null) {
@@ -2265,10 +2389,6 @@ function parseExampleLine(line: string) {
     // 普通示例按原有每行文本处理；JSON 字符串行只用于表达空串或保留首尾空格。
   }
   return text
-}
-
-function isUngrouped(field: Field) {
-  return !field.domainId && !field.category?.trim() && splitTags(field.tags).length === 0
 }
 
 function formatDataType(field: Field) {
@@ -2544,6 +2664,30 @@ function routeFieldId() {
   width: 100%;
 }
 
+.field-table-region {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.slow-loading-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  color: #606266;
+  font-size: 13px;
+  visibility: hidden;
+}
+
+.slow-loading-status.visible {
+  visibility: visible;
+}
+
+.slow-loading-icon {
+  color: var(--el-color-primary);
+}
+
 .field-name-cell {
   font-weight: 600;
   color: #303133;
@@ -2696,6 +2840,7 @@ function routeFieldId() {
 .pagination-row {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   margin-top: 16px;
 }
 
@@ -2808,6 +2953,20 @@ function routeFieldId() {
 }
 
 @media (max-width: 640px) {
+  .field-page {
+    padding: 12px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions,
+  .toolbar-actions {
+    flex-wrap: wrap;
+  }
+
   .field-toolbar {
     grid-template-columns: 1fr;
   }
@@ -2825,11 +2984,32 @@ function routeFieldId() {
   }
 
   .group-panel {
-    max-height: 220px;
+    flex-direction: row;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
     border-right: 0;
     border-bottom: 1px solid #ebeef5;
     padding-right: 0;
-    padding-bottom: 10px;
+    padding-bottom: 8px;
+  }
+
+  .group-option {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 220px;
+  }
+
+  .field-table :deep(.el-table-fixed-column--left),
+  .field-table :deep(.el-table-fixed-column--right) {
+    position: static !important;
+    right: auto !important;
+    left: auto !important;
+  }
+
+  .pagination-row {
+    justify-content: flex-start;
+    overflow-x: auto;
   }
 
   .batch-input {

@@ -162,16 +162,36 @@ export interface StandardQueryResult {
 }
 
 export interface FieldSearchReq {
+  /** 字段所属项目 ID。 */
   projectId?: number
+  /** 字段名、显示名、别名或业务语义关键词。 */
   query?: string
+  /** 字段分类精确过滤条件。 */
   category?: string
+  /** 字段标签精确过滤条件。 */
   tag?: string
+  /** 字段生命周期状态过滤条件。 */
   status?: string
+  /** 是否敏感字段的精确过滤条件。 */
   sensitive?: boolean
+  /** 反向导入来源批次 ID。 */
   sourceBatchId?: number
+  /** legacy 首批返回上限；未提供 current/size 时生效。 */
   limit?: number
+  /** 服务端页码，从 1 开始；与 size 任一存在即启用分页模式。 */
+  current?: number
+  /** 服务端页大小，范围 1-100。 */
+  size?: number
+  /** 字段数据域 ID 精确过滤条件。 */
+  domainId?: number
+  /** true 仅返回未归组字段，false 仅返回已归组字段。 */
+  ungrouped?: boolean
+  /** true 表示包含全部生命周期状态；省略时保留 legacy 的 enabled 默认过滤。 */
+  includeAllStatuses?: boolean
 }
 export type FieldSearchItem = Schemas['FieldSearchItem']
+/** 字段搜索服务端分页元数据；legacy limit-only 调用可为空。 */
+export type FieldSearchPage = Schemas['FieldSearchPage']
 export type FieldSearchSummary = Schemas['FieldSearchSummary'] & {
   /** 字段搜索映射到 Standard Query DSL 后的脱敏查询摘要；additive 字段，不改变旧字段语义。 */
   querySummary?: StandardQuerySummary
@@ -184,9 +204,11 @@ export type FieldSearchSummary = Schemas['FieldSearchSummary'] & {
   /** 字段搜索使用的确定性 token evidence；文本已脱敏且数量有界。 */
   queryTokens?: QueryTokenEvidence[]
 }
-export type FieldSearchResult = Omit<Schemas['FieldSearchResult'], 'summary'> & {
+export type FieldSearchResult = Omit<Schemas['FieldSearchResult'], 'summary' | 'page'> & {
   /** 字段搜索摘要；在生成 Schema 更新前兼容 additive queryTokens。 */
   summary?: FieldSearchSummary
+  /** 服务端分页元数据；legacy limit-only 调用可为空。 */
+  page?: FieldSearchPage | null
 }
 export type Domain = Schemas['Domain']
 export type FieldGroupItem = Schemas['FieldGroupItem']
