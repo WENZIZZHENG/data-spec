@@ -1363,34 +1363,48 @@ class FieldServiceImplTest {
     void suggest_matchesDeterministicGoldenRecommendationFixture() throws Exception {
         JsonNode fixture = objectMapper.readTree(readResource(
                 "fixtures/querynormalization/deterministic-name-tokenization.json"));
+        JsonNode thresholds = fixture.path("qualityThresholds");
+        int top1Eligible = 0;
+        int top1Hits = 0;
+        int top3Hits = 0;
+        List<String> top1Misses = new ArrayList<>();
+        List<String> top3Misses = new ArrayList<>();
+        List<String> falsePositiveAt3 = new ArrayList<>();
+        List<String> falsePositiveCases = new ArrayList<>();
+        List<String> falsePositiveRegressions = new ArrayList<>();
+        List<String> orderingRegressions = new ArrayList<>();
 
         assertEquals(1, fixture.path("schemaVersion").asInt());
         for (JsonNode scenario : fixture.path("recommendationCases")) {
             FieldRepository repository = mock(FieldRepository.class);
             BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+            FieldHistoricalAliasService historyService = mock(FieldHistoricalAliasService.class);
             List<Field> fields = fieldsFromFixture(scenario.path("fields"));
             String query = scenario.path("query").asText();
             when(repository.findAllByProjectId(1L)).thenReturn(fields);
             when(glossaryService.match(1L, query)).thenReturn(glossaryMatchesFromFixture(
                     scenario.path("glossaryMatches")));
+            when(historyService.load(1L, fields)).thenReturn(historicalAliasesFromFixture(
+                    scenario.path("historicalAliases")));
             FieldServiceImpl service = service(
                     repository,
                     mock(FieldSourceRepository.class),
                     mock(StandardChangeLogService.class),
-                    glossaryService);
+                    glossaryService,
+                    historyService);
 
             List<FieldSuggestion> suggestions = service.suggest(1L, query, scenario.path("limit").asInt());
             List<String> expectedOrder = stringValues(scenario.path("expectedOrder"));
             String scenarioId = scenario.path("id").asText();
+            List<String> actualOrder = suggestions.stream()
+                    .limit(expectedOrder.size())
+                    .map(FieldSuggestion::recommendedName)
+                    .toList();
 
             assertTrue(suggestions.size() >= expectedOrder.size(), scenarioId);
-            assertEquals(
-                    expectedOrder,
-                    suggestions.stream()
-                            .limit(expectedOrder.size())
-                            .map(FieldSuggestion::recommendedName)
-                            .toList(),
-                    scenarioId);
+            if (!expectedOrder.equals(actualOrder)) {
+                orderingRegressions.add(scenarioId + ": expected=" + expectedOrder + ", actual=" + actualOrder);
+            }
             assertEquals(
                     stringValues(scenario.path("expectedResolutionStatuses")),
                     suggestions.getFirst().queryTokens().stream()
@@ -1401,7 +1415,60 @@ class FieldServiceImplTest {
             if (scenario.path("strictTopScore").asBoolean()) {
                 assertTrue(suggestions.getFirst().score() > suggestions.get(1).score(), scenarioId);
             }
+            if (scenario.path("qualityIncluded").asBoolean()) {
+                String expectedTop1 = nullableText(scenario.path("expectedTop1"));
+                List<String> top3 = suggestions.stream()
+                        .limit(3)
+                        .map(FieldSuggestion::recommendedName)
+                        .toList();
+                if (expectedTop1 != null) {
+                    top1Eligible += 1;
+                    if (expectedTop1.equals(suggestions.getFirst().recommendedName())) {
+                        top1Hits += 1;
+                    } else {
+                        top1Misses.add(scenarioId);
+                    }
+                    if (top3.contains(expectedTop1)) {
+                        top3Hits += 1;
+                    } else {
+                        top3Misses.add(scenarioId);
+                    }
+                }
+                Set<String> allowedTop3 = Set.copyOf(stringValues(scenario.path("allowedTop3")));
+                List<String> falsePositiveNames = suggestions.stream()
+                        .limit(3)
+                        .filter(FieldSuggestion::existing)
+                        .map(FieldSuggestion::recommendedName)
+                        .filter(name -> !allowedTop3.contains(name))
+                        .toList();
+                falsePositiveNames.forEach(name -> falsePositiveAt3.add(scenarioId + ":" + name));
+                if (!falsePositiveNames.isEmpty()) {
+                    falsePositiveCases.add(scenarioId + ": " + falsePositiveNames);
+                }
+                if (falsePositiveNames.size() > scenario.path("maxFalsePositiveAt3").asInt()) {
+                    falsePositiveRegressions.add(scenarioId + ": " + falsePositiveNames);
+                }
+            }
         }
+
+        double top1Rate = top1Eligible == 0 ? 0 : (double) top1Hits / top1Eligible;
+        double top3Rate = top1Eligible == 0 ? 0 : (double) top3Hits / top1Eligible;
+        assertTrue(top1Rate >= thresholds.path("minimumTop1Rate").asDouble(),
+                "Top-1 rate=" + top1Rate + ", misses=" + top1Misses);
+        assertTrue(top3Rate >= thresholds.path("minimumTop3Rate").asDouble(),
+                "Top-3 rate=" + top3Rate + ", misses=" + top3Misses);
+        Set<String> allowedFalsePositiveAt3 = Set.copyOf(stringValues(fixture.path("allowedFalsePositiveAt3")));
+        List<String> unexpectedFalsePositiveAt3 = falsePositiveAt3.stream()
+                .filter(candidate -> !allowedFalsePositiveAt3.contains(candidate))
+                .toList();
+        assertTrue(unexpectedFalsePositiveAt3.size()
+                        <= thresholds.path("maxUnexpectedFalsePositiveAt3Count").asInt(),
+                "Unexpected Top-3 false positives=" + unexpectedFalsePositiveAt3
+                        + ", all cases=" + falsePositiveCases);
+        assertTrue(falsePositiveRegressions.isEmpty(),
+                "Per-case Top-3 false-positive regressions=" + falsePositiveRegressions);
+        assertTrue(orderingRegressions.size() <= thresholds.path("maxOrderingRegressionCount").asInt(),
+                "Ordering regressions=" + orderingRegressions);
     }
 
     @Test
@@ -1859,6 +1926,19 @@ class FieldServiceImplTest {
                     longValues(value.path("glossaryIds"))));
         }
         return List.copyOf(matches);
+    }
+
+    private Map<Long, List<FieldHistoricalAlias>> historicalAliasesFromFixture(JsonNode values) {
+        Map<Long, List<FieldHistoricalAlias>> aliases = new java.util.LinkedHashMap<>();
+        for (JsonNode value : values) {
+            Long fieldId = value.path("fieldId").asLong();
+            aliases.computeIfAbsent(fieldId, ignored -> new ArrayList<>()).add(new FieldHistoricalAlias(
+                    fieldId,
+                    value.path("value").asText(),
+                    value.path("changeLogId").asLong()));
+        }
+        aliases.replaceAll((fieldId, items) -> List.copyOf(items));
+        return Map.copyOf(aliases);
     }
 
     private List<String> stringValues(JsonNode values) {

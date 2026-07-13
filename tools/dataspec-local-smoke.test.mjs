@@ -104,6 +104,64 @@ test('runSmoke emits stable JSON result for a healthy stack', async () => {
     if (url === 'http://localhost:8090/api/dashboard/summary?projectId=12') {
       return jsonResponse({ code: 200, data: { fieldCount: 8 } })
     }
+    if (url === 'http://localhost:8090/api/bootstrap/session?projectId=12&server=http%3A%2F%2Flocalhost%3A8090') {
+      return jsonResponse({
+        code: 200,
+        data: {
+          kind: 'dataspec-ai-session-bootstrap',
+          status: 'DEGRADED',
+          projectId: 12
+        }
+      })
+    }
+    if (url === 'http://localhost:8090/api/ai-context/field-catalog?projectId=12&scope=field&query=id&status=enabled&limit=5') {
+      return jsonResponse({
+        code: 200,
+        data: JSON.stringify({
+          projectId: 12,
+          contextScope: {
+            scope: 'field',
+            query: 'id',
+            status: 'enabled',
+            limit: 5,
+            matchedFieldCount: 1,
+            returnedFieldCount: 1
+          },
+          fields: [{
+            name: 'business_key',
+            comment: 'legacy id reference',
+            status: 'enabled',
+            matchReasons: ['注释匹配: legacy id reference']
+          }]
+        })
+      })
+    }
+    if (url === 'http://localhost:8090/api/standard-maintenance/workflows/plan') {
+      assert.equal(options.method, 'POST')
+      assert.deepEqual(JSON.parse(options.body), {
+        projectId: 12,
+        sourceType: 'STANDARD_CANDIDATE',
+        sourceIds: []
+      })
+      return jsonResponse({
+        code: 200,
+        data: {
+          projectId: 12,
+          inboxAction: {
+            actionType: 'REVIEW_CANDIDATES',
+            sourceType: 'STANDARD_CANDIDATE',
+            confirmationRequired: true
+          },
+          recipeBinding: {
+            recipeId: 'standard-maintenance',
+            sourceParameters: { projectId: 12, sourceType: 'STANDARD_CANDIDATE' }
+          },
+          dryRunSteps: [{ phase: 'precheck' }, { phase: 'execute', requiresConfirmation: true }],
+          executionState: { status: 'DRY_RUN' },
+          nextActions: [{ code: 'REVIEW_CONFIRMATION_REQUIRED' }]
+        }
+      })
+    }
     if (url === 'http://localhost:8090/api/lint') {
       assert.equal(options.method, 'POST')
       assert.match(options.body, /UserOrder/)
@@ -125,9 +183,206 @@ test('runSmoke emits stable JSON result for a healthy stack', async () => {
     'api-docs',
     'demo-project',
     'dashboard-summary',
+    'ai-bootstrap-minimal-context',
+    'standard-maintenance-plan',
     'sql-lint'
   ])
   assert.ok(seen.some((entry) => entry.url.endsWith('/api/lint')))
+  assert.ok(seen.some((entry) => entry.url.includes('/api/bootstrap/session?')))
+  assert.ok(seen.some((entry) => entry.url.includes('/api/ai-context/field-catalog?')))
+  assert.ok(seen.some((entry) => entry.url.endsWith('/api/standard-maintenance/workflows/plan')))
+})
+
+test('runSmoke rejects a blocked AI bootstrap before reading Context', async () => {
+  const seen = []
+  const fetchFn = async (url) => {
+    seen.push(url)
+    if (url === 'http://localhost:5173/' || url === 'http://localhost:8090/api-docs') {
+      return jsonResponse({ ok: true })
+    }
+    if (url === 'http://localhost:8090/api/projects/demo') {
+      return jsonResponse({ code: 200, data: { created: false, project: { id: 12 } } })
+    }
+    if (url === 'http://localhost:8090/api/dashboard/summary?projectId=12') {
+      return jsonResponse({ code: 200, data: { fieldCount: 8 } })
+    }
+    if (url === 'http://localhost:8090/api/bootstrap/session?projectId=12&server=http%3A%2F%2Flocalhost%3A8090') {
+      return jsonResponse({
+        code: 200,
+        data: {
+          kind: 'dataspec-ai-session-bootstrap',
+          status: 'BLOCKED',
+          projectId: 12
+        }
+      })
+    }
+    throw new Error(`Unexpected URL ${url}`)
+  }
+
+  const result = await runSmoke(parseArgs([], {}), {
+    fetchFn,
+    sleepFn: async () => {}
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.checks.at(-1).name, 'ai-bootstrap-minimal-context')
+  assert.match(result.checks.at(-1).message, /usable status/)
+  assert.equal(seen.some((url) => url.includes('/api/ai-context/field-catalog?')), false)
+})
+
+test('runSmoke strips server userinfo from bootstrap metadata and diagnostics', async () => {
+  let bootstrapServer = null
+  const options = parseArgs([
+    '--server', 'http://svc-user:svc-pass@localhost:8090'
+  ], {})
+  const result = await runSmoke(options, {
+    fetchFn: async (url) => {
+      const parsed = new URL(url)
+      if (parsed.pathname === '/' || parsed.pathname === '/api-docs') {
+        return jsonResponse({ ok: true })
+      }
+      if (parsed.pathname === '/api/projects/demo') {
+        return jsonResponse({ code: 200, data: { created: false, project: { id: 12 } } })
+      }
+      if (parsed.pathname === '/api/dashboard/summary') {
+        return jsonResponse({ code: 200, data: { fieldCount: 8 } })
+      }
+      if (parsed.pathname === '/api/bootstrap/session') {
+        bootstrapServer = parsed.searchParams.get('server')
+        return jsonResponse({
+          code: 200,
+          data: { kind: 'dataspec-ai-session-bootstrap', status: 'BLOCKED', projectId: 12 }
+        })
+      }
+      throw new Error(`Unexpected URL ${url}`)
+    },
+    sleepFn: async () => {}
+  })
+
+  assert.equal(bootstrapServer, 'http://localhost:8090')
+  assert.doesNotMatch(formatResult(result, 'text'), /svc-user|svc-pass/)
+})
+
+test('runSmoke preserves skip-demo as a readiness-only check', async () => {
+  const seen = []
+  const result = await runSmoke(parseArgs(['--skip-demo'], {}), {
+    fetchFn: async (url) => {
+      seen.push(url)
+      return jsonResponse({ ok: true })
+    },
+    sleepFn: async () => {}
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.projectId, undefined)
+  assert.deepEqual(result.checks.map((check) => check.name), ['web', 'api-docs', 'demo-project'])
+  assert.equal(result.checks.at(-1).status, 'skip')
+  assert.deepEqual(seen, ['http://localhost:5173/', 'http://localhost:8090/api-docs'])
+})
+
+test('runSmoke rejects empty or unscoped minimal Context', async () => {
+  const invalidCatalogs = [
+    {
+      projectId: 12,
+      contextScope: {
+        scope: 'field',
+        query: 'id',
+        status: 'enabled',
+        limit: 5,
+        matchedFieldCount: 0,
+        returnedFieldCount: 0
+      },
+      fields: []
+    },
+    {
+      projectId: 12,
+      contextScope: {
+        scope: 'all',
+        query: 'id',
+        status: 'enabled',
+        limit: 5,
+        matchedFieldCount: 1,
+        returnedFieldCount: 1
+      },
+      fields: [{ name: 'id', status: 'enabled' }]
+    },
+    {
+      projectId: 12,
+      contextScope: {
+        scope: 'field',
+        query: 'id',
+        status: 'enabled',
+        limit: 4,
+        matchedFieldCount: 1,
+        returnedFieldCount: 1
+      },
+      fields: [{ name: 'id', status: 'enabled' }]
+    },
+    {
+      projectId: 12,
+      contextScope: {
+        scope: 'field',
+        query: 'id',
+        status: 'enabled',
+        limit: 5,
+        returnedFieldCount: 1
+      },
+      fields: [{ name: 'id', status: 'enabled' }]
+    },
+    {
+      projectId: 12,
+      contextScope: {
+        scope: 'field',
+        query: 'id',
+        status: 'enabled',
+        limit: '5',
+        matchedFieldCount: '1',
+        returnedFieldCount: '1'
+      },
+      fields: [{ name: 'id', status: 'enabled', matchReasons: ['字段名匹配: id'] }]
+    }
+  ]
+
+  for (const fieldCatalog of invalidCatalogs) {
+    const result = await runSmoke(parseArgs([], {}), {
+      fetchFn: smokeFetchThroughContext({ fieldCatalog }),
+      sleepFn: async () => {}
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.checks.at(-1).name, 'ai-bootstrap-minimal-context')
+    assert.match(result.checks.at(-1).message, /scope, filters, count, or limit/)
+  }
+})
+
+test('runSmoke rejects a maintenance plan without explicit confirmation evidence', async () => {
+  const result = await runSmoke(parseArgs([], {}), {
+    fetchFn: smokeFetchThroughContext({
+      plan: {
+        projectId: 12,
+        inboxAction: {
+          actionType: 'REVIEW_CANDIDATES',
+          sourceType: 'STANDARD_CANDIDATE',
+          confirmationRequired: false
+        },
+        recipeBinding: {
+          recipeId: 'standard-maintenance',
+          sourceParameters: { projectId: 12, sourceType: 'STANDARD_CANDIDATE' }
+        },
+        dryRunSteps: [
+          { phase: 'precheck', requiresConfirmation: true },
+          { phase: 'execute', requiresConfirmation: false }
+        ],
+        executionState: { status: 'DRY_RUN' },
+        nextActions: []
+      }
+    }),
+    sleepFn: async () => {}
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.checks.at(-1).name, 'standard-maintenance-plan')
+  assert.match(result.checks.at(-1).message, /deterministic dry-run plan/)
 })
 
 test('runSmoke reports unavailable services with redacted details', async () => {
@@ -197,13 +452,19 @@ test('runSmoke aborts the underlying fetch when a request times out', { timeout:
 
 test('redactText removes common secret shapes', () => {
   const text = redactText(
-    'Bearer abc.def password=s3cr3t jdbc:postgresql://localhost:5432/demo token ds_secret',
+    'Bearer abc.def password=s3cr3t jdbc:postgresql://localhost:5432/demo '
+      + 'http://svc-user:svc-pass@localhost:8090 http://username-only@localhost:8090 '
+      + 'http://empty-password:@localhost:8090 token ds_secret',
     'ds_secret'
   )
 
   assert.equal(text.includes('abc.def'), false)
   assert.equal(text.includes('s3cr3t'), false)
   assert.equal(text.includes('jdbc:postgresql'), false)
+  assert.equal(text.includes('svc-user'), false)
+  assert.equal(text.includes('svc-pass'), false)
+  assert.equal(text.includes('username-only'), false)
+  assert.equal(text.includes('empty-password'), false)
   assert.equal(text.includes('ds_secret'), false)
 })
 
@@ -286,5 +547,45 @@ function jsonResponse(body, status = 200) {
     async text() {
       return JSON.stringify(body)
     }
+  }
+}
+
+function smokeFetchThroughContext({ fieldCatalog, plan } = {}) {
+  const validFieldCatalog = fieldCatalog || {
+    projectId: 12,
+    contextScope: {
+      scope: 'field',
+      query: 'id',
+      status: 'enabled',
+      limit: 5,
+      matchedFieldCount: 1,
+      returnedFieldCount: 1
+    },
+    fields: [{ name: 'id', status: 'enabled', matchReasons: ['字段名匹配: id'] }]
+  }
+
+  return async (url) => {
+    if (url === 'http://localhost:5173/' || url === 'http://localhost:8090/api-docs') {
+      return jsonResponse({ ok: true })
+    }
+    if (url === 'http://localhost:8090/api/projects/demo') {
+      return jsonResponse({ code: 200, data: { created: false, project: { id: 12 } } })
+    }
+    if (url === 'http://localhost:8090/api/dashboard/summary?projectId=12') {
+      return jsonResponse({ code: 200, data: { fieldCount: 8 } })
+    }
+    if (url === 'http://localhost:8090/api/bootstrap/session?projectId=12&server=http%3A%2F%2Flocalhost%3A8090') {
+      return jsonResponse({
+        code: 200,
+        data: { kind: 'dataspec-ai-session-bootstrap', status: 'READY', projectId: 12 }
+      })
+    }
+    if (url === 'http://localhost:8090/api/ai-context/field-catalog?projectId=12&scope=field&query=id&status=enabled&limit=5') {
+      return jsonResponse({ code: 200, data: JSON.stringify(validFieldCatalog) })
+    }
+    if (url === 'http://localhost:8090/api/standard-maintenance/workflows/plan' && plan) {
+      return jsonResponse({ code: 200, data: plan })
+    }
+    throw new Error(`Unexpected URL ${url}`)
   }
 }

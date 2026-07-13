@@ -1069,7 +1069,15 @@
 - 安全与兼容：内部完整 token 只用于匹配，公共 evidence 独立限长限量并经 `SensitiveDataSanitizer` 脱敏；人工确认状态优先保留，supplementary code point 不会被 UTF-16 截断或绕过最小长度；不改数据库 schema、既有必填字段或错误码。
 - 验证证据：后端定向 113 pass、全量 725 pass；tools 438 total，436 pass / 2 platform skips；前端 191 pass，build 通过；OpenAPI drift 通过；OpenSpec strict valid、all 136 pass；`git diff --check` 通过。详细命令和环境 warning 见归档 change 的 `tasks.md`。
 - 评审证据：初始只读 agent `019f5c3f-00c5-7570-abc8-5edc4b89986b` 和最终只读 agent `019f5c71-0b3a-7831-8520-2ff3fbaa6c43` 已完成并关闭；所有 token 截断、Unicode、歧义保留、Explain Trace 来源、secret-safe scoring 和契约 findings 均已修复，最终复评结论为“无 findings”。
-- 后续增强：`P6-120` 继续固化 Top-1/Top-3、误召回和 AI 链路回归；`P6-111` 可复用未知词、歧义缩写和禁用命名 evidence 进入 dry-run 候选 Inbox。第一版不引入 jieba/Python、外部 LLM、向量数据库、拼音猜测或自动写 glossary。
+- 后续增强：`P6-120` 已完成 Top-1/Top-3、误召回和 AI 链路回归基线；`P6-111` 可继续复用未知词、歧义缩写和禁用命名 evidence 进入 dry-run 候选 Inbox。第一版不引入 jieba/Python、外部 LLM、向量数据库、拼音猜测或自动写 glossary。
+
+### P6-120 / P6-126 / P6-133 / P6-162：推荐质量与 AI 场景回归基线
+- 状态：第一版已于 2026-07-14 完成实现、验证和独立评审；本次仅扩展既有测试 fixture 与 local smoke，不改变 API、数据库或长期公共契约，因此按常规模式收口，不创建 OpenSpec change。
+- 已完成能力：复用 `deterministic-name-tokenization.json` 和 `FieldServiceImplTest`，将推荐质量场景扩展到中文最长匹配、英文直接命名、已配置缩写、多词字段名、历史别名、歧义缩写和未知词负例；门禁统计 Top-1、Top-3、单场景误召回和排序退化，并以显式已知误召回白名单配合 `maxUnexpectedFalsePositiveAt3Count=0` 阻止同数量噪声替换。
+- 已完成能力：扩展既有 `dataspec-local-smoke.mjs`，在演示项目链路中回放 session bootstrap、受限字段 Context 和标准维护 dry-run plan；允许 `READY/DEGRADED`、阻断 `BLOCKED`，验证 scope/query/status/limit/count/matchReasons、候选来源和 execute 阶段人工确认，同时保持 `--skip-demo`、timeout、fail-fast 和凭据脱敏语义。
+- 验证证据：推荐目标测试和 `FieldServiceImplTest` 通过；后端全量 `725/725`；tools 全量 `443 total / 441 pass / 2 platform skips`；真实 Docker smoke 在 `http://localhost:5173` 与 `http://localhost:8090` 通过全部 7 项检查；`git diff --check` 无错误。
+- 评审证据：只读 agent `019f5cbc-b06f-7d52-bfda-2550e68f40ef`、`019f5cc7-f3fd-7090-95a1-b02149bf07df`、`019f5ccf-249f-7e40-84a6-6ef2568a3cf3` 均已完成并关闭；误召回恒真门禁、空 Context、维护确认边界、URL userinfo、严格整数契约和搜索证据 findings 均已修复，并由目标/全量测试与真实 smoke 复验。
+- 后续增强：第一版不调用外部 LLM，不建设 A/B、向量或通用评测平台；更大字段库下的分页、搜索完整性和交互性能由 `P6-86` 承接。
 
 ## 本轮候选覆盖归档（2026-07-09）
 

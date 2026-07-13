@@ -26,6 +26,20 @@
       "tokenKinds": ["HAN"]
     }
   ],
+  "qualityThresholds": {
+    "minimumTop1Rate": 1.0,
+    "minimumTop3Rate": 1.0,
+    "maxUnexpectedFalsePositiveAt3Count": 0,
+    "maxOrderingRegressionCount": 0
+  },
+  "allowedFalsePositiveAt3": [
+    "longest-chinese-canonical-is-top1:member_id",
+    "english-direct-name-remains-top1:customer_id",
+    "english-direct-name-remains-top1:order_email",
+    "multi-word-name-remains-top1:payment_status",
+    "multi-word-name-remains-top1:status_code",
+    "historical-alias-recalls-current-field:phone_type"
+  ],
   "recommendationCases": [
     {
       "id": "direct-name-precedes-expanded-abbreviation",
@@ -66,7 +80,11 @@
       "expectedOrder": ["amt", "order_amount"],
       "expectedResolutionStatuses": ["RESOLVED"],
       "expectedTopExisting": true,
-      "strictTopScore": true
+      "strictTopScore": true,
+      "qualityIncluded": true,
+      "expectedTop1": "amt",
+      "allowedTop3": ["amt", "order_amount"],
+      "maxFalsePositiveAt3": 0
     },
     {
       "id": "longest-chinese-canonical-is-top1",
@@ -107,7 +125,11 @@
       "expectedOrder": ["mobile_no", "member_id"],
       "expectedResolutionStatuses": ["RESOLVED"],
       "expectedTopExisting": true,
-      "strictTopScore": true
+      "strictTopScore": true,
+      "qualityIncluded": true,
+      "expectedTop1": "mobile_no",
+      "allowedTop3": ["mobile_no"],
+      "maxFalsePositiveAt3": 1
     },
     {
       "id": "configured-ord-amt-resolves-without-guessing",
@@ -155,7 +177,11 @@
       "expectedOrder": ["order_amount"],
       "expectedResolutionStatuses": ["RESOLVED", "RESOLVED"],
       "expectedTopExisting": true,
-      "strictTopScore": false
+      "strictTopScore": false,
+      "qualityIncluded": true,
+      "expectedTop1": "order_amount",
+      "allowedTop3": ["order_amount"],
+      "maxFalsePositiveAt3": 0
     },
     {
       "id": "ambiguous-abbreviation-does-not-promote-canonical",
@@ -189,7 +215,152 @@
       "expectedOrder": ["amt"],
       "expectedResolutionStatuses": ["AMBIGUOUS"],
       "expectedTopExisting": false,
-      "strictTopScore": false
+      "strictTopScore": false,
+      "qualityIncluded": false,
+      "expectedTop1": null,
+      "allowedTop3": [],
+      "maxFalsePositiveAt3": 0
+    },
+    {
+      "id": "english-direct-name-remains-top1",
+      "query": "customer_email",
+      "limit": 5,
+      "fields": [
+        {
+          "id": 60,
+          "name": "customer_email",
+          "displayName": "客户邮箱",
+          "dataType": "varchar(200)",
+          "status": "enabled"
+        },
+        {
+          "id": 61,
+          "name": "customer_id",
+          "displayName": "客户ID",
+          "dataType": "bigint",
+          "status": "enabled"
+        },
+        {
+          "id": 62,
+          "name": "order_email",
+          "displayName": "订单邮箱",
+          "dataType": "varchar(200)",
+          "status": "enabled"
+        }
+      ],
+      "glossaryMatches": [],
+      "expectedOrder": ["customer_email"],
+      "expectedResolutionStatuses": ["UNRESOLVED", "UNRESOLVED"],
+      "expectedTopExisting": true,
+      "strictTopScore": true,
+      "qualityIncluded": true,
+      "expectedTop1": "customer_email",
+      "allowedTop3": ["customer_email"],
+      "maxFalsePositiveAt3": 2
+    },
+    {
+      "id": "multi-word-name-remains-top1",
+      "query": "payment status code",
+      "limit": 5,
+      "fields": [
+        {
+          "id": 70,
+          "name": "payment_status_code",
+          "displayName": "支付状态码",
+          "dataType": "varchar(32)",
+          "status": "enabled"
+        },
+        {
+          "id": 71,
+          "name": "payment_status",
+          "displayName": "支付状态",
+          "dataType": "varchar(32)",
+          "status": "enabled"
+        },
+        {
+          "id": 72,
+          "name": "status_code",
+          "displayName": "状态码",
+          "dataType": "varchar(32)",
+          "status": "enabled"
+        }
+      ],
+      "glossaryMatches": [],
+      "expectedOrder": ["payment_status_code"],
+      "expectedResolutionStatuses": ["UNRESOLVED", "UNRESOLVED", "UNRESOLVED"],
+      "expectedTopExisting": true,
+      "strictTopScore": true,
+      "qualityIncluded": true,
+      "expectedTop1": "payment_status_code",
+      "allowedTop3": ["payment_status_code"],
+      "maxFalsePositiveAt3": 2
+    },
+    {
+      "id": "historical-alias-recalls-current-field",
+      "query": "legacy_phone",
+      "limit": 5,
+      "fields": [
+        {
+          "id": 80,
+          "name": "mobile_no",
+          "displayName": "手机号",
+          "dataType": "varchar(20)",
+          "status": "enabled"
+        },
+        {
+          "id": 81,
+          "name": "phone_type",
+          "displayName": "电话类型",
+          "dataType": "varchar(20)",
+          "status": "enabled"
+        }
+      ],
+      "glossaryMatches": [],
+      "historicalAliases": [
+        {
+          "fieldId": 80,
+          "value": "legacy_phone",
+          "changeLogId": 801
+        }
+      ],
+      "expectedOrder": ["mobile_no"],
+      "expectedResolutionStatuses": ["UNRESOLVED", "UNRESOLVED"],
+      "expectedTopExisting": true,
+      "strictTopScore": true,
+      "qualityIncluded": true,
+      "expectedTop1": "mobile_no",
+      "allowedTop3": ["mobile_no"],
+      "maxFalsePositiveAt3": 1
+    },
+    {
+      "id": "unknown-multi-word-query-does-not-recall-existing-field",
+      "query": "quantum_entropy_probe",
+      "limit": 5,
+      "fields": [
+        {
+          "id": 90,
+          "name": "order_id",
+          "displayName": "订单ID",
+          "dataType": "bigint",
+          "status": "enabled"
+        },
+        {
+          "id": 91,
+          "name": "mobile_no",
+          "displayName": "手机号",
+          "dataType": "varchar(20)",
+          "status": "enabled"
+        }
+      ],
+      "glossaryMatches": [],
+      "expectedOrder": ["quantum_entropy_probe"],
+      "expectedResolutionStatuses": ["UNRESOLVED", "UNRESOLVED", "UNRESOLVED"],
+      "expectedTopExisting": false,
+      "strictTopScore": false,
+      "qualityIncluded": true,
+      "expectedTop1": null,
+      "allowedTop3": [],
+      "maxFalsePositiveAt3": 0
     }
   ]
 }

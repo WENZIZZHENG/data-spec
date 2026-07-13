@@ -5,6 +5,7 @@ const DEFAULT_SERVER = 'http://localhost:8090'
 const DEFAULT_WEB = 'http://localhost:5173'
 const DEFAULT_TIMEOUT_MS = 120_000
 const DEFAULT_INTERVAL_MS = 2_000
+const USABLE_BOOTSTRAP_STATUSES = new Set(['READY', 'DEGRADED'])
 const DEMO_FALLBACK_SQL = `
 CREATE TABLE UserOrder (
   id bigint PRIMARY KEY,
@@ -167,8 +168,8 @@ export async function runSmoke(options, deps = {}) {
     })
     demoResult = unwrapData(response)
     projectId = demoResult?.project?.id || demoResult?.projectId || null
-    if (!projectId) {
-      throw new Error('Demo project response did not include project.id.')
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      throw new Error('Demo project response did not include a positive integer project.id.')
     }
     checks.push({
       name: 'demo-project',
@@ -191,6 +192,116 @@ export async function runSmoke(options, deps = {}) {
     })
   } catch (error) {
     return fail('dashboard-summary', error, 'Check backend logs and verify Flyway migrations completed.')
+  }
+
+  try {
+    const contextQuery = 'id'
+    const contextStatus = 'enabled'
+    const contextLimit = 5
+    const bootstrapParams = new URLSearchParams({
+      projectId: String(projectId),
+      server: safeServiceUrl(options.server)
+    })
+    const bootstrap = unwrapData(await requestJson(
+      fetchFn,
+      joinUrl(options.server, `/api/bootstrap/session?${bootstrapParams.toString()}`),
+      { token: options.token, timeoutMs: options.timeoutMs }
+    ))
+    // DEGRADED 仍允许只读 Context；它通常只表示缺少 token 或版本化快照。
+    if (bootstrap?.kind !== 'dataspec-ai-session-bootstrap'
+      || !USABLE_BOOTSTRAP_STATUSES.has(bootstrap?.status)
+      || bootstrap?.projectId !== projectId) {
+      throw new Error('Session bootstrap did not return a usable status for the demo project.')
+    }
+
+    const contextParams = new URLSearchParams({
+      projectId: String(projectId),
+      scope: 'field',
+      query: contextQuery,
+      status: contextStatus,
+      limit: String(contextLimit)
+    })
+    const contextResponse = unwrapData(await requestJson(
+      fetchFn,
+      joinUrl(options.server, `/api/ai-context/field-catalog?${contextParams.toString()}`),
+      { token: options.token, timeoutMs: options.timeoutMs }
+    ))
+    const fieldCatalog = parseJsonDocument(contextResponse, 'Minimal field Context')
+    const contextFields = fieldCatalog?.fields
+    const contextScope = fieldCatalog?.contextScope
+    const matchedFieldCount = contextScope?.matchedFieldCount
+    const returnedFieldCount = contextScope?.returnedFieldCount
+    const fieldsRespectFilter = Array.isArray(contextFields) && contextFields.every((field) => {
+      return field?.status === contextStatus
+        && Array.isArray(field?.matchReasons)
+        && field.matchReasons.some((reason) => String(reason).toLowerCase().includes(contextQuery))
+    })
+    if (fieldCatalog?.projectId !== projectId
+      || !Array.isArray(contextFields)
+      || contextFields.length === 0
+      || contextFields.length > contextLimit
+      || contextScope?.scope !== 'field'
+      || contextScope?.query !== contextQuery
+      || contextScope?.status !== contextStatus
+      || !Number.isInteger(contextScope?.limit)
+      || contextScope.limit !== contextLimit
+      || !Number.isInteger(returnedFieldCount)
+      || returnedFieldCount !== contextFields.length
+      || !Number.isInteger(matchedFieldCount)
+      || matchedFieldCount < contextFields.length
+      || !fieldsRespectFilter) {
+      throw new Error('Minimal field Context did not preserve project scope, filters, count, or limit.')
+    }
+    checks.push({
+      name: 'ai-bootstrap-minimal-context',
+      status: 'pass',
+      message: `${bootstrap.status} bootstrap and bounded field Context replayed for project ${projectId}`
+    })
+  } catch (error) {
+    return fail(
+      'ai-bootstrap-minimal-context',
+      error,
+      'Inspect session bootstrap and scoped field-catalog responses before running AI tasks.'
+    )
+  }
+
+  try {
+    const plan = unwrapData(await requestJson(
+      fetchFn,
+      joinUrl(options.server, '/api/standard-maintenance/workflows/plan'),
+      {
+        method: 'POST',
+        token: options.token,
+        timeoutMs: options.timeoutMs,
+        body: { projectId, sourceType: 'STANDARD_CANDIDATE', sourceIds: [] }
+      }
+    ))
+    if (plan?.projectId !== projectId
+      || plan?.recipeBinding?.recipeId !== 'standard-maintenance'
+      || plan?.recipeBinding?.sourceParameters?.sourceType !== 'STANDARD_CANDIDATE'
+      || plan?.recipeBinding?.sourceParameters?.projectId !== projectId
+      || plan?.inboxAction?.sourceType !== 'STANDARD_CANDIDATE'
+      || plan?.inboxAction?.actionType !== 'REVIEW_CANDIDATES'
+      || plan?.inboxAction?.confirmationRequired !== true
+      || plan?.executionState?.status !== 'DRY_RUN'
+      || !Array.isArray(plan?.dryRunSteps)
+      || plan.dryRunSteps.length === 0
+      || !plan.dryRunSteps.some((step) => step?.phase === 'execute' && step?.requiresConfirmation === true)
+      || !Array.isArray(plan?.nextActions)
+      || !plan.nextActions.some((action) => action?.code === 'REVIEW_CONFIRMATION_REQUIRED')) {
+      throw new Error('Standard maintenance endpoint did not return a deterministic dry-run plan.')
+    }
+    checks.push({
+      name: 'standard-maintenance-plan',
+      status: 'pass',
+      message: `Standard maintenance dry-run plan replayed for project ${projectId}`
+    })
+  } catch (error) {
+    return fail(
+      'standard-maintenance-plan',
+      error,
+      'Inspect the standard-maintenance workflow plan endpoint; do not execute maintenance without a dry-run plan.'
+    )
   }
 
   try {
@@ -244,6 +355,7 @@ export function redactText(value, token = '') {
     text = text.split(token).join('<token>')
   }
   return text
+    .replace(/(https?:\/\/)[^\s/@]+@/gi, '$1<redacted>@')
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer <redacted>')
     .replace(/password=([^&\s'"]+)/gi, 'password=<redacted>')
     .replace(/jdbc:[^\s'"]+/gi, '<jdbc-url-redacted>')
@@ -362,6 +474,20 @@ function requestOptions(options = {}) {
 
 function unwrapData(response) {
   return response && Object.prototype.hasOwnProperty.call(response, 'data') ? response.data : response
+}
+
+function parseJsonDocument(value, label) {
+  if (value && typeof value === 'object') {
+    return value
+  }
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`${label} response is empty.`)
+  }
+  try {
+    return JSON.parse(value)
+  } catch {
+    throw new Error(`${label} response is not valid JSON.`)
+  }
 }
 
 async function responseText(response) {
