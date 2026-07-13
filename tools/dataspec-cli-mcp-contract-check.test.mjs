@@ -175,6 +175,7 @@ test('bundled fixtures include stable reference and post-check contracts', async
   const checkCommand = fixture.cliCommands.find((item) => item.id === 'ai-output-check')
   const refTool = fixture.mcpTools.find((item) => item.name === 'resolve_standard_refs')
   const checkTool = fixture.mcpTools.find((item) => item.name === 'check_ai_output')
+  const evidenceTool = fixture.mcpTools.find((item) => item.name === 'export_evidence_package')
 
   assert.ok(refCommand)
   assert.equal(refCommand.safety.readOnly, true)
@@ -190,6 +191,11 @@ test('bundled fixtures include stable reference and post-check contracts', async
   assert.ok(checkCommand.outputShape.includes('safeToUse'))
   assert.ok(checkCommand.oneOfRequiredOptions.includes('file'))
   assert.ok(checkCommand.oneOfRequiredOptions.includes('stdin'))
+  assert.deepEqual(checkCommand.evidenceIssueCodes, [
+    'MISSING_EVIDENCE_REFERENCE',
+    'CROSS_PROJECT_EVIDENCE_REFERENCE',
+    'UNVERIFIABLE_EVIDENCE_REFERENCE'
+  ])
 
   assert.ok(refTool)
   assert.deepEqual(refTool.requiredInputs, ['refType', 'refs'])
@@ -203,6 +209,14 @@ test('bundled fixtures include stable reference and post-check contracts', async
   assert.deepEqual(checkTool.compatibilityAliases.contentType, { PLAIN_TEXT: 'TEXT' })
   assert.equal(checkTool.safety.sensitiveInputs.includes('content'), true)
   assert.ok(checkTool.outputShape.includes('structuredContent.safeToUse'))
+  assert.deepEqual(checkTool.evidenceIssueCodes, checkCommand.evidenceIssueCodes)
+
+  assert.ok(evidenceTool)
+  assert.ok(evidenceTool.outputShape.includes('structuredContent.source.evidenceRef'))
+  assert.equal(
+    evidenceTool.successExample.output.source.evidenceRef,
+    'dataspec://evidence/sql-check/42'
+  )
 })
 
 test('bundled fixtures include table standards CLI and MCP readonly contracts', async () => {

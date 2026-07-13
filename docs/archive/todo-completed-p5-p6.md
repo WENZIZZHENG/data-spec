@@ -1,11 +1,11 @@
 # DataSpec 已完成待办归档（P5/P6）
 
-归档日期：2026-07-10
+归档日期：2026-07-13
 
 本文件从根 TODO.md 机械迁移已完成的 P5/P6 待办详情，根待办只保留入口和当前候选池。每个条目保留原始状态、已完成能力、验证证据、产物、后续增强和边界；原条目未记录 commit 的地方不补猜。
 
-- 完成项数量：128
-- 当前未完成候选：60，详见 [P6 候选池](../todo-p6-candidates.md)
+- 完成项数量：136
+- 当前未完成主题：9，详见 [P6 候选池](../todo-p6-candidates.md)
 - P0-P4 已完成归档：[todo-completed-p0-p4.md](todo-completed-p0-p4.md)
 
 ## 历史追加记录（已降级为背景）
@@ -979,6 +979,15 @@
 - 验证证据：`node --test tests/standardQuestionDisplay.test.ts` 12 pass；`pnpm test` 159 pass；`pnpm build` 通过，保留现有第三方 pure annotation、chunk size 和 plugin timings warning；`git diff --check` 通过，仅 LF/CRLF warning；当时 `node tools/dataspec-status-check.mjs --format json` warn 仅因 active change `add-ai-context-quality-check`，该 warning 已随 P6-186 归档消除。
 - 评审证据：独立子 agent `019f3d2f-b5c4-75d3-886d-c1c83c759dab` 完成只读评审并已关闭；发现的格式证据缺失 P1 已补失败测试并修复，停用字段覆盖和废弃字段替代信息误报风险已处理。
 - 边界：不实现通用自然语言问答引擎，不调用外部 LLM；第一版基于现有检索、术语表、证据和质量分确定性判断。
+
+### P6-190：稳定引用、历史别名与 Evidence claim 真实性修复
+- 状态：已完成并归档，OpenSpec change 为 `fix-stable-reference-evidence-truthfulness`。
+- 已完成能力：从项目级字段变更日志的 `beforeJson`/`afterJson` 白名单字段派生历史名称和别名，接入 stable reference resolve、字段检索和字段推荐；当前名称/别名保持更高优先级，历史歧义不猜测，损坏快照按记录跳过且不暴露原文。
+- 已完成能力：新增 project-scoped Evidence claim resolver 和 canonical URI，覆盖 SQL check、AI job、AI batch run、AI task run；post-check 区分 `VERIFIED`、`MISSING`、`CROSS_PROJECT`、`UNVERIFIABLE`，只把真实引用加入 `evidenceLinks`，跨项目结果不泄露来源元数据；Evidence Package 仅为持久化来源输出 additive `source.evidenceRef`。
+- 契约同步：Schema Registry、OpenAPI 生成类型、CLI/MCP fixture 和 PR review summary/inline/fallback 主规格已同步；自然语言句尾标点不会再污染 canonical Evidence URI。
+- 验证证据：见归档 change 的 `tasks.md` `Verification Evidence`；覆盖后端全量测试、前端测试与 build、tools、OpenSpec strict/all、OpenAPI 漂移、Docker API 闭环、diff/secrets/status 门禁。
+- 评审证据：首个评审 agent `019f5b7c-9dc6-71e1-8284-d513c6604a74` 超时后已关闭；替代评审 agent `019f5b86-fba8-70d2-abc6-43a46012d942` 已完成并关闭，1 个 Important 和 1 个 Minor finding 均已补失败测试或查询契约测试并修复。
+- 后续增强：不新增历史别名表、不回填不可推导历史、不持久化 Evidence Package；统一 Finding/Evidence 与 AI/PR 评审闭环继续由 `P6-191` 承接。
 
 ### P6-153：AI Context 注入防护与不可信文本隔离
 - 状态：已完成第一版，OpenSpec change `add-ai-context-safety-controls` 当前按项目约定保留为 active change。

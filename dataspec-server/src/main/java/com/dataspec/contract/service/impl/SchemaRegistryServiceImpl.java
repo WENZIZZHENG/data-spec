@@ -387,6 +387,7 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                         "postCheckSummary.issueCounts", "postCheckSummary.blockingRefs[]",
                         "postCheckSummary.replacementRefs[]", "postCheckSummary.evidenceLinks[]",
                         "postCheckSummary.suggestedCheckCommand",
+                        "source.evidenceRef",
                         "artifacts[]", "nextActions[]", "suggestedCommands[]", "diagnostics[]"),
                 List.of(),
                 objectSchema("DataSpec AI Evidence Package",
@@ -402,7 +403,9 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                                         "sourceId", integerProp(),
                                         "sourceTitle", stringProp(),
                                         "status", stringProp(),
-                                        "persisted", booleanProp()
+                                        "persisted", booleanProp(),
+                                        "evidenceRef", describedStringProp(
+                                                "持久化来源的 canonical evidence ref，格式为 dataspec://evidence/<source-type>/<source-id>；payload-only 来源为空。")
                                 )),
                                 "standardSnapshot", objectProp(),
                                 "inputsSummary", objectProp(),
@@ -425,7 +428,11 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                 List.of(orderedMap(
                         "kind", "dataspec-ai-evidence-package",
                         "schemaVersion", 1,
-                        "source", orderedMap("sourceType", "SQL_CHECK", "sourceId", 42, "persisted", true),
+                        "source", orderedMap(
+                                "sourceType", "SQL_CHECK",
+                                "sourceId", 42,
+                                "persisted", true,
+                                "evidenceRef", "dataspec://evidence/sql-check/42"),
                         "validationSummary", orderedMap("status", "COMPLETED"),
                         "postCheckSummary", orderedMap(
                                 "status", "WARN",
@@ -764,7 +771,8 @@ public class SchemaRegistryServiceImpl implements SchemaRegistryService {
                                 "issues", arrayOf(objectSchema("Post-check Issue",
                                         List.of("code", "severity", "message"),
                                         orderedMap(
-                                                "code", describedStringProp("稳定问题码，如 UNKNOWN_STANDARD_REFERENCE、STALE_STANDARD_REFERENCE 或 EVIDENCE_GAP。"),
+                                                "code", describedStringProp(
+                                                        "稳定问题码，如 UNKNOWN_STANDARD_REFERENCE、STALE_STANDARD_REFERENCE、MISSING_EVIDENCE_REFERENCE、CROSS_PROJECT_EVIDENCE_REFERENCE 或 UNVERIFIABLE_EVIDENCE_REFERENCE。"),
                                                 "severity", describedEnumProp("问题级别；FAIL 会阻断使用，WARN 需要人工确认或补证据。",
                                                         "WARN", "FAIL"),
                                                 "refType", describedEnumProp("相关标准对象类型。", "FIELD", "ENUM", "RULE", "SNAPSHOT"),

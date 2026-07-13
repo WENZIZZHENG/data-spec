@@ -8,6 +8,10 @@ import com.dataspec.aioutputcheck.service.impl.AiOutputPostCheckServiceImpl;
 import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.entity.EnumValue;
 import com.dataspec.enumdict.repository.EnumDictRepository;
+import com.dataspec.evidence.model.EvidenceSourceType;
+import com.dataspec.evidenceclaim.model.EvidenceClaimResolution;
+import com.dataspec.evidenceclaim.model.EvidenceClaimResolutionStatus;
+import com.dataspec.evidenceclaim.service.EvidenceClaimResolver;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.repository.RuleConfigRepository;
@@ -31,8 +35,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class AiOutputPostCheckServiceImplTest {
@@ -95,7 +102,7 @@ class AiOutputPostCheckServiceImplTest {
         assertEquals(AiOutputPostCheckStatus.FAIL, markdown.status());
         assertTrue(markdown.issues().stream().anyMatch(issue -> "UNKNOWN_STANDARD_REFERENCE".equals(issue.code())
                 && issue.inputRef().contains("unknown_rule")));
-        assertTrue(markdown.issues().stream().anyMatch(issue -> "EVIDENCE_GAP".equals(issue.code())));
+        assertTrue(markdown.issues().stream().anyMatch(issue -> "UNVERIFIABLE_EVIDENCE_REFERENCE".equals(issue.code())));
 
         AiOutputPostCheckResult json = service.check(new AiOutputPostCheckRequest(
                 1L,
@@ -173,7 +180,79 @@ class AiOutputPostCheckServiceImplTest {
         assertTrue(result.issues().stream().anyMatch(issue -> "INVALID_ENUM_VALUE".equals(issue.code())));
         assertTrue(result.issues().stream().anyMatch(issue -> "UNKNOWN_RULE_CODE".equals(issue.code())));
         assertTrue(result.issues().stream().anyMatch(issue -> "SNAPSHOT_DRIFT".equals(issue.code())));
-        assertTrue(result.issues().stream().anyMatch(issue -> "EVIDENCE_GAP".equals(issue.code())));
+        assertTrue(result.issues().stream().anyMatch(issue -> "UNVERIFIABLE_EVIDENCE_REFERENCE".equals(issue.code())));
+    }
+
+    @Test
+    void evidenceClaimsUseProjectScopedResolverStatusesAndOnlyExposeVerifiedLinks() {
+        EvidenceClaimResolver evidenceResolver = mock(EvidenceClaimResolver.class);
+        when(evidenceResolver.resolve(anyLong(), anyString())).thenAnswer(invocation -> {
+            String ref = invocation.getArgument(1);
+            if (ref.endsWith("/10")) {
+                return evidenceResolution(ref, EvidenceClaimResolutionStatus.VERIFIED, ref);
+            }
+            if (ref.endsWith("/20")) {
+                return evidenceResolution(ref, EvidenceClaimResolutionStatus.MISSING, null);
+            }
+            if (ref.endsWith("/30")) {
+                return evidenceResolution(ref, EvidenceClaimResolutionStatus.CROSS_PROJECT, null);
+            }
+            return evidenceResolution(ref, EvidenceClaimResolutionStatus.UNVERIFIABLE, null);
+        });
+        AiOutputPostCheckServiceImpl service = service(mockResolver(), evidenceResolver);
+        String output = """
+                {
+                  "verified": "dataspec://evidence/sql-check/10",
+                  "verifiedAgain": "dataspec://evidence/sql-check/10",
+                  "missing": "dataspec://evidence/sql-check/20",
+                  "crossProject": "dataspec://evidence/sql-check/30",
+                  "unsupported": "dataspec://evidence/legacy-package"
+                }
+                """;
+
+        AiOutputPostCheckResult result = service.check(new AiOutputPostCheckRequest(
+                1L,
+                AiOutputContentType.JSON,
+                output,
+                null));
+
+        assertEquals(AiOutputPostCheckStatus.FAIL, result.status());
+        assertTrue(result.issues().stream().anyMatch(issue -> "MISSING_EVIDENCE_REFERENCE".equals(issue.code())));
+        assertTrue(result.issues().stream().anyMatch(issue ->
+                "CROSS_PROJECT_EVIDENCE_REFERENCE".equals(issue.code())
+                        && issue.severity().name().equals("FAIL")));
+        assertTrue(result.issues().stream().anyMatch(issue -> "UNVERIFIABLE_EVIDENCE_REFERENCE".equals(issue.code())));
+        assertEquals(List.of("dataspec://evidence/sql-check/10"), result.evidenceLinks().stream()
+                .filter(link -> link.startsWith("dataspec://evidence/"))
+                .toList());
+    }
+
+    @Test
+    void evidenceClaimsIgnoreNaturalLanguageTrailingPunctuation() {
+        String canonicalRef = "dataspec://evidence/sql-check/10";
+        EvidenceClaimResolver evidenceResolver = mock(EvidenceClaimResolver.class);
+        when(evidenceResolver.resolve(anyLong(), anyString())).thenAnswer(invocation -> {
+            String ref = invocation.getArgument(1);
+            EvidenceClaimResolutionStatus status = canonicalRef.equals(ref)
+                    ? EvidenceClaimResolutionStatus.VERIFIED
+                    : EvidenceClaimResolutionStatus.UNVERIFIABLE;
+            return evidenceResolution(ref, status, status == EvidenceClaimResolutionStatus.VERIFIED ? ref : null);
+        });
+        AiOutputPostCheckServiceImpl service = service(mockResolver(), evidenceResolver);
+
+        AiOutputPostCheckResult result = service.check(new AiOutputPostCheckRequest(
+                1L,
+                AiOutputContentType.TEXT,
+                "依据 " + canonicalRef + "。\n另见 " + canonicalRef + ",\n句点 " + canonicalRef
+                        + ".\n列表 [" + canonicalRef + "]",
+                null));
+
+        assertEquals(AiOutputPostCheckStatus.PASS, result.status());
+        assertEquals(List.of(canonicalRef), result.evidenceLinks().stream()
+                .filter(link -> link.startsWith("dataspec://evidence/"))
+                .toList());
+        verify(evidenceResolver).resolve(1L, canonicalRef);
+        verifyNoMoreInteractions(evidenceResolver);
     }
 
     @Test
@@ -236,7 +315,25 @@ class AiOutputPostCheckServiceImplTest {
     }
 
     private AiOutputPostCheckServiceImpl service(StandardReferenceResolutionService resolver) {
-        return service(resolver, defaultEnumRepository(), defaultRuleRepository(), defaultSnapshotRepository());
+        EvidenceClaimResolver evidenceResolver = mock(EvidenceClaimResolver.class);
+        when(evidenceResolver.resolve(anyLong(), anyString())).thenAnswer(invocation ->
+                evidenceResolution(
+                        invocation.getArgument(1),
+                        EvidenceClaimResolutionStatus.UNVERIFIABLE,
+                        null));
+        return service(resolver, evidenceResolver);
+    }
+
+    private AiOutputPostCheckServiceImpl service(
+            StandardReferenceResolutionService resolver,
+            EvidenceClaimResolver evidenceResolver
+    ) {
+        return service(
+                resolver,
+                defaultEnumRepository(),
+                defaultRuleRepository(),
+                defaultSnapshotRepository(),
+                evidenceResolver);
     }
 
     private AiOutputPostCheckServiceImpl service(
@@ -245,12 +342,43 @@ class AiOutputPostCheckServiceImplTest {
             RuleConfigRepository ruleRepository,
             StandardSnapshotRepository snapshotRepository
     ) {
+        EvidenceClaimResolver evidenceResolver = mock(EvidenceClaimResolver.class);
+        when(evidenceResolver.resolve(anyLong(), anyString())).thenAnswer(invocation ->
+                evidenceResolution(
+                        invocation.getArgument(1),
+                        EvidenceClaimResolutionStatus.UNVERIFIABLE,
+                        null));
+        return service(resolver, enumRepository, ruleRepository, snapshotRepository, evidenceResolver);
+    }
+
+    private AiOutputPostCheckServiceImpl service(
+            StandardReferenceResolutionService resolver,
+            EnumDictRepository enumRepository,
+            RuleConfigRepository ruleRepository,
+            StandardSnapshotRepository snapshotRepository,
+            EvidenceClaimResolver evidenceResolver
+    ) {
         return new AiOutputPostCheckServiceImpl(
                 resolver,
+                evidenceResolver,
                 new SqlParserService(),
                 enumRepository,
                 ruleRepository,
                 snapshotRepository);
+    }
+
+    private EvidenceClaimResolution evidenceResolution(
+            String inputRef,
+            EvidenceClaimResolutionStatus status,
+            String canonicalRef
+    ) {
+        return new EvidenceClaimResolution(
+                inputRef,
+                canonicalRef,
+                status,
+                EvidenceSourceType.SQL_CHECK,
+                10L,
+                status == EvidenceClaimResolutionStatus.VERIFIED ? 1L : null);
     }
 
     private EnumDictRepository defaultEnumRepository() {

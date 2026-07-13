@@ -21,6 +21,7 @@ import com.dataspec.evidence.model.AiEvidenceSource;
 import com.dataspec.evidence.model.AiEvidenceStandardSnapshot;
 import com.dataspec.evidence.model.EvidenceSourceType;
 import com.dataspec.evidence.service.AiEvidencePackageService;
+import com.dataspec.evidenceclaim.service.EvidenceClaimResolver;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.SqlCheckReplay;
@@ -55,6 +56,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
     private final AiJobRecordService aiJobRecordService;
     private final AiBatchService aiBatchService;
     private final AiTaskRunService aiTaskRunService;
+    private final EvidenceClaimResolver evidenceClaimResolver;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -113,7 +115,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 new AiEvidenceArtifact("replay", "标准快照回放", "json", sanitizeToMap(replay))
         );
         return build(projectId,
-                new AiEvidenceSource(EvidenceSourceType.SQL_CHECK, sourceId, "SQL 检查记录 #" + sourceId, statusFromCounts(record), true),
+                source(EvidenceSourceType.SQL_CHECK, sourceId, "SQL 检查记录 #" + sourceId, statusFromCounts(record), true),
                 snapshot(record.getStandardSnapshotId(), record.getStandardSnapshotVersion(), record.getStandardSnapshotHash()),
                 inputs,
                 outputs,
@@ -149,7 +151,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
         artifacts.add(new AiEvidenceArtifact("ai-job-record", "AI 作业记录", "json", orderedMap("id", record.getId(), "jobType", record.getJobType())));
         artifacts.add(new AiEvidenceArtifact("replay-payload", "回放 payload 摘要", "json", sanitizeToMap(detail.replayPayload())));
         return build(projectId,
-                new AiEvidenceSource(EvidenceSourceType.AI_JOB, sourceId, firstText(record.getTitle(), "AI 作业 #" + sourceId), record.getStatus(), true),
+                source(EvidenceSourceType.AI_JOB, sourceId, firstText(record.getTitle(), "AI 作业 #" + sourceId), record.getStatus(), true),
                 snapshot(record.getStandardSnapshotId(), record.getStandardSnapshotVersion(), record.getStandardSnapshotHash()),
                 inputs,
                 outputs,
@@ -185,7 +187,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 new AiEvidenceArtifact("ai-batch-delivery", "AI 批量交付包摘要", "json", outputs)
         );
         return build(projectId,
-                new AiEvidenceSource(EvidenceSourceType.AI_BATCH_RUN, sourceId, "AI 批量任务 #" + sourceId, detail.run().getStatus(), true),
+                source(EvidenceSourceType.AI_BATCH_RUN, sourceId, "AI 批量任务 #" + sourceId, detail.run().getStatus(), true),
                 AiEvidenceStandardSnapshot.unversioned(),
                 inputs,
                 outputs,
@@ -230,7 +232,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 ? List.of(detail.resumeCommand())
                 : List.of("dataspec task show " + sourceId + " --project " + req.projectId() + " --format json");
         return build(req.projectId(),
-                new AiEvidenceSource(EvidenceSourceType.AI_TASK_RUN, sourceId, "AI 任务运行 #" + sourceId, detail.status(), true),
+                source(EvidenceSourceType.AI_TASK_RUN, sourceId, "AI 任务运行 #" + sourceId, detail.status(), true),
                 AiEvidenceStandardSnapshot.unversioned(),
                 inputs,
                 outputs,
@@ -267,7 +269,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 "unmanagedCount", report.getSummary() != null ? report.getSummary().getUnmanagedCount() : 0
         );
         return build(projectId,
-                new AiEvidenceSource(EvidenceSourceType.COVERAGE_REPORT, null, firstText(req.sourceTitle(), "字段覆盖率报告"), "READY", false),
+                source(EvidenceSourceType.COVERAGE_REPORT, null, firstText(req.sourceTitle(), "字段覆盖率报告"), "READY", false),
                 req.standardSnapshot() != null ? req.standardSnapshot() : AiEvidenceStandardSnapshot.unversioned(),
                 inputs,
                 outputs,
@@ -313,6 +315,17 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                         .map(item -> new AiEvidenceDiagnostic(item.level(), item.code(), sanitizeText(item.message())))
                         .toList()
         );
+    }
+
+    private AiEvidenceSource source(
+            EvidenceSourceType sourceType,
+            Long sourceId,
+            String sourceTitle,
+            String status,
+            boolean persisted
+    ) {
+        String evidenceRef = persisted ? evidenceClaimResolver.canonicalRef(sourceType, sourceId) : null;
+        return new AiEvidenceSource(sourceType, sourceId, sourceTitle, status, persisted, evidenceRef);
     }
 
     private Long requireSourceId(AiEvidencePackageReq req) {

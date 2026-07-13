@@ -269,6 +269,7 @@ class StandardQueryServiceImplTest {
                 repository,
                 mock(FieldSourceRepository.class),
                 mock(com.dataspec.changelog.service.StandardChangeLogService.class),
+                mock(com.dataspec.fieldhistory.service.FieldHistoricalAliasService.class),
                 new ObjectMapper(),
                 mock(com.dataspec.businessglossary.service.BusinessGlossaryService.class),
                 semanticRuleService,

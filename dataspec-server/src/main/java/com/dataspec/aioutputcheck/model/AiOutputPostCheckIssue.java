@@ -9,7 +9,8 @@ import java.util.List;
 /**
  * AI 输出后置校验问题。
  *
- * @param code 稳定问题码，如 UNKNOWN_STANDARD_REFERENCE、STALE_STANDARD_REFERENCE 或 EVIDENCE_GAP。
+ * @param code 稳定问题码，如 UNKNOWN_STANDARD_REFERENCE、MISSING_EVIDENCE_REFERENCE、
+ *             CROSS_PROJECT_EVIDENCE_REFERENCE 或 UNVERIFIABLE_EVIDENCE_REFERENCE。
  * @param severity 问题级别；FAIL 会阻断使用。
  * @param refType 相关标准对象类型；证据缺口可为空。
  * @param inputRef 脱敏后的输入引用。
@@ -21,7 +22,7 @@ import java.util.List;
  */
 @Schema(description = "AI 输出后置校验问题；所有文本字段均必须 secret-safe。")
 public record AiOutputPostCheckIssue(
-        @Schema(description = "稳定问题码。")
+        @Schema(description = "稳定问题码；Evidence claim 使用 MISSING_EVIDENCE_REFERENCE、CROSS_PROJECT_EVIDENCE_REFERENCE 或 UNVERIFIABLE_EVIDENCE_REFERENCE。")
         String code,
         @Schema(description = "问题级别。")
         AiOutputPostCheckIssueSeverity severity,

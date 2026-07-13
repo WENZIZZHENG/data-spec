@@ -30,6 +30,7 @@ import com.dataspec.evidence.model.AiEvidencePackage;
 import com.dataspec.evidence.model.AiEvidencePackageReq;
 import com.dataspec.evidence.model.EvidenceSourceType;
 import com.dataspec.evidence.service.impl.AiEvidencePackageServiceImpl;
+import com.dataspec.evidenceclaim.service.EvidenceClaimResolver;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.LintResult;
@@ -52,17 +53,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class AiEvidencePackageServiceImplTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
-    private final AiEvidencePackageServiceImpl service = new AiEvidencePackageServiceImpl(
-            new StubSqlCheckRecordService(),
-            new StubAiJobRecordService(),
-            new StubAiBatchService(),
-            new StubAiTaskRunService(),
-            objectMapper
-    );
+    private final AiEvidencePackageServiceImpl service = service();
 
     @Test
     void generatesSqlCheckEvidenceAndRedactsSensitiveValues() throws Exception {
@@ -81,6 +80,7 @@ class AiEvidencePackageServiceImplTest {
         assertEquals(1, pkg.schemaVersion());
         assertEquals(7L, pkg.projectId());
         assertEquals("SQL_CHECK", pkg.source().sourceType().name());
+        assertEquals("dataspec://evidence/sql-check/11", pkg.source().evidenceRef());
         assertEquals("v1", pkg.standardSnapshot().specVersion());
         assertTrue(json.path("validationSummary").path("errorCount").asInt() > 0);
         assertTrue(json.toString().contains("[REDACTED]"));
@@ -93,14 +93,17 @@ class AiEvidencePackageServiceImplTest {
     void generatesEvidenceForAiJobCoverageAndBatchSources() {
         AiEvidencePackage aiJob = service.generate(new AiEvidencePackageReq(null, EvidenceSourceType.AI_JOB, 21L, null, null, null, null));
         assertEquals(EvidenceSourceType.AI_JOB, aiJob.source().sourceType());
+        assertEquals("dataspec://evidence/ai-job/21", aiJob.source().evidenceRef());
         assertEquals("SQL_FIX", aiJob.outputsSummary().get("jobType"));
 
         AiEvidencePackage batch = service.generate(new AiEvidencePackageReq(null, EvidenceSourceType.AI_BATCH_RUN, 31L, null, null, null, null));
         assertEquals(EvidenceSourceType.AI_BATCH_RUN, batch.source().sourceType());
+        assertEquals("dataspec://evidence/ai-batch-run/31", batch.source().evidenceRef());
         assertEquals("DONE", batch.validationSummary().get("status"));
 
         AiEvidencePackage taskRun = service.generate(new AiEvidencePackageReq(7L, EvidenceSourceType.AI_TASK_RUN, 41L, null, null, null, null));
         assertEquals(EvidenceSourceType.AI_TASK_RUN, taskRun.source().sourceType());
+        assertEquals("dataspec://evidence/ai-task-run/41", taskRun.source().evidenceRef());
         assertEquals("PARTIAL_FAILED", taskRun.validationSummary().get("status"));
         assertTrue(taskRun.suggestedCommands().get(0).contains("task show 41"));
         assertFalse(objectMapper.valueToTree(taskRun).toString().contains("secret123"));
@@ -115,10 +118,35 @@ class AiEvidencePackageServiceImplTest {
                 Map.of("mode", "database", "connection", "jdbc:mysql://localhost:3306/app?password=secret123")
         ));
         assertEquals(EvidenceSourceType.COVERAGE_REPORT, coverage.source().sourceType());
+        assertEquals(null, coverage.source().evidenceRef());
         assertEquals("database", ((Map<?, ?>) coverage.inputsSummary().get("payloadSummary")).get("mode"));
         assertFalse(objectMapper.valueToTree(coverage).toString().contains("secret123"));
         assertFalse(objectMapper.valueToTree(coverage).toString().contains("jdbc:mysql://localhost:3306/app"));
         assertTrue(coverage.diagnostics().stream().anyMatch(item -> "PAYLOAD_SOURCE".equals(item.code())));
+    }
+
+    private AiEvidencePackageServiceImpl service() {
+        EvidenceClaimResolver resolver = mock(EvidenceClaimResolver.class);
+        when(resolver.canonicalRef(any(EvidenceSourceType.class), anyLong())).thenAnswer(invocation -> {
+            EvidenceSourceType sourceType = invocation.getArgument(0);
+            Long sourceId = invocation.getArgument(1);
+            String path = switch (sourceType) {
+                case SQL_CHECK -> "sql-check";
+                case AI_JOB -> "ai-job";
+                case AI_BATCH_RUN -> "ai-batch-run";
+                case AI_TASK_RUN -> "ai-task-run";
+                case COVERAGE_REPORT -> null;
+            };
+            return path == null ? null : "dataspec://evidence/" + path + "/" + sourceId;
+        });
+        return new AiEvidencePackageServiceImpl(
+                new StubSqlCheckRecordService(),
+                new StubAiJobRecordService(),
+                new StubAiBatchService(),
+                new StubAiTaskRunService(),
+                resolver,
+                objectMapper
+        );
     }
 
     @Test

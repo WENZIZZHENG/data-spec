@@ -12,6 +12,9 @@ import com.dataspec.common.exception.BizException;
 import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.repository.EnumDictRepository;
+import com.dataspec.evidenceclaim.model.EvidenceClaimResolution;
+import com.dataspec.evidenceclaim.model.EvidenceClaimResolutionStatus;
+import com.dataspec.evidenceclaim.service.EvidenceClaimResolver;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.model.TableDef;
 import com.dataspec.rule.repository.RuleConfigRepository;
@@ -60,6 +63,7 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
             "(?i)\\b(field|enum|rule|snapshot):\\d+:[A-Za-z0-9_.-]+");
     private static final Pattern BACKTICK_PATTERN = Pattern.compile("`([A-Za-z_][A-Za-z0-9_]*)`");
     private static final Pattern EVIDENCE_PATTERN = Pattern.compile("dataspec://evidence/[^\\s`\"')]+");
+    private static final String EVIDENCE_TRAILING_PUNCTUATION = ".,;:!?，。；：！？)]}>）】》";
     private static final Pattern SQL_STRING_LITERAL_PATTERN = Pattern.compile("'(?:''|[^'])*'");
     private static final Pattern SQL_SELECT_FROM_PATTERN = Pattern.compile("(?is)\\bselect\\b(.+?)\\bfrom\\b");
     private static final Pattern SQL_ALIAS_PATTERN = Pattern.compile("(?i)\\s+as\\s+[A-Za-z_][A-Za-z0-9_]*\\s*$");
@@ -85,6 +89,7 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     private final StandardReferenceResolutionService referenceResolutionService;
+    private final EvidenceClaimResolver evidenceClaimResolver;
     private final SqlParserService sqlParserService;
     private final EnumDictRepository enumDictRepository;
     private final RuleConfigRepository ruleConfigRepository;
@@ -96,7 +101,8 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
         ProjectAccessGuard.requireProjectAccess(request.projectId());
 
         List<Occurrence> occurrences = extractOccurrences(request);
-        List<AiOutputPostCheckIssue> evidenceIssues = evidenceGapIssues(request.content());
+        List<EvidenceClaimCheck> evidenceChecks = resolveEvidenceClaims(request.projectId(), request.content());
+        List<AiOutputPostCheckIssue> evidenceIssues = evidenceClaimIssues(request.content(), evidenceChecks);
         List<StandardReferenceResolutionResult> resolvedRefs = resolveOccurrences(request.projectId(), occurrences);
         List<AiOutputPostCheckIssue> issues = new ArrayList<>(evidenceIssues);
         issues.addAll(explicitClaimIssues(request));
@@ -114,7 +120,7 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
                 issues,
                 resolvedRefs,
                 suggestedFixes(issues),
-                evidenceLinks(resolvedRefs),
+                evidenceLinks(resolvedRefs, evidenceChecks),
                 nextActions(status));
     }
 
@@ -569,23 +575,70 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
                 sanitizeList(nextActions));
     }
 
-    private List<AiOutputPostCheckIssue> evidenceGapIssues(String content) {
-        List<AiOutputPostCheckIssue> issues = new ArrayList<>();
+    private List<EvidenceClaimCheck> resolveEvidenceClaims(Long projectId, String content) {
+        Map<String, EvidenceClaimCheck> checks = new LinkedHashMap<>();
         Matcher matcher = EVIDENCE_PATTERN.matcher(content);
         while (matcher.find()) {
-            String ref = sanitize(matcher.group());
-            issues.add(new AiOutputPostCheckIssue(
-                    "EVIDENCE_GAP",
-                    AiOutputPostCheckIssueSeverity.WARN,
-                    null,
-                    ref,
-                    "AI 输出声明了 DataSpec evidence ref，第一版无法验证该 evidence 是否存在，需人工复核。",
-                    excerpt(content, matcher.start(), matcher.end()),
-                    null,
-                    List.of(ref),
-                    List.of("打开 evidence package 或重新生成证据包后再采纳。")));
+            String rawRef = stripEvidenceTrailingPunctuation(matcher.group());
+            int refEnd = matcher.start() + rawRef.length();
+            checks.computeIfAbsent(rawRef, ignored -> new EvidenceClaimCheck(
+                    matcher.start(),
+                    refEnd,
+                    evidenceClaimResolver.resolve(projectId, rawRef)));
         }
-        return issues;
+        return List.copyOf(checks.values());
+    }
+
+    private String stripEvidenceTrailingPunctuation(String rawRef) {
+        int end = rawRef.length();
+        while (end > 0 && EVIDENCE_TRAILING_PUNCTUATION.indexOf(rawRef.charAt(end - 1)) >= 0) {
+            end--;
+        }
+        return rawRef.substring(0, end);
+    }
+
+    private List<AiOutputPostCheckIssue> evidenceClaimIssues(
+            String content,
+            List<EvidenceClaimCheck> evidenceChecks
+    ) {
+        List<AiOutputPostCheckIssue> issues = new ArrayList<>();
+        for (EvidenceClaimCheck check : evidenceChecks) {
+            EvidenceClaimResolution resolution = check.resolution();
+            if (resolution.status() == EvidenceClaimResolutionStatus.VERIFIED) {
+                continue;
+            }
+            String code;
+            AiOutputPostCheckIssueSeverity severity;
+            String message;
+            List<String> nextActions;
+            if (resolution.status() == EvidenceClaimResolutionStatus.MISSING) {
+                code = "MISSING_EVIDENCE_REFERENCE";
+                severity = AiOutputPostCheckIssueSeverity.WARN;
+                message = "AI 输出声明的 Evidence 来源不存在，不能作为已验证证据。";
+                nextActions = List.of("重新生成 Evidence Package，并使用其 source.evidenceRef。", "确认来源记录未被删除。");
+            } else if (resolution.status() == EvidenceClaimResolutionStatus.CROSS_PROJECT) {
+                code = "CROSS_PROJECT_EVIDENCE_REFERENCE";
+                severity = AiOutputPostCheckIssueSeverity.FAIL;
+                message = "AI 输出声明的 Evidence 来源不属于当前项目，已拒绝采信。";
+                nextActions = List.of("改用当前项目 Evidence Package 的 source.evidenceRef。", "不要复制其他项目的 evidence ref。");
+            } else {
+                code = "UNVERIFIABLE_EVIDENCE_REFERENCE";
+                severity = AiOutputPostCheckIssueSeverity.WARN;
+                message = "AI 输出声明的 Evidence ref 格式或来源不受支持，无法确定性验证。";
+                nextActions = List.of("使用持久化 Evidence Package 返回的 canonical source.evidenceRef。", "人工复核后再采纳该声明。");
+            }
+            issues.add(new AiOutputPostCheckIssue(
+                    code,
+                    severity,
+                    null,
+                    resolution.inputRef(),
+                    message,
+                    excerpt(content, check.start(), check.end()),
+                    null,
+                    List.of(),
+                    nextActions));
+        }
+        return List.copyOf(issues);
     }
 
     private AiOutputPostCheckIssue issue(
@@ -658,10 +711,20 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
         return sanitizeList(fixes);
     }
 
-    private List<String> evidenceLinks(List<StandardReferenceResolutionResult> resolvedRefs) {
+    private List<String> evidenceLinks(
+            List<StandardReferenceResolutionResult> resolvedRefs,
+            List<EvidenceClaimCheck> evidenceChecks
+    ) {
         Set<String> links = new LinkedHashSet<>();
         for (StandardReferenceResolutionResult result : resolvedRefs) {
             links.addAll(result.evidenceLinks());
+        }
+        for (EvidenceClaimCheck check : evidenceChecks) {
+            EvidenceClaimResolution resolution = check.resolution();
+            if (resolution.status() == EvidenceClaimResolutionStatus.VERIFIED
+                    && resolution.canonicalRef() != null) {
+                links.add(resolution.canonicalRef());
+            }
         }
         return sanitizeList(new ArrayList<>(links));
     }
@@ -758,6 +821,9 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
     }
 
     private record Occurrence(StandardReferenceType refType, String ref, String excerpt, boolean highConfidence) {
+    }
+
+    private record EvidenceClaimCheck(int start, int end, EvidenceClaimResolution resolution) {
     }
 
     private record SnapshotIdentity(Long id, String version) {

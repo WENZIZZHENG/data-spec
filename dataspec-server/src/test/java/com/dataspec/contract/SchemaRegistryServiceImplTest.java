@@ -89,7 +89,9 @@ class SchemaRegistryServiceImplTest {
         assertTrue(evidence.getStableFields().contains("validationSummary"));
         assertTrue(evidence.getStableFields().contains("postCheckSummary"));
         assertTrue(evidence.getStableFields().contains("postCheckSummary.blockingRefs[]"));
+        assertTrue(evidence.getStableFields().contains("source.evidenceRef"));
         assertTrue(evidence.getJsonSchema().get("properties").toString().contains("postCheckSummary"));
+        assertTrue(evidence.getJsonSchema().get("properties").toString().contains("evidenceRef"));
         assertTrue(evidence.getStableFields().contains("suggestedCommands[]"));
 
         SchemaContract field = service.getContract("field");
@@ -143,6 +145,9 @@ class SchemaRegistryServiceImplTest {
         assertTrue(postCheck.getJsonSchema().get("properties").toString().contains("FAIL"));
         assertTrue(postCheck.getJsonSchema().get("properties").toString().contains("safeToUse"));
         assertTrue(postCheck.getJsonSchema().get("properties").toString().contains("secret-safe"));
+        assertTrue(postCheck.getJsonSchema().get("properties").toString().contains("MISSING_EVIDENCE_REFERENCE"));
+        assertTrue(postCheck.getJsonSchema().get("properties").toString().contains("CROSS_PROJECT_EVIDENCE_REFERENCE"));
+        assertTrue(postCheck.getJsonSchema().get("properties").toString().contains("UNVERIFIABLE_EVIDENCE_REFERENCE"));
         assertTrue(postCheck.getExamples().toString().contains("safeToUse"));
     }
 

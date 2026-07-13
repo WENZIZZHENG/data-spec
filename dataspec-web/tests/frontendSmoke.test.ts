@@ -208,6 +208,17 @@ test('keeps stable reference and ai output post-check OpenAPI contracts generate
   ], 'stable reference and post-check OpenAPI schema')
 })
 
+test('keeps canonical evidence reference OpenAPI field generated', () => {
+  const schema = readSource('src/api/schema.ts')
+
+  assertContains(schema, [
+    'AiEvidenceSource',
+    'evidenceRef?: string',
+    'dataspec://evidence/<source-type>/<source-id>',
+    'CROSS_PROJECT_EVIDENCE_REFERENCE'
+  ], 'canonical evidence reference OpenAPI schema')
+})
+
 test('keeps standard test data package OpenAPI contract generated', () => {
   const schema = readSource('src/api/schema.ts')
   const types = readSource('src/types/index.ts')

@@ -4,6 +4,8 @@ import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.repository.EnumDictRepository;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.repository.FieldRepository;
+import com.dataspec.fieldhistory.model.FieldHistoricalAlias;
+import com.dataspec.fieldhistory.service.FieldHistoricalAliasService;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.repository.RuleConfigRepository;
 import com.dataspec.standard.entity.StandardSnapshot;
@@ -18,6 +20,7 @@ import com.dataspec.standardref.service.impl.StandardReferenceResolutionServiceI
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,6 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 class StandardReferenceResolutionServiceImplTest {
@@ -68,6 +73,41 @@ class StandardReferenceResolutionServiceImplTest {
         assertEquals("field:1:10", stale.replacementRef());
         assertEquals("deprecated", stale.lifecycleStatus());
         assertTrue(stale.warnings().getFirst().contains("替代"));
+    }
+
+    @Test
+    void resolvesAuditableHistoricalNamesAndKeepsAmbiguousHistoryUnresolved() {
+        FieldRepository fieldRepository = mock(FieldRepository.class);
+        FieldHistoricalAliasService historyService = mock(FieldHistoricalAliasService.class);
+        Field mobile = field(10L, 1L, "mobile_no", "mobile_phone", "enabled", null);
+        Field backup = field(12L, 1L, "backup_mobile", null, "enabled", null);
+        when(fieldRepository.findAllByProjectId(1L)).thenReturn(List.of(mobile, backup));
+        when(historyService.load(1L, List.of(mobile, backup))).thenReturn(Map.of(
+                10L, List.of(
+                        new FieldHistoricalAlias(10L, "legacy_phone", 100L),
+                        new FieldHistoricalAlias(10L, "former_phone", 101L)),
+                12L, List.of(new FieldHistoricalAlias(12L, "former_phone", 102L))));
+        var service = service(fieldRepository, historyService);
+
+        StandardReferenceResolveResponse response = service.resolve(new StandardReferenceResolveRequest(
+                1L,
+                StandardReferenceType.FIELD,
+                List.of("legacy_phone", "former_phone")
+        ));
+
+        StandardReferenceResolutionResult historical = response.results().get(0);
+        assertEquals(StandardReferenceResolutionStatus.CURRENT, historical.resolutionStatus());
+        assertEquals("field:1:10", historical.stableRef());
+        assertEquals("legacy_phone", historical.matchedAlias());
+        assertEquals(StandardReferenceConfidence.MEDIUM, historical.confidence());
+        assertTrue(historical.evidenceLinks().contains("dataspec://change-logs/100"));
+
+        StandardReferenceResolutionResult ambiguous = response.results().get(1);
+        assertEquals(StandardReferenceResolutionStatus.AMBIGUOUS, ambiguous.resolutionStatus());
+        assertNull(ambiguous.canonicalRef());
+        assertTrue(ambiguous.evidenceLinks().containsAll(List.of(
+                "dataspec://change-logs/101",
+                "dataspec://change-logs/102")));
     }
 
     @Test
@@ -140,11 +180,21 @@ class StandardReferenceResolutionServiceImplTest {
     }
 
     private StandardReferenceResolutionServiceImpl service(FieldRepository fieldRepository) {
+        FieldHistoricalAliasService historyService = mock(FieldHistoricalAliasService.class);
+        when(historyService.load(anyLong(), anyList())).thenReturn(Map.of());
+        return service(fieldRepository, historyService);
+    }
+
+    private StandardReferenceResolutionServiceImpl service(
+            FieldRepository fieldRepository,
+            FieldHistoricalAliasService historyService
+    ) {
         return service(
                 fieldRepository,
                 mock(EnumDictRepository.class),
                 mock(RuleConfigRepository.class),
-                mock(StandardSnapshotRepository.class));
+                mock(StandardSnapshotRepository.class),
+                historyService);
     }
 
     private StandardReferenceResolutionServiceImpl service(
@@ -153,11 +203,24 @@ class StandardReferenceResolutionServiceImplTest {
             RuleConfigRepository ruleRepository,
             StandardSnapshotRepository snapshotRepository
     ) {
+        FieldHistoricalAliasService historyService = mock(FieldHistoricalAliasService.class);
+        when(historyService.load(anyLong(), anyList())).thenReturn(Map.of());
+        return service(fieldRepository, enumRepository, ruleRepository, snapshotRepository, historyService);
+    }
+
+    private StandardReferenceResolutionServiceImpl service(
+            FieldRepository fieldRepository,
+            EnumDictRepository enumRepository,
+            RuleConfigRepository ruleRepository,
+            StandardSnapshotRepository snapshotRepository,
+            FieldHistoricalAliasService historyService
+    ) {
         return new StandardReferenceResolutionServiceImpl(
                 fieldRepository,
                 enumRepository,
                 ruleRepository,
-                snapshotRepository);
+                snapshotRepository,
+                historyService);
     }
 
     private Field field(Long id, Long projectId, String name, String aliases, String status, Long replacementFieldId) {

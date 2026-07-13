@@ -276,6 +276,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/test-data/package/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 生成标准驱动测试数据包 */
+        post: operations["generatePackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/templates": {
         parameters: {
             query?: never;
@@ -1550,22 +1567,6 @@ export interface paths {
         get: operations["generate_1"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/test-data/package/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["generatePackage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3652,6 +3653,203 @@ export interface components {
             message?: string;
             data?: components["schemas"]["ApiTokenCreateResp"];
             error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 标准测试数据包生成请求；只读取项目标准元数据，不采集真实业务数据行。 */
+        StandardTestDataPackageReq: {
+            /**
+             * Format: int64
+             * @description 所属项目 ID，生成过程只读取该项目标准元数据。
+             */
+            projectId?: number;
+            /** @description 可选字段名筛选；为空时按项目标准字段和 maxFields 自动选择。 */
+            fieldNames?: string[];
+            /** @description 可选轻量对象场景，如 order、user、audit；仅影响 fallback 命名和 seed 草稿表名。 */
+            objectScenario?: string;
+            /**
+             * Format: int32
+             * @description 最大选取字段数，服务端会按安全上限裁剪。
+             */
+            maxFields?: number;
+            /**
+             * Format: int32
+             * @description 每个字段最多生成多少类用例，v1 最多 valid/invalid/boundary 三类。
+             */
+            casesPerField?: number;
+            /**
+             * Format: int32
+             * @description mock/CSV/SQL seed 草稿行数，默认使用小样本。
+             */
+            seedRowCount?: number;
+            /** @description SQL seed 草稿方言提示；v1 只作为说明，不承诺可直接执行。 */
+            dialect?: string;
+        };
+        RStandardTestDataPackage: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["StandardTestDataPackage"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 标准驱动测试数据包；用于 AI、测试、mock、seed 草稿和边界用例复用。 */
+        StandardTestDataPackage: {
+            /** @description 包类型，固定为 dataspec.standard-test-data-package。 */
+            kind?: string;
+            /**
+             * Format: int32
+             * @description 包结构版本。
+             */
+            schemaVersion?: number;
+            /**
+             * Format: int64
+             * @description 所属项目 ID。
+             */
+            projectId?: number;
+            /** @description 基于标准摘要、筛选参数和生成版本计算的确定性 hash。 */
+            specHash?: string;
+            /** @description 脱敏后的生成参数。 */
+            generationParams?: {
+                [key: string]: Record<string, never>;
+            };
+            sourceSummary?: components["schemas"]["TestDataSourceSummary"];
+            /** @description 字段级 valid/invalid/boundary 用例。 */
+            testDataCases?: components["schemas"]["TestDataCase"][];
+            /** @description JSON、CSV、SQL seed/mock 草稿。 */
+            seedProfiles?: components["schemas"]["TestDataSeedProfile"][];
+            /** @description AI 或前端 mock 可复用的结构化 payload。 */
+            mockPayloads?: components["schemas"]["TestDataMockPayload"][];
+            coverageReport?: components["schemas"]["TestDataCoverageReport"];
+            /** @description 生成诊断，包含 fallback、脱敏和缺口提示。 */
+            diagnostics?: components["schemas"]["TestDataDiagnostic"][];
+            safety?: components["schemas"]["TestDataSafety"];
+            /** @description 后续人工审核和复用建议。 */
+            nextActions?: string[];
+        };
+        /** @description 字段级测试数据用例，覆盖 valid、invalid 和 boundary 三类。 */
+        TestDataCase: {
+            /** @description 确定性用例 ID。 */
+            caseId?: string;
+            /** @description 标准字段名。 */
+            fieldName?: string;
+            /** @description 用例类型：VALID、INVALID 或 BOUNDARY。 */
+            caseType?: string;
+            /** @description 合成样例值；敏感字段使用安全占位或脱敏值。 */
+            value?: string;
+            /** @description 该值是否预期通过字段级校验。 */
+            expectedValidity?: boolean;
+            /** @description 用例生成原因和业务边界说明。 */
+            reason?: string;
+            /** @description 来源标准引用，如 field:<id> 或 enum:<id>。 */
+            sourceRefs?: string[];
+            /** @description 是否需要业务人工复核。 */
+            requiresBusinessReview?: boolean;
+        };
+        /** @description 测试数据包覆盖报告，说明字段、case 和缺口。 */
+        TestDataCoverageReport: {
+            /**
+             * Format: int32
+             * @description 选中的字段数。
+             */
+            selectedFieldCount?: number;
+            /**
+             * Format: int32
+             * @description 生成至少一个 case 的字段数。
+             */
+            coveredFieldCount?: number;
+            /**
+             * Format: int32
+             * @description 生成用例总数。
+             */
+            caseCount?: number;
+            /** @description 覆盖级别，如 FIELD_ONLY 或 OBJECT_LIGHTWEIGHT。 */
+            coverageLevel?: string;
+            /** @description 缺失或无法确定的约束说明。 */
+            missingConstraints?: string[];
+            /** @description 暂不能生成确定性 case 的字段名。 */
+            unsupportedFields?: string[];
+        };
+        /** @description 测试数据包生成诊断；用于说明 fallback、脱敏、缺口或边界。 */
+        TestDataDiagnostic: {
+            /** @description 稳定诊断编码。 */
+            code?: string;
+            /** @description 诊断级别：INFO、WARN 或 ERROR。 */
+            severity?: string;
+            /** @description 已脱敏的人可读说明。 */
+            message?: string;
+        };
+        /** @description 结构化 mock payload，字段值均来自安全合成 valid case。 */
+        TestDataMockPayload: {
+            /** @description 确定性 payload ID。 */
+            payloadId?: string;
+            /** @description 轻量对象场景。 */
+            objectScenario?: string;
+            /** @description 合成 mock 对象，字段值均来自 valid case。 */
+            payload?: {
+                [key: string]: Record<string, never>;
+            };
+            /** @description 来源 valid case ID。 */
+            sourceCaseIds?: string[];
+            /** @description 是否需要人工复核。 */
+            requiresBusinessReview?: boolean;
+        };
+        /** @description 测试数据包安全边界声明。 */
+        TestDataSafety: {
+            /** @description 是否只读。 */
+            readOnly?: boolean;
+            /** @description 是否写入 DataSpec 项目记录。 */
+            writesProject?: boolean;
+            /** @description 是否写入业务仓库文件。 */
+            writesBusinessRepo?: boolean;
+            /** @description 是否包含真实业务数据行。 */
+            containsRealBusinessRows?: boolean;
+            /** @description 是否访问外部网络。 */
+            externalNetworkUsed?: boolean;
+            /** @description 是否调用外部 LLM。 */
+            externalLlmUsed?: boolean;
+            /** @description 可能参与脱敏的敏感输入类别。 */
+            sensitiveInputCategories?: string[];
+        };
+        /** @description seed 或 mock 草稿片段；默认只作可审查样例，不自动写入数据库。 */
+        TestDataSeedProfile: {
+            /** @description 确定性 profile ID。 */
+            profileId?: string;
+            /** @description 输出格式，如 JSON、CSV、SQL。 */
+            format?: string;
+            /** @description 方言提示；v1 不保证 SQL 可直接执行。 */
+            dialect?: string;
+            /** @description 草稿文本，已脱敏。 */
+            content?: string;
+            /** @description 参与该草稿的字段名。 */
+            fieldNames?: string[];
+            /** @description 来源 case ID。 */
+            sourceCaseIds?: string[];
+            /** @description 草稿是否可直接执行；v1 SQL seed 默认为 false。 */
+            executable?: boolean;
+            /** @description 是否需要人工审核后再使用。 */
+            requiresReview?: boolean;
+        };
+        /** @description 测试数据包来源标准摘要，说明所用字段、枚举和 fallback。 */
+        TestDataSourceSummary: {
+            /**
+             * Format: int32
+             * @description 项目可用标准字段总数。
+             */
+            standardFieldCount?: number;
+            /**
+             * Format: int32
+             * @description 本次选中字段数。
+             */
+            selectedFieldCount?: number;
+            /**
+             * Format: int32
+             * @description 使用到的枚举值数量。
+             */
+            enumValueCount?: number;
+            /** @description 是否使用内置 fallback 字段。 */
+            fallbackUsed?: boolean;
+            /** @description 本次选中的字段名。 */
+            selectedFields?: string[];
+            /** @description 来源类型，如 project-field、enum-value、fallback。 */
+            sourceKinds?: string[];
         };
         StarterKitApplyReq: {
             /** Format: int64 */
@@ -6792,13 +6990,24 @@ export interface components {
             diagnostics?: components["schemas"]["AiEvidenceDiagnostic"][];
         };
         AiEvidenceSource: {
-            /** @enum {string} */
+            /**
+             * @description Evidence Package 来源类型；决定来源 ID 和 evidenceRef 的解析语义。
+             * @enum {string}
+             */
             sourceType?: "AI_JOB" | "SQL_CHECK" | "COVERAGE_REPORT" | "AI_BATCH_RUN" | "AI_TASK_RUN";
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description 持久化来源记录 ID；payload-only 来源为空。
+             */
             sourceId?: number;
+            /** @description 脱敏后的来源标题。 */
             sourceTitle?: string;
+            /** @description 来源记录或 payload 的当前状态。 */
             status?: string;
+            /** @description 来源是否已持久化并可由 sourceId 重新读取。 */
             persisted?: boolean;
+            /** @description 项目级 canonical evidence ref，格式为 dataspec://evidence/<source-type>/<source-id>；非持久化来源为空。 */
+            evidenceRef?: string;
         };
         RAiEvidencePackage: {
             /** Format: int32 */
@@ -6996,7 +7205,7 @@ export interface components {
         };
         /** @description AI 输出后置校验问题；所有文本字段均必须 secret-safe。 */
         AiOutputPostCheckIssue: {
-            /** @description 稳定问题码。 */
+            /** @description 稳定问题码；Evidence claim 使用 MISSING_EVIDENCE_REFERENCE、CROSS_PROJECT_EVIDENCE_REFERENCE 或 UNVERIFIABLE_EVIDENCE_REFERENCE。 */
             code?: string;
             /**
              * @description AI 输出后置校验问题级别；FAIL 会使整体 status=FAIL，WARN 会使整体 status 至少为 WARN。
@@ -7378,119 +7587,6 @@ export interface components {
             data?: components["schemas"]["SyntheticStandardExamplePackage"];
             error?: components["schemas"]["ErrorDetail"];
         };
-        RStandardTestDataPackage: {
-            /** Format: int32 */
-            code?: number;
-            message?: string;
-            data?: components["schemas"]["StandardTestDataPackage"];
-            error?: components["schemas"]["ErrorDetail"];
-        };
-        /** @description 字段级测试数据用例，覆盖 valid、invalid 和 boundary 三类。 */
-        TestDataCase: {
-            caseId?: string;
-            fieldName?: string;
-            caseType?: string;
-            value?: string;
-            expectedValidity?: boolean;
-            reason?: string;
-            sourceRefs?: string[];
-            requiresBusinessReview?: boolean;
-        };
-        /** @description 测试数据包覆盖报告，说明字段、case 和缺口。 */
-        TestDataCoverageReport: {
-            /** Format: int32 */
-            selectedFieldCount?: number;
-            /** Format: int32 */
-            coveredFieldCount?: number;
-            /** Format: int32 */
-            caseCount?: number;
-            coverageLevel?: string;
-            missingConstraints?: string[];
-            unsupportedFields?: string[];
-        };
-        /** @description 测试数据包生成诊断；用于说明 fallback、脱敏、缺口或边界。 */
-        TestDataDiagnostic: {
-            code?: string;
-            severity?: string;
-            message?: string;
-        };
-        /** @description 结构化 mock payload，字段值均来自安全合成 valid case。 */
-        TestDataMockPayload: {
-            payloadId?: string;
-            objectScenario?: string;
-            payload?: {
-                [key: string]: Record<string, never>;
-            };
-            sourceCaseIds?: string[];
-            requiresBusinessReview?: boolean;
-        };
-        /** @description 测试数据包安全边界声明。 */
-        TestDataSafety: {
-            readOnly?: boolean;
-            writesProject?: boolean;
-            writesBusinessRepo?: boolean;
-            containsRealBusinessRows?: boolean;
-            externalNetworkUsed?: boolean;
-            externalLlmUsed?: boolean;
-            sensitiveInputCategories?: string[];
-        };
-        /** @description seed 或 mock 草稿片段；默认只作可审查样例，不自动写入数据库。 */
-        TestDataSeedProfile: {
-            profileId?: string;
-            format?: string;
-            dialect?: string;
-            content?: string;
-            fieldNames?: string[];
-            sourceCaseIds?: string[];
-            executable?: boolean;
-            requiresReview?: boolean;
-        };
-        /** @description 测试数据包来源标准摘要，说明所用字段、枚举和 fallback。 */
-        TestDataSourceSummary: {
-            /** Format: int32 */
-            standardFieldCount?: number;
-            /** Format: int32 */
-            selectedFieldCount?: number;
-            /** Format: int32 */
-            enumValueCount?: number;
-            fallbackUsed?: boolean;
-            selectedFields?: string[];
-            sourceKinds?: string[];
-        };
-        /** @description 标准驱动测试数据包；用于 AI、测试、mock、seed 草稿和边界用例复用。 */
-        StandardTestDataPackage: {
-            kind?: string;
-            /** Format: int32 */
-            schemaVersion?: number;
-            /** Format: int64 */
-            projectId?: number;
-            specHash?: string;
-            generationParams?: {
-                [key: string]: Record<string, never>;
-            };
-            sourceSummary?: components["schemas"]["TestDataSourceSummary"];
-            testDataCases?: components["schemas"]["TestDataCase"][];
-            seedProfiles?: components["schemas"]["TestDataSeedProfile"][];
-            mockPayloads?: components["schemas"]["TestDataMockPayload"][];
-            coverageReport?: components["schemas"]["TestDataCoverageReport"];
-            diagnostics?: components["schemas"]["TestDataDiagnostic"][];
-            safety?: components["schemas"]["TestDataSafety"];
-            nextActions?: string[];
-        };
-        /** @description 标准测试数据包生成请求；只读取项目标准元数据，不采集真实业务数据行。 */
-        StandardTestDataPackageReq: {
-            /** Format: int64 */
-            projectId?: number;
-            fieldNames?: string[];
-            objectScenario?: string;
-            /** Format: int32 */
-            maxFields?: number;
-            /** Format: int32 */
-            casesPerField?: number;
-            /** Format: int32 */
-            seedRowCount?: number;
-            dialect?: string;
-        };
         SyntheticDdlPreviewInput: {
             id?: string;
             tableName?: string;
@@ -7591,9 +7687,9 @@ export interface components {
             /** Format: int32 */
             fieldCount?: number;
             /** Format: int32 */
-            templateCount?: number;
-            /** Format: int32 */
             enumCount?: number;
+            /** Format: int32 */
+            templateCount?: number;
         };
         StarterKitDomain: {
             code?: string;
@@ -10504,6 +10600,30 @@ export interface operations {
             };
         };
     };
+    generatePackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StandardTestDataPackageReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RStandardTestDataPackage"];
+                };
+            };
+        };
+    };
     list: {
         parameters: {
             query: {
@@ -12847,30 +12967,6 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RSyntheticStandardExamplePackage"];
-                };
-            };
-        };
-    };
-    generatePackage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StandardTestDataPackageReq"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["RStandardTestDataPackage"];
                 };
             };
         };

@@ -6,6 +6,8 @@ import com.dataspec.enumdict.entity.EnumDict;
 import com.dataspec.enumdict.repository.EnumDictRepository;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.repository.FieldRepository;
+import com.dataspec.fieldhistory.model.FieldHistoricalAlias;
+import com.dataspec.fieldhistory.service.FieldHistoricalAliasService;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.repository.RuleConfigRepository;
 import com.dataspec.security.context.ProjectAccessGuard;
@@ -26,6 +28,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -48,14 +51,18 @@ public class StandardReferenceResolutionServiceImpl implements StandardReference
     private final EnumDictRepository enumDictRepository;
     private final RuleConfigRepository ruleConfigRepository;
     private final StandardSnapshotRepository standardSnapshotRepository;
+    private final FieldHistoricalAliasService fieldHistoricalAliasService;
 
     @Override
     public StandardReferenceResolveResponse resolve(StandardReferenceResolveRequest request) {
         validate(request);
         ProjectAccessGuard.requireProjectAccess(request.projectId());
+        FieldResolutionContext fieldContext = request.refType() == StandardReferenceType.FIELD
+                ? loadFieldContext(request.projectId())
+                : FieldResolutionContext.empty();
         List<StandardReferenceResolutionResult> results = new ArrayList<>();
         for (String ref : request.refs()) {
-            results.add(resolveOne(request.projectId(), request.refType(), ref));
+            results.add(resolveOne(request.projectId(), request.refType(), ref, fieldContext));
         }
         return new StandardReferenceResolveResponse(
                 StandardReferenceResolveResponse.KIND,
@@ -77,17 +84,28 @@ public class StandardReferenceResolutionServiceImpl implements StandardReference
         }
     }
 
-    private StandardReferenceResolutionResult resolveOne(Long projectId, StandardReferenceType refType, String rawRef) {
+    private FieldResolutionContext loadFieldContext(Long projectId) {
+        List<Field> fields = fieldRepository.findAllByProjectId(projectId);
+        Map<Long, List<FieldHistoricalAlias>> history = fieldHistoricalAliasService.load(projectId, fields);
+        return new FieldResolutionContext(fields, history == null ? Map.of() : history);
+    }
+
+    private StandardReferenceResolutionResult resolveOne(
+            Long projectId,
+            StandardReferenceType refType,
+            String rawRef,
+            FieldResolutionContext fieldContext
+    ) {
         String inputRef = sanitize(rawRef);
         if (rawRef == null || rawRef.isBlank()) {
             return unknown(inputRef, refType, "引用不能为空");
         }
         Optional<StandardReferenceFormatter.ParsedStableReference> parsed = StandardReferenceFormatter.parse(rawRef.trim());
         if (parsed.isPresent()) {
-            return resolveStableRef(projectId, refType, inputRef, parsed.get());
+            return resolveStableRef(projectId, refType, inputRef, parsed.get(), fieldContext);
         }
         return switch (refType) {
-            case FIELD -> resolveFieldText(projectId, inputRef, rawRef);
+            case FIELD -> resolveFieldText(inputRef, rawRef, fieldContext);
             case ENUM -> resolveEnumText(projectId, inputRef, rawRef);
             case RULE -> resolveRuleText(projectId, inputRef, rawRef);
             case SNAPSHOT -> resolveSnapshotText(projectId, inputRef, rawRef);
@@ -98,7 +116,8 @@ public class StandardReferenceResolutionServiceImpl implements StandardReference
             Long projectId,
             StandardReferenceType requestedType,
             String inputRef,
-            StandardReferenceFormatter.ParsedStableReference parsed
+            StandardReferenceFormatter.ParsedStableReference parsed,
+            FieldResolutionContext fieldContext
     ) {
         if (!Objects.equals(projectId, parsed.projectId())) {
             return result(
@@ -121,7 +140,7 @@ public class StandardReferenceResolutionServiceImpl implements StandardReference
         }
         return switch (parsed.type()) {
             case FIELD -> parseLong(parsed.objectKey())
-                    .map(id -> resolveFieldById(projectId, inputRef, id))
+                    .map(id -> resolveFieldById(inputRef, id, fieldContext))
                     .orElseGet(() -> unknown(inputRef, requestedType, "字段 stableRef 对象 ID 无效。"));
             case ENUM -> parseLong(parsed.objectKey())
                     .map(id -> resolveEnumById(projectId, inputRef, id))
@@ -131,21 +150,44 @@ public class StandardReferenceResolutionServiceImpl implements StandardReference
         };
     }
 
-    private StandardReferenceResolutionResult resolveFieldById(Long projectId, String inputRef, Long fieldId) {
-        return fieldRepository.findAllByProjectId(projectId).stream()
+    private StandardReferenceResolutionResult resolveFieldById(
+            String inputRef,
+            Long fieldId,
+            FieldResolutionContext fieldContext
+    ) {
+        return fieldContext.fields().stream()
                 .filter(field -> Objects.equals(fieldId, field.getId()))
                 .findFirst()
                 .map(field -> fieldResult(inputRef, field, null, StandardReferenceConfidence.HIGH))
                 .orElseGet(() -> unknown(inputRef, StandardReferenceType.FIELD, "当前项目不存在该字段 stableRef。"));
     }
 
-    private StandardReferenceResolutionResult resolveFieldText(Long projectId, String inputRef, String rawRef) {
+    private StandardReferenceResolutionResult resolveFieldText(
+            String inputRef,
+            String rawRef,
+            FieldResolutionContext fieldContext
+    ) {
         String key = normalize(rawRef);
         List<FieldMatch> matches = new ArrayList<>();
-        for (Field field : fieldRepository.findAllByProjectId(projectId)) {
+        for (Field field : fieldContext.fields()) {
             FieldMatch match = matchField(field, key);
             if (match != null) {
                 matches.add(match);
+            }
+        }
+        // 当前名称和当前别名是现行契约；只有它们完全未命中时才回退历史快照。
+        if (matches.isEmpty()) {
+            for (Field field : fieldContext.fields()) {
+                for (FieldHistoricalAlias historical : fieldContext.history().getOrDefault(field.getId(), List.of())) {
+                    if (sameRefText(historical.value(), key)) {
+                        matches.add(new FieldMatch(
+                                field,
+                                sanitize(historical.value()),
+                                StandardReferenceConfidence.MEDIUM,
+                                List.of(historical.evidenceRef())));
+                        break;
+                    }
+                }
             }
         }
         if (matches.isEmpty()) {
@@ -153,23 +195,24 @@ public class StandardReferenceResolutionServiceImpl implements StandardReference
         }
         if (matches.size() > 1) {
             return ambiguous(inputRef, StandardReferenceType.FIELD, matches.stream()
-                    .map(match -> evidenceLink(StandardReferenceType.FIELD, match.field().getId()))
+                    .flatMap(match -> matchEvidenceLinks(match).stream())
+                    .distinct()
                     .toList());
         }
         FieldMatch match = matches.getFirst();
-        return fieldResult(inputRef, match.field(), match.matchedAlias(), match.confidence());
+        return fieldResult(inputRef, match.field(), match.matchedAlias(), match.confidence(), match.evidenceLinks());
     }
 
     private FieldMatch matchField(Field field, String key) {
         if (sameRefText(field.getName(), key)) {
-            return new FieldMatch(field, null, StandardReferenceConfidence.HIGH);
+            return new FieldMatch(field, null, StandardReferenceConfidence.HIGH, List.of());
         }
         if (sameRefText(field.getDisplayName(), key)) {
-            return new FieldMatch(field, sanitize(field.getDisplayName()), StandardReferenceConfidence.HIGH);
+            return new FieldMatch(field, sanitize(field.getDisplayName()), StandardReferenceConfidence.HIGH, List.of());
         }
         for (String alias : splitCsv(field.getAliases())) {
             if (sameRefText(alias, key)) {
-                return new FieldMatch(field, sanitize(alias), StandardReferenceConfidence.HIGH);
+                return new FieldMatch(field, sanitize(alias), StandardReferenceConfidence.HIGH, List.of());
             }
         }
         return null;
@@ -181,6 +224,16 @@ public class StandardReferenceResolutionServiceImpl implements StandardReference
             String matchedAlias,
             StandardReferenceConfidence confidence
     ) {
+        return fieldResult(inputRef, field, matchedAlias, confidence, List.of());
+    }
+
+    private StandardReferenceResolutionResult fieldResult(
+            String inputRef,
+            Field field,
+            String matchedAlias,
+            StandardReferenceConfidence confidence,
+            List<String> additionalEvidenceLinks
+    ) {
         String stableRef = StandardReferenceFormatter.fieldRef(field.getProjectId(), field.getId());
         Replacement replacement = replacementFor(field);
         boolean stale = isStaleField(field);
@@ -191,6 +244,9 @@ public class StandardReferenceResolutionServiceImpl implements StandardReference
                     ? "字段已废弃或停用，且未配置可验证替代字段；需要人工确认。"
                     : "字段已废弃或停用，建议使用替代字段 " + replacement.ref() + "。");
         }
+        List<String> evidenceLinks = new ArrayList<>();
+        evidenceLinks.add(evidenceLink(StandardReferenceType.FIELD, field.getId()));
+        evidenceLinks.addAll(additionalEvidenceLinks);
         return result(
                 inputRef,
                 StandardReferenceType.FIELD,
@@ -203,8 +259,15 @@ public class StandardReferenceResolutionServiceImpl implements StandardReference
                 sanitize(normalizeStatus(field.getStatus())),
                 replacement.ref(),
                 confidence,
-                List.of(evidenceLink(StandardReferenceType.FIELD, field.getId())),
+                evidenceLinks,
                 warnings);
+    }
+
+    private List<String> matchEvidenceLinks(FieldMatch match) {
+        List<String> links = new ArrayList<>();
+        links.add(evidenceLink(StandardReferenceType.FIELD, match.field().getId()));
+        links.addAll(match.evidenceLinks());
+        return links;
     }
 
     private Replacement replacementFor(Field field) {
@@ -458,7 +521,21 @@ public class StandardReferenceResolutionServiceImpl implements StandardReference
         }
     }
 
-    private record FieldMatch(Field field, String matchedAlias, StandardReferenceConfidence confidence) {
+    private record FieldMatch(
+            Field field,
+            String matchedAlias,
+            StandardReferenceConfidence confidence,
+            List<String> evidenceLinks
+    ) {
+    }
+
+    private record FieldResolutionContext(
+            List<Field> fields,
+            Map<Long, List<FieldHistoricalAlias>> history
+    ) {
+        static FieldResolutionContext empty() {
+            return new FieldResolutionContext(List.of(), Map.of());
+        }
     }
 
     private record Replacement(String ref) {

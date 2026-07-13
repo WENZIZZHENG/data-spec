@@ -1789,6 +1789,7 @@ class AiContextExportServiceTest {
                 fieldRepository,
                 fieldSourceRepository,
                 mock(com.dataspec.changelog.service.StandardChangeLogService.class),
+                mock(com.dataspec.fieldhistory.service.FieldHistoricalAliasService.class),
                 new ObjectMapper(),
                 glossaryService,
                 semanticRuleService,

@@ -143,6 +143,7 @@ class PerformanceBaselineTest {
                 repository,
                 mock(FieldSourceRepository.class),
                 mock(StandardChangeLogService.class),
+                mock(com.dataspec.fieldhistory.service.FieldHistoricalAliasService.class),
                 new ObjectMapper(),
                 glossaryService,
                 semanticRuleService,

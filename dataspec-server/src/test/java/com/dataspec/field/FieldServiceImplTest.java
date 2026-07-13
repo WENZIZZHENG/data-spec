@@ -21,6 +21,8 @@ import com.dataspec.field.model.FieldSearchResult;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.impl.FieldServiceImpl;
+import com.dataspec.fieldhistory.model.FieldHistoricalAlias;
+import com.dataspec.fieldhistory.service.FieldHistoricalAliasService;
 import com.dataspec.fieldsemantic.service.FieldSemanticRuleService;
 import com.dataspec.metric.service.MetricDefinitionService;
 import com.dataspec.reverseimport.repository.FieldSourceRepository;
@@ -1395,6 +1397,50 @@ class FieldServiceImplTest {
     }
 
     @Test
+    void searchAndSuggestRecallCurrentFieldFromHistoryWithoutOutrankingCurrentAlias() {
+        FieldRepository repository = mock(FieldRepository.class);
+        FieldHistoricalAliasService historyService = mock(FieldHistoricalAliasService.class);
+        Field historical = field("mobile_no", "手机号", "varchar(20)", "当前手机号", null, "enabled");
+        historical.setId(10L);
+        historical.setProjectId(1L);
+        Field currentAlias = field("former_phone_field", "现行别名字段", "varchar(20)", null, "former_phone", "enabled");
+        currentAlias.setId(11L);
+        currentAlias.setProjectId(1L);
+        when(repository.findAllByProjectId(1L)).thenReturn(List.of(historical, currentAlias));
+        when(historyService.load(1L, List.of(historical, currentAlias))).thenReturn(Map.of(
+                10L, List.of(
+                        new FieldHistoricalAlias(10L, "legacy_phone", 100L),
+                        new FieldHistoricalAlias(10L, "former_phone", 101L))));
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(glossaryService.match(anyLong(), anyString())).thenReturn(List.of());
+        FieldServiceImpl service = service(
+                repository,
+                mock(FieldSourceRepository.class),
+                mock(StandardChangeLogService.class),
+                glossaryService,
+                historyService);
+
+        FieldSearchItem historicalItem = service.search(new FieldSearchReq(
+                1L, "legacy_phone", null, null, null, null, null, 10)).items().getFirst();
+        assertEquals("mobile_no", historicalItem.field().getName());
+        assertEquals("legacy_phone", historicalItem.matchedAlias());
+        assertTrue(historicalItem.matchReasons().stream().anyMatch(reason -> reason.contains("历史名称")));
+        assertTrue(historicalItem.evidence().stream().anyMatch(trace ->
+                "FIELD_CHANGE_LOG".equals(trace.sourceType())
+                        && Long.valueOf(100L).equals(trace.sourceId())
+                        && "dataspec://change-logs/100".equals(trace.docsRef())));
+
+        List<FieldSuggestion> suggestions = service.suggest(1L, "legacy_phone", 5);
+        assertEquals("mobile_no", suggestions.getFirst().recommendedName());
+        assertTrue(suggestions.getFirst().matchReason().contains("历史名称"));
+
+        FieldSearchResult ranking = service.search(new FieldSearchReq(
+                1L, "former_phone", null, null, null, null, null, 10));
+        assertEquals("former_phone_field", ranking.items().getFirst().field().getName());
+        assertTrue(ranking.items().getFirst().score() > ranking.items().get(1).score());
+    }
+
+    @Test
     void suggest_returnsFallbackSnakeCaseNameWhenNoExistingFieldMatches() {
         FieldRepository repository = mock(FieldRepository.class);
         when(repository.findAllByProjectId(1L)).thenReturn(List.of());
@@ -1473,6 +1519,15 @@ class FieldServiceImplTest {
     private FieldServiceImpl service(FieldRepository repository, FieldSourceRepository sourceRepository,
                                      StandardChangeLogService changeLogService,
                                      BusinessGlossaryService glossaryService) {
+        FieldHistoricalAliasService historyService = mock(FieldHistoricalAliasService.class);
+        when(historyService.load(anyLong(), anyList())).thenReturn(Map.of());
+        return service(repository, sourceRepository, changeLogService, glossaryService, historyService);
+    }
+
+    private FieldServiceImpl service(FieldRepository repository, FieldSourceRepository sourceRepository,
+                                     StandardChangeLogService changeLogService,
+                                     BusinessGlossaryService glossaryService,
+                                     FieldHistoricalAliasService historyService) {
         FieldSemanticRuleService semanticRuleService = mock(FieldSemanticRuleService.class);
         MetricDefinitionService metricDefinitionService = mock(MetricDefinitionService.class);
         when(semanticRuleService.list(anyLong(), nullable(Long.class), nullable(String.class), nullable(String.class)))
@@ -1483,6 +1538,7 @@ class FieldServiceImplTest {
                 repository,
                 sourceRepository,
                 changeLogService,
+                historyService,
                 objectMapper,
                 glossaryService,
                 semanticRuleService,

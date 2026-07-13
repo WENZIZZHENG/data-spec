@@ -27,6 +27,8 @@ import com.dataspec.field.model.FieldSearchSummary;
 import com.dataspec.field.model.FieldSuggestion;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.FieldService;
+import com.dataspec.fieldhistory.model.FieldHistoricalAlias;
+import com.dataspec.fieldhistory.service.FieldHistoricalAliasService;
 import com.dataspec.fieldsemantic.model.FieldSemanticRuleResp;
 import com.dataspec.fieldsemantic.service.FieldSemanticRuleService;
 import com.dataspec.metric.model.MetricDefinitionResp;
@@ -92,6 +94,7 @@ public class FieldServiceImpl implements FieldService {
     private final FieldRepository fieldRepository;
     private final FieldSourceRepository fieldSourceRepository;
     private final StandardChangeLogService changeLogService;
+    private final FieldHistoricalAliasService fieldHistoricalAliasService;
     private final ObjectMapper objectMapper;
     private final BusinessGlossaryService businessGlossaryService;
     private final FieldSemanticRuleService fieldSemanticRuleService;
@@ -141,10 +144,17 @@ public class FieldServiceImpl implements FieldService {
         List<Field> candidates = fieldRepository.findAllByProjectId(req.projectId()).stream()
                 .filter(field -> matchesSearchFilters(field, criteria, sourceFieldIds))
                 .toList();
+        Map<Long, List<FieldHistoricalAlias>> historicalAliases = criteria.hasQuery()
+                ? loadHistoricalAliases(req.projectId(), candidates)
+                : Map.of();
 
         List<FieldSearchItem> matched = new ArrayList<>();
         for (Field field : candidates) {
-            FieldSearchItem item = searchItemFor(field, criteria, glossaryMatches);
+            FieldSearchItem item = searchItemFor(
+                    field,
+                    criteria,
+                    glossaryMatches,
+                    historicalAliasesFor(historicalAliases, field));
             if (item != null) {
                 matched.add(item);
             }
@@ -413,8 +423,10 @@ public class FieldServiceImpl implements FieldService {
         List<FieldSuggestion> suggestions = new ArrayList<>();
         FieldSuggestion blockedByUsageContract = null;
         int blockedScore = -1;
+        List<Field> fields = fieldRepository.findAllByProjectId(projectId);
+        Map<Long, List<FieldHistoricalAlias>> historicalAliases = loadHistoricalAliases(projectId, fields);
 
-        for (Field field : fieldRepository.findAllByProjectId(projectId)) {
+        for (Field field : fields) {
             if (!isEnabledStatus(field.getStatus())) {
                 continue;
             }
@@ -425,7 +437,14 @@ public class FieldServiceImpl implements FieldService {
                 }
                 continue;
             }
-            ScoredMatch match = scoreFieldWithGlossary(field, queryCompact, queryTokens, querySemanticGroups, glossaryMatches);
+            EvaluatedMatch evaluation = scoreFieldWithHistory(
+                    field,
+                    queryCompact,
+                    queryTokens,
+                    querySemanticGroups,
+                    glossaryMatches,
+                    historicalAliasesFor(historicalAliases, field));
+            ScoredMatch match = evaluation.match();
             if (match.score() <= 0) {
                 continue;
             }
@@ -440,13 +459,18 @@ public class FieldServiceImpl implements FieldService {
                 }
                 continue;
             }
+            List<ExplainTrace> evidence = new ArrayList<>();
+            evidence.add(fieldEvidence(field, score, reason));
+            if (evaluation.historicalAlias() != null) {
+                evidence.add(historicalEvidence(evaluation.historicalAlias(), match));
+            }
             suggestions.add(new FieldSuggestion(
                     field,
                     score,
                     reason,
                     field.getName(),
                     true,
-                    List.of(fieldEvidence(field, score, reason))));
+                    List.copyOf(evidence)));
         }
 
         suggestions.sort(Comparator
@@ -584,16 +608,24 @@ public class FieldServiceImpl implements FieldService {
                 || FieldGroupingSummaries.normalizeText(field.getInvalidExamplesJson()) != null;
     }
 
-    private FieldSearchItem searchItemFor(Field field, SearchCriteria criteria, List<GlossaryMatch> glossaryMatches) {
+    private FieldSearchItem searchItemFor(
+            Field field,
+            SearchCriteria criteria,
+            List<GlossaryMatch> glossaryMatches,
+            List<FieldHistoricalAlias> historicalAliases
+    ) {
         int score = 1;
         List<String> reasons = new ArrayList<>();
+        EvaluatedMatch evaluation = EvaluatedMatch.none();
         if (criteria.hasQuery()) {
-            ScoredMatch match = scoreFieldWithGlossary(
+            evaluation = scoreFieldWithHistory(
                     field,
                     criteria.queryCompact(),
                     criteria.queryTokens(),
                     criteria.querySemanticGroups(),
-                    glossaryMatches);
+                    glossaryMatches,
+                    historicalAliases);
+            ScoredMatch match = evaluation.match();
             if (match.score() <= 0) {
                 return null;
             }
@@ -617,6 +649,11 @@ public class FieldServiceImpl implements FieldService {
             reasons.add(semanticCaution);
         }
         boolean contractContradiction = usageContractContradictsScenario(field, criteria.query());
+        List<ExplainTrace> evidence = new ArrayList<>();
+        evidence.add(fieldEvidence(field, score, String.join("；", reasons)));
+        if (evaluation.historicalAlias() != null) {
+            evidence.add(historicalEvidence(evaluation.historicalAlias(), evaluation.match()));
+        }
         return new FieldSearchItem(
                 field,
                 score,
@@ -624,11 +661,15 @@ public class FieldServiceImpl implements FieldService {
                 recommendedUse(field, contractContradiction),
                 usageContractSummary(field),
                 itemNextActions(field, contractContradiction),
-                List.of(fieldEvidence(field, score, String.join("；", reasons))),
+                List.copyOf(evidence),
                 fieldStableRef(field),
                 fieldCanonicalRef(field),
                 normalizeStatus(field.getStatus()),
-                matchedAlias(field, criteria.queryCompact(), criteria.queryTokens()));
+                matchedAlias(
+                        field,
+                        criteria.queryCompact(),
+                        criteria.queryTokens(),
+                        evaluation.historicalAlias()));
     }
 
     private ExplainTrace fieldEvidence(Field field, int score, String reason) {
@@ -713,7 +754,12 @@ public class FieldServiceImpl implements FieldService {
                 .orElseGet(() -> fieldStableRef(field));
     }
 
-    private String matchedAlias(Field field, String queryCompact, Set<String> queryTokens) {
+    private String matchedAlias(
+            Field field,
+            String queryCompact,
+            Set<String> queryTokens,
+            FieldHistoricalAlias historicalAlias
+    ) {
         if (queryCompact == null || queryCompact.isBlank()) {
             return null;
         }
@@ -726,7 +772,36 @@ public class FieldServiceImpl implements FieldService {
                 bestAlias = alias;
             }
         }
-        return SensitiveDataSanitizer.redactText(bestAlias);
+        if (bestAlias != null) {
+            return SensitiveDataSanitizer.redactText(bestAlias);
+        }
+        return historicalAlias == null ? null : SensitiveDataSanitizer.redactText(historicalAlias.value());
+    }
+
+    private Map<Long, List<FieldHistoricalAlias>> loadHistoricalAliases(Long projectId, List<Field> fields) {
+        Map<Long, List<FieldHistoricalAlias>> aliases = fieldHistoricalAliasService.load(projectId, fields);
+        return aliases == null ? Map.of() : aliases;
+    }
+
+    private List<FieldHistoricalAlias> historicalAliasesFor(
+            Map<Long, List<FieldHistoricalAlias>> aliases,
+            Field field
+    ) {
+        if (field == null || field.getId() == null) {
+            return List.of();
+        }
+        return aliases.getOrDefault(field.getId(), List.of());
+    }
+
+    private ExplainTrace historicalEvidence(FieldHistoricalAlias alias, ScoredMatch match) {
+        return new ExplainTrace(
+                "FIELD_CHANGE_LOG",
+                alias.changeLogId(),
+                null,
+                SensitiveDataSanitizer.redactText(match.reason()),
+                Math.max(0, Math.min(match.score(), 100)),
+                "historical_field_alias",
+                alias.evidenceRef());
     }
 
     private List<String> itemNextActions(Field field, boolean contractContradiction) {
@@ -1465,6 +1540,51 @@ public class FieldServiceImpl implements FieldService {
                 .max(scoreGlossary(field, glossaryMatches));
     }
 
+    private EvaluatedMatch scoreFieldWithHistory(
+            Field field,
+            String queryCompact,
+            Set<String> queryTokens,
+            Set<String> querySemanticGroups,
+            List<GlossaryMatch> glossaryMatches,
+            List<FieldHistoricalAlias> historicalAliases
+    ) {
+        ScoredMatch current = scoreFieldWithGlossary(
+                field,
+                queryCompact,
+                queryTokens,
+                querySemanticGroups,
+                glossaryMatches == null ? List.of() : glossaryMatches);
+        HistoricalMatch historical = scoreHistoricalAliases(historicalAliases, queryCompact, queryTokens);
+        if (historical.match().score() > current.score()) {
+            return new EvaluatedMatch(historical.match(), historical.alias());
+        }
+        return new EvaluatedMatch(current, null);
+    }
+
+    private HistoricalMatch scoreHistoricalAliases(
+            List<FieldHistoricalAlias> historicalAliases,
+            String queryCompact,
+            Set<String> queryTokens
+    ) {
+        ScoredMatch best = ScoredMatch.none();
+        FieldHistoricalAlias bestAlias = null;
+        for (FieldHistoricalAlias alias : historicalAliases) {
+            ScoredMatch candidate = scoreText(
+                    "历史名称",
+                    alias.value(),
+                    queryCompact,
+                    queryTokens,
+                    89,
+                    68,
+                    24);
+            if (candidate.score() > best.score()) {
+                best = new ScoredMatch(candidate.score(), SensitiveDataSanitizer.redactText(candidate.reason()));
+                bestAlias = alias;
+            }
+        }
+        return new HistoricalMatch(best, bestAlias);
+    }
+
     private ScoredMatch scoreGlossary(Field field, List<GlossaryMatch> glossaryMatches) {
         ScoredMatch best = ScoredMatch.none();
         for (GlossaryMatch match : glossaryMatches) {
@@ -1811,6 +1931,15 @@ public class FieldServiceImpl implements FieldService {
 
         ScoredMatch max(ScoredMatch other) {
             return other.score > score ? other : this;
+        }
+    }
+
+    private record HistoricalMatch(ScoredMatch match, FieldHistoricalAlias alias) {
+    }
+
+    private record EvaluatedMatch(ScoredMatch match, FieldHistoricalAlias historicalAlias) {
+        static EvaluatedMatch none() {
+            return new EvaluatedMatch(ScoredMatch.none(), null);
         }
     }
 

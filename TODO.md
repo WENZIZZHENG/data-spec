@@ -4,12 +4,12 @@
 
 ## 当前状态
 
-- `P6-84` 前端可访问性与键盘操作基线已完成；当前高优先级转为修正已声明契约、补命名理解和统一评审证据。
-- 2026-07-12 第三轮功能评审后，当前保留 10 个实施主题：8 个进入近期队列，2 个等待业务触发；3 个旧主题并入更小边界，并新增 `P6-189` 到 `P6-191`。
-- 近期优先顺序为 `P6-190`、`P6-189`、`P6-120`、`P6-86`、`P6-191`、`P6-137`、`P6-111`、`P6-85`，串行约 18-30 个工作日。
-- OpenSpec 当前 active changes 为 0；2026-07-12 已按实现顺序同步主规格并归档 7 个既有完成 change，以及本地运行与时间存储强化 change。
+- `P6-190` 稳定引用、历史别名与 Evidence claim 真实性修复已完成；当前高优先级转为命名解析、推荐回归和统一评审证据。
+- 2026-07-13 完成 `P6-190` 后，当前剩余 9 个实施主题：7 个进入近期队列，2 个等待业务触发；`P6-189` 和 `P6-191` 继续承接第三轮功能评审建议。
+- 近期优先顺序为 `P6-189`、`P6-120`、`P6-86`、`P6-191`、`P6-137`、`P6-111`、`P6-85`，串行约 14.5-24 个工作日。
+- OpenSpec 当前 active changes 为 0；`P6-190` 已同步主规格并归档。
 - 已完成 P0-P4 详情见 [docs/archive/todo-completed-p0-p4.md](docs/archive/todo-completed-p0-p4.md)。
-- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 135 个原待办编号。
+- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 136 个待办编号。
 - 已删除、合并或等待触发的独立候选 29 项，详见 [docs/archive/todo-removed-p6-candidates.md](docs/archive/todo-removed-p6-candidates.md)。
 - 清理前 60 项候选全文见 [docs/archive/todo-p6-candidates-2026-07-12.md](docs/archive/todo-p6-candidates-2026-07-12.md)。
 - 任务卡可从 `create-table`、`review-pr-sql`、`reverse-import-standards`、`export-min-context`、`standard-evidence-review`、`standard-maintenance` workflow recipe 生成；详细能力见完成归档。
@@ -17,22 +17,21 @@
 
 ## 下一步顺序
 
-1. `P6-190`：历史别名、Evidence claim 与 PR 规格真实性修复，约 3.5-6 个工作日。
-2. `P6-189`：确定性数标命名解析与缩写治理，约 3-5 个工作日。
-3. `P6-120`：推荐质量与 AI 场景回归基线，约 1-2 个工作日。
-4. `P6-86`：字段库服务端分页、搜索防抖和大数据量性能闭环，约 2-3 个工作日。
-5. `P6-191`：统一 Finding/Evidence 与 AI/PR 评审闭环，约 3-5 个工作日。
-6. `P6-137`：`.dataspec/config.json` Schema 与编辑器提示，约 0.5-1 个工作日。
-7. `P6-111`：先接一个可追溯候选来源，优先承接未知词和缩写歧义，约 2-3 个工作日。
-8. `P6-85`：演示项目 dry-run 清理与完整重建，约 3-5 个工作日。
+1. `P6-189`：确定性数标命名解析与缩写治理，约 3-5 个工作日。
+2. `P6-120`：推荐质量与 AI 场景回归基线，约 1-2 个工作日。
+3. `P6-86`：字段库服务端分页、搜索防抖和大数据量性能闭环，约 2-3 个工作日。
+4. `P6-191`：统一 Finding/Evidence 与 AI/PR 评审闭环，约 3-5 个工作日。
+5. `P6-137`：`.dataspec/config.json` Schema 与编辑器提示，约 0.5-1 个工作日。
+6. `P6-111`：先接一个可追溯候选来源，优先承接未知词和缩写歧义，约 2-3 个工作日。
+7. `P6-85`：演示项目 dry-run 清理与完整重建，约 3-5 个工作日。
 
 开工前读取候选主题的近期范围和边界，再按任务风险决定快速、常规或 OpenSpec 流程。暂缓主题只有触发条件成立时才进入队列。
 
 ## 待办入口
 
-- [P6 精简候选池](docs/todo-p6-candidates.md)：10 个仍值得实施的主题、第一版边界和启动条件。
+- [P6 精简候选池](docs/todo-p6-candidates.md)：9 个仍值得实施的主题、第一版边界和启动条件。
 - [P6 候选价值评审](docs/todo-p6-candidate-review.md)：记录 60 项候选的保留、合并、完成覆盖和删除依据。
-- [P6 剩余时间评估](docs/todo-p6-remaining-estimates.md)：按 10 个实施主题估算开发时间。
+- [P6 剩余时间评估](docs/todo-p6-remaining-estimates.md)：按 9 个实施主题估算开发时间。
 - [P6 候选池历史快照](docs/archive/todo-p6-candidates-2026-07-12.md)：保留清理前 60 项完整背景和验收描述。
 - [P5/P6 完成归档](docs/archive/todo-completed-p5-p6.md)：保留已完成条目的验证证据、产物和后续增强。
 - [P6 删除候选归档](docs/archive/todo-removed-p6-candidates.md)：记录删除、暂不做和恢复触发条件。
@@ -40,9 +39,9 @@
 
 ## 当前主题摘要
 
-### 近期 8 项
+### 近期 7 项
 
-`P6-190`、`P6-189`、`P6-120`、`P6-86`、`P6-191`、`P6-137`、`P6-111`、`P6-85`。
+`P6-189`、`P6-120`、`P6-86`、`P6-191`、`P6-137`、`P6-111`、`P6-85`。
 
 ### 暂缓 2 项
 

@@ -18,6 +18,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class StandardChangeLogRepository {
 
+    private static final String TARGET_FIELD = "field";
+
     private final StandardChangeLogMapper standardChangeLogMapper;
 
     public IPage<StandardChangeLog> page(Long projectId, String targetType, Long targetId, int current, int size) {
@@ -47,6 +49,27 @@ public class StandardChangeLogRepository {
                 .orderByDesc(StandardChangeLog::getChangedAt)
                 .orderByDesc(StandardChangeLog::getId)
                 .last("limit " + Math.max(1, limit)));
+    }
+
+    /**
+     * 按时间顺序读取项目内字段快照，供请求级历史别名索引派生名称变化。
+     *
+     * <p>只选择历史解析需要的列；返回的原始 JSON 只能在服务内部按字段白名单读取，
+     * 不得直接进入 API、日志或证据响应。</p>
+     */
+    public List<StandardChangeLog> findFieldHistoryByProjectId(Long projectId) {
+        return standardChangeLogMapper.selectList(new LambdaQueryWrapper<StandardChangeLog>()
+                .select(
+                        StandardChangeLog::getId,
+                        StandardChangeLog::getProjectId,
+                        StandardChangeLog::getTargetType,
+                        StandardChangeLog::getTargetId,
+                        StandardChangeLog::getBeforeJson,
+                        StandardChangeLog::getAfterJson)
+                .eq(StandardChangeLog::getProjectId, projectId)
+                .eq(StandardChangeLog::getTargetType, TARGET_FIELD)
+                .orderByAsc(StandardChangeLog::getChangedAt)
+                .orderByAsc(StandardChangeLog::getId));
     }
 
     /**

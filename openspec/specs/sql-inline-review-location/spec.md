@@ -45,4 +45,5 @@ DataSpec CLI SHALL expose issue file locations in machine-readable and human-rea
 #### Scenario: PR review Markdown 输出
 - **WHEN** `dataspec review-pr` builds a PR review comment from locatable issues
 - **THEN** each issue line includes a readable file-relative location such as `行 2:5-2:11`
-- **AND** the command still creates or updates a single summary comment rather than posting inline comments
+- **AND** the command creates or updates the single DataSpec summary comment on every run
+- **AND** issues mapped to changed PR lines are eligible for deduplicated inline comments while unmapped or duplicate issues remain in the summary with fallback reasons.
