@@ -581,6 +581,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/standard-candidates/token-evidence/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 预览命名证据候选
+         * @description 把未知词、歧义缩写和禁用词整理为只读候选 signals，并签发确认 token。
+         */
+        post: operations["previewTokenEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/standard-candidates/token-evidence/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 确认命名证据候选
+         * @description 重新校验 evidence 后幂等写入 PENDING 候选，不自动采纳或修改标准字段。
+         */
+        post: operations["applyTokenEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rules": {
         parameters: {
             query?: never;
@@ -4861,6 +4901,211 @@ export interface components {
             /** Format: int64 */
             targetFieldId: number;
             reason?: string;
+        };
+        /** @description 命名证据候选预览输入；preview 只读，apply 时必须原样带回并重新校验证据。 */
+        TokenEvidenceCandidatePreviewReq: {
+            /**
+             * Format: int64
+             * @description 候选所属项目 ID；调用方必须拥有项目访问权限。
+             */
+            projectId: number;
+            /** @description 待进入 Inbox 的 snake_case 候选字段名，最长 100 个字符。 */
+            candidateName: string;
+            /** @description 候选显示名，最长 100 个字符；可为空。 */
+            displayName?: string | null;
+            /** @description 候选数据类型草案，最长 50 个字符。 */
+            dataType: string;
+            /** @description 候选说明，最长 1000 个字符；保存前会脱敏。 */
+            comment?: string | null;
+            /** @description 稳定来源引用，例如 field:orders.ord_amt；最长 300 个字符，保存前会脱敏。 */
+            sourceRef: string;
+            /** @description 用于命名解析的可选来源文本；为空时使用候选名和显示名，原文不会保存或返回。 */
+            sourceText?: string | null;
+        };
+        RTokenEvidenceCandidatePreview: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["TokenEvidenceCandidatePreview"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 命名证据候选的可审阅写入 payload；所有文本均已校验、限长并按需脱敏。 */
+        TokenEvidenceCandidatePayload: {
+            /**
+             * Format: int64
+             * @description 候选所属项目 ID。
+             */
+            projectId: number;
+            /** @description 规范化 snake_case 候选字段名。 */
+            candidateName: string;
+            /** @description 候选显示名；没有时为空。 */
+            displayName?: string | null;
+            /** @description 候选数据类型草案。 */
+            dataType: string;
+            /** @description 已脱敏的候选说明；没有时为空。 */
+            comment?: string | null;
+            /** @description 候选来源类型，固定为 TOKEN_EVIDENCE。 */
+            sourceType: string;
+            /** @description 经脱敏和限长的稳定来源引用。 */
+            sourceRef: string;
+            /** @description 不含 raw sourceText 的结构化命名证据 JSON。 */
+            evidenceJson: string;
+            /**
+             * Format: int32
+             * @description 低置信人工复核分，范围 0 到 100。
+             */
+            confidence: number;
+        };
+        /** @description 命名证据候选 dry-run 预览；该响应本身不会写入 Inbox。 */
+        TokenEvidenceCandidatePreview: {
+            /** @description 稳定类型，固定为 dataspec.token-evidence-candidate-preview。 */
+            kind: string;
+            /**
+             * Format: int32
+             * @description 响应 schema 版本，当前为 1。
+             */
+            schemaVersion: number;
+            /**
+             * Format: int64
+             * @description 候选所属项目 ID。
+             */
+            projectId: number;
+            /** @description 规范化候选字段名。 */
+            candidateName: string;
+            /** @description 候选来源类型，固定为 TOKEN_EVIDENCE。 */
+            sourceType: string;
+            /** @description 经脱敏和限长的稳定来源引用。 */
+            sourceRef: string;
+            /**
+             * @description 命名证据候选预览状态；只有 READY 可进入确认写入。
+             * @enum {string}
+             */
+            status: "READY" | "NO_ACTIONABLE_SIGNAL" | "STANDARD_EXISTS" | "EXACT_DUPLICATE" | "NAME_CONFLICT";
+            /** @description preview 固定为 false。 */
+            willWrite: boolean;
+            /**
+             * Format: int64
+             * @description 冲突或重复的既有候选 ID；没有时为空。
+             */
+            duplicateCandidateId?: number | null;
+            inboxPayload: components["schemas"]["TokenEvidenceCandidatePayload"];
+            /** @description 触发本候选的有界命名证据信号。 */
+            signals: components["schemas"]["TokenEvidenceCandidateSignal"][];
+            /** @description READY 时签发的进程内 dry-run token；其他状态为空。 */
+            dryRunToken?: string | null;
+            safety: components["schemas"]["TokenEvidenceCandidateSafety"];
+            /** @description 当前状态对应的可恢复下一步。 */
+            nextActions: string[];
+        };
+        /** @description 命名证据候选操作的稳定安全摘要。 */
+        TokenEvidenceCandidateSafety: {
+            /** @description 当前响应是否只读。 */
+            readOnly: boolean;
+            /** @description 当前操作是否写入 DataSpec 项目数据。 */
+            writesProject: boolean;
+            /** @description 写入前是否要求显式人工确认。 */
+            requiresConfirmation: boolean;
+            /** @description 响应是否包含 raw sourceText；固定为 false。 */
+            containsRawSourceText: boolean;
+            /** @description 是否调用外部 LLM；固定为 false。 */
+            externalLlmUsed: boolean;
+        };
+        /** @description 单条可操作命名证据信号；不包含 raw sourceText。 */
+        TokenEvidenceCandidateSignal: {
+            /**
+             * @description 可触发候选预览的命名证据信号；所有类型都必须人工确认。
+             * @enum {string}
+             */
+            signalType: "UNKNOWN_TERM" | "AMBIGUOUS_ABBREVIATION" | "DISABLED_NAMING";
+            tokenEvidence: components["schemas"]["QueryTokenEvidence"];
+        };
+        /** @description 命名证据候选确认写入请求；输入或 glossary 漂移后必须重新 preview。 */
+        TokenEvidenceCandidateApplyReq: {
+            previewInput: components["schemas"]["TokenEvidenceCandidatePreviewReq"];
+            /** @description preview 返回的签名 dry-run token；服务重启或 evidence 漂移后失效。 */
+            dryRunToken: string;
+            /** @description 必须为 true，表示用户已核对候选、来源和 token evidence。 */
+            confirmed: boolean;
+        };
+        RTokenEvidenceCandidateApplyResult: {
+            /** Format: int32 */
+            code?: number;
+            message?: string;
+            data?: components["schemas"]["TokenEvidenceCandidateApplyResult"];
+            error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 命名证据候选确认写入结果；不会自动采纳或修改标准字段。 */
+        TokenEvidenceCandidateApplyResult: {
+            /** @description 稳定类型，固定为 dataspec.token-evidence-candidate-apply-result。 */
+            kind: string;
+            /**
+             * Format: int32
+             * @description 响应 schema 版本，当前为 1。
+             */
+            schemaVersion: number;
+            /** @description 本次是否插入新候选。 */
+            created: boolean;
+            /** @description 本次是否因完整事实已存在而返回既有候选。 */
+            deduplicated: boolean;
+            candidate: components["schemas"]["TokenEvidenceCandidateView"];
+            /** @description 进入既有候选决策流程的下一步。 */
+            nextActions: string[];
+        };
+        /** @description TOKEN_EVIDENCE 候选安全视图；不包含逻辑删除等持久化内部字段。 */
+        TokenEvidenceCandidateView: {
+            /**
+             * Format: int64
+             * @description 候选 ID。
+             */
+            id: number;
+            /**
+             * Format: int64
+             * @description 候选所属项目 ID。
+             */
+            projectId: number;
+            /** @description 候选字段名。 */
+            candidateName: string;
+            /** @description 候选显示名；没有时为空。 */
+            displayName?: string | null;
+            /** @description 候选数据类型草案。 */
+            dataType: string;
+            /** @description 已脱敏的候选说明；没有时为空。 */
+            comment?: string | null;
+            /** @description 候选来源类型，固定为 TOKEN_EVIDENCE。 */
+            sourceType: string;
+            /** @description 经脱敏和限长的稳定来源引用。 */
+            sourceRef: string;
+            /** @description 不含 raw sourceText 的结构化命名证据 JSON。 */
+            evidenceJson: string;
+            /**
+             * Format: int32
+             * @description 低置信人工复核分，范围 0 到 100。
+             */
+            confidence: number;
+            /** @description 候选决策状态；首次 apply 后为 PENDING。 */
+            status: string;
+            /**
+             * Format: int64
+             * @description 后续采纳或合并产生的目标字段 ID；PENDING 时为空。
+             */
+            targetFieldId?: number | null;
+            /** @description 后续人工决策原因；PENDING 时为空。 */
+            decisionReason?: string | null;
+            /**
+             * Format: date-time
+             * @description 后续人工决策时间；PENDING 时为空。
+             */
+            decidedAt?: string | null;
+            /**
+             * Format: date-time
+             * @description 候选创建时间。
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description 候选最近更新时间。
+             */
+            updatedAt: string;
         };
         RuleExemptionReq: {
             /** Format: int64 */
@@ -11398,6 +11643,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RStandardCandidate"];
+                };
+            };
+        };
+    };
+    previewTokenEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenEvidenceCandidatePreviewReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RTokenEvidenceCandidatePreview"];
+                };
+            };
+        };
+    };
+    applyTokenEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenEvidenceCandidateApplyReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RTokenEvidenceCandidateApplyResult"];
                 };
             };
         };

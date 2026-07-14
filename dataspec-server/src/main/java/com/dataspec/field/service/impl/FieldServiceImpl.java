@@ -7,6 +7,7 @@ import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.common.perf.PerformanceProbe;
 import com.dataspec.common.sanitize.SensitiveDataSanitizer;
+import com.dataspec.common.service.ProjectFieldNameReservationGuard;
 import com.dataspec.explaintrace.model.ExplainTrace;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldBulkUpdateChange;
@@ -103,6 +104,7 @@ public class FieldServiceImpl implements FieldService {
             "(?i)-----BEGIN [A-Z ]*PRIVATE KEY-----|\\bprivate[_-]?key\\s*[:=]");
 
     private final FieldRepository fieldRepository;
+    private final ProjectFieldNameReservationGuard fieldNameReservationGuard;
     private final FieldSourceRepository fieldSourceRepository;
     private final StandardChangeLogService changeLogService;
     private final FieldHistoricalAliasService fieldHistoricalAliasService;
@@ -239,8 +241,23 @@ public class FieldServiceImpl implements FieldService {
     }
 
     @Override
+    @Transactional
     public Field create(Field field) {
+        return create(field, null);
+    }
+
+    @Override
+    @Transactional
+    public Field createFromCandidate(Field field, Long sourceCandidateId) {
+        if (sourceCandidateId == null) {
+            throw new BizException("来源候选ID不能为空");
+        }
+        return create(field, sourceCandidateId);
+    }
+
+    private Field create(Field field, Long sourceCandidateId) {
         ProjectAccessGuard.requireProjectAccess(field.getProjectId());
+        fieldNameReservationGuard.reserve(field.getProjectId(), field.getName(), sourceCandidateId);
         if (fieldRepository.existsByNameInProject(field.getName(), field.getProjectId())) {
             throw new BizException("项目内字段名已存在: " + field.getName());
         }
@@ -260,8 +277,12 @@ public class FieldServiceImpl implements FieldService {
     }
 
     @Override
+    @Transactional
     public Field update(Long id, Field field) {
         Field existing = getById(id);
+        if (!Objects.equals(existing.getName(), field.getName())) {
+            fieldNameReservationGuard.reserve(existing.getProjectId(), field.getName(), null);
+        }
         if (fieldRepository.existsByNameInProjectExcludeId(field.getName(), existing.getProjectId(), id)) {
             throw new BizException("项目内字段名已存在: " + field.getName());
         }
@@ -416,6 +437,9 @@ public class FieldServiceImpl implements FieldService {
         validateUndoLog(existing, log);
         Field before = readFieldSnapshot(log.getBeforeJson());
         validateUndoSnapshot(existing, before);
+        if (!Objects.equals(existing.getName(), before.getName())) {
+            fieldNameReservationGuard.reserve(existing.getProjectId(), before.getName(), null);
+        }
         if (fieldRepository.existsByNameInProjectExcludeId(before.getName(), existing.getProjectId(), existing.getId())) {
             throw new BizException("回退后的字段名已存在: " + before.getName());
         }

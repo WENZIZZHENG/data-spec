@@ -2,6 +2,7 @@ package com.dataspec.standardcandidate.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.repository.ProjectFieldNameReservationRepository;
 import com.dataspec.common.result.PageResult;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.repository.FieldRepository;
@@ -34,6 +35,7 @@ public class StandardCandidateServiceImpl implements StandardCandidateService {
     private static final String STATUS_MERGED = "MERGED";
     private static final String STATUS_IGNORED = "IGNORED";
     private static final String STATUS_POSTPONED = "POSTPONED";
+    private static final String RESERVED_TOKEN_EVIDENCE_SOURCE = "TOKEN_EVIDENCE";
     private static final Set<String> DECIDABLE_STATUSES = Set.of(STATUS_PENDING, STATUS_POSTPONED);
     private static final int DEFAULT_CONFIDENCE = 50;
     private static final int FIELD_NAME_MAX_LENGTH = 100;
@@ -50,6 +52,7 @@ public class StandardCandidateServiceImpl implements StandardCandidateService {
     private final StandardCandidateRepository standardCandidateRepository;
     private final FieldRepository fieldRepository;
     private final FieldService fieldService;
+    private final ProjectFieldNameReservationRepository fieldNameReservationRepository;
 
     @Override
     public PageResult<StandardCandidate> page(Long projectId, String status, String sourceType, String keyword, int current, int size) {
@@ -75,6 +78,15 @@ public class StandardCandidateServiceImpl implements StandardCandidateService {
         }
         ProjectAccessGuard.requireProjectAccess(req.projectId());
         String name = ensureMaxLength(required(req.candidateName(), "候选字段名不能为空"), FIELD_NAME_MAX_LENGTH, "候选字段名");
+        String sourceType = ensureMaxLength(
+                required(req.sourceType(), "候选来源不能为空").toUpperCase(Locale.ROOT),
+                SOURCE_TYPE_MAX_LENGTH,
+                "候选来源");
+        if (RESERVED_TOKEN_EVIDENCE_SOURCE.equals(sourceType)) {
+            throw new BizException("TOKEN_EVIDENCE 是受控来源，请使用命名证据 preview/apply 接口");
+        }
+        // 字段和候选共享同一命名空间，锁必须先于两个表的冲突检查。
+        fieldNameReservationRepository.lock(req.projectId(), name);
         if (fieldRepository.existsByNameInProject(name, req.projectId())) {
             throw new BizException("标准字段已存在，请合并到已有字段: " + name);
         }
@@ -87,10 +99,7 @@ public class StandardCandidateServiceImpl implements StandardCandidateService {
         candidate.setDisplayName(ensureMaxLength(sanitize(req.displayName()), DISPLAY_NAME_MAX_LENGTH, "候选显示名"));
         candidate.setDataType(ensureMaxLength(required(req.dataType(), "候选字段类型不能为空"), DATA_TYPE_MAX_LENGTH, "候选字段类型"));
         candidate.setComment(sanitize(req.comment()));
-        candidate.setSourceType(ensureMaxLength(
-                required(req.sourceType(), "候选来源不能为空").toUpperCase(Locale.ROOT),
-                SOURCE_TYPE_MAX_LENGTH,
-                "候选来源"));
+        candidate.setSourceType(sourceType);
         candidate.setSourceRef(ensureMaxLength(sanitize(req.sourceRef()), SOURCE_REF_MAX_LENGTH, "候选来源引用"));
         candidate.setEvidenceJson(sanitize(req.evidenceJson()));
         candidate.setConfidence(clampConfidence(req.confidence()));
@@ -103,9 +112,6 @@ public class StandardCandidateServiceImpl implements StandardCandidateService {
     @Transactional
     public StandardCandidate accept(Long id, StandardCandidateDecisionReq req) {
         StandardCandidate candidate = getForDecision(id);
-        if (fieldRepository.existsByNameInProject(candidate.getCandidateName(), candidate.getProjectId())) {
-            throw new BizException("标准字段已存在，请合并到已有字段: " + candidate.getCandidateName());
-        }
         Field field = new Field();
         field.setProjectId(candidate.getProjectId());
         field.setName(candidate.getCandidateName());
@@ -114,7 +120,7 @@ public class StandardCandidateServiceImpl implements StandardCandidateService {
         field.setComment(candidate.getComment());
         field.setNullable(true);
         field.setStatus("enabled");
-        Field created = fieldService.create(field);
+        Field created = fieldService.createFromCandidate(field, candidate.getId());
         return decide(candidate, STATUS_ACCEPTED, created.getId(), reason(req));
     }
 

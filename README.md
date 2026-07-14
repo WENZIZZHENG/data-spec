@@ -21,7 +21,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - 项目空间管理，创建项目时可导入内置 standards，可选择用户账号、订单交易、支付金额、库存商品和审计日志等领域 Starter Kit，并支持一键创建演示项目。
 - 标准字段库，支持别名、分类、代码集关联、敏感标记、生命周期状态、替代字段/说明、示例值、命名翻译偏好、字段语义规则摘要、分组筛选、批量归组、批量维护、字段知识卡只读查看、标准字段合并向导和字段标准检索命中原因展示。
 - 业务术语表，支持项目级术语、同义词、英文词根、拼音/历史缩写、禁用词、canonical 字段、适用范围和示例字段维护；冲突检测会提示重复术语、禁用词冲突和不可用 canonical 字段。
-- 标准候选 Inbox，支持手动创建候选、按状态/来源/关键词筛选、采纳为新字段、合并到已有字段、忽略或延后处理。
+- 标准候选 Inbox，支持手动创建候选、将未知词/歧义缩写/禁用命名证据预览并确认入箱、按状态/来源/关键词筛选、采纳为新字段、合并到已有字段、忽略或延后处理。
 - 字段质量评分，按注释、别名、示例、分类、敏感标识、代码集和废弃说明识别低质量字段。
 - 标准健康趋势，按项目保存健康快照，聚合字段质量、覆盖率摘要、AI 反馈、候选状态和 fixedSql 机会，展示本周/月变化、Top actions 和可复制的 AI 改进计划。
 - 标准质量门禁，按项目配置字段质量、覆盖率、lint error、未纳管字段和敏感标记阈值，输出 `PASS/FAIL/DISABLED`、失败项和 nextActions。
@@ -460,7 +460,7 @@ curl -X POST "http://localhost:8090/api/evidence-packages" \
 
 ## 标准候选 Inbox
 
-前端“基础数据 / 标准候选”提供项目级候选采纳工作台。第一版支持手动创建候选字段，按状态、来源和关键词筛选，查看证据与置信度，并执行采纳、合并、忽略或延后。候选采纳会创建新的标准字段；候选合并只记录目标字段和决策原因，不会静默修改目标字段的别名、注释或类型。正式标准字段之间的合并请使用字段库或字段冲突页的“字段合并”向导。
+前端“基础数据 / 标准候选”提供项目级候选采纳工作台。除手动创建外，“命名证据”入口会把当前项目确定性解析得到的未知业务词、歧义缩写和禁用命名整理为只读预览；只有状态为 `READY` 且用户显式勾选确认时才写入 `PENDING` 候选。写入成功后页面切换到 `TOKEN_EVIDENCE` 来源并刷新，后续继续使用既有采纳、合并、忽略或延后流程。候选采纳会创建新的标准字段；候选合并只记录目标字段和决策原因，不会静默修改目标字段的别名、注释或类型。正式标准字段之间的合并请使用字段库或字段冲突页的“字段合并”向导。
 
 后端 API：
 
@@ -469,12 +469,18 @@ curl "http://localhost:8090/api/standard-candidates?projectId=1&status=PENDING&c
 curl -X POST "http://localhost:8090/api/standard-candidates" \
   -H "Content-Type: application/json" \
   -d '{"projectId":1,"candidateName":"mobile","displayName":"手机号","dataType":"varchar","sourceType":"MANUAL","confidence":80}'
+curl -X POST "http://localhost:8090/api/standard-candidates/token-evidence/preview" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":1,"candidateName":"ord_amt","displayName":"订单金额","dataType":"decimal(18,2)","sourceRef":"field:orders.ord_amt","sourceText":"ord amt"}'
+curl -X POST "http://localhost:8090/api/standard-candidates/token-evidence/apply" \
+  -H "Content-Type: application/json" \
+  -d '{"previewInput":{"projectId":1,"candidateName":"ord_amt","displayName":"订单金额","dataType":"decimal(18,2)","sourceRef":"field:orders.ord_amt","sourceText":"ord amt"},"dryRunToken":"<preview 返回的 dryRunToken>","confirmed":true}'
 curl -X POST "http://localhost:8090/api/standard-candidates/1/accept" \
   -H "Content-Type: application/json" \
   -d '{"reason":"确认转正"}'
 ```
 
-候选证据会做敏感信息脱敏，不保存 token/password/Bearer/完整 JDBC URL，不读取源数据库业务数据行。第一版不做审批流、不自动合并标准字段，也不把候选处理变成团队工单系统。
+命名证据 preview 不写 Inbox，apply 会重新校验签名 token、项目、完整脱敏候选元数据和当前 glossary evidence；任一候选字段或 evidence 漂移都必须重新 preview。同一 `projectId + candidateName + TOKEN_EVIDENCE + sourceRef` 受控事实由数据库唯一索引保证精确重试幂等；专用 apply、通用候选 create、直接字段 create 和候选 accept 共用项目字段名事务锁，避免同名字段与 active 候选并发共存。直接创建字段遇到同名 active 候选时需先在 Inbox 采纳或合并。`TOKEN_EVIDENCE` 是受控保留来源，不能通过通用 create 声明；新接口使用稳定字段均为 required 的专用 DTO，不暴露逻辑删除等持久化内部字段。响应与 `evidenceJson` 只保留脱敏、限长的 signals 和 `sourceTextHash`，不保存或返回 raw `sourceText`，也不调用外部 LLM。第一版不接覆盖率、反向导入、AI 反馈、文档/ORM、多数据源冲突或批量 apply，不自动采纳候选、修改 glossary 或改写标准字段。
 
 ## 自然语言需求草案
 

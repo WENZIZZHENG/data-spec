@@ -4,12 +4,12 @@
 
 ## 当前状态
 
-- `P6-137` `.dataspec/config.json` Schema 与运行摘要已完成；当前高优先级转为首个可追溯标准候选来源。
-- 2026-07-14 完成 `P6-137` 后，当前剩余 4 个实施主题：2 个进入近期队列，2 个等待业务触发。
-- 近期优先顺序为 `P6-111`、`P6-85`，串行约 5-8 个工作日。
+- `P6-111` 标准候选来源管道已完成，OpenSpec 已归档到 `openspec/changes/archive/2026-07-14-add-token-evidence-candidate-pipeline`；当前高优先级转为演示项目 dry-run 清理与完整重建。
+- 2026-07-14 完成 `P6-111` 后，当前剩余 3 个实施主题：1 个进入近期队列，2 个等待业务触发。
+- 近期仅剩 `P6-85`，约 3-5 个工作日。
 - OpenSpec `add-dataspec-config-schema` 已完成实现、验证和独立评审，并归档到 `openspec/changes/archive/2026-07-14-add-dataspec-config-schema`。
 - 已完成 P0-P4 详情见 [docs/archive/todo-completed-p0-p4.md](docs/archive/todo-completed-p0-p4.md)。
-- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 152 个待办编号。
+- 已完成 P5/P6 详情见 [docs/archive/todo-completed-p5-p6.md](docs/archive/todo-completed-p5-p6.md)，当前归档 159 个待办编号。
 - 已删除、合并或等待触发的独立候选 29 项，详见 [docs/archive/todo-removed-p6-candidates.md](docs/archive/todo-removed-p6-candidates.md)。
 - 清理前 60 项候选全文见 [docs/archive/todo-p6-candidates-2026-07-12.md](docs/archive/todo-p6-candidates-2026-07-12.md)。
 - 任务卡可从 `create-table`、`review-pr-sql`、`reverse-import-standards`、`export-min-context`、`standard-evidence-review`、`standard-maintenance` workflow recipe 生成；详细能力见完成归档。
@@ -17,16 +17,15 @@
 
 ## 下一步顺序
 
-1. `P6-111`：先接一个可追溯候选来源，优先承接未知词和缩写歧义，约 2-3 个工作日。
-2. `P6-85`：演示项目 dry-run 清理与完整重建，约 3-5 个工作日。
+1. `P6-85`：演示项目 dry-run 清理与完整重建，约 3-5 个工作日。
 
 开工前读取候选主题的近期范围和边界，再按任务风险决定快速、常规或 OpenSpec 流程。暂缓主题只有触发条件成立时才进入队列。
 
 ## 待办入口
 
-- [P6 精简候选池](docs/todo-p6-candidates.md)：5 个仍值得实施的主题、第一版边界和启动条件。
+- [P6 精简候选池](docs/todo-p6-candidates.md)：3 个仍值得实施的主题、第一版边界和启动条件。
 - [P6 候选价值评审](docs/todo-p6-candidate-review.md)：记录 60 项候选的保留、合并、完成覆盖和删除依据。
-- [P6 剩余时间评估](docs/todo-p6-remaining-estimates.md)：按 5 个实施主题估算开发时间。
+- [P6 剩余时间评估](docs/todo-p6-remaining-estimates.md)：按 3 个实施主题估算开发时间。
 - [P6 候选池历史快照](docs/archive/todo-p6-candidates-2026-07-12.md)：保留清理前 60 项完整背景和验收描述。
 - [P5/P6 完成归档](docs/archive/todo-completed-p5-p6.md)：保留已完成条目的验证证据、产物和后续增强。
 - [P6 删除候选归档](docs/archive/todo-removed-p6-candidates.md)：记录删除、暂不做和恢复触发条件。
@@ -34,10 +33,10 @@
 
 ## 当前主题摘要
 
-### 近期 2 项
+### 近期 1 项
 
-`P6-111`、`P6-85`。
+`P6-85`。
 
 ### 暂缓 2 项
 
-`P6-74`、`P6-123`。`P6-104` 已并入 `P6-74`，`P6-129` 已并入 `P6-123`；`P6-101` 等配置候选已随 `P6-137` 完成归档。
+`P6-74`、`P6-123`。`P6-104` 已并入 `P6-74`，`P6-129` 已并入 `P6-123`；`P6-110` 等候选来源编号已随 `P6-111` 完成归档。

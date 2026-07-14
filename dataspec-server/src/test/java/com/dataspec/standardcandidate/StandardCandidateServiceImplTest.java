@@ -3,6 +3,7 @@ package com.dataspec.standardcandidate;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.common.result.PageResult;
+import com.dataspec.common.repository.ProjectFieldNameReservationRepository;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.repository.FieldRepository;
 import com.dataspec.field.service.FieldService;
@@ -20,9 +21,11 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class StandardCandidateServiceImplTest {
@@ -46,7 +49,10 @@ class StandardCandidateServiceImplTest {
     void create_insertsSanitizedCandidateAndRejectsDuplicateField() {
         StandardCandidateRepository candidateRepository = mock(StandardCandidateRepository.class);
         FieldRepository fieldRepository = mock(FieldRepository.class);
-        StandardCandidateServiceImpl service = service(candidateRepository, fieldRepository, mock(FieldService.class));
+        ProjectFieldNameReservationRepository reservationRepository =
+                mock(ProjectFieldNameReservationRepository.class);
+        StandardCandidateServiceImpl service = service(
+                candidateRepository, fieldRepository, mock(FieldService.class), reservationRepository);
         when(fieldRepository.existsByNameInProject("mobile", 1L)).thenReturn(false);
         when(candidateRepository.existsActiveByNameInProject(1L, "mobile")).thenReturn(false);
 
@@ -71,6 +77,7 @@ class StandardCandidateServiceImplTest {
                 "\"apiToken\":\"xyz\"",
                 "Bearer abc");
         verify(candidateRepository).insert(any(StandardCandidate.class));
+        verify(reservationRepository).lock(1L, "mobile");
 
         when(fieldRepository.existsByNameInProject("mobile", 1L)).thenReturn(true);
         assertThrows(BizException.class, () -> service.create(new StandardCandidateCreateReq(
@@ -99,6 +106,30 @@ class StandardCandidateServiceImplTest {
     }
 
     @Test
+    void create_rejectsReservedTokenEvidenceSourceBeforeAnyCandidateWrite() {
+        StandardCandidateRepository candidateRepository = mock(StandardCandidateRepository.class);
+        FieldRepository fieldRepository = mock(FieldRepository.class);
+        ProjectFieldNameReservationRepository reservationRepository =
+                mock(ProjectFieldNameReservationRepository.class);
+        StandardCandidateServiceImpl service = service(
+                candidateRepository, fieldRepository, mock(FieldService.class), reservationRepository);
+
+        BizException error = assertThrows(BizException.class, () -> service.create(new StandardCandidateCreateReq(
+                1L,
+                "ord_amt",
+                "订单金额",
+                "decimal(18,2)",
+                null,
+                "token_evidence",
+                null,
+                "{\"forged\":true}",
+                99)));
+
+        assertThat(error.getMessage()).contains("受控来源", "preview/apply");
+        verifyNoInteractions(candidateRepository, fieldRepository, reservationRepository);
+    }
+
+    @Test
     void accept_createsFieldAndMarksCandidateAccepted() {
         StandardCandidateRepository candidateRepository = mock(StandardCandidateRepository.class);
         FieldRepository fieldRepository = mock(FieldRepository.class);
@@ -108,9 +139,8 @@ class StandardCandidateServiceImplTest {
         candidate.setDataType("bigint");
         candidate.setComment("用户标识");
         when(candidateRepository.findById(10L)).thenReturn(Optional.of(candidate));
-        when(fieldRepository.existsByNameInProject("user_id", 1L)).thenReturn(false);
         Field createdField = field(99L, 1L, "user_id");
-        when(fieldService.create(any(Field.class))).thenReturn(createdField);
+        when(fieldService.createFromCandidate(any(Field.class), eq(10L))).thenReturn(createdField);
         StandardCandidateServiceImpl service = service(candidateRepository, fieldRepository, fieldService);
 
         StandardCandidate accepted = service.accept(10L, new StandardCandidateDecisionReq("确认转正"));
@@ -118,7 +148,7 @@ class StandardCandidateServiceImplTest {
         assertThat(accepted.getStatus()).isEqualTo("ACCEPTED");
         assertThat(accepted.getTargetFieldId()).isEqualTo(99L);
         assertThat(accepted.getDecisionReason()).isEqualTo("确认转正");
-        verify(fieldService).create(any(Field.class));
+        verify(fieldService).createFromCandidate(any(Field.class), eq(10L));
         verify(candidateRepository).update(candidate);
     }
 
@@ -172,7 +202,24 @@ class StandardCandidateServiceImplTest {
             FieldRepository fieldRepository,
             FieldService fieldService
     ) {
-        return new StandardCandidateServiceImpl(candidateRepository, fieldRepository, fieldService);
+        return service(
+                candidateRepository,
+                fieldRepository,
+                fieldService,
+                mock(ProjectFieldNameReservationRepository.class));
+    }
+
+    private StandardCandidateServiceImpl service(
+            StandardCandidateRepository candidateRepository,
+            FieldRepository fieldRepository,
+            FieldService fieldService,
+            ProjectFieldNameReservationRepository reservationRepository
+    ) {
+        return new StandardCandidateServiceImpl(
+                candidateRepository,
+                fieldRepository,
+                fieldService,
+                reservationRepository);
     }
 
     private StandardCandidate candidate(Long id, Long projectId, String name, String status) {

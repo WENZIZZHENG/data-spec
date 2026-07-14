@@ -4,7 +4,11 @@ import type {
   StandardCandidate,
   StandardCandidateCreateReq,
   StandardCandidateDecisionReq,
-  StandardCandidateMergeReq
+  StandardCandidateMergeReq,
+  TokenEvidenceCandidateApplyReq,
+  TokenEvidenceCandidateApplyResult,
+  TokenEvidenceCandidatePreview,
+  TokenEvidenceCandidatePreviewReq
 } from '@/types'
 
 export interface StandardCandidateListParams {
@@ -24,6 +28,22 @@ export function listStandardCandidates(params: StandardCandidateListParams) {
 
 export function createStandardCandidate(data: StandardCandidateCreateReq) {
   return request.post<unknown, StandardCandidate>('/standard-candidates', data)
+}
+
+/** 只读预览命名证据候选，不写入标准候选 Inbox。 */
+export function previewTokenEvidenceCandidate(data: TokenEvidenceCandidatePreviewReq) {
+  return request.post<unknown, TokenEvidenceCandidatePreview>(
+    '/standard-candidates/token-evidence/preview',
+    data
+  )
+}
+
+/** 使用匹配的 dry-run token 和显式确认幂等写入 PENDING 候选。 */
+export function applyTokenEvidenceCandidate(data: TokenEvidenceCandidateApplyReq) {
+  return request.post<unknown, TokenEvidenceCandidateApplyResult>(
+    '/standard-candidates/token-evidence/apply',
+    data
+  )
 }
 
 export function acceptStandardCandidate(id: number, data: StandardCandidateDecisionReq) {

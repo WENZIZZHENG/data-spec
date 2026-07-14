@@ -1,6 +1,7 @@
 package com.dataspec.starterkit.service.impl;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.service.ProjectFieldNameReservationGuard;
 import com.dataspec.domain.entity.Domain;
 import com.dataspec.domain.repository.DomainRepository;
 import com.dataspec.enumdict.entity.EnumDict;
@@ -52,6 +53,7 @@ public class StarterKitServiceImpl implements StarterKitService {
     private final DomainRepository domainRepository;
     private final EnumDictRepository enumDictRepository;
     private final FieldRepository fieldRepository;
+    private final ProjectFieldNameReservationGuard fieldNameReservationGuard;
     private final TemplateRepository templateRepository;
     private final StarterKitInstallationRepository installationRepository;
     private final ObjectMapper objectMapper;
@@ -188,6 +190,16 @@ public class StarterKitServiceImpl implements StarterKitService {
             Map<String, Field> fieldsByName,
             ApplyAccumulator acc
     ) {
+        List<String> namesToCreate = safeList(kit.fields()).stream()
+                .map(StarterKitFieldDefinition::name)
+                .filter(name -> !isBlank(name))
+                .filter(name -> !fieldsByName.containsKey(name))
+                .toList();
+        fieldNameReservationGuard.reserveAll(
+                projectId,
+                namesToCreate);
+        fieldRepository.findByNamesInProject(namesToCreate, projectId)
+                .forEach(field -> fieldsByName.put(field.getName(), field));
         for (StarterKitFieldDefinition seed : safeList(kit.fields())) {
             if (isBlank(seed.name())) {
                 acc.warn("Starter Kit " + kit.key() + " 包含空字段名,已跳过");

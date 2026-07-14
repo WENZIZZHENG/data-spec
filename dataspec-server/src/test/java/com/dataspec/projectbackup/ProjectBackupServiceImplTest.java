@@ -2,6 +2,7 @@ package com.dataspec.projectbackup;
 
 import com.dataspec.changelog.repository.StandardChangeLogRepository;
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.service.ProjectFieldNameReservationGuard;
 import com.dataspec.domain.entity.Domain;
 import com.dataspec.domain.repository.DomainRepository;
 import com.dataspec.enumdict.repository.EnumDictRepository;
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,7 +41,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -85,6 +89,24 @@ class ProjectBackupServiceImplTest {
 
         assertThrows(BizException.class,
                 () -> fixture.service().previewRestore(new ProjectRestoreReq(null, false, tampered)));
+    }
+
+    @Test
+    void previewRestore_rejectsDuplicateFieldNamesInValidPackage() {
+        Fixture fixture = new Fixture();
+        fixture.withSourceProject();
+        Field first = field("order_no", 1L);
+        Field duplicate = field("order_no", 1L);
+        duplicate.setId(101L);
+        when(fixture.domainRepository.findByProjectId(1L)).thenReturn(List.of());
+        when(fixture.fieldRepository.findAllByProjectId(1L)).thenReturn(List.of(first, duplicate));
+        fixture.withEmptyRemainingAssets();
+        ProjectBackupPackage exported = fixture.service().exportPackage(1L);
+
+        BizException error = assertThrows(BizException.class,
+                () -> fixture.service().previewRestore(new ProjectRestoreReq(null, false, exported)));
+
+        assertTrue(error.getMessage().contains("重复字段名"));
     }
 
     @Test
@@ -154,6 +176,40 @@ class ProjectBackupServiceImplTest {
         verify(fixture.restoreRecordRepository).insert(recordCaptor.capture());
         assertFalse(recordCaptor.getValue().getSummaryJson().contains(req.dryRunToken()));
         assertFalse(recordCaptor.getValue().getSummaryJson().contains("\"dryRunToken\":\""));
+    }
+
+    @Test
+    void applyRestore_refreshesFieldsAfterNameReservation() {
+        Fixture fixture = new Fixture();
+        fixture.withSourceProject();
+        Field sourceField = field("order_no", 1L);
+        when(fixture.domainRepository.findByProjectId(1L)).thenReturn(List.of());
+        when(fixture.fieldRepository.findAllByProjectId(1L)).thenReturn(List.of(sourceField));
+        fixture.withEmptyRemainingAssets();
+        ProjectBackupPackage exported = fixture.service().exportPackage(1L);
+        when(fixture.projectService.getById(2L)).thenReturn(project(2L, "目标项目"));
+        List<Field> targetFields = new ArrayList<>();
+        when(fixture.domainRepository.findByProjectId(2L)).thenReturn(List.of());
+        when(fixture.fieldRepository.findAllByProjectId(2L)).thenAnswer(invocation -> targetFields);
+        when(fixture.fieldRepository.findByNamesInProject(anyCollection(), eq(2L)))
+                .thenAnswer(invocation -> targetFields);
+        when(fixture.enumDictRepository.findDictsByProjectId(2L)).thenReturn(List.of());
+        when(fixture.ruleConfigRepository.findByProjectId(2L)).thenReturn(List.of());
+        when(fixture.templateRepository.findByProjectId(2L)).thenReturn(List.of());
+        when(fixture.standardSnapshotRepository.findByProjectId(2L)).thenReturn(List.of());
+        ProjectBackupServiceImpl service = fixture.service();
+        ProjectRestoreReq req = reqWithPreviewToken(service, 2L, false, exported);
+        Field concurrentlyCreated = field("order_no", 2L);
+        concurrentlyCreated.setId(901L);
+        doAnswer(invocation -> {
+            targetFields.add(concurrentlyCreated);
+            return null;
+        }).when(fixture.fieldNameReservationGuard).reserveAll(eq(2L), anyCollection());
+
+        service.applyRestore(req, "restore-refresh-fields");
+
+        verify(fixture.fieldRepository, never()).insert(any(Field.class));
+        assertEquals(List.of("order_no"), targetFields.stream().map(Field::getName).toList());
     }
 
     @Test
@@ -347,6 +403,8 @@ class ProjectBackupServiceImplTest {
         private final ProjectService projectService = mock(ProjectService.class);
         private final DomainRepository domainRepository = mock(DomainRepository.class);
         private final FieldRepository fieldRepository = mock(FieldRepository.class);
+        private final ProjectFieldNameReservationGuard fieldNameReservationGuard =
+                mock(ProjectFieldNameReservationGuard.class);
         private final EnumDictRepository enumDictRepository = mock(EnumDictRepository.class);
         private final RuleConfigRepository ruleConfigRepository = mock(RuleConfigRepository.class);
         private final RuleConfigService ruleConfigService = mock(RuleConfigService.class);
@@ -385,6 +443,7 @@ class ProjectBackupServiceImplTest {
                     projectService,
                     domainRepository,
                     fieldRepository,
+                    fieldNameReservationGuard,
                     enumDictRepository,
                     ruleConfigRepository,
                     ruleConfigService,

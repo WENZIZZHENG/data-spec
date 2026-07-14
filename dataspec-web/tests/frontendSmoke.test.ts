@@ -686,6 +686,7 @@ test('keeps AI handoff evidence dashboard wired', () => {
 
 test('keeps standard candidate inbox workbench wired', () => {
   const view = readSource('src/views/StandardCandidate.vue')
+  const tokenEvidenceDialog = readSource('src/components/TokenEvidenceCandidateDialog.vue')
   const api = readSource('src/api/standardCandidate.ts')
   const types = readSource('src/types/index.ts')
   const schema = readSource('src/api/schema.ts')
@@ -699,6 +700,12 @@ test('keeps standard candidate inbox workbench wired', () => {
     "mergeStandardCandidate",
     "ignoreStandardCandidate",
     "postponeStandardCandidate",
+    "TokenEvidenceCandidateDialog",
+    "tokenEvidenceVisible.value = false",
+    "sourceFilter.value = 'TOKEN_EVIDENCE'",
+    "statusFilter.value = 'PENDING'",
+    "async function handleTokenEvidenceApplied(result: TokenEvidenceCandidateApplyResult)",
+    "result.candidate?.projectId !== projectId",
     "projectStore.currentProjectId",
     "createVisible.value = false",
     "decisionVisible.value = false",
@@ -714,9 +721,29 @@ test('keeps standard candidate inbox workbench wired', () => {
     "请先创建并选择项目"
   ], 'StandardCandidate.vue')
 
+  assertContains(tokenEvidenceDialog, [
+    "previewTokenEvidenceCandidate",
+    "applyTokenEvidenceCandidate",
+    "if (!props.projectId)",
+    "previewLoading.value = true",
+    "requestError.value = errorMessage(error, '预览失败，请重试')",
+    "buildTokenEvidenceCandidateApplyReq(input, preview.value, confirmed.value)",
+    "shouldHandleTokenEvidenceCandidateApplyResult(result, {",
+    "const requestId = ++applyRequestId",
+    "requestedProjectId === props.projectId",
+    "requestError.value = errorMessage(error, '写入失败，请重新生成预览')",
+    "emit('applied', result)",
+    "v-model=\"confirmed\"",
+    "命名证据候选",
+    "生成预览",
+    "确认写入"
+  ], 'TokenEvidenceCandidateDialog.vue')
+
   assertContains(api, [
     "request.get<unknown, PageResult<StandardCandidate>>('/standard-candidates'",
     "export function createStandardCandidate",
+    "export function previewTokenEvidenceCandidate",
+    "export function applyTokenEvidenceCandidate",
     "export function acceptStandardCandidate",
     "export function mergeStandardCandidate",
     "export function ignoreStandardCandidate",
@@ -726,7 +753,9 @@ test('keeps standard candidate inbox workbench wired', () => {
   assertContains(types, [
     'export interface StandardCandidate',
     'export interface StandardCandidateCreateReq',
-    'export interface StandardCandidateMergeReq'
+    'export interface StandardCandidateMergeReq',
+    "export type TokenEvidenceCandidatePreviewReq = Schemas['TokenEvidenceCandidatePreviewReq']",
+    "export type TokenEvidenceCandidateApplyResult = Schemas['TokenEvidenceCandidateApplyResult']"
   ], 'standard candidate types')
 
   assertContains(schema, [
@@ -735,6 +764,12 @@ test('keeps standard candidate inbox workbench wired', () => {
     '"/api/standard-candidates/{id}/merge"',
     '"/api/standard-candidates/{id}/ignore"',
     '"/api/standard-candidates/{id}/postpone"',
+    '"/api/standard-candidates/token-evidence/preview"',
+    '"/api/standard-candidates/token-evidence/apply"',
+    'TokenEvidenceCandidatePreviewReq',
+    'TokenEvidenceCandidateApplyResult',
+    'signals: components["schemas"]["TokenEvidenceCandidateSignal"][]',
+    'nextActions: string[]',
     'StandardCandidate',
     'RPageResultStandardCandidate',
     'RStandardCandidate'

@@ -1,6 +1,7 @@
 package com.dataspec.starterkit;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.service.ProjectFieldNameReservationGuard;
 import com.dataspec.domain.entity.Domain;
 import com.dataspec.domain.repository.DomainRepository;
 import com.dataspec.enumdict.entity.EnumDict;
@@ -28,8 +29,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -63,6 +66,7 @@ class StarterKitServiceImplTest {
                 domainRepository,
                 enumDictRepository,
                 fieldRepository,
+                mock(ProjectFieldNameReservationGuard.class),
                 templateRepository,
                 installationRepository,
                 new ObjectMapper());
@@ -114,6 +118,7 @@ class StarterKitServiceImplTest {
                 domainRepository,
                 enumDictRepository,
                 fieldRepository,
+                mock(ProjectFieldNameReservationGuard.class),
                 templateRepository,
                 installationRepository,
                 new ObjectMapper());
@@ -148,11 +153,52 @@ class StarterKitServiceImplTest {
     }
 
     @Test
+    void applyKit_refreshesFieldsAfterNameReservation() {
+        DomainRepository domainRepository = mock(DomainRepository.class);
+        EnumDictRepository enumDictRepository = mock(EnumDictRepository.class);
+        FieldRepository fieldRepository = mock(FieldRepository.class);
+        TemplateRepository templateRepository = mock(TemplateRepository.class);
+        StarterKitInstallationRepository installationRepository = mock(StarterKitInstallationRepository.class);
+        StarterKitServiceImpl service = new StarterKitServiceImpl(
+                domainRepository,
+                enumDictRepository,
+                fieldRepository,
+                mock(ProjectFieldNameReservationGuard.class),
+                templateRepository,
+                installationRepository,
+                new ObjectMapper());
+        Field concurrentlyCreated = userAccountFields().stream()
+                .filter(field -> "mobile_phone".equals(field.getName()))
+                .findFirst()
+                .orElseThrow();
+        concurrentlyCreated.setDataType("varchar(20)");
+        concurrentlyCreated.setNullable(true);
+        when(domainRepository.findByProjectId(1L)).thenReturn(List.of());
+        when(enumDictRepository.findDictsByProjectId(1L)).thenReturn(List.of());
+        when(fieldRepository.findAllByProjectId(1L)).thenReturn(List.of());
+        when(fieldRepository.findByNamesInProject(anyCollection(), eq(1L)))
+                .thenReturn(List.of(concurrentlyCreated));
+        when(templateRepository.findByNameInProject(anyString(), eq(1L))).thenReturn(Optional.empty());
+        when(enumDictRepository.existsValueByEnumIdAndValue(anyLong(), anyString())).thenReturn(false);
+        assignDomainIds(domainRepository);
+        assignEnumIds(enumDictRepository);
+        assignFieldIds(fieldRepository);
+        assignTemplateIds(templateRepository);
+
+        StarterKitApplyResult result = service.applyKit(1L, "user_account", BuiltInDomainStarterKits.VERSION);
+
+        assertEquals(6, result.created().fields());
+        assertEquals(1, result.skipped().fields());
+        verify(fieldRepository, times(6)).insert(argThat(field -> !"mobile_phone".equals(field.getName())));
+    }
+
+    @Test
     void applyKit_rejectsUnknownKitBeforeWriting() {
         StarterKitServiceImpl service = new StarterKitServiceImpl(
                 mock(DomainRepository.class),
                 mock(EnumDictRepository.class),
                 mock(FieldRepository.class),
+                mock(ProjectFieldNameReservationGuard.class),
                 mock(TemplateRepository.class),
                 mock(StarterKitInstallationRepository.class),
                 new ObjectMapper());

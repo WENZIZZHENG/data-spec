@@ -1,11 +1,19 @@
 <template>
-  <div class="standard-candidate-page">
+  <div class="standard-candidate-page" :data-testid="stableTestIds.standardCandidates.page">
     <div class="page-header">
       <div>
         <h2>标准候选</h2>
         <p class="page-subtitle">{{ projectStore.currentProjectName || '未选择项目' }}</p>
       </div>
       <div class="header-actions">
+        <el-button
+          :data-testid="stableTestIds.standardCandidates.tokenEvidenceButton"
+          :disabled="!hasProject"
+          @click="tokenEvidenceVisible = true"
+        >
+          <el-icon><DocumentChecked /></el-icon>
+          命名证据
+        </el-button>
         <el-button type="primary" :disabled="!hasProject" :loading="maintenanceWorkflowLoading" @click="generateCandidateMaintenanceWorkflow">
           <el-icon><DataAnalysis /></el-icon>
           生成维护 workflow
@@ -41,6 +49,7 @@
           <el-option label="覆盖率" value="COVERAGE" />
           <el-option label="反向导入" value="REVERSE_IMPORT" />
           <el-option label="AI 反馈" value="AI_FEEDBACK" />
+          <el-option label="命名证据" value="TOKEN_EVIDENCE" />
         </el-select>
         <el-input
           v-model="keyword"
@@ -238,6 +247,12 @@
         <el-button type="primary" :loading="submitting" @click="submitMerge">确认合并</el-button>
       </template>
     </el-dialog>
+
+    <TokenEvidenceCandidateDialog
+      v-model="tokenEvidenceVisible"
+      :project-id="projectStore.currentProjectId"
+      @applied="handleTokenEvidenceApplied"
+    />
   </div>
 </template>
 
@@ -245,7 +260,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataAnalysis, Plus, Refresh } from '@element-plus/icons-vue'
+import { DataAnalysis, DocumentChecked, Plus, Refresh } from '@element-plus/icons-vue'
 import { listFields } from '@/api/field'
 import { generateStandardMaintenanceWorkflowPlan } from '@/api/standardMaintenanceWorkflow'
 import {
@@ -257,15 +272,24 @@ import {
   postponeStandardCandidate
 } from '@/api/standardCandidate'
 import StandardMaintenanceWorkflowPlanPanel from '@/components/StandardMaintenanceWorkflowPlanPanel.vue'
+import TokenEvidenceCandidateDialog from '@/components/TokenEvidenceCandidateDialog.vue'
 import { useProjectStore } from '@/stores/project'
+import { stableTestIds } from '@/utils/stableTestIds'
 import {
   formatCandidateEvidence,
   isStandardCandidateDecidable,
+  shouldHandleStandardCandidateListResult,
   standardCandidateSourceLabel,
   standardCandidateStatusLabel,
   standardCandidateStatusTag
 } from '@/utils/standardCandidateDisplay'
-import type { Field, StandardCandidate, StandardCandidateCreateReq, StandardMaintenanceWorkflowPlan } from '@/types'
+import type {
+  Field,
+  StandardCandidate,
+  StandardCandidateCreateReq,
+  StandardMaintenanceWorkflowPlan,
+  TokenEvidenceCandidateApplyResult
+} from '@/types'
 
 type DecisionMode = 'accept' | 'ignore' | 'postpone'
 
@@ -288,6 +312,7 @@ const maintenanceWorkflowError = ref('')
 const maintenanceWorkflowPlan = ref<StandardMaintenanceWorkflowPlan | null>(null)
 
 const createVisible = ref(false)
+const tokenEvidenceVisible = ref(false)
 const decisionVisible = ref(false)
 const mergeVisible = ref(false)
 const activeCandidate = ref<StandardCandidate | null>(null)
@@ -295,6 +320,7 @@ const decisionMode = ref<DecisionMode>('accept')
 const decisionReason = ref('')
 const mergeTargetFieldId = ref<number | null>(null)
 const mergeReason = ref('')
+let candidateListRequestId = 0
 const fieldsWithId = computed(() =>
   fields.value.filter((field): field is Field & { id: number } => typeof field.id === 'number')
 )
@@ -336,6 +362,7 @@ watch(
     maintenanceWorkflowPlan.value = null
     maintenanceWorkflowError.value = ''
     createVisible.value = false
+    tokenEvidenceVisible.value = false
     decisionVisible.value = false
     mergeVisible.value = false
     activeCandidate.value = null
@@ -353,27 +380,61 @@ watch(
 )
 
 async function loadCandidates() {
+  const requestId = ++candidateListRequestId
   const projectId = projectStore.currentProjectId
   if (!projectId) {
     candidates.value = []
     total.value = 0
+    loading.value = false
     return
   }
+  const request = {
+    projectId,
+    status: statusFilter.value === 'ALL' ? undefined : statusFilter.value,
+    sourceType: sourceFilter.value === 'ALL' ? undefined : sourceFilter.value,
+    keyword: keyword.value || undefined,
+    current: current.value,
+    size: size.value
+  }
+  const requestedQueryKey = candidateListQueryKey(request)
   loading.value = true
   try {
-    const result = await listStandardCandidates({
-      projectId,
-      status: statusFilter.value === 'ALL' ? undefined : statusFilter.value,
-      sourceType: sourceFilter.value === 'ALL' ? undefined : sourceFilter.value,
-      keyword: keyword.value || undefined,
-      current: current.value,
-      size: size.value
-    })
+    const result = await listStandardCandidates(request)
+    if (!shouldHandleStandardCandidateListResult({
+      requestId,
+      currentRequestId: candidateListRequestId,
+      requestedProjectId: projectId,
+      currentProjectId: projectStore.currentProjectId,
+      requestedQueryKey,
+      currentQueryKey: candidateListQueryKey()
+    })) {
+      return
+    }
     candidates.value = result.records ?? []
     total.value = result.total ?? 0
   } finally {
-    loading.value = false
+    if (requestId === candidateListRequestId) {
+      loading.value = false
+    }
   }
+}
+
+function candidateListQueryKey(request = {
+  projectId: projectStore.currentProjectId,
+  status: statusFilter.value === 'ALL' ? undefined : statusFilter.value,
+  sourceType: sourceFilter.value === 'ALL' ? undefined : sourceFilter.value,
+  keyword: keyword.value || undefined,
+  current: current.value,
+  size: size.value
+}): string {
+  return JSON.stringify([
+    request.projectId ?? null,
+    request.status ?? null,
+    request.sourceType ?? null,
+    request.keyword ?? null,
+    request.current,
+    request.size
+  ])
 }
 
 async function generateCandidateMaintenanceWorkflow() {
@@ -457,6 +518,17 @@ async function submitCreate() {
   } finally {
     submitting.value = false
   }
+}
+
+async function handleTokenEvidenceApplied(result: TokenEvidenceCandidateApplyResult) {
+  const projectId = projectStore.currentProjectId
+  if (!projectId || result.candidate?.projectId !== projectId) {
+    return
+  }
+  sourceFilter.value = 'TOKEN_EVIDENCE'
+  statusFilter.value = 'PENDING'
+  current.value = 1
+  await loadCandidates()
 }
 
 function openDecision(mode: DecisionMode, candidate: StandardCandidate) {

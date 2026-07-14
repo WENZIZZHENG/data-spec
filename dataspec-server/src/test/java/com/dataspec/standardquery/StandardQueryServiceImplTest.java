@@ -311,6 +311,7 @@ class StandardQueryServiceImplTest {
                 .thenReturn(List.of());
         FieldService fieldService = new FieldServiceImpl(
                 repository,
+                mock(com.dataspec.common.service.ProjectFieldNameReservationGuard.class),
                 mock(FieldSourceRepository.class),
                 mock(com.dataspec.changelog.service.StandardChangeLogService.class),
                 mock(com.dataspec.fieldhistory.service.FieldHistoricalAliasService.class),

@@ -2,6 +2,7 @@ package com.dataspec.standardreuse.service.impl;
 
 import com.dataspec.common.exception.BizException;
 import com.dataspec.common.sanitize.SensitiveDataSanitizer;
+import com.dataspec.common.service.ProjectFieldNameReservationGuard;
 import com.dataspec.domain.entity.Domain;
 import com.dataspec.domain.repository.DomainRepository;
 import com.dataspec.enumdict.entity.EnumDict;
@@ -72,6 +73,7 @@ public class StandardReusePackServiceImpl implements StandardReusePackService {
     private final ProjectService projectService;
     private final DomainRepository domainRepository;
     private final FieldRepository fieldRepository;
+    private final ProjectFieldNameReservationGuard fieldNameReservationGuard;
     private final EnumDictRepository enumDictRepository;
     private final RuleConfigRepository ruleConfigRepository;
     private final TemplateRepository templateRepository;
@@ -637,6 +639,16 @@ public class StandardReusePackServiceImpl implements StandardReusePackService {
             String sourceTag,
             ApplyAccumulator acc
     ) {
+        List<String> namesToCreate = safeList(payload.fields()).stream()
+                .map(PackField::name)
+                .filter(name -> !isBlank(name))
+                .filter(name -> !fieldsByName.containsKey(name))
+                .toList();
+        fieldNameReservationGuard.reserveAll(
+                targetProjectId,
+                namesToCreate);
+        fieldRepository.findByNamesInProject(namesToCreate, targetProjectId)
+                .forEach(field -> fieldsByName.put(field.getName(), field));
         for (PackField pack : safeList(payload.fields())) {
             if (isBlank(pack.name())) {
                 continue;

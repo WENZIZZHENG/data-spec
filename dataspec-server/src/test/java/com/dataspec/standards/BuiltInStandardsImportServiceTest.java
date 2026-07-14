@@ -2,6 +2,7 @@ package com.dataspec.standards;
 
 import com.dataspec.domain.entity.Domain;
 import com.dataspec.domain.repository.DomainRepository;
+import com.dataspec.common.service.ProjectFieldNameReservationGuard;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.repository.FieldRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +26,8 @@ class BuiltInStandardsImportServiceTest {
         BuiltInStandardsImportService service = new BuiltInStandardsImportService(
                 new ObjectMapper(new YAMLFactory()),
                 domainRepository,
-                fieldRepository);
+                fieldRepository,
+                mock(ProjectFieldNameReservationGuard.class));
 
         service.importBuiltInStandards(1L);
 
@@ -62,5 +64,28 @@ class BuiltInStandardsImportServiceTest {
                 .orElseThrow();
         assertFalse(amountCent.getNullable());
         assertEquals("0", amountCent.getDefaultValue());
+    }
+
+    @Test
+    void importBuiltInStandards_refreshesFieldsAfterNameReservation() {
+        DomainRepository domainRepository = mock(DomainRepository.class);
+        FieldRepository fieldRepository = mock(FieldRepository.class);
+        Field concurrentlyCreated = new Field();
+        concurrentlyCreated.setProjectId(1L);
+        concurrentlyCreated.setName("mobile_no");
+        when(fieldRepository.findByNamesInProject(anyCollection(), eq(1L)))
+                .thenReturn(List.of(concurrentlyCreated));
+        BuiltInStandardsImportService service = new BuiltInStandardsImportService(
+                new ObjectMapper(new YAMLFactory()),
+                domainRepository,
+                fieldRepository,
+                mock(ProjectFieldNameReservationGuard.class));
+
+        service.importBuiltInStandards(1L);
+
+        ArgumentCaptor<Field> fieldCaptor = ArgumentCaptor.forClass(Field.class);
+        verify(fieldRepository, times(9)).insert(fieldCaptor.capture());
+        assertTrue(fieldCaptor.getAllValues().stream()
+                .noneMatch(field -> "mobile_no".equals(field.getName())));
     }
 }

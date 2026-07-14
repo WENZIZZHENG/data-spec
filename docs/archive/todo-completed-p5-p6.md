@@ -1201,3 +1201,13 @@
 - 验证证据：config 测试 `11/11`；tools 全量 `468 total / 466 pass / 2 platform skips`；Python `jsonschema` Draft 2020-12 实际校验通过；归档前 OpenSpec strict valid、all `138/138`，归档后主规格 `137/137`；最终状态检查零 issues，backlog validator 和 `git diff --check` 通过。详细命令见归档 change 的 `tasks.md`。
 - 评审证据：只读 agent `019f5e4d-5640-7a23-9b90-7d663f989d77`、最终评审 agent `019f5e5d-91f8-73d3-b901-2c90ef48423a` 和复评 agent `019f5e67-7b47-7900-9afb-4cadde770112` 均已完成并关闭；全部 findings 已修复并补定向与全量回归，最终复评为“无 findings”。
 - 后续遗留：不建设 VS Code 插件、远程 schema registry、schema hash 或第二套运行指纹；只有真实分发或本地篡改诊断需求出现时再评估。
+
+## P6-111 / P6-110 / P6-112 / P6-113 / P6-124 / P6-136 / P6-142：标准候选来源管道
+
+- 状态：第一版已于 2026-07-14 完成实现、全量验证和独立评审；OpenSpec change `add-token-evidence-candidate-pipeline` 已同步 `deterministic-name-tokenization`、`standard-candidate-inbox` 与 `field-model` 主规格，并归档到 `openspec/changes/archive/2026-07-14-add-token-evidence-candidate-pipeline`。
+- 已完成能力：新增命名证据候选 preview/apply API 和候选工作台入口，只把未知业务词、歧义缩写和禁用命名整理为有界 signals；preview 保持只读，apply 要求匹配的进程内签名 token 与显式确认，写入后仍进入既有 PENDING 候选决策流程。
+- 幂等与一致性：`TOKEN_EVIDENCE` 受 partial unique index 和 insert-if-absent 保护；专用 apply、通用候选创建、字段创建/重命名、候选采纳、Starter Kit、复用包、项目恢复与内置标准导入共用项目字段名事务锁，批量入口按稳定顺序加锁，防止字段和 active 候选跨入口并发穿透。
+- 安全与契约：通用候选 create 不能伪造保留来源；dry-run token 绑定完整脱敏候选元数据和 evidence hash；不保存或返回 raw sourceText、业务数据行和凭据。preview/apply 使用专用 DTO，稳定数组字段在 OpenAPI 中为 required，响应不暴露逻辑删除字段。
+- 验证证据：后端全量 `790/790`、真实 PostgreSQL 17 并发集成测试 `6/6`、前端 `197/197`、tools `468 total / 466 pass / 2 platform skips`；前端 build、OpenAPI drift、OpenSpec strict/all（138 项）、backlog validator 和 `git diff --check` 均通过。桌面与 `390x844` 移动端 Browser 验收覆盖首焦点、显式确认门禁、取消写入、无横向溢出和无 console error。
+- 评审证据：独立只读 agent `019f5e9b-7198-7190-8921-68790ca6c1dd` 已完成三轮评审并在每轮后关闭；字段写入口绕过预留锁、锁前快照、undo 名称恢复、外部 PostgreSQL database-level/subscription 作用域、OpenAPI 稳定数组 optional 和恢复包重复字段自然键 findings 均已整改并补回归，最终结论为 `Approved：无 findings`。
+- 后续遗留：第一版不接覆盖率、反向导入、AI 反馈、文档/ORM、多数据源冲突或批量 apply，不自动采纳候选、修改 glossary 或改写标准字段；新来源只有在首个管道稳定并出现真实需求后再单独增量接入。

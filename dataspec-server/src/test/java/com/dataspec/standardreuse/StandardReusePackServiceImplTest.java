@@ -1,6 +1,7 @@
 package com.dataspec.standardreuse;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.service.ProjectFieldNameReservationGuard;
 import com.dataspec.domain.entity.Domain;
 import com.dataspec.domain.repository.DomainRepository;
 import com.dataspec.enumdict.entity.EnumDict;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +43,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -192,6 +197,27 @@ class StandardReusePackServiceImplTest {
         assertEquals(0, postApplyCounts.missing());
         assertEquals(5, postApplyCounts.matched());
         assertFalse(application.getDriftReportJson().contains("\"MISSING\""));
+    }
+
+    @Test
+    void applyPack_refreshesFieldsAfterNameReservation() {
+        Fixture fixture = new Fixture();
+        StandardReusePack pack = fixture.savedPack();
+        when(fixture.packRepository.findById(10L)).thenReturn(Optional.of(pack));
+        when(fixture.projectService.getById(2L)).thenReturn(project(2L, "目标项目"));
+        MutableTargetProject targetProject = new MutableTargetProject(2L);
+        targetProject.install(fixture);
+        Field concurrentlyCreated = field("order_no", 2L);
+        concurrentlyCreated.setId(901L);
+        doAnswer(invocation -> {
+            targetProject.fields.add(concurrentlyCreated);
+            return null;
+        }).when(fixture.fieldNameReservationGuard).reserveAll(eq(2L), anyCollection());
+
+        fixture.service().applyPack(new StandardReusePackApplyReq(10L, 2L, false));
+
+        verify(fixture.fieldRepository, never()).insert(any(Field.class));
+        assertEquals(List.of("order_no"), targetProject.fields.stream().map(Field::getName).toList());
     }
 
     @Test
@@ -356,6 +382,8 @@ class StandardReusePackServiceImplTest {
         private final EnumDictRepository enumDictRepository = mock(EnumDictRepository.class);
         private final RuleConfigRepository ruleConfigRepository = mock(RuleConfigRepository.class);
         private final TemplateRepository templateRepository = mock(TemplateRepository.class);
+        private final ProjectFieldNameReservationGuard fieldNameReservationGuard =
+                mock(ProjectFieldNameReservationGuard.class);
         private final StandardReusePackRepository packRepository = mock(StandardReusePackRepository.class);
         private final StandardReusePackApplicationRepository applicationRepository =
                 mock(StandardReusePackApplicationRepository.class);
@@ -435,6 +463,7 @@ class StandardReusePackServiceImplTest {
                     projectService,
                     domainRepository,
                     fieldRepository,
+                    fieldNameReservationGuard,
                     enumDictRepository,
                     ruleConfigRepository,
                     templateRepository,
@@ -493,6 +522,11 @@ class StandardReusePackServiceImplTest {
                 return 1;
             });
             when(fixture.fieldRepository.findAllByProjectId(projectId)).thenAnswer(invocation -> fields);
+            when(fixture.fieldRepository.findByNamesInProject(anyCollection(), eq(projectId)))
+                    .thenAnswer(invocation -> {
+                        Collection<String> names = invocation.getArgument(0);
+                        return fields.stream().filter(field -> names.contains(field.getName())).toList();
+                    });
             when(fixture.fieldRepository.insert(any(Field.class))).thenAnswer(invocation -> {
                 Field field = invocation.getArgument(0);
                 field.setId(fieldIds.getAndIncrement());

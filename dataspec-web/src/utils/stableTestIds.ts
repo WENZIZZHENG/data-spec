@@ -85,6 +85,16 @@ export const stableTestIds = {
     slowState: 'fields.slowState',
     pagination: 'fields.pagination'
   },
+  standardCandidates: {
+    page: 'standardCandidates.page',
+    tokenEvidenceButton: 'standardCandidates.tokenEvidenceButton',
+    tokenEvidenceDialog: 'standardCandidates.tokenEvidenceDialog',
+    candidateNameInput: 'standardCandidates.candidateNameInput',
+    sourceRefInput: 'standardCandidates.sourceRefInput',
+    previewButton: 'standardCandidates.previewButton',
+    confirmCheckbox: 'standardCandidates.confirmCheckbox',
+    applyButton: 'standardCandidates.applyButton'
+  },
   aiContext: {
     page: 'aiContext.page',
     scopeToolbar: 'aiContext.scopeToolbar',

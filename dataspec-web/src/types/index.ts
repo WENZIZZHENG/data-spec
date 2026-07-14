@@ -1485,6 +1485,27 @@ export interface StandardCandidateMergeReq {
   reason?: string
 }
 
+/** 命名证据候选只读预览输入；apply 时必须原样回传。 */
+export type TokenEvidenceCandidatePreviewReq = Schemas['TokenEvidenceCandidatePreviewReq']
+
+/** 命名证据候选 dry-run 结果；只有 READY 状态可进入确认写入。 */
+export type TokenEvidenceCandidatePreview = Schemas['TokenEvidenceCandidatePreview']
+
+/** 命名证据候选预览状态。 */
+export type TokenEvidenceCandidatePreviewStatus = NonNullable<TokenEvidenceCandidatePreview['status']>
+
+/** 触发候选的单条有界命名证据信号。 */
+export type TokenEvidenceCandidateSignal = Schemas['TokenEvidenceCandidateSignal']
+
+/** 命名证据信号类型；所有类型均需要人工确认。 */
+export type TokenEvidenceCandidateSignalType = TokenEvidenceCandidateSignal['signalType']
+
+/** 命名证据候选确认写入请求。 */
+export type TokenEvidenceCandidateApplyReq = Schemas['TokenEvidenceCandidateApplyReq']
+
+/** 命名证据候选幂等写入结果。 */
+export type TokenEvidenceCandidateApplyResult = Schemas['TokenEvidenceCandidateApplyResult']
+
 export interface RequirementDraftReq {
   projectId: number
   description: string

@@ -3,6 +3,7 @@ package com.dataspec.common.config;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.media.ObjectSchema;
+import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.Schema;
 import org.junit.jupiter.api.Test;
 
@@ -30,5 +31,22 @@ class OpenApiSchemaConfigTest {
         assertEquals("服务端分页元数据；legacy limit-only 调用为空以保持原有语义。", page.getDescription());
         assertEquals("#/components/schemas/FieldSearchPage", page.getAllOf().getFirst().get$ref());
         assertTrue(page.getNullable());
+    }
+
+    @Test
+    void tokenEvidenceWorkflowArraysAreRequiredInGeneratedOpenApi() {
+        Schema<?> preview = new ObjectSchema()
+                .addProperty("signals", new ArraySchema())
+                .addProperty("nextActions", new ArraySchema());
+        Schema<?> applyResult = new ObjectSchema()
+                .addProperty("nextActions", new ArraySchema());
+        OpenAPI openApi = new OpenAPI().components(new Components()
+                .addSchemas("TokenEvidenceCandidatePreview", preview)
+                .addSchemas("TokenEvidenceCandidateApplyResult", applyResult));
+
+        new OpenApiSchemaConfig().tokenEvidenceRequiredWorkflowFields().customise(openApi);
+
+        assertTrue(preview.getRequired().containsAll(java.util.List.of("signals", "nextActions")));
+        assertTrue(applyResult.getRequired().contains("nextActions"));
     }
 }

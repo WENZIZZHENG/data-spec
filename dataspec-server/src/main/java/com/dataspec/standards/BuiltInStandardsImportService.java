@@ -1,6 +1,7 @@
 package com.dataspec.standards;
 
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.service.ProjectFieldNameReservationGuard;
 import com.dataspec.domain.entity.Domain;
 import com.dataspec.domain.repository.DomainRepository;
 import com.dataspec.field.entity.Field;
@@ -14,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 内置 standards 初始化服务。
@@ -32,18 +35,23 @@ public class BuiltInStandardsImportService {
     private final ObjectMapper yamlMapper;
     private final DomainRepository domainRepository;
     private final FieldRepository fieldRepository;
+    private final ProjectFieldNameReservationGuard fieldNameReservationGuard;
 
     @Autowired
-    public BuiltInStandardsImportService(DomainRepository domainRepository, FieldRepository fieldRepository) {
-        this(new ObjectMapper(new YAMLFactory()), domainRepository, fieldRepository);
+    public BuiltInStandardsImportService(DomainRepository domainRepository,
+                                         FieldRepository fieldRepository,
+                                         ProjectFieldNameReservationGuard fieldNameReservationGuard) {
+        this(new ObjectMapper(new YAMLFactory()), domainRepository, fieldRepository, fieldNameReservationGuard);
     }
 
     public BuiltInStandardsImportService(ObjectMapper yamlMapper,
                                          DomainRepository domainRepository,
-                                         FieldRepository fieldRepository) {
+                                         FieldRepository fieldRepository,
+                                         ProjectFieldNameReservationGuard fieldNameReservationGuard) {
         this.yamlMapper = yamlMapper;
         this.domainRepository = domainRepository;
         this.fieldRepository = fieldRepository;
+        this.fieldNameReservationGuard = fieldNameReservationGuard;
     }
 
     @Transactional
@@ -79,11 +87,20 @@ public class BuiltInStandardsImportService {
         if (seeds == null) {
             return;
         }
-        for (FieldSeed seed : seeds) {
-            if (seed.name() == null || seed.name().isBlank()) {
-                continue;
-            }
-            if (fieldRepository.existsByNameInProject(seed.name(), projectId)) {
+        List<FieldSeed> missingSeeds = seeds.stream()
+                .filter(seed -> seed.name() != null && !seed.name().isBlank())
+                .filter(seed -> !fieldRepository.existsByNameInProject(seed.name(), projectId))
+                .toList();
+        fieldNameReservationGuard.reserveAll(
+                projectId,
+                missingSeeds.stream().map(FieldSeed::name).toList());
+        Set<String> existingNames = new HashSet<>();
+        fieldRepository.findByNamesInProject(
+                        missingSeeds.stream().map(FieldSeed::name).toList(),
+                        projectId)
+                .forEach(field -> existingNames.add(field.getName()));
+        for (FieldSeed seed : missingSeeds) {
+            if (existingNames.contains(seed.name())) {
                 continue;
             }
             Field field = new Field();
@@ -105,6 +122,7 @@ public class BuiltInStandardsImportService {
             field.setStatus(seed.status() != null && !seed.status().isBlank() ? seed.status() : DEFAULT_STATUS);
             field.setExampleValue(seed.exampleValue());
             fieldRepository.insert(field);
+            existingNames.add(seed.name());
         }
     }
 

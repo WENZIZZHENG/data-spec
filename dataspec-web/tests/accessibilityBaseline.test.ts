@@ -114,3 +114,19 @@ test('keeps core workflow controls discoverable by keyboard and automation', () 
     'useDialogFocusReturn'
   ], 'CommandPalette accessibility controls')
 })
+
+test('keeps token evidence candidate dialog keyboard and focus recovery baseline wired', () => {
+  const dialog = readSource('src/components/TokenEvidenceCandidateDialog.vue')
+
+  assertContains(dialog, [
+    'useDialogFocusReturn',
+    '@opened="focusCandidateName"',
+    '@closed="handleClosed"',
+    'await dialogFocus.restoreFocus()',
+    'aria-label="命名证据候选字段名"',
+    'aria-label="命名证据来源引用"',
+    'autofocus',
+    'aria-live="polite"',
+    ':disabled="!canApply"'
+  ], 'TokenEvidenceCandidateDialog accessibility')
+})

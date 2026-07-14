@@ -141,6 +141,7 @@ class PerformanceBaselineTest {
                 .thenReturn(List.of());
         return new FieldServiceImpl(
                 repository,
+                mock(com.dataspec.common.service.ProjectFieldNameReservationGuard.class),
                 mock(FieldSourceRepository.class),
                 mock(StandardChangeLogService.class),
                 mock(com.dataspec.fieldhistory.service.FieldHistoricalAliasService.class),

@@ -1787,6 +1787,7 @@ class AiContextExportServiceTest {
                 .thenReturn(List.of());
         FieldService searchFieldService = new FieldServiceImpl(
                 fieldRepository,
+                mock(com.dataspec.common.service.ProjectFieldNameReservationGuard.class),
                 fieldSourceRepository,
                 mock(com.dataspec.changelog.service.StandardChangeLogService.class),
                 mock(com.dataspec.fieldhistory.service.FieldHistoricalAliasService.class),

@@ -5,6 +5,7 @@ import com.dataspec.changelog.repository.StandardChangeLogRepository;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.common.safety.DryRunEvidenceSigner;
 import com.dataspec.common.sanitize.SensitiveDataSanitizer;
+import com.dataspec.common.service.ProjectFieldNameReservationGuard;
 import com.dataspec.domain.entity.Domain;
 import com.dataspec.domain.repository.DomainRepository;
 import com.dataspec.enumdict.entity.EnumDict;
@@ -82,6 +83,7 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
     private final ProjectService projectService;
     private final DomainRepository domainRepository;
     private final FieldRepository fieldRepository;
+    private final ProjectFieldNameReservationGuard fieldNameReservationGuard;
     private final EnumDictRepository enumDictRepository;
     private final RuleConfigRepository ruleConfigRepository;
     private final RuleConfigService ruleConfigService;
@@ -264,10 +266,24 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
         if (pkg.packageHash() == null || !pkg.packageHash().equals(expectedHash)) {
             throw new BizException("备份包 packageHash 校验失败");
         }
+        rejectDuplicateFieldNames(pkg.assets());
         if (containsSensitivePayload(pkg)) {
             throw new BizException("备份包包含疑似敏感字段，请重新导出脱敏包");
         }
         return pkg;
+    }
+
+    /** 同一恢复包内的字段自然键必须唯一，避免单个事务自行制造重复标准字段。 */
+    private void rejectDuplicateFieldNames(ProjectBackupAssets assets) {
+        Set<String> fieldNames = new HashSet<>();
+        for (Field field : safeList(assets.fields())) {
+            if (field == null || isBlank(field.getName())) {
+                continue;
+            }
+            if (!fieldNames.add(field.getName())) {
+                throw new BizException("备份包 fields 包含重复字段名: " + field.getName());
+            }
+        }
     }
 
     private Long restoreLockProjectId(ProjectRestoreReq req) {
@@ -434,11 +450,22 @@ public class ProjectBackupServiceImpl implements ProjectBackupService {
     private void restoreFields(ProjectBackupPackage pkg, RestoreContext context) {
         Map<String, Field> existing = fieldRepository.findAllByProjectId(context.projectId).stream()
                 .collect(toNaturalMap(Field::getName));
+        List<String> namesToCreate = safeList(pkg.assets().fields()).stream()
+                .map(Field::getName)
+                .filter(name -> !isBlank(name))
+                .filter(name -> !existing.containsKey(name))
+                .toList();
+        fieldNameReservationGuard.reserveAll(
+                context.projectId,
+                namesToCreate);
+        fieldRepository.findByNamesInProject(namesToCreate, context.projectId)
+                .forEach(field -> existing.put(field.getName(), field));
         for (Field source : safeList(pkg.assets().fields())) {
             Field target = existing.get(source.getName());
             if (target == null) {
                 Field created = copyForRestore(source, context.projectId, context);
                 fieldRepository.insert(created);
+                existing.put(created.getName(), created);
                 context.fieldIdMap.put(source.getId(), created.getId());
             } else {
                 if (context.overwrite) {

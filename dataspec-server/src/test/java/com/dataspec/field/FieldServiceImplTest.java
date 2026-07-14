@@ -7,6 +7,7 @@ import com.dataspec.businessglossary.service.BusinessGlossaryService;
 import com.dataspec.changelog.entity.StandardChangeLog;
 import com.dataspec.changelog.service.StandardChangeLogService;
 import com.dataspec.common.exception.BizException;
+import com.dataspec.common.service.ProjectFieldNameReservationGuard;
 import com.dataspec.field.entity.Field;
 import com.dataspec.field.model.FieldBulkUpdatePreview;
 import com.dataspec.field.model.FieldBulkUpdateReq;
@@ -62,8 +63,13 @@ class FieldServiceImplTest {
     @Test
     void create_defaultsPersonalMetadata() {
         FieldRepository repository = mock(FieldRepository.class);
+        ProjectFieldNameReservationGuard reservationGuard =
+                mock(ProjectFieldNameReservationGuard.class);
         when(repository.existsByNameInProject("mobile_no", 1L)).thenReturn(false);
-        FieldServiceImpl service = service(repository, mock(StandardChangeLogService.class));
+        FieldServiceImpl service = service(
+                repository,
+                mock(StandardChangeLogService.class),
+                reservationGuard);
 
         Field field = new Field();
         field.setProjectId(1L);
@@ -75,7 +81,32 @@ class FieldServiceImplTest {
         assertTrue(created.getNullable());
         assertFalse(created.getSensitive());
         assertEquals("enabled", created.getStatus());
+        verify(reservationGuard).reserve(1L, "mobile_no", null);
         verify(repository).insert(created);
+    }
+
+    @Test
+    void create_rejectsNameReservedByActiveCandidate() {
+        FieldRepository repository = mock(FieldRepository.class);
+        ProjectFieldNameReservationGuard reservationGuard =
+                mock(ProjectFieldNameReservationGuard.class);
+        doThrow(new BizException("同名候选仍待处理"))
+                .when(reservationGuard).reserve(1L, "mobile_no", null);
+        FieldServiceImpl service = service(
+                repository,
+                mock(StandardChangeLogService.class),
+                reservationGuard);
+
+        Field field = new Field();
+        field.setProjectId(1L);
+        field.setName("mobile_no");
+        field.setDataType("varchar(20)");
+
+        BizException error = assertThrows(BizException.class, () -> service.create(field));
+
+        assertTrue(error.getMessage().contains("候选"));
+        verify(reservationGuard).reserve(1L, "mobile_no", null);
+        verify(repository, never()).insert(any());
     }
 
     @Test
@@ -289,6 +320,33 @@ class FieldServiceImplTest {
         assertEquals("[\"12345\"]", updated.getInvalidExamplesJson());
         assertEquals("中国大陆手机号", updated.getFormatNotes());
         verify(repository).update(updated);
+    }
+
+    @Test
+    void update_rejectsRenameReservedByActiveCandidate() {
+        FieldRepository repository = mock(FieldRepository.class);
+        ProjectFieldNameReservationGuard reservationGuard = mock(ProjectFieldNameReservationGuard.class);
+        Field existing = new Field();
+        existing.setId(9L);
+        existing.setProjectId(1L);
+        existing.setName("old_mobile_no");
+        when(repository.findById(9L)).thenReturn(Optional.of(existing));
+        doThrow(new BizException("同名候选仍待处理"))
+                .when(reservationGuard).reserve(1L, "mobile_no", null);
+        FieldServiceImpl service = service(
+                repository,
+                mock(StandardChangeLogService.class),
+                reservationGuard);
+
+        Field incoming = new Field();
+        incoming.setName("mobile_no");
+        incoming.setDataType("varchar(20)");
+
+        BizException error = assertThrows(BizException.class, () -> service.update(9L, incoming));
+
+        assertTrue(error.getMessage().contains("候选"));
+        verify(reservationGuard).reserve(1L, "mobile_no", null);
+        verify(repository, never()).update(any());
     }
 
     @Test
@@ -876,6 +934,33 @@ class FieldServiceImplTest {
 
         assertThrows(BizException.class, () -> service.undoFieldChange(1L, 50L));
 
+        verify(repository, never()).update(any());
+        verify(changeLogService, never()).recordChange(anyLong(), anyString(), anyLong(), anyString(), any(), any());
+    }
+
+    @Test
+    void undoFieldChange_rejectsNameReservedByActiveCandidate() throws Exception {
+        FieldRepository repository = mock(FieldRepository.class);
+        StandardChangeLogService changeLogService = mock(StandardChangeLogService.class);
+        ProjectFieldNameReservationGuard reservationGuard = mock(ProjectFieldNameReservationGuard.class);
+        Field existing = field("mobile_no", "手机号", "varchar(20)", "用户手机号", "phone", "enabled");
+        existing.setId(1L);
+        existing.setProjectId(1L);
+        Field before = field("email", "邮箱", "varchar(128)", "邮箱", "mail", "enabled");
+        before.setId(1L);
+        before.setProjectId(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(existing));
+        when(changeLogService.getById(50L))
+                .thenReturn(fieldLog(50L, 1L, 1L, "update", objectMapper.writeValueAsString(before)));
+        doThrow(new BizException("同名候选仍待处理"))
+                .when(reservationGuard).reserve(1L, "email", null);
+        FieldServiceImpl service = service(repository, changeLogService, reservationGuard);
+
+        BizException error = assertThrows(BizException.class, () -> service.undoFieldChange(1L, 50L));
+
+        assertTrue(error.getMessage().contains("候选"));
+        verify(reservationGuard).reserve(1L, "email", null);
+        verify(repository, never()).existsByNameInProjectExcludeId(anyString(), anyLong(), anyLong());
         verify(repository, never()).update(any());
         verify(changeLogService, never()).recordChange(anyLong(), anyString(), anyLong(), anyString(), any(), any());
     }
@@ -2196,6 +2281,24 @@ class FieldServiceImplTest {
         return service(repository, mock(FieldSourceRepository.class), changeLogService);
     }
 
+    private FieldServiceImpl service(
+            FieldRepository repository,
+            StandardChangeLogService changeLogService,
+            ProjectFieldNameReservationGuard reservationGuard
+    ) {
+        BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
+        when(glossaryService.match(anyLong(), anyString())).thenReturn(List.of());
+        FieldHistoricalAliasService historyService = mock(FieldHistoricalAliasService.class);
+        when(historyService.load(anyLong(), anyList())).thenReturn(Map.of());
+        return service(
+                repository,
+                mock(FieldSourceRepository.class),
+                changeLogService,
+                glossaryService,
+                historyService,
+                reservationGuard);
+    }
+
     private FieldServiceImpl service(FieldRepository repository, FieldSourceRepository sourceRepository,
                                      StandardChangeLogService changeLogService) {
         BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
@@ -2215,6 +2318,20 @@ class FieldServiceImplTest {
                                      StandardChangeLogService changeLogService,
                                      BusinessGlossaryService glossaryService,
                                      FieldHistoricalAliasService historyService) {
+        return service(
+                repository,
+                sourceRepository,
+                changeLogService,
+                glossaryService,
+                historyService,
+                mock(ProjectFieldNameReservationGuard.class));
+    }
+
+    private FieldServiceImpl service(FieldRepository repository, FieldSourceRepository sourceRepository,
+                                     StandardChangeLogService changeLogService,
+                                     BusinessGlossaryService glossaryService,
+                                     FieldHistoricalAliasService historyService,
+                                     ProjectFieldNameReservationGuard reservationGuard) {
         FieldSemanticRuleService semanticRuleService = mock(FieldSemanticRuleService.class);
         MetricDefinitionService metricDefinitionService = mock(MetricDefinitionService.class);
         when(semanticRuleService.list(anyLong(), nullable(Long.class), nullable(String.class), nullable(String.class)))
@@ -2223,6 +2340,7 @@ class FieldServiceImplTest {
                 .thenReturn(List.of());
         return new FieldServiceImpl(
                 repository,
+                reservationGuard,
                 sourceRepository,
                 changeLogService,
                 historyService,

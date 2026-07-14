@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,6 +46,29 @@ public class FieldRepository {
         return fieldMapper.selectList(
                 new LambdaQueryWrapper<Field>()
                         .eq(Field::getProjectId, projectId)
+                        .orderByAsc(Field::getName));
+    }
+
+    /**
+     * 在项目内按名称批量查询字段。
+     *
+     * <p>批量创建流程在取得项目字段名事务锁后调用该方法刷新锁前快照，避免并发事务已经创建
+     * 同名字段时继续依据旧列表重复插入。</p>
+     */
+    public List<Field> findByNamesInProject(Collection<String> names, Long projectId) {
+        List<String> normalizedNames = names == null
+                ? List.of()
+                : names.stream()
+                        .filter(name -> name != null && !name.isBlank())
+                        .distinct()
+                        .toList();
+        if (normalizedNames.isEmpty()) {
+            return List.of();
+        }
+        return fieldMapper.selectList(
+                new LambdaQueryWrapper<Field>()
+                        .eq(Field::getProjectId, projectId)
+                        .in(Field::getName, normalizedNames)
                         .orderByAsc(Field::getName));
     }
 
