@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { promisify } from 'node:util'
-import { buildFixedSqlPatchPlan, buildInlineReviewPlan, buildPullRequestLineMap, runCli } from './dataspec-cli.mjs'
+import { buildFixedSqlPatchPlan, buildInlineReviewPlan, buildPullRequestLineMap, reviewFindingKey, runCli } from './dataspec-cli.mjs'
 
 const execFileAsync = promisify(execFile)
 
@@ -372,6 +372,117 @@ test('ai-output check reads file returns 1 for WARN and redacts diagnostics', as
     assert.equal(output.status, 'WARN')
     assert.equal(output.safeToUse, false)
     assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('ai-output check validates and forwards a structured findings file', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-ai-output-findings-'))
+  try {
+    await writeFile(path.join(dir, 'ai.txt'), 'review result', 'utf8')
+    const findings = [{
+      source: 'EXTERNAL_AI',
+      findingKey: 'caller-key',
+      code: 'AI_REVIEW_RULE',
+      severity: 'WARNING',
+      subject: { projectId: 7, kind: 'AI_OUTPUT', name: 'review' },
+      location: { path: 'db/schema.sql', line: 2, column: 3 },
+      trigger: '字段不一致',
+      expected: '使用 snake_case',
+      observed: 'BadName',
+      evidenceRefs: ['dataspec://evidence/sql-check/11'],
+      confidence: 85,
+      suggestedFix: '改为 bad_name',
+      autoFixSafe: false,
+      waiver: { waived: false }
+    }]
+    await writeFile(path.join(dir, 'findings.json'), JSON.stringify(findings), 'utf8')
+    const calls = []
+    const fetchFn = async (url, options) => {
+      calls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 200,
+          data: {
+            kind: 'dataspec-ai-output-postcheck',
+            status: 'PASS',
+            safeToUse: true,
+            issues: [],
+            findings: [{ ...findings[0], findingKey: 'external_ai:server-key' }]
+          }
+        })
+      }
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'ai-output', 'check',
+      '--project', '7',
+      '--type', 'TEXT',
+      '--file', 'ai.txt',
+      '--findings', 'findings.json',
+      '--format', 'json',
+      '--server', 'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(calls.length, 1)
+    assert.deepEqual(JSON.parse(calls[0].options.body).findings, findings)
+    assert.equal(JSON.parse(io.stdout).findings[0].findingKey, 'external_ai:server-key')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('review finding key matches the shared Java and CLI UTF-8 fixture', async () => {
+  const fixture = JSON.parse(await readFile(
+    new URL('../dataspec-server/src/test/resources/fixtures/review-finding-key-v1.json', import.meta.url),
+    'utf8'
+  ))
+
+  assert.equal(fixture.algorithm, 'sha256-length-prefixed-utf8-v1')
+  assert.equal(reviewFindingKey(fixture.finding), fixture.expectedFindingKey)
+})
+
+test('ai-output check rejects invalid or unsafe findings before server call', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-ai-output-invalid-findings-'))
+  try {
+    await writeFile(path.join(dir, 'ai.txt'), 'review result', 'utf8')
+    const invalidFiles = new Map([
+      ['invalid.json', '{invalid'],
+      ['object.json', JSON.stringify({ code: 'NOT_ARRAY' })],
+      ['too-many.json', JSON.stringify(Array.from({ length: 101 }, (_, index) => ({ code: `RULE_${index}` })))],
+      ['oversized.json', JSON.stringify([{ code: 'RULE', observed: 'x'.repeat(1001) }])],
+      ['invalid-version.json', JSON.stringify([{ schemaVersion: 0, code: 'RULE' }])],
+      ['unknown-field.json', JSON.stringify([{ code: 'RULE', rawPayload: 'x'.repeat(100000) }])],
+      ['unknown-nested-field.json', JSON.stringify([{ code: 'RULE', subject: { kind: 'AI_OUTPUT', rawPayload: 'x' } }])]
+    ])
+    for (const [name, content] of invalidFiles) {
+      await writeFile(path.join(dir, name), content, 'utf8')
+    }
+    let fetchCalls = 0
+    const fetchFn = async () => {
+      fetchCalls += 1
+      throw new Error('不应调用服务端')
+    }
+
+    for (const name of invalidFiles.keys()) {
+      const io = createIo('', dir)
+      const code = await runCli([
+        'ai-output', 'check',
+        '--project', '7',
+        '--type', 'TEXT',
+        '--file', 'ai.txt',
+        '--findings', name,
+        '--format', 'json'
+      ], io, fetchFn)
+      assert.equal(code, 2, name)
+      assert.match(io.stderr, /findings|JSON/, name)
+    }
+    assert.equal(fetchCalls, 0)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -2633,6 +2744,7 @@ test('review-pr posts markdown comment and returns 1 when lint has errors', asyn
           status: 200,
           json: async () => [{
             filename: 'bad.sql',
+            sha: gitBlobSha('CREATE TABLE UserOrder (id bigint);'),
             patch: '@@ -0,0 +1,1 @@\n+CREATE TABLE UserOrder (id bigint);'
           }]
         }
@@ -2705,6 +2817,7 @@ test('review-pr prints json summary when requested', async () => {
               errorCount: 1,
               warningCount: 0,
               suggestionCount: 0,
+              sqlCheckRecordId: 71,
               issues: [{
                 severity: 'ERROR',
                 ruleCode: 'table_naming_snake_case',
@@ -2725,6 +2838,7 @@ test('review-pr prints json summary when requested', async () => {
           status: 200,
           json: async () => [{
             filename: 'bad.sql',
+            sha: gitBlobSha('CREATE TABLE UserOrder (id bigint);'),
             patch: '@@ -0,0 +1,1 @@\n+CREATE TABLE UserOrder (id bigint);'
           }]
         }
@@ -2733,13 +2847,21 @@ test('review-pr prints json summary when requested', async () => {
         return { ok: true, status: 200, json: async () => [] }
       }
       if (url === 'https://api.github.com/repos/acme/app/pulls/42/comments' && options.method === 'POST') {
-        return { ok: true, status: 201, json: async () => ({ id: 199 }) }
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({ id: 199, html_url: 'https://github.com/acme/app/pull/42#discussion_r199' })
+        }
       }
       if (url === 'https://api.github.com/repos/acme/app/issues/42/comments?per_page=100') {
         return { ok: true, status: 200, json: async () => [] }
       }
       if (url === 'https://api.github.com/repos/acme/app/issues/42/comments' && options.method === 'POST') {
-        return { ok: true, status: 201, json: async () => ({ id: 99 }) }
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({ id: 99, html_url: 'https://github.com/acme/app/pull/42#issuecomment-99' })
+        }
       }
       throw new Error(`unexpected fetch: ${url}`)
     }
@@ -2764,13 +2886,134 @@ test('review-pr prints json summary when requested', async () => {
 
     const output = JSON.parse(io.stdout)
     assert.equal(code, 1)
+    assert.equal(output.kind, 'dataspec.review-pr-delivery')
+    assert.equal(output.schemaVersion, 1)
+    assert.equal(output.commitSha, 'abc123')
+    assert.equal(output.reviewCommentUrl, 'https://github.com/acme/app/pull/42#issuecomment-99')
+    assert.deepEqual(output.inlineCommentUrls, ['https://github.com/acme/app/pull/42#discussion_r199'])
     assert.equal(output.reviewCommentAction, 'created')
     assert.equal(output.summary.failedFiles, 1)
     assert.equal(output.inline.inlineCommentsCreated, 1)
     assert.equal(output.inline.inlineCommentsSkipped, 0)
     assert.equal(output.inline.fallbackIssues, 0)
     assert.equal(output.files[0].path.endsWith('bad.sql'), true)
+    assert.equal(output.findings.length, 1)
+    assert.equal(output.findings[0].source, 'SQL_LINT')
+    assert.equal(output.findings[0].location.path.endsWith('bad.sql'), true)
+    assert.deepEqual(output.findings[0].evidenceRefs, ['dataspec://evidence/sql-check/71'])
+    assert.doesNotMatch(JSON.stringify(output.findings[0].evidenceRefs), /abc123|github\.com/)
+    assert.deepEqual(output.sqlCheckRecordIds, [71])
+    assert.equal(output.postCheck.status, 'NOT_REQUIRED')
+    assert.equal(output.evidencePackages[0].sourceId, 71)
+    assert.equal(output.evidencePackages[0].evidenceRef, 'dataspec://evidence/sql-check/71')
     assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('review-pr prefers backend findings and keeps missing GitHub URLs nullable', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-review-findings-'))
+  try {
+    await writeFile(path.join(dir, 'bad.sql'), 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    const fetchFn = async (url, options = {}) => {
+      if (url === 'http://dataspec.local/api/lint') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: {
+              errorCount: 1,
+              warningCount: 0,
+              suggestionCount: 0,
+              sqlCheckRecordId: 72,
+              issues: [{
+                severity: 'ERROR',
+                ruleCode: 'legacy_rule_should_not_be_delivered',
+                message: 'legacy issue 仅用于兼容 inline 评论',
+                line: 1,
+                column: 14
+              }],
+              findings: [{
+                schemaVersion: 1,
+                source: 'SQL_LINT',
+                findingKey: 'server-key-without-path',
+                code: 'table_naming_snake_case',
+                severity: 'ERROR',
+                subject: { projectId: 7, kind: 'SQL_TABLE', name: 'UserOrder' },
+                location: { line: 1, column: 14, locationKind: 'table' },
+                trigger: '表名不符合 snake_case',
+                expected: 'user_order',
+                observed: 'UserOrder',
+                evidenceRefs: ['dataspec://evidence/sql-check/72'],
+                confidence: 100,
+                suggestedFix: '改为 user_order',
+                autoFixSafe: true,
+                waiver: { waived: false }
+              }]
+            }
+          })
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/43') {
+        return { ok: true, status: 200, json: async () => ({ head: { sha: 'backend123' } }) }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/43/files?per_page=100') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{
+            filename: 'bad.sql',
+            sha: gitBlobSha('CREATE TABLE UserOrder (id bigint);'),
+            patch: '@@ -0,0 +1,1 @@\n+CREATE TABLE UserOrder (id bigint);'
+          }]
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/43/comments?per_page=100') {
+        return { ok: true, status: 200, json: async () => [] }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/43/comments' && options.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({ id: 299 }) }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/issues/43/comments?per_page=100') {
+        return { ok: true, status: 200, json: async () => [] }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/issues/43/comments' && options.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({ id: 199 }) }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'review-pr',
+      dir,
+      '--project',
+      '7',
+      '--repo',
+      'acme/app',
+      '--pr',
+      '43',
+      '--token',
+      'ghs_test',
+      '--server',
+      'http://dataspec.local',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    const output = JSON.parse(io.stdout)
+    assert.equal(code, 1)
+    assert.equal(output.commitSha, 'backend123')
+    assert.equal(output.reviewCommentUrl, null)
+    assert.deepEqual(output.inlineCommentUrls, [null])
+    assert.equal(output.findings.length, 1)
+    assert.equal(output.findings[0].code, 'table_naming_snake_case')
+    assert.notEqual(output.findings[0].findingKey, 'server-key-without-path')
+    assert.equal(output.findings[0].location.path.endsWith('bad.sql'), true)
+    assert.deepEqual(output.findings[0].evidenceRefs, ['dataspec://evidence/sql-check/72'])
+    assert.equal(output.findings.some((finding) => finding.code === 'legacy_rule_should_not_be_delivered'), false)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -2800,6 +3043,20 @@ test('review-pr updates existing markdown comment and returns 0 when lint passes
           json: async () => [{ id: 123, body: 'old\n<!-- dataspec-sql-review -->' }]
         }
       }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/9') {
+        return { ok: true, status: 200, json: async () => ({ head: { sha: 'clean123' } }) }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/9/files?per_page=100') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{
+            filename: 'good.sql',
+            sha: gitBlobSha('CREATE TABLE user_order (id bigint);'),
+            patch: '@@ -0,0 +1,1 @@\n+CREATE TABLE user_order (id bigint);'
+          }]
+        }
+      }
       if (url === 'https://api.github.com/repos/acme/app/issues/comments/123' && options.method === 'PATCH') {
         return { ok: true, status: 200, json: async () => ({ id: 123 }) }
       }
@@ -2817,14 +3074,23 @@ test('review-pr updates existing markdown comment and returns 0 when lint passes
       '--pr',
       '9',
       '--token',
-      'ghs_test'
+      'ghs_test',
+      '--format',
+      'json'
     ], io, fetchFn)
 
     const patchCall = calls.find((call) => call.options.method === 'PATCH')
     const commentBody = JSON.parse(patchCall.options.body).body
+    const output = JSON.parse(io.stdout)
     assert.equal(code, 0)
     assert.match(commentBody, /未发现 ERROR/)
-    assert.match(io.stdout, /已更新 DataSpec Review 评论/)
+    assert.equal(output.reviewCommentAction, 'updated')
+    assert.equal(output.commitSha, 'clean123')
+    assert.equal(output.reviewCommentUrl, null)
+    assert.deepEqual(output.inlineCommentUrls, [])
+    assert.deepEqual(output.findings, [])
+    assert.deepEqual(output.sqlCheckRecordIds, [])
+    assert.deepEqual(output.evidencePackages, [])
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -2875,6 +3141,296 @@ test('review-pr reports token and permission diagnosis when GitHub rejects inlin
     assert.equal(code, 2)
     assert.match(io.stderr, /GitHub 请求失败，HTTP 403/)
     assert.match(io.stderr, /token、repo、pr 或权限/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('review-pr rejects local SQL whose Git blob does not match the PR file', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-review-drift-'))
+  try {
+    await writeFile(path.join(dir, 'bad.sql'), 'CREATE TABLE UserOrder (id bigint);', 'utf8')
+    const calls = []
+    const fetchFn = async (url, options = {}) => {
+      calls.push({ url, options })
+      if (url === 'https://api.github.com/repos/acme/app/pulls/44') {
+        return { ok: true, status: 200, json: async () => ({ head: { sha: 'head44' } }) }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/44/files?per_page=100') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{
+            filename: 'bad.sql',
+            sha: gitBlobSha('CREATE TABLE other_table (id bigint);'),
+            patch: '@@ -0,0 +1,1 @@\n+CREATE TABLE other_table (id bigint);'
+          }]
+        }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'review-pr', dir, '--project', '7', '--repo', 'acme/app', '--pr', '44',
+      '--token', 'ghs_test', '--server', 'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /本地 SQL 内容与 PR head 不一致/)
+    assert.equal(calls.some((call) => call.url === 'http://dataspec.local/api/lint'), false)
+    assert.equal(calls.some((call) => call.options.method === 'POST'), false)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('review-pr stops remote writes when PR head changes before publish', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-review-head-race-'))
+  try {
+    const sql = 'CREATE TABLE user_order (id bigint);'
+    await writeFile(path.join(dir, 'good.sql'), sql, 'utf8')
+    const calls = []
+    let headReads = 0
+    const fetchFn = async (url, options = {}) => {
+      calls.push({ url, options })
+      if (url === 'https://api.github.com/repos/acme/app/pulls/45') {
+        headReads += 1
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ head: { sha: headReads < 3 ? 'head45' : 'head45-new' } })
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/45/files?per_page=100') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{
+            filename: 'good.sql',
+            sha: gitBlobSha(sql),
+            patch: '@@ -0,0 +1,1 @@\n+CREATE TABLE user_order (id bigint);'
+          }]
+        }
+      }
+      if (url === 'http://dataspec.local/api/lint') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] }
+          })
+        }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'review-pr', dir, '--project', '7', '--repo', 'acme/app', '--pr', '45',
+      '--token', 'ghs_test', '--server', 'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.equal(headReads, 3)
+    assert.match(io.stderr, /PR head 已从 head45 变化为 head45-new/)
+    assert.equal(calls.some((call) => call.options.method === 'POST' && call.url.includes('github.com')), false)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('review-pr loads the second PR files page before binding SQL', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-review-files-page-'))
+  try {
+    const sql = 'CREATE TABLE user_order (id bigint);'
+    await writeFile(path.join(dir, 'target.sql'), sql, 'utf8')
+    const calls = []
+    const fetchFn = async (url, options = {}) => {
+      calls.push({ url, options })
+      if (url === 'https://api.github.com/repos/acme/app/pulls/46') {
+        return { ok: true, status: 200, json: async () => ({ head: { sha: 'head46' } }) }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/46/files?per_page=100') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => Array.from({ length: 100 }, (_, index) => ({
+            filename: `other-${index}.sql`,
+            sha: 'a'.repeat(40)
+          }))
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/46/files?per_page=100&page=2') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{
+            filename: 'target.sql',
+            sha: gitBlobSha(sql),
+            patch: '@@ -0,0 +1,1 @@\n+CREATE TABLE user_order (id bigint);'
+          }]
+        }
+      }
+      if (url === 'http://dataspec.local/api/lint') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] }
+          })
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/issues/46/comments?per_page=100') {
+        return { ok: true, status: 200, json: async () => [] }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/issues/46/comments' && options.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({ id: 460 }) }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'review-pr', dir, '--project', '7', '--repo', 'acme/app', '--pr', '46',
+      '--token', 'ghs_test', '--server', 'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 0)
+    assert.equal(calls.some((call) => call.url.endsWith('files?per_page=100&page=2')), true)
+    assert.equal(calls.some((call) => call.url === 'http://dataspec.local/api/lint'), true)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('review-pr rechecks PR head between inline comment writes', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-review-inline-race-'))
+  try {
+    const sql = [
+      'CREATE TABLE UserOrder (id bigint);',
+      'CREATE TABLE PaymentOrder (id bigint);'
+    ].join('\n')
+    await writeFile(path.join(dir, 'bad.sql'), sql, 'utf8')
+    const calls = []
+    let headReads = 0
+    const fetchFn = async (url, options = {}) => {
+      calls.push({ url, options })
+      if (url === 'https://api.github.com/repos/acme/app/pulls/47') {
+        headReads += 1
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ head: { sha: headReads < 5 ? 'head47' : 'head47-new' } })
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/47/files?per_page=100') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{
+            filename: 'bad.sql',
+            sha: gitBlobSha(sql),
+            patch: '@@ -0,0 +1,2 @@\n+CREATE TABLE UserOrder (id bigint);\n+CREATE TABLE PaymentOrder (id bigint);'
+          }]
+        }
+      }
+      if (url === 'http://dataspec.local/api/lint') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: {
+              errorCount: 2,
+              warningCount: 0,
+              suggestionCount: 0,
+              issues: [
+                { severity: 'ERROR', ruleCode: 'table_name_1', message: 'first', line: 1, column: 14 },
+                { severity: 'ERROR', ruleCode: 'table_name_2', message: 'second', line: 2, column: 14 }
+              ]
+            }
+          })
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/47/comments?per_page=100') {
+        return { ok: true, status: 200, json: async () => [] }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/47/comments' && options.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({ id: 470 }) }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'review-pr', dir, '--project', '7', '--repo', 'acme/app', '--pr', '47',
+      '--token', 'ghs_test', '--server', 'http://dataspec.local'
+    ], io, fetchFn)
+
+    const inlineWrites = calls.filter((call) => call.url.endsWith('/pulls/47/comments') && call.options.method === 'POST')
+    assert.equal(code, 2)
+    assert.equal(headReads, 5)
+    assert.equal(inlineWrites.length, 1)
+    assert.match(io.stderr, /PR head 已从 head47 变化为 head47-new/)
+    assert.equal(calls.some((call) => call.url.includes('/issues/47/comments')), false)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('review-pr rechecks PR head after loading the summary comment list', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-review-summary-race-'))
+  try {
+    const sql = 'CREATE TABLE user_order (id bigint);'
+    await writeFile(path.join(dir, 'good.sql'), sql, 'utf8')
+    const calls = []
+    let headReads = 0
+    const fetchFn = async (url, options = {}) => {
+      calls.push({ url, options })
+      if (url === 'https://api.github.com/repos/acme/app/pulls/48') {
+        headReads += 1
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ head: { sha: headReads < 4 ? 'head48' : 'head48-new' } })
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/pulls/48/files?per_page=100') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{ filename: 'good.sql', sha: gitBlobSha(sql) }]
+        }
+      }
+      if (url === 'http://dataspec.local/api/lint') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            data: { errorCount: 0, warningCount: 0, suggestionCount: 0, issues: [] }
+          })
+        }
+      }
+      if (url === 'https://api.github.com/repos/acme/app/issues/48/comments?per_page=100') {
+        return { ok: true, status: 200, json: async () => [] }
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }
+    const io = createIo()
+
+    const code = await runCli([
+      'review-pr', dir, '--project', '7', '--repo', 'acme/app', '--pr', '48',
+      '--token', 'ghs_test', '--server', 'http://dataspec.local'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.equal(headReads, 4)
+    assert.match(io.stderr, /PR head 已从 head48 变化为 head48-new/)
+    assert.equal(calls.some((call) => call.url.includes('github.com') && ['POST', 'PATCH'].includes(call.options.method)), false)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -7755,6 +8311,14 @@ function versionCompatibilityPayload(overrides = {}) {
     generatedAt: '2026-07-05T10:00:00',
     ...overrides
   }
+}
+
+function gitBlobSha(content) {
+  const bytes = Buffer.from(content, 'utf8')
+  return createHash('sha1')
+    .update(Buffer.from(`blob ${bytes.length}\0`, 'utf8'))
+    .update(bytes)
+    .digest('hex')
 }
 
 function createIo(stdin = '', cwd = process.cwd()) {

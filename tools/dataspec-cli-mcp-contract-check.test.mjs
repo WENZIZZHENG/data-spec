@@ -6,6 +6,7 @@ import { test } from 'node:test'
 import { runCli } from './dataspec-cli.mjs'
 import {
   DEFAULT_FIXTURE_PATH,
+  loadLocalMcpDescriptors,
   loadContractFixtures,
   runContractCheckCli,
   validateContractFixtures
@@ -205,6 +206,15 @@ test('bundled fixtures include stable reference and post-check contracts', async
   assert.ok(checkCommand.outputShape.includes('safeToUse'))
   assert.ok(checkCommand.oneOfRequiredOptions.includes('file'))
   assert.ok(checkCommand.oneOfRequiredOptions.includes('stdin'))
+  assert.ok(checkCommand.optionalOptions.includes('findings'))
+  assert.ok(checkCommand.outputShape.includes('findings[].evidenceRefs[]'))
+  assert.equal(checkCommand.findingShape.maxItems, 100)
+  assert.equal(checkCommand.findingShape.maxEvidenceRefs, 20)
+  assert.deepEqual(checkCommand.findingEvidenceIssueCodes, [
+    'MISSING_FINDING_EVIDENCE_REFERENCE',
+    'CROSS_PROJECT_FINDING_EVIDENCE_REFERENCE',
+    'UNVERIFIABLE_FINDING_EVIDENCE_REFERENCE'
+  ])
   assert.deepEqual(checkCommand.evidenceIssueCodes, [
     'MISSING_EVIDENCE_REFERENCE',
     'CROSS_PROJECT_EVIDENCE_REFERENCE',
@@ -222,15 +232,51 @@ test('bundled fixtures include stable reference and post-check contracts', async
   assert.deepEqual(checkTool.contentTypeValues, ['SQL', 'DDL', 'MARKDOWN', 'JSON', 'TEXT'])
   assert.deepEqual(checkTool.compatibilityAliases.contentType, { PLAIN_TEXT: 'TEXT' })
   assert.equal(checkTool.safety.sensitiveInputs.includes('content'), true)
+  assert.equal(checkTool.safety.sensitiveInputs.includes('findings'), true)
+  assert.ok(checkTool.inputProperties.includes('findings'))
   assert.ok(checkTool.outputShape.includes('structuredContent.safeToUse'))
+  assert.ok(checkTool.outputShape.includes('structuredContent.findings[].findingKey'))
   assert.deepEqual(checkTool.evidenceIssueCodes, checkCommand.evidenceIssueCodes)
+  assert.deepEqual(checkTool.findingEvidenceIssueCodes, checkCommand.findingEvidenceIssueCodes)
 
   assert.ok(evidenceTool)
   assert.ok(evidenceTool.outputShape.includes('structuredContent.source.evidenceRef'))
+  assert.ok(evidenceTool.inputProperties.includes('postCheckSummary'))
+  assert.ok(evidenceTool.inputProperties.includes('findings'))
+  assert.ok(evidenceTool.outputShape.includes('structuredContent.findings[]'))
+  assert.equal(evidenceTool.findingAcceptance.requiresPassingPostCheck, true)
+  assert.equal(evidenceTool.findingAcceptance.revalidatesEvidenceRefs, true)
   assert.equal(
     evidenceTool.successExample.output.source.evidenceRef,
     'dataspec://evidence/sql-check/42'
   )
+})
+
+test('bundled fixtures include review-pr delivery envelope contract', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const command = fixture.cliCommands.find((item) => item.id === 'review-pr')
+
+  assert.ok(command)
+  for (const field of [
+    'commitSha',
+    'reviewCommentUrl',
+    'inlineCommentUrls[]',
+    'findings[]',
+    'sqlCheckRecordIds[]',
+    'postCheck',
+    'evidencePackages[]',
+    'reviewCommentAction',
+    'summary',
+    'inline',
+    'files[]'
+  ]) {
+    assert.ok(command.outputShape.includes(field), field)
+  }
+  assert.equal(command.deliveryEvidencePolicy.githubMetadataInEvidenceRefs, false)
+  assert.equal(command.deliveryEvidencePolicy.missingUrlValue, null)
+  assert.equal(command.deliveryEvidencePolicy.legacyIssueFallback, true)
+  assert.equal(command.successExample.output.inlineCommentUrls[0], null)
+  assert.doesNotMatch(JSON.stringify(command.successExample.output.findings), /github\.com|abc123/)
 })
 
 test('bundled fixtures include table standards CLI and MCP readonly contracts', async () => {
@@ -643,6 +689,60 @@ test('fixture checker reports Standard Query DSL contract drift', async () => {
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'STANDARD_QUERY_DSL_SENSITIVE_INPUT_MISSING'))
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'STANDARD_QUERY_DSL_INPUT_MISSING'))
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'STANDARD_QUERY_DSL_OUTPUT_SHAPE_MISSING'))
+})
+
+test('fixture checker reports Finding gating and review delivery drift', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const checkCommand = fixture.cliCommands.find((item) => item.id === 'ai-output-check')
+  const reviewCommand = fixture.cliCommands.find((item) => item.id === 'review-pr')
+  const checkTool = fixture.mcpTools.find((item) => item.name === 'check_ai_output')
+  const evidenceTool = fixture.mcpTools.find((item) => item.name === 'export_evidence_package')
+
+  checkCommand.findingShape.evidenceGating.highImpact = ['severity=ERROR']
+  checkCommand.findingShape.requiredFields = []
+  checkCommand.findingShape.subjectFields = checkCommand.findingShape.subjectFields.filter((field) => field !== 'stableRef')
+  checkCommand.findingShape.locationFields = checkCommand.findingShape.locationFields.filter((field) => field !== 'sourceEnd')
+  checkCommand.findingShape.waiverFields = checkCommand.findingShape.waiverFields.filter((field) => field !== 'reason')
+  checkCommand.findingShape.textBounds.observed = 999
+  checkCommand.outputShape = checkCommand.outputShape.filter((field) => field !== 'findings[].evidenceRefs[]')
+  checkTool.findingEvidenceIssueCodes = []
+  reviewCommand.deliveryEvidencePolicy.githubMetadataInEvidenceRefs = true
+  reviewCommand.deliveryEvidencePolicy.requiresPrBlobMatch = false
+  evidenceTool.findingAcceptance.revalidatesEvidenceRefs = false
+
+  const result = await validateContractFixtures({ fixture })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'REVIEW_FINDING_GATING_MISSING'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'REVIEW_FINDING_REQUIRED_FIELDS_MISMATCH'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'REVIEW_FINDING_SUBJECT_FIELDS_MISMATCH'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'REVIEW_FINDING_LOCATION_FIELDS_MISMATCH'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'REVIEW_FINDING_WAIVER_FIELDS_MISMATCH'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'REVIEW_FINDING_TEXT_BOUND_MISMATCH'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'REVIEW_FINDING_OUTPUT_SHAPE_MISSING'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'REVIEW_FINDING_EVIDENCE_CODES_MISMATCH'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'REVIEW_DELIVERY_EVIDENCE_POLICY_MISMATCH'))
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === 'EVIDENCE_PACKAGE_FINDING_GATING_MISMATCH'))
+})
+
+test('fixture checker recursively rejects live MCP Finding schema drift', async () => {
+  const fixture = await loadContractFixtures(DEFAULT_FIXTURE_PATH)
+  const descriptors = structuredClone(await loadLocalMcpDescriptors())
+  const checkTool = descriptors.tools.find((tool) => tool.name === 'check_ai_output')
+  const findingItems = checkTool.inputSchema.properties.findings.items
+  findingItems.required = []
+  findingItems.properties.subject.properties.name.maxLength = 255
+  findingItems.properties.location.additionalProperties = true
+
+  const result = await validateContractFixtures({ fixture, mcpDescriptors: descriptors })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === 'MCP_REVIEW_FINDING_SCHEMA_MISMATCH' && diagnostic.path.endsWith('.items.required')))
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === 'MCP_REVIEW_FINDING_SCHEMA_MISMATCH' && diagnostic.path.includes('subject.name.maxLength')))
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === 'MCP_REVIEW_FINDING_SCHEMA_MISMATCH' && diagnostic.path.endsWith('location.additionalProperties')))
 })
 
 test('fixture checker reports test data and consumer compatibility safety drift', async () => {

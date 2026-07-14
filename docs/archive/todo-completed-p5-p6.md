@@ -987,7 +987,7 @@
 - 契约同步：Schema Registry、OpenAPI 生成类型、CLI/MCP fixture 和 PR review summary/inline/fallback 主规格已同步；自然语言句尾标点不会再污染 canonical Evidence URI。
 - 验证证据：见归档 change 的 `tasks.md` `Verification Evidence`；覆盖后端全量测试、前端测试与 build、tools、OpenSpec strict/all、OpenAPI 漂移、Docker API 闭环、diff/secrets/status 门禁。
 - 评审证据：首个评审 agent `019f5b7c-9dc6-71e1-8284-d513c6604a74` 超时后已关闭；替代评审 agent `019f5b86-fba8-70d2-abc6-43a46012d942` 已完成并关闭，1 个 Important 和 1 个 Minor finding 均已补失败测试或查询契约测试并修复。
-- 后续增强：不新增历史别名表、不回填不可推导历史、不持久化 Evidence Package；统一 Finding/Evidence 与 AI/PR 评审闭环继续由 `P6-191` 承接。
+- 后续增强：不新增历史别名表、不回填不可推导历史、不持久化 Evidence Package；统一 Finding/Evidence 与 AI/PR 评审闭环已由 `P6-191` 完成。
 
 ### P6-153：AI Context 注入防护与不可信文本隔离
 - 状态：已完成第一版，OpenSpec change `add-ai-context-safety-controls` 当前按项目约定保留为 active change。
@@ -1180,3 +1180,14 @@
 - 归档日期：2026-07-12。
 - 评审证据：独立只读子 agent `019f5504-90ac-7212-8b71-7720c0999bf5` 完成覆盖核对后已关闭。
 - 验证方式：本轮只调整待办状态，复用上述能力各自归档中的实现与测试证据；文档一致性检查结果随本轮 commit 记录。
+
+## P6-191：统一 Finding/Evidence 与 AI/PR 评审闭环
+
+- 状态：第一版已于 2026-07-14 完成实现、验证和两轮独立评审；OpenSpec change `unify-review-findings-and-evidence` 已同步主规格并归档。
+- 已完成能力：新增 additive、versioned、secret-safe 的共享 `ReviewFinding` 契约，统一 SQL lint、AI output post-check、Evidence Package、CLI/MCP fixture 和 `review-pr` 的 code、severity、subject、location、evidenceRefs、confidence、suggestedFix、autoFixSafe 与 waiver 语义，同时保留 legacy `issues[]`、统计、marker 和退出码。
+- 证据门禁：post-check 为 PASS 时签发进程内 HMAC receipt，绑定项目、状态和完整规范化 findings 摘要；Evidence Package 重新校验 receipt、项目权限和 evidence refs，外部 finding 固定 `autoFixSafe=false`。receipt 不绑定 package 来源、同一进程内可为同项目和同 findings 重复使用，服务重启后失效。
+- GitHub 交付：`review-pr --format json` 输出 commit SHA、评论 URL、findings、SQL check IDs、post-check 状态和 evidence package 入口；本地原始 bytes 计算 Git blob SHA 并与分页读取的 GitHub PR file `sha` 绑定，每次 inline/汇总评论远端写入前复查 PR head。
+- 验证证据：后端全量 `758/758`；tools `458 total / 456 pass / 2 platform skips`；前端 `192/192`，Docker build 通过；CLI/MCP fixture 0 diagnostics；OpenAPI drift、OpenSpec strict/all（138 项）、状态检查和 `git diff --check` 均通过。详细命令与环境 warning 见归档 change 的 `proposal.md`。
+- 评审证据：首轮 agent `019f5ddf-801b-73a1-97c2-dd8e36573796` 已完成并关闭，7 项 finding 均已整改；第二轮 agent `019f5e13-ce91-7312-a80a-4c0ccf09687c` 已完成并关闭，2 项 Important 已修复并补回归，1 项 Minor 已通过公共契约说明收口。
+- 产物：`review-finding-contract` 主规格、后端 Review Finding 模型与适配器、post-check receipt、Evidence Package findings、OpenAPI 生成类型、CLI/MCP contract fixture、GitHub review delivery envelope、README 和 AI 契约文档。
+- 后续遗留：不由 DataSpec 调用外部 LLM，不自动应用修复或创建远程 PR；真实 GitHub 并发写入、多副本 receipt 共享和跨进程有效期只有出现明确部署需求时再单独评估。

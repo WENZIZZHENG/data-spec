@@ -301,7 +301,7 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 - API `POST /api/lint`: 返回 `LintResult` 并保存 SQL 检查记录。
 - API `POST /api/lint/debug`: 返回 `SqlLintDebugResult`，只读解释规则执行过程，不保存 SQL 检查记录、不生成 AI replay、不写回业务仓库。
-- `LintResult`: `tables`、`issues`、`errorCount`、`warningCount`、`suggestionCount`、`suppressedCount`、`fixedSql`、`fixedSqlDiff`、`fixPolicy`、`fixDryRun`、`fixChanges`、`fixExplanations`、`fixSummary`、`fixNextActions`。
+- `LintResult`: `tables`、`issues`、`findings`、`sqlCheckRecordId`、`errorCount`、`warningCount`、`suggestionCount`、`suppressedCount`、`fixedSql`、`fixedSqlDiff`、`fixPolicy`、`fixDryRun`、`fixChanges`、`fixExplanations`、`fixSummary`、`fixNextActions`。
 - `LintRequest`: `sql`、`projectId`、`profileId`、`taskType`、`fixPolicy`。
 - `FixPolicy`: `mode`、`maxRiskLevel`、`enabledRuleCodes`、`disabledRuleCodes`、`includeExplanations`。
 - `FixChange`: `status`、`reasonCode`、`ruleCode`、`ruleName`、`riskLevel`、`changeType`、`tableName`、`columnName`、`before`、`after`、`explain`、`confidence`、`sourceStart`、`sourceEnd`。
@@ -319,6 +319,30 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 `/api/lint/debug` 与 CLI `lint-debug` 使用同一份 `LintRequest`。调试结果中的 `paramsSnapshot` 仅用于说明规则运行参数，服务端会对 password、token、secret、Authorization、JDBC URL、DSN 等敏感值返回 `[REDACTED]`；调用方不得把该字段当作可还原配置源。
 
+## Shared Review Finding 与 AI Output Post-check
+
+稳定入口：
+
+- API `POST /api/ai-output/check`: 校验 AI 产物正文、标准引用和可选结构化 `findings[]`。
+- CLI `ai-output check --findings <json>`: 读取最多 1 MiB 的 JSON 数组，并在请求前校验最多 100 条 finding、每条最多 20 个 evidence refs、正整数 `schemaVersion`、字段 allowlist 及嵌套字段边界。
+- MCP `check_ai_output`: input schema 暴露同一 Finding 字段、数量上限和安全说明，Finding 及 subject/location/waiver 均声明 `additionalProperties=false`。
+- CLI `review-pr --format json`: 返回 GitHub 交付 envelope，并兼容旧后端 `issues[]` fallback。
+- Post-check PASS 响应：返回进程内 `verificationReceipt`，绑定 projectId、PASS/safeToUse 和完整规范化外部 findings 摘要；WARN/FAIL 不签发可用于 Evidence Package 的 receipt。receipt 不绑定 Evidence Package 的 sourceType/sourceId，也不是一次性凭证，同一服务进程内可为同项目、同 findings 重复使用；服务重启后失效。
+
+`ReviewFinding` 稳定字段：
+
+- 顶层：`schemaVersion`、`source`、`findingKey`、`code`、`severity`、`subject`、`location`、`trigger`、`expected`、`observed`、`evidenceRefs[]`、`confidence`、`suggestedFix`、`autoFixSafe`、`waiver`。
+- `subject`: `projectId`、`kind`、`name`、`tableName`、`columnName`、`stableRef`。
+- `location`: `path`、`line`、`column`、`lineEnd`、`columnEnd`、`sourceStart`、`sourceEnd`、`locationKind`；没有可靠位置时字段为空。
+- `waiver`: `waived`、`waiverId`、`reason`；外部 AI 自报豁免不会替代 DataSpec 项目规则豁免。
+- 稳定来源：`SQL_LINT`、`AI_OUTPUT_POSTCHECK`、`EXTERNAL_AI`；稳定级别：`ERROR`、`WARNING`、`SUGGESTION`、`INFO`。
+- 文本上限：`findingKey/code=128`、`trigger/expected/observed/suggestedFix=1000`、单条 `evidenceRef=500`、`subject.kind=64`、subject 名称类字段 `=256`、`location.path=512`、`location.locationKind=64`、`waiver.reason=500`；Java/CLI/MCP/sanitizer 均按 Unicode code point 计算，脱敏截断后的结果也不会超过该上限。
+- `findingKey` 使用 `sha256-length-prefixed-utf8-v1`：固定 source/code/subject/location 字段顺序，显式编码 null，以 UTF-8 byte length 前缀消除字段边界歧义；Java/CLI 必须通过同一固定 fixture。
+
+外部 finding 进入服务端后会被规范化为 `EXTERNAL_AI`、重写请求项目 ID、重算 `findingKey`，并固定输出 `autoFixSafe=false`。调用方自报 `autoFixSafe=true` 仍按高影响输入要求证据，但即使证据有效也不会升级为自动修复授权；只有 SQL lint 派生的未豁免、LOW-risk、真正 `APPLIED` 的确定性修复可输出 true。`ERROR` 或 `confidence>=80` 同样属于高影响 finding，缺少当前项目可解析的 canonical evidence ref 时产生 blocking FAIL；低影响 finding 的 evidence 无效时产生 WARN。post-check `PASS` 表示结构化 finding 契约和 evidence gating 可接受，不表示被评审代码没有问题，也不授权自动执行 `suggestedFix`。没有问题时 `findings=[]` 是正常结果，系统不得生成占位 finding 或总分。
+
+`review-pr` 在 lint 前固定 PR head、读取 PR files，并要求每个本地 SQL 唯一映射到 PR file 且按原始 bytes 计算的 Git blob SHA 与 file `sha` 一致；加载 files 后和发布任何评论前都会复查 head。非 PR 文件、缺失 sha、内容漂移、路径歧义或 head race 均返回错误且不发布 GitHub 评论。delivery envelope 稳定返回 `kind/schemaVersion/commitSha/reviewCommentUrl/inlineCommentUrls/findings/sqlCheckRecordIds/postCheck/evidencePackages`，并保留 `reviewCommentAction/summary/inline/files`。GitHub SHA 和评论 URL 只证明交付位置；它们不得进入 `finding.evidenceRefs`。GitHub 成功响应没有 `html_url` 时 URL 字段为 `null`，不改变评论 action、计数或退出码。
+
 ## AI Evidence Package
 
 稳定入口：
@@ -330,16 +354,18 @@ Profile 是任务默认建议，不是权限或 provider 配置。AI 可以用�
 
 稳定字段：
 
-- `AiEvidencePackage`: `kind`、`schemaVersion`、`packageId`、`projectId`、`generatedAt`、`source`、`standardSnapshot`、`inputsSummary`、`outputsSummary`、`validationSummary`、`postCheckSummary`、`artifacts[]`、`nextActions[]`、`suggestedCommands[]`、`diagnostics[]`。
+- `AiEvidencePackage`: `kind`、`schemaVersion`、`packageId`、`projectId`、`generatedAt`、`source`、`standardSnapshot`、`inputsSummary`、`outputsSummary`、`validationSummary`、`postCheckSummary`、`findings[]`、`artifacts[]`、`nextActions[]`、`suggestedCommands[]`、`diagnostics[]`。
 - `AiEvidenceSource`: `sourceType`、`sourceId`、`sourceTitle`、`status`、`persisted`。
 - `AiEvidenceStandardSnapshot`: `snapshotId`、`specVersion`、`specHash`、`versioned`。
 - `AiEvidenceArtifact`: `artifactType`、`title`、`format`、`summary`。
 - `AiEvidenceDiagnostic`: `level`、`code`、`message`。
-- `AiEvidencePackageReq`: `projectId`、`sourceType`、`sourceId`、`sourceTitle`、`coverageReport`、`standardSnapshot`、`payloadSummary`、`postCheckSummary`。`postCheckSummary` 仅记录脱敏 post-check 摘要，不存储 raw output。
+- `AiEvidencePackageReq`: `projectId`、`sourceType`、`sourceId`、`sourceTitle`、`coverageReport`、`standardSnapshot`、`payloadSummary`、`postCheckSummary`、`postCheckReceipt`、`findings[]`。`postCheckSummary` 仅记录脱敏摘要；`postCheckReceipt` 仅用于本次请求验证，不写入 evidence package。
 
 稳定来源类型：`AI_JOB`、`SQL_CHECK`、`COVERAGE_REPORT`、`AI_BATCH_RUN`、`AI_TASK_RUN`。`COVERAGE_REPORT` 可以是 payload source，`persisted=false` 表示当前报告不是服务端长期记录。
 
-证据包不得暴露 token、password、Authorization header、完整 JDBC URL 或业务数据行。AI 可以使用 evidence package 继续修复、复盘或生成交付说明，但不得把 evidence package 视为企业审计记录、审批结果或写入授权。
+SQL_CHECK 来源要求记录具有非空项目归属，并先校验调用方对该项目的访问权限；请求 `projectId` 不能替代缺失归属。COVERAGE_REPORT 在读取 payload 前校验项目权限，JSON/zip 使用同一边界。请求携带外部 findings 时，必须同时提供 `status=PASS`、`safeToUse=true` 的摘要及匹配的 `postCheckReceipt`；服务端重算完整规范化 findings 摘要并再次验证 evidence refs。缺失、失效、跨项目或字段被篡改的 receipt 都会被拒绝；receipt 不绑定 sourceType/sourceId，同一进程内可为同项目、同 findings 重放；外部 finding 在包内仍固定 `autoFixSafe=false`。
+
+证据包不得暴露 token、password、Authorization header、完整 JDBC URL、DSN、raw AI output 或业务数据行。AI 可以使用 evidence package 继续修复、复盘或生成交付说明，但不得把 evidence package 视为企业审计记录、审批结果或写入授权。
 
 ## 字段推荐
 

@@ -287,7 +287,7 @@ class QueryNormalizationServiceImplTest {
         BusinessGlossaryService glossaryService = mock(BusinessGlossaryService.class);
         when(glossaryService.match(anyLong(), anyString())).thenReturn(List.of());
         String supplementaryHan = new String(Character.toChars(0x20000));
-        String query = "a".repeat(NameLexicalTokenizer.MAX_INPUT_LENGTH - 1) + supplementaryHan + "b";
+        String query = "a".repeat(NameLexicalTokenizer.MAX_INPUT_LENGTH - 4) + supplementaryHan + "bbbb";
         QueryNormalizationServiceImpl service = service(glossaryService);
 
         QueryNormalizationResult result = service.normalize(1L, query);

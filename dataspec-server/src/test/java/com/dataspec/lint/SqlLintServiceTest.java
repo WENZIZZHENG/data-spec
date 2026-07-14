@@ -72,6 +72,11 @@ class SqlLintServiceTest {
         assertTrue(result.getFixedSqlDiff().contains("-CREATE TABLE UserOrder"));
         assertTrue(result.getFixedSqlDiff().contains("+CREATE TABLE user_order"));
         assertEquals(1, recordService.saved.size(), "应保存 1 条检查记录");
+        assertEquals(7L, result.getSqlCheckRecordId());
+        assertTrue(result.getFindings().stream()
+                .allMatch(finding -> finding.evidenceRefs().contains("dataspec://evidence/sql-check/7")));
+        assertTrue(result.getFindings().stream().anyMatch(finding -> finding.autoFixSafe()),
+                "真正 APPLIED 的 LOW-risk rename 应声明 autoFixSafe");
     }
 
     @Test
@@ -575,6 +580,17 @@ class SqlLintServiceTest {
         assertEquals(0, debug.getLintResult().getIssues().size());
         assertEquals(lint.getIssues().size(), debug.getLintResult().getIssues().size());
         assertEquals(1, recordService.saved.size(), "普通 lint 仍应保存检查记录");
+    }
+
+    @Test
+    void debugReturnsFindingsWithoutFabricatingPersistedEvidence() {
+        SqlLintService service = newService(new RecordingCheckRecordService());
+
+        SqlLintDebugResult debug = service.debug("CREATE TABLE UserOrder (id bigint);", 1L, null, null, null);
+
+        assertNull(debug.getLintResult().getSqlCheckRecordId());
+        assertTrue(debug.getLintResult().getFindings().stream()
+                .allMatch(finding -> finding.evidenceRefs().isEmpty()));
     }
 
     @Test

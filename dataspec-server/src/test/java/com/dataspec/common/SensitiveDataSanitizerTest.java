@@ -44,16 +44,17 @@ class SensitiveDataSanitizerTest {
         );
 
         assertFalse(sanitized.contains("raw-password-value"));
-        assertTrue(sanitized.length() <= 48);
+        assertTrue(sanitized.codePointCount(0, sanitized.length()) <= 45);
     }
 
     @Test
     void limitsTextWithoutSplittingSupplementaryCodePoints() {
         String supplementaryHan = new String(Character.toChars(0x20000));
 
-        String sanitized = SensitiveDataSanitizer.redactText("a".repeat(63) + supplementaryHan + "b", 64);
+        String sanitized = SensitiveDataSanitizer.redactText("a".repeat(60) + supplementaryHan + "bbbb", 64);
 
-        assertEquals("a".repeat(63) + supplementaryHan + "...", sanitized);
+        assertEquals("a".repeat(60) + supplementaryHan + "...", sanitized);
+        assertEquals(64, sanitized.codePointCount(0, sanitized.length()));
     }
 
     @Test

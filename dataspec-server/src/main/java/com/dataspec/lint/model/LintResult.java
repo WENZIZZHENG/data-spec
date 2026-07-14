@@ -1,6 +1,9 @@
 package com.dataspec.lint.model;
 
 import com.dataspec.dialect.model.DialectDiagnostic;
+import com.dataspec.reviewfinding.model.ReviewFinding;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -56,6 +59,20 @@ public class LintResult {
     /** 方言识别、支持矩阵和降级提示，供 AI/CLI/前端判断结果边界 */
     private List<DialectDiagnostic> dialectDiagnostics;
 
+    /**
+     * 共享 Review Finding 读模型；从 issues 派生，旧客户端可安全忽略。
+     */
+    @ArraySchema(
+            arraySchema = @Schema(description = "由既有 lint issues 派生的共享 findings；空结果返回空数组。"),
+            schema = @Schema(implementation = ReviewFinding.class))
+    private List<ReviewFinding> findings;
+
+    /**
+     * 本次 lint 成功保存的 SQL check record ID；保存失败或只读 debug 时为空。
+     */
+    @Schema(description = "本次 lint 成功保存的 SQL check record ID；保存失败或只读 debug 时为空。")
+    private Long sqlCheckRecordId;
+
     public static LintResult of(List<TableDef> tables, List<LintIssue> issues) {
         long errors = issues.stream().filter(LintResult::isActive).filter(i -> i.getSeverity() == Severity.ERROR).count();
         long warnings = issues.stream().filter(LintResult::isActive).filter(i -> i.getSeverity() == Severity.WARNING).count();
@@ -69,6 +86,7 @@ public class LintResult {
                 .warningCount((int) warnings)
                 .suggestionCount((int) suggestions)
                 .suppressedCount((int) suppressed)
+                .findings(List.of())
                 .build();
     }
 

@@ -18,6 +18,8 @@ import com.dataspec.aitaskrun.model.AiTaskRunListItem;
 import com.dataspec.aitaskrun.model.AiTaskRunStartCommand;
 import com.dataspec.aitaskrun.model.AiTaskStepStatus;
 import com.dataspec.aitaskrun.service.AiTaskRunService;
+import com.dataspec.aioutputcheck.model.AiOutputPostCheckStatus;
+import com.dataspec.aioutputcheck.service.AiOutputPostCheckReceipt;
 import com.dataspec.aireplay.entity.AiJobRecord;
 import com.dataspec.aireplay.model.AiJobRecordCreateReq;
 import com.dataspec.aireplay.model.AiJobRecordDetail;
@@ -26,10 +28,13 @@ import com.dataspec.coverage.model.FieldCoverageReport;
 import com.dataspec.coverage.model.FieldCoverageSummary;
 import com.dataspec.coverage.model.FieldCoverageTable;
 import com.dataspec.coverage.model.UnmanagedFieldRanking;
+import com.dataspec.common.exception.BizException;
 import com.dataspec.evidence.model.AiEvidencePackage;
 import com.dataspec.evidence.model.AiEvidencePackageReq;
 import com.dataspec.evidence.model.EvidenceSourceType;
 import com.dataspec.evidence.service.impl.AiEvidencePackageServiceImpl;
+import com.dataspec.evidenceclaim.model.EvidenceClaimResolution;
+import com.dataspec.evidenceclaim.model.EvidenceClaimResolutionStatus;
 import com.dataspec.evidenceclaim.service.EvidenceClaimResolver;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.LintIssue;
@@ -37,9 +42,17 @@ import com.dataspec.lint.model.LintResult;
 import com.dataspec.lint.model.Severity;
 import com.dataspec.lint.model.SqlCheckReplay;
 import com.dataspec.lint.service.SqlCheckRecordService;
+import com.dataspec.reviewfinding.model.ReviewFinding;
+import com.dataspec.reviewfinding.model.ReviewFindingSeverity;
+import com.dataspec.reviewfinding.model.ReviewFindingSource;
+import com.dataspec.reviewfinding.model.ReviewFindingSubject;
+import com.dataspec.reviewfinding.model.ReviewFindingWaiver;
+import com.dataspec.security.context.DataSpecSecurityContext;
+import com.dataspec.security.model.ApiTokenPrincipal;
 import com.dataspec.standard.dto.StandardSnapshotInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -47,11 +60,13 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipInputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -62,6 +77,11 @@ class AiEvidencePackageServiceImplTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
     private final AiEvidencePackageServiceImpl service = service();
+
+    @AfterEach
+    void clearSecurityContext() {
+        DataSpecSecurityContext.clear();
+    }
 
     @Test
     void generatesSqlCheckEvidenceAndRedactsSensitiveValues() throws Exception {
@@ -87,6 +107,61 @@ class AiEvidencePackageServiceImplTest {
         assertFalse(json.toString().contains("secret123"));
         assertFalse(json.toString().contains("ds_token_raw"));
         assertFalse(json.toString().contains("jdbc:postgresql://localhost:5432/app"));
+        assertFalse(pkg.findings().isEmpty());
+        assertTrue(pkg.findings().stream().allMatch(finding ->
+                finding.evidenceRefs().equals(List.of("dataspec://evidence/sql-check/11"))));
+    }
+
+    @Test
+    void rejectsSqlCheckEvidenceOutsideScopedTokenProject() {
+        DataSpecSecurityContext.set(new ApiTokenPrincipal("scoped", "reviewer", false, Set.of(8L)));
+
+        BizException error = assertThrows(BizException.class, () -> service.generate(new AiEvidencePackageReq(
+                8L,
+                EvidenceSourceType.SQL_CHECK,
+                11L,
+                null,
+                null,
+                null,
+                null)));
+
+        assertEquals(403, error.getCode());
+    }
+
+    @Test
+    void rejectsSqlCheckWithoutPersistedProjectEvenWhenRequestSuppliesOne() {
+        SqlCheckRecordService records = mock(SqlCheckRecordService.class);
+        SqlCheckRecord record = new SqlCheckRecord();
+        record.setId(12L);
+        record.setProjectId(null);
+        when(records.getById(12L)).thenReturn(record);
+        DataSpecSecurityContext.set(new ApiTokenPrincipal("scoped", "reviewer", false, Set.of(8L)));
+
+        BizException error = assertThrows(BizException.class, () ->
+                service(mock(EvidenceClaimResolver.class), records).generate(new AiEvidencePackageReq(
+                        8L, EvidenceSourceType.SQL_CHECK, 12L, null, null, null, null)));
+
+        assertEquals(403, error.getCode());
+        assertTrue(error.getMessage().contains("缺少项目归属"));
+    }
+
+    @Test
+    void rejectsCoverageJsonAndZipOutsideScopedTokenProject() {
+        DataSpecSecurityContext.set(new ApiTokenPrincipal("scoped", "reviewer", false, Set.of(8L)));
+        AiEvidencePackageReq request = new AiEvidencePackageReq(
+                7L,
+                EvidenceSourceType.COVERAGE_REPORT,
+                null,
+                "跨项目覆盖率",
+                coverageReport(),
+                null,
+                null);
+
+        BizException jsonError = assertThrows(BizException.class, () -> service.generate(request));
+        BizException zipError = assertThrows(BizException.class, () -> service.generateZip(request));
+
+        assertEquals(403, jsonError.getCode());
+        assertEquals(403, zipError.getCode());
     }
 
     @Test
@@ -139,14 +214,200 @@ class AiEvidencePackageServiceImplTest {
             };
             return path == null ? null : "dataspec://evidence/" + path + "/" + sourceId;
         });
+        return service(resolver);
+    }
+
+    private AiEvidencePackageServiceImpl service(EvidenceClaimResolver resolver) {
+        return service(resolver, new StubSqlCheckRecordService());
+    }
+
+    private AiEvidencePackageServiceImpl service(
+            EvidenceClaimResolver resolver,
+            SqlCheckRecordService sqlCheckRecordService
+    ) {
         return new AiEvidencePackageServiceImpl(
-                new StubSqlCheckRecordService(),
+                sqlCheckRecordService,
                 new StubAiJobRecordService(),
                 new StubAiBatchService(),
                 new StubAiTaskRunService(),
                 resolver,
                 objectMapper
         );
+    }
+
+    @Test
+    void packagesExternalFindingOnlyAfterSuccessfulPostCheckAndEvidenceRevalidation() {
+        String evidenceRef = "dataspec://evidence/sql-check/11";
+        EvidenceClaimResolver resolver = mock(EvidenceClaimResolver.class);
+        when(resolver.canonicalRef(EvidenceSourceType.AI_JOB, 21L))
+                .thenReturn("dataspec://evidence/ai-job/21");
+        when(resolver.resolve(7L, evidenceRef)).thenReturn(new EvidenceClaimResolution(
+                evidenceRef,
+                evidenceRef,
+                EvidenceClaimResolutionStatus.VERIFIED,
+                EvidenceSourceType.SQL_CHECK,
+                11L,
+                7L));
+
+        ReviewFinding submitted = externalFinding(evidenceRef);
+        String receipt = AiOutputPostCheckReceipt.issue(
+                7L,
+                AiOutputPostCheckStatus.PASS,
+                true,
+                List.of(normalizedExternalFinding(submitted)),
+                objectMapper);
+        AiEvidencePackage pkg = service(resolver).generate(new AiEvidencePackageReq(
+                7L,
+                EvidenceSourceType.AI_JOB,
+                21L,
+                null,
+                null,
+                null,
+                null,
+                Map.of("status", "PASS", "safeToUse", true),
+                receipt,
+                List.of(submitted)));
+
+        assertEquals(1, pkg.findings().size());
+        ReviewFinding finding = pkg.findings().getFirst();
+        assertEquals(ReviewFindingSource.EXTERNAL_AI, finding.source());
+        assertEquals(7L, finding.subject().projectId());
+        assertEquals(List.of(evidenceRef), finding.evidenceRefs());
+        assertFalse(finding.autoFixSafe());
+        assertFalse(objectMapper.valueToTree(pkg).toString().contains("raw-secret"));
+    }
+
+    @Test
+    void rejectsExternalFindingWithoutSuccessfulPostCheckOrProjectValidEvidence() {
+        String evidenceRef = "dataspec://evidence/sql-check/99";
+        EvidenceClaimResolver resolver = mock(EvidenceClaimResolver.class);
+        when(resolver.canonicalRef(EvidenceSourceType.AI_JOB, 21L))
+                .thenReturn("dataspec://evidence/ai-job/21");
+        when(resolver.resolve(7L, evidenceRef)).thenReturn(new EvidenceClaimResolution(
+                evidenceRef,
+                null,
+                EvidenceClaimResolutionStatus.CROSS_PROJECT,
+                EvidenceSourceType.SQL_CHECK,
+                99L,
+                null));
+        AiEvidencePackageServiceImpl customService = service(resolver);
+
+        assertThrows(BizException.class, () -> customService.generate(new AiEvidencePackageReq(
+                7L, EvidenceSourceType.AI_JOB, 21L, null, null, null, null,
+                Map.of("status", "WARN", "safeToUse", false),
+                List.of(externalFinding(evidenceRef)))));
+        assertThrows(BizException.class, () -> customService.generate(new AiEvidencePackageReq(
+                7L, EvidenceSourceType.AI_JOB, 21L, null, null, null, null,
+                Map.of("status", "PASS", "safeToUse", true),
+                List.of(externalFinding(evidenceRef)))));
+    }
+
+    @Test
+    void rejectsForgedSummaryAndFindingChangedAfterPostCheck() {
+        String evidenceRef = "dataspec://evidence/sql-check/11";
+        EvidenceClaimResolver resolver = mock(EvidenceClaimResolver.class);
+        when(resolver.canonicalRef(EvidenceSourceType.AI_JOB, 21L))
+                .thenReturn("dataspec://evidence/ai-job/21");
+        when(resolver.resolve(7L, evidenceRef)).thenReturn(new EvidenceClaimResolution(
+                evidenceRef,
+                evidenceRef,
+                EvidenceClaimResolutionStatus.VERIFIED,
+                EvidenceSourceType.SQL_CHECK,
+                11L,
+                7L));
+        ReviewFinding original = externalFinding(evidenceRef);
+        String receipt = AiOutputPostCheckReceipt.issue(
+                7L,
+                AiOutputPostCheckStatus.PASS,
+                true,
+                List.of(normalizedExternalFinding(original)),
+                objectMapper);
+        ReviewFinding tampered = new ReviewFinding(
+                original.source(),
+                original.findingKey(),
+                original.code(),
+                ReviewFindingSeverity.WARNING,
+                original.subject(),
+                original.location(),
+                original.trigger(),
+                original.expected(),
+                original.observed(),
+                original.evidenceRefs(),
+                40,
+                original.suggestedFix(),
+                original.autoFixSafe(),
+                original.waiver());
+        AiEvidencePackageServiceImpl customService = service(resolver);
+
+        BizException forgedSummary = assertThrows(BizException.class, () -> customService.generate(
+                new AiEvidencePackageReq(
+                        7L, EvidenceSourceType.AI_JOB, 21L, null, null, null, null,
+                        Map.of("status", "PASS", "safeToUse", true),
+                        List.of(original))));
+        BizException changedFinding = assertThrows(BizException.class, () -> customService.generate(
+                new AiEvidencePackageReq(
+                        7L, EvidenceSourceType.AI_JOB, 21L, null, null, null, null,
+                        Map.of("status", "PASS", "safeToUse", true),
+                        receipt,
+                        List.of(tampered))));
+        String otherProjectReceipt = AiOutputPostCheckReceipt.issue(
+                8L,
+                AiOutputPostCheckStatus.PASS,
+                true,
+                List.of(normalizedExternalFinding(original)),
+                objectMapper);
+        BizException crossProjectReceipt = assertThrows(BizException.class, () -> customService.generate(
+                new AiEvidencePackageReq(
+                        7L, EvidenceSourceType.AI_JOB, 21L, null, null, null, null,
+                        Map.of("status", "PASS", "safeToUse", true),
+                        otherProjectReceipt,
+                        List.of(original))));
+
+        assertTrue(forgedSummary.getMessage().contains("postCheckReceipt"));
+        assertTrue(changedFinding.getMessage().contains("postCheckReceipt"));
+        assertTrue(crossProjectReceipt.getMessage().contains("postCheckReceipt"));
+    }
+
+    private ReviewFinding externalFinding(String evidenceRef) {
+        return new ReviewFinding(
+                ReviewFindingSource.EXTERNAL_AI,
+                null,
+                "AI_REVIEW_RULE",
+                ReviewFindingSeverity.ERROR,
+                new ReviewFindingSubject(7L, "AI_OUTPUT", "review", null, null, null),
+                null,
+                "Authorization: Bearer raw-secret",
+                "符合标准",
+                "password=raw-secret",
+                List.of(evidenceRef),
+                95,
+                "人工修复",
+                true,
+                ReviewFindingWaiver.NONE);
+    }
+
+    private ReviewFinding normalizedExternalFinding(ReviewFinding submitted) {
+        return new ReviewFinding(
+                ReviewFindingSource.EXTERNAL_AI,
+                null,
+                submitted.code(),
+                submitted.severity(),
+                new ReviewFindingSubject(
+                        7L,
+                        submitted.subject().kind(),
+                        submitted.subject().name(),
+                        submitted.subject().tableName(),
+                        submitted.subject().columnName(),
+                        submitted.subject().stableRef()),
+                submitted.location(),
+                submitted.trigger(),
+                submitted.expected(),
+                submitted.observed(),
+                submitted.evidenceRefs(),
+                submitted.confidence(),
+                submitted.suggestedFix(),
+                false,
+                ReviewFindingWaiver.NONE);
     }
 
     @Test

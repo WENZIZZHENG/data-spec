@@ -68,7 +68,7 @@ public final class SensitiveDataSanitizer {
      * @param text 待脱敏文本，可为空
      * @param maxLength 最大 Unicode code point 数；小于等于 0 时不限制
      * @param explicitSecrets 需要额外精确脱敏的 secret
-     * @return 脱敏后的安全文本；超限时追加省略号
+     * @return 脱敏后的安全文本；超限时在最大长度内追加省略号
      */
     public static String redactText(String text, int maxLength, String... explicitSecrets) {
         if (text == null) {
@@ -84,8 +84,10 @@ public final class SensitiveDataSanitizer {
         value = BEARER_PATTERN.matcher(value).replaceAll("$1" + REDACTION);
         value = SECRET_KEY_VALUE_PATTERN.matcher(value).replaceAll("$1$2" + REDACTION + "$2");
         if (maxLength > 0 && value.codePointCount(0, value.length()) > maxLength) {
-            int endIndex = value.offsetByCodePoints(0, maxLength);
-            return value.substring(0, endIndex) + "...";
+            int ellipsisLength = Math.min(3, maxLength);
+            int contentLength = maxLength - ellipsisLength;
+            int endIndex = value.offsetByCodePoints(0, contentLength);
+            return value.substring(0, endIndex) + ".".repeat(ellipsisLength);
         }
         return value;
     }

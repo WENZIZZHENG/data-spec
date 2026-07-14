@@ -6594,6 +6594,13 @@ export interface components {
             fixSummary?: components["schemas"]["FixPlanSummary"];
             fixNextActions?: string[];
             dialectDiagnostics?: components["schemas"]["DialectDiagnostic"][];
+            /** @description 由既有 lint issues 派生的共享 findings；空结果返回空数组。 */
+            findings?: components["schemas"]["ReviewFinding"][];
+            /**
+             * Format: int64
+             * @description 本次 lint 成功保存的 SQL check record ID；保存失败或只读 debug 时为空。
+             */
+            sqlCheckRecordId?: number;
         };
         RLintResult: {
             /** Format: int32 */
@@ -6601,6 +6608,116 @@ export interface components {
             message?: string;
             data?: components["schemas"]["LintResult"];
             error?: components["schemas"]["ErrorDetail"];
+        };
+        /** @description 版本化共享 Review Finding；bounded、secret-safe，且不包含可复用凭据或完整外部响应。 */
+        ReviewFinding: {
+            /**
+             * Format: int32
+             * @description Finding schema 版本；breaking 变更必须升级。
+             * @example 1
+             */
+            schemaVersion?: number;
+            /**
+             * @description Finding 的原始发现来源；Evidence Package 和 PR 评论沿用原始来源，不改写该值。
+             * @enum {string}
+             */
+            source?: "SQL_LINT" | "AI_OUTPUT_POSTCHECK" | "EXTERNAL_AI";
+            /** @description 稳定去重键；为空时由确定性字段生成，最多 128 个 Unicode code point。 */
+            findingKey?: string;
+            /** @description 稳定规则或问题码；最多 128 个 Unicode code point。 */
+            code: string;
+            /**
+             * @description 共享问题级别；ERROR 可阻断使用，WARNING 需确认，SUGGESTION/INFO 为非阻断建议。
+             * @enum {string}
+             */
+            severity?: "ERROR" | "WARNING" | "SUGGESTION" | "INFO";
+            subject?: components["schemas"]["ReviewFindingSubject"];
+            location?: components["schemas"]["ReviewFindingLocation"];
+            /** @description 触发规则或判定条件；最多 1000 个 Unicode code point。 */
+            trigger?: string;
+            /** @description 期望状态或约束；最多 1000 个 Unicode code point。 */
+            expected?: string;
+            /** @description 实际观察到的脱敏摘要；最多 1000 个 Unicode code point，不得包含完整业务数据行。 */
+            observed?: string;
+            /** @description 可复核证据引用；最多 20 条。 */
+            evidenceRefs?: string[];
+            /**
+             * Format: int32
+             * @description 置信度 0-100；未知时为空。
+             */
+            confidence?: number;
+            /** @description 脱敏修复建议；最多 1000 个 Unicode code point，不表示允许自动执行。 */
+            suggestedFix?: string;
+            /** @description 仅在确定性、未豁免、LOW-risk 且真正 APPLIED 时可为 true；外部 AI 声明仍须 evidence gating。 */
+            autoFixSafe?: boolean;
+            waiver?: components["schemas"]["ReviewFindingWaiver"];
+        };
+        /** @description Finding 的可选文件与源码范围；无可靠位置时字段为空，不伪造行号。 */
+        ReviewFindingLocation: {
+            /** @description 业务仓库相对路径；最多 512 个 Unicode code point，后端仅收到 SQL 文本时为空。 */
+            path?: string;
+            /**
+             * Format: int32
+             * @description 1-based 起始行；未知时为空。
+             */
+            line?: number;
+            /**
+             * Format: int32
+             * @description 1-based 起始列；未知时为空。
+             */
+            column?: number;
+            /**
+             * Format: int32
+             * @description 1-based 结束行；未知时为空。
+             */
+            lineEnd?: number;
+            /**
+             * Format: int32
+             * @description 1-based 结束列，不含结束位置；未知时为空。
+             */
+            columnEnd?: number;
+            /**
+             * Format: int32
+             * @description 0-based 起始字符偏移；未知时为空。
+             */
+            sourceStart?: number;
+            /**
+             * Format: int32
+             * @description 0-based 结束字符偏移，不含结束位置；未知时为空。
+             */
+            sourceEnd?: number;
+            /** @description 定位类型，如 table、column 或 comment_column。 */
+            locationKind?: string;
+        };
+        /** @description Finding 的项目级业务对象摘要；所有文本均脱敏和限长，不包含业务数据行。 */
+        ReviewFindingSubject: {
+            /**
+             * Format: int64
+             * @description 当前项目 ID；无法确定时为空。
+             */
+            projectId?: number;
+            /** @description 对象类型，如 SQL_COLUMN、SQL_TABLE、STANDARD_REFERENCE 或 AI_OUTPUT。 */
+            kind?: string;
+            /** @description 对象的人读名称；最多 256 个 Unicode code point。 */
+            name?: string;
+            /** @description SQL 表名；非 SQL finding 为空。 */
+            tableName?: string;
+            /** @description SQL 字段名；非字段 finding 为空。 */
+            columnName?: string;
+            /** @description 标准对象 stableRef；没有稳定引用时为空。 */
+            stableRef?: string;
+        };
+        /** @description Finding 的规则豁免摘要；未豁免时 waiverId 和 reason 固定为空。 */
+        ReviewFindingWaiver: {
+            /** @description 是否已被确定性规则豁免；默认 false。 */
+            waived?: boolean;
+            /**
+             * Format: int64
+             * @description DataSpec 规则豁免 ID；未豁免或无持久化记录时为空。
+             */
+            waiverId?: number;
+            /** @description 脱敏后的豁免原因；最多 500 个 Unicode code point。 */
+            reason?: string;
         };
         RSqlLintDebugResult: {
             /** Format: int32 */
@@ -6956,23 +7073,41 @@ export interface components {
             data?: components["schemas"]["FieldBulkUpdatePreview"];
             error?: components["schemas"]["ErrorDetail"];
         };
+        /** @description AI Evidence Package 生成请求；不接收 raw AI output 或可复用凭据。 */
         AiEvidencePackageReq: {
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description 当前项目 ID；持久化来源以来源记录的项目 ID 为准。
+             */
             projectId?: number;
-            /** @enum {string} */
+            /**
+             * @description 证据来源类型；决定 sourceId 或 payload 的解析方式。
+             * @enum {string}
+             */
             sourceType: "AI_JOB" | "SQL_CHECK" | "COVERAGE_REPORT" | "AI_BATCH_RUN" | "AI_TASK_RUN";
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description 持久化来源 ID；payload-only COVERAGE_REPORT 可为空。
+             */
             sourceId?: number;
+            /** @description payload-only 来源的人读标题；输出前脱敏。 */
             sourceTitle?: string;
             coverageReport?: components["schemas"]["FieldCoverageReport"];
             standardSnapshot?: components["schemas"]["AiEvidenceStandardSnapshot"];
+            /** @description 输入 payload 的有界脱敏摘要；不得包含 raw secret。 */
             payloadSummary?: {
                 [key: string]: Record<string, never>;
             };
+            /** @description AI output post-check 摘要；外部 findings 要求 status=PASS 且 safeToUse=true。 */
             postCheckSummary?: {
                 [key: string]: Record<string, never>;
             };
+            /** @description post-check PASS 时签发的进程内 HMAC receipt；外部 findings 非空时必须匹配当前项目和完整规范化 findings，不绑定 package 来源，同一进程内可为相同输入重复使用，服务重启后失效。 */
+            postCheckReceipt?: string | null;
+            /** @description 已通过 post-check 的外部 findings；打包前再次验证 evidenceRefs。 */
+            findings?: components["schemas"]["ReviewFinding"][];
         };
+        /** @description 标准快照摘要；payload-only 来源未提供时标记为未版本化。 */
         AiEvidenceStandardSnapshot: {
             /** Format: int64 */
             snapshotId?: number;
@@ -6993,34 +7128,57 @@ export interface components {
             code?: string;
             message?: string;
         };
+        /** @description AI Evidence Package 的稳定机器契约；所有摘要和 findings 均 bounded、secret-safe。 */
         AiEvidencePackage: {
+            /** @description 契约类型标识，固定为 dataspec-ai-evidence-package。 */
             kind?: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Evidence Package schema 版本；breaking 变更必须升级。
+             */
             schemaVersion?: number;
+            /** @description 本次本地生成的唯一 evidence package ID。 */
             packageId?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description 包所属项目 ID；持久化来源以来源记录的项目为准。
+             */
             projectId?: number;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description 证据包生成时间，使用 UTC Instant。
+             */
             generatedAt?: string;
             source?: components["schemas"]["AiEvidenceSource"];
             standardSnapshot?: components["schemas"]["AiEvidenceStandardSnapshot"];
+            /** @description 有界脱敏输入摘要；不得包含 raw secret。 */
             inputsSummary?: {
                 [key: string]: Record<string, never>;
             };
+            /** @description 有界脱敏输出摘要；不得包含 raw AI output。 */
             outputsSummary?: {
                 [key: string]: Record<string, never>;
             };
+            /** @description 来源自身的确定性校验摘要。 */
             validationSummary?: {
                 [key: string]: Record<string, never>;
             };
+            /** @description AI output post-check 摘要；只保留 allowlist 字段，不保存 raw content 或 issues。 */
             postCheckSummary?: {
                 [key: string]: Record<string, never>;
             };
+            /** @description 从持久化来源派生或经 post-check/evidence 复验的共享 findings。 */
+            findings?: components["schemas"]["ReviewFinding"][];
+            /** @description 证据 artifact 摘要列表。 */
             artifacts?: components["schemas"]["AiEvidenceArtifact"][];
+            /** @description 建议的人工下一步动作。 */
             nextActions?: string[];
+            /** @description 建议执行的只读或显式命令。 */
             suggestedCommands?: string[];
+            /** @description 证据来源、payload 或兼容性诊断。 */
             diagnostics?: components["schemas"]["AiEvidenceDiagnostic"][];
         };
+        /** @description 持久化或 payload-only 证据来源摘要。 */
         AiEvidenceSource: {
             /**
              * @description Evidence Package 来源类型；决定来源 ID 和 evidenceRef 的解析语义。
@@ -7234,6 +7392,8 @@ export interface components {
             content: string;
             /** @description 可选标准快照引用，如 snapshot:<projectId>:<snapshotId|version>；用于识别旧快照或快照漂移。 */
             snapshotRef?: string;
+            /** @description 外部 AI 提交的结构化 findings；服务端会重写 source、projectId 和 findingKey，并验证 evidenceRefs。 */
+            findings?: components["schemas"]["ReviewFinding"][];
         };
         /** @description AI 输出后置校验问题；所有文本字段均必须 secret-safe。 */
         AiOutputPostCheckIssue: {
@@ -7288,10 +7448,14 @@ export interface components {
             safeToUse?: boolean;
             summary?: components["schemas"]["AiOutputPostCheckSummary"];
             issues?: components["schemas"]["AiOutputPostCheckIssue"][];
+            /** @description 经脱敏、去重和 evidence gating 的共享 findings；空结果返回空数组。 */
+            findings?: components["schemas"]["ReviewFinding"][];
             resolvedRefs?: components["schemas"]["StandardReferenceResolutionResult"][];
             suggestedFixes?: string[];
             evidenceLinks?: string[];
             nextActions?: string[];
+            /** @description 仅 PASS 时签发的进程内 HMAC receipt；绑定项目、状态和完整规范化 findings 摘要，不绑定 Evidence Package 来源，同一进程内可为相同输入重复使用，服务重启后失效。 */
+            verificationReceipt?: string | null;
         };
         /** @description AI 输出后置校验摘要，用于 AI/CLI/MCP 快速判断阻断和风险规模。 */
         AiOutputPostCheckSummary: {

@@ -26,6 +26,80 @@ const AI_OUTPUT_POST_CHECK_CONTENT_TYPES = ['SQL', 'DDL', 'MARKDOWN', 'JSON', 'T
 const TEST_DATA_MAX_FIELDS = 100
 const TEST_DATA_MAX_CASES_PER_FIELD = 3
 const TEST_DATA_MAX_SEED_ROWS = 50
+const REVIEW_FINDINGS_MAX_ITEMS = 100
+const REVIEW_FINDING_MAX_EVIDENCE_REFS = 20
+const REVIEW_FINDING_FIELDS = new Set([
+  'schemaVersion', 'source', 'findingKey', 'code', 'severity', 'subject', 'location', 'trigger',
+  'expected', 'observed', 'evidenceRefs', 'confidence', 'suggestedFix', 'autoFixSafe', 'waiver'
+])
+const REVIEW_FINDING_SUBJECT_FIELDS = new Set(['projectId', 'kind', 'name', 'tableName', 'columnName', 'stableRef'])
+const REVIEW_FINDING_LOCATION_FIELDS = new Set([
+  'path', 'line', 'column', 'lineEnd', 'columnEnd', 'sourceStart', 'sourceEnd', 'locationKind'
+])
+const REVIEW_FINDING_WAIVER_FIELDS = new Set(['waived', 'waiverId', 'reason'])
+const REVIEW_FINDING_INPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  description: '外部 AI 提交的共享 Review Finding；服务端会重写 source、projectId 和 findingKey，并验证 evidenceRefs。',
+  properties: {
+    schemaVersion: { type: 'integer', minimum: 1, description: 'Finding schema 版本；省略时使用当前版本。' },
+    source: { type: 'string', enum: ['SQL_LINT', 'AI_OUTPUT_POSTCHECK', 'EXTERNAL_AI'], description: '调用方声明的来源；外部输入会被服务端规范化为 EXTERNAL_AI。' },
+    findingKey: { type: 'string', maxLength: 128, description: '调用方去重键；服务端会根据规范化字段重新计算。' },
+    code: { type: 'string', minLength: 1, maxLength: 128, description: '稳定规则或问题码。' },
+    severity: { type: 'string', enum: ['ERROR', 'WARNING', 'SUGGESTION', 'INFO'], description: '共享问题级别；ERROR/high-confidence/autoFixSafe 必须有当前项目可验证证据。' },
+    subject: {
+      type: 'object',
+      additionalProperties: false,
+      description: 'Finding 指向的项目级业务对象摘要，不得包含业务数据行。',
+      properties: {
+        projectId: { type: 'integer', minimum: 1, description: '调用方项目 ID；服务端会重写为请求项目。' },
+        kind: { type: 'string', maxLength: 64, description: '对象类型，如 SQL_COLUMN、STANDARD_REFERENCE 或 AI_OUTPUT。' },
+        name: { type: 'string', maxLength: 256, description: '脱敏对象名称。' },
+        tableName: { type: 'string', maxLength: 256, description: 'SQL 表名；非 SQL finding 省略。' },
+        columnName: { type: 'string', maxLength: 256, description: 'SQL 字段名；非字段 finding 省略。' },
+        stableRef: { type: 'string', maxLength: 256, description: '标准对象 stableRef；没有稳定引用时省略。' }
+      }
+    },
+    location: {
+      type: 'object',
+      additionalProperties: false,
+      description: '可选业务仓库相对路径和源码范围；未知位置不应伪造。',
+      properties: {
+        path: { type: 'string', maxLength: 512, description: '业务仓库相对路径。' },
+        line: { type: 'integer', minimum: 1, description: '1-based 起始行。' },
+        column: { type: 'integer', minimum: 1, description: '1-based 起始列。' },
+        lineEnd: { type: 'integer', minimum: 1, description: '1-based 结束行。' },
+        columnEnd: { type: 'integer', minimum: 1, description: '1-based 结束列，不含结束位置。' },
+        sourceStart: { type: 'integer', minimum: 0, description: '0-based 起始字符偏移。' },
+        sourceEnd: { type: 'integer', minimum: 0, description: '0-based 结束字符偏移，不含结束位置。' },
+        locationKind: { type: 'string', maxLength: 64, description: '定位类型，如 table、column 或 comment_column。' }
+      }
+    },
+    trigger: { type: 'string', maxLength: 1000, description: '触发规则或判定条件；输出前脱敏。' },
+    expected: { type: 'string', maxLength: 1000, description: '期望状态或约束；输出前脱敏。' },
+    observed: { type: 'string', maxLength: 1000, description: '实际观察摘要；不得包含完整业务数据行或凭据。' },
+    evidenceRefs: {
+      type: 'array',
+      maxItems: REVIEW_FINDING_MAX_EVIDENCE_REFS,
+      description: '当前项目可解析的 canonical evidence refs；最多 20 条。',
+      items: { type: 'string', minLength: 1, maxLength: 500, description: '单条 evidence ref。' }
+    },
+    confidence: { type: 'integer', minimum: 0, maximum: 100, description: '置信度 0-100；80 及以上必须有可验证证据。' },
+    suggestedFix: { type: 'string', maxLength: 1000, description: '脱敏修复建议；不表示允许自动执行。' },
+    autoFixSafe: { type: 'boolean', description: '外部 AI 声明仍须 evidence gating，不会自动应用修复。' },
+    waiver: {
+      type: 'object',
+      additionalProperties: false,
+      description: '调用方豁免摘要；外部输入不会被当作 DataSpec 项目豁免。',
+      properties: {
+        waived: { type: 'boolean', description: '调用方声明的豁免状态。' },
+        waiverId: { type: 'integer', minimum: 1, description: 'DataSpec 规则豁免 ID；没有持久化豁免时省略。' },
+        reason: { type: 'string', maxLength: 500, description: '脱敏豁免原因。' }
+      }
+    }
+  },
+  required: ['code']
+}
 
 const READ_ONLY_TOOL_SAFETY = {
   readOnly: true,
@@ -81,8 +155,8 @@ const TOOL_SAFETY = {
   },
   check_ai_output: {
     ...READ_ONLY_TOOL_SAFETY,
-    sensitiveInputs: ['content'],
-    nextActions: ['PASS 后再复制或执行 AI 产物；WARN/FAIL 时先查看 blocking refs、replacement refs 和 nextActions。']
+    sensitiveInputs: ['content', 'findings'],
+    nextActions: ['PASS 后再复制或执行 AI 产物；WARN/FAIL 时先查看 blocking refs、findings、replacement refs 和 nextActions。']
   },
   suggest_fields: READ_ONLY_TOOL_SAFETY,
   get_table_standards: {
@@ -114,7 +188,11 @@ const TOOL_SAFETY = {
     sensitiveInputs: [],
     nextActions: ['生成 DDL 后检查 lintResult 和方言诊断，再交付给用户确认。']
   },
-  export_evidence_package: READ_ONLY_TOOL_SAFETY,
+  export_evidence_package: {
+    ...READ_ONLY_TOOL_SAFETY,
+    sensitiveInputs: ['postCheckSummary', 'postCheckReceipt', 'findings'],
+    nextActions: ['外部 findings 仅在 post-check PASS、receipt 匹配且 evidence refs 复验通过后导出。']
+  },
   get_ai_task_run: READ_ONLY_TOOL_SAFETY
 }
 
@@ -1446,11 +1524,18 @@ function listTools() {
             },
             content: {
               type: 'string',
+              maxLength: 20000,
               description: '待校验 AI 产物正文；工具只读传给后端 post-check，返回前会保留结构化结果并依赖后端/本地脱敏保护秘密。'
             },
             snapshotRef: {
               type: 'string',
               description: '可选标准快照 stableRef，用于判断输出是否引用旧快照或当前标准。'
+            },
+            findings: {
+              type: 'array',
+              maxItems: REVIEW_FINDINGS_MAX_ITEMS,
+              description: '可选结构化 findings；MCP 在请求前校验共享字段和安全边界，服务端再做 project-scoped evidence gating。',
+              items: REVIEW_FINDING_INPUT_SCHEMA
             }
           },
           required: ['contentType', 'content']
@@ -1609,6 +1694,21 @@ function listTools() {
             payloadSummary: {
               type: 'object',
               description: '可选脱敏 payload 摘要，后端会再次清洗。'
+            },
+            postCheckSummary: {
+              type: 'object',
+              description: '可选 AI output post-check 摘要；携带外部 findings 时必须声明 status=PASS 且 safeToUse=true，不得包含 raw AI output。'
+            },
+            postCheckReceipt: {
+              type: 'string',
+              maxLength: 4096,
+              description: '可选 post-check 进程内 HMAC receipt；携带外部 findings 时必须匹配当前项目和完整规范化 findings，服务重启后失效。'
+            },
+            findings: {
+              type: 'array',
+              maxItems: REVIEW_FINDINGS_MAX_ITEMS,
+              description: '可选已通过 post-check 的结构化 findings；MCP 先校验共享字段，后端再复验 project-scoped evidence refs。',
+              items: REVIEW_FINDING_INPUT_SCHEMA
             }
           },
           required: ['sourceType']
@@ -1942,10 +2042,12 @@ async function callCheckAiOutput(args, context) {
   const projectId = optionalProjectId(args.projectId, context.defaultProjectId)
   const contentType = normalizeAiOutputPostCheckContentType(stringArg(args.contentType, 'check_ai_output 需要 contentType'))
   const content = stringArg(args.content, 'check_ai_output 需要非空 content')
+  const findings = optionalReviewFindings(args.findings)
   const body = {
     projectId,
     contentType,
-    content
+    content,
+    ...(findings === undefined ? {} : { findings })
   }
   if (args.snapshotRef !== undefined && args.snapshotRef !== null && String(args.snapshotRef).trim() !== '') {
     body.snapshotRef = String(args.snapshotRef).trim()
@@ -2034,7 +2136,7 @@ async function callExportEvidencePackage(args, context) {
     body: JSON.stringify(req)
   })
   const result = await readDataSpecJson(response)
-  return toolJsonResult(result)
+  return toolJsonResult(sanitizeSecretValue(result))
 }
 
 async function callGetAiTaskRun(args, context) {
@@ -2075,6 +2177,12 @@ function buildEvidencePackageRequest(args, defaultProjectId) {
   appendOptionalObject(req, 'coverageReport', args.coverageReport)
   appendOptionalObject(req, 'standardSnapshot', args.standardSnapshot)
   appendOptionalObject(req, 'payloadSummary', args.payloadSummary)
+  appendOptionalObject(req, 'postCheckSummary', args.postCheckSummary)
+  appendOptionalBoundedTextProperty(req, 'postCheckReceipt', args.postCheckReceipt, 4096)
+  const findings = optionalReviewFindings(args.findings)
+  if (findings !== undefined) {
+    req.findings = findings
+  }
   appendOptionalTextProperty(req, 'sourceTitle', args.sourceTitle ?? args['source-title'])
   return req
 }
@@ -2100,6 +2208,17 @@ function appendOptionalTextProperty(target, key, value) {
   if (normalized) {
     target[key] = normalized
   }
+}
+
+function appendOptionalBoundedTextProperty(target, key, value, maxCodePoints) {
+  const normalized = normalizeOptionalText(value)
+  if (!normalized) {
+    return
+  }
+  if ([...normalized].length > maxCodePoints) {
+    throw new JsonRpcError(-32602, `${key} 不能超过 ${maxCodePoints} 个 Unicode code point`)
+  }
+  target[key] = normalized
 }
 
 async function fetchAiContextText(context, path, projectId, extraParams = {}) {
@@ -2688,6 +2807,125 @@ function optionalStringArray(value, label, maxItems) {
   }
   const result = value.map((item) => String(item).trim()).filter(Boolean)
   return result.length > 0 ? result : undefined
+}
+
+/** 校验 MCP 结构化 findings，确保越界或畸形输入不会到达后端。 */
+function optionalReviewFindings(value) {
+  if (value === undefined || value === null) return undefined
+  if (!Array.isArray(value)) {
+    throw new JsonRpcError(-32602, 'findings 必须是数组')
+  }
+  if (value.length > REVIEW_FINDINGS_MAX_ITEMS) {
+    throw new JsonRpcError(-32602, `findings 超过安全上限 ${REVIEW_FINDINGS_MAX_ITEMS}`)
+  }
+  value.forEach((finding, index) => validateReviewFinding(finding, index))
+  return value
+}
+
+function validateReviewFinding(finding, index) {
+  const prefix = `findings[${index}]`
+  if (!isPlainObject(finding)) throw new JsonRpcError(-32602, `${prefix} 必须是 object`)
+  rejectUnknownReviewFindingFields(finding, prefix, REVIEW_FINDING_FIELDS)
+  optionalIntegerInRange(finding.schemaVersion, `${prefix}.schemaVersion`, 1, Number.MAX_SAFE_INTEGER)
+  requireBoundedText(finding.code, `${prefix}.code`, 128)
+  optionalEnum(finding.source, `${prefix}.source`, ['SQL_LINT', 'AI_OUTPUT_POSTCHECK', 'EXTERNAL_AI'])
+  optionalBoundedText(finding.findingKey, `${prefix}.findingKey`, 128)
+  optionalEnum(finding.severity, `${prefix}.severity`, ['ERROR', 'WARNING', 'SUGGESTION', 'INFO'])
+  for (const field of ['trigger', 'expected', 'observed', 'suggestedFix']) {
+    optionalBoundedText(finding[field], `${prefix}.${field}`, 1000)
+  }
+  optionalIntegerInRange(finding.confidence, `${prefix}.confidence`, 0, 100)
+  if (finding.autoFixSafe !== undefined && finding.autoFixSafe !== null && typeof finding.autoFixSafe !== 'boolean') {
+    throw new JsonRpcError(-32602, `${prefix}.autoFixSafe 必须是 boolean`)
+  }
+  validateReviewFindingSubject(finding.subject, `${prefix}.subject`)
+  validateReviewFindingLocation(finding.location, `${prefix}.location`)
+  validateReviewFindingWaiver(finding.waiver, `${prefix}.waiver`)
+  if (finding.evidenceRefs !== undefined && finding.evidenceRefs !== null) {
+    if (!Array.isArray(finding.evidenceRefs)) {
+      throw new JsonRpcError(-32602, `${prefix}.evidenceRefs 必须是数组`)
+    }
+    if (finding.evidenceRefs.length > REVIEW_FINDING_MAX_EVIDENCE_REFS) {
+      throw new JsonRpcError(-32602, `${prefix}.evidenceRefs 超过安全上限 ${REVIEW_FINDING_MAX_EVIDENCE_REFS}`)
+    }
+    finding.evidenceRefs.forEach((ref, refIndex) =>
+      requireBoundedText(ref, `${prefix}.evidenceRefs[${refIndex}]`, 500))
+  }
+}
+
+function validateReviewFindingSubject(subject, label) {
+  if (subject === undefined || subject === null) return
+  if (!isPlainObject(subject)) throw new JsonRpcError(-32602, `${label} 必须是 object`)
+  rejectUnknownReviewFindingFields(subject, label, REVIEW_FINDING_SUBJECT_FIELDS)
+  optionalIntegerInRange(subject.projectId, `${label}.projectId`, 1, Number.MAX_SAFE_INTEGER)
+  optionalBoundedText(subject.kind, `${label}.kind`, 64)
+  for (const field of ['name', 'tableName', 'columnName', 'stableRef']) {
+    optionalBoundedText(subject[field], `${label}.${field}`, 256)
+  }
+}
+
+function validateReviewFindingLocation(location, label) {
+  if (location === undefined || location === null) return
+  if (!isPlainObject(location)) throw new JsonRpcError(-32602, `${label} 必须是 object`)
+  rejectUnknownReviewFindingFields(location, label, REVIEW_FINDING_LOCATION_FIELDS)
+  optionalBoundedText(location.path, `${label}.path`, 512)
+  optionalBoundedText(location.locationKind, `${label}.locationKind`, 64)
+  for (const field of ['line', 'column', 'lineEnd', 'columnEnd']) {
+    optionalIntegerInRange(location[field], `${label}.${field}`, 1, Number.MAX_SAFE_INTEGER)
+  }
+  for (const field of ['sourceStart', 'sourceEnd']) {
+    optionalIntegerInRange(location[field], `${label}.${field}`, 0, Number.MAX_SAFE_INTEGER)
+  }
+}
+
+function validateReviewFindingWaiver(waiver, label) {
+  if (waiver === undefined || waiver === null) return
+  if (!isPlainObject(waiver)) throw new JsonRpcError(-32602, `${label} 必须是 object`)
+  rejectUnknownReviewFindingFields(waiver, label, REVIEW_FINDING_WAIVER_FIELDS)
+  if (waiver.waived !== undefined && waiver.waived !== null && typeof waiver.waived !== 'boolean') {
+    throw new JsonRpcError(-32602, `${label}.waived 必须是 boolean`)
+  }
+  optionalIntegerInRange(waiver.waiverId, `${label}.waiverId`, 1, Number.MAX_SAFE_INTEGER)
+  optionalBoundedText(waiver.reason, `${label}.reason`, 500)
+}
+
+function rejectUnknownReviewFindingFields(value, label, allowedFields) {
+  const unknown = Object.keys(value).filter((field) => !allowedFields.has(field))
+  if (unknown.length > 0) {
+    throw new JsonRpcError(-32602, `${label} 包含不支持字段: ${unknown.join(', ')}`)
+  }
+}
+
+function optionalIntegerInRange(value, label, min, max) {
+  if (value === undefined || value === null) return
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new JsonRpcError(-32602, `${label} 必须是 ${min}-${max} 的整数`)
+  }
+}
+
+function optionalEnum(value, label, allowed) {
+  if (value === undefined || value === null) return
+  if (typeof value !== 'string' || !allowed.includes(value)) {
+    throw new JsonRpcError(-32602, `${label} 必须是 ${allowed.join('|')}`)
+  }
+}
+
+function requireBoundedText(value, label, maxCodePoints) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new JsonRpcError(-32602, `${label} 必须是非空字符串`)
+  }
+  if ([...value].length > maxCodePoints) {
+    throw new JsonRpcError(-32602, `${label} 超过安全上限 ${maxCodePoints}`)
+  }
+}
+
+function optionalBoundedText(value, label, maxCodePoints) {
+  if (value === undefined || value === null) return
+  requireBoundedText(value, label, maxCodePoints)
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function removeUndefinedValues(value) {

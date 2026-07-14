@@ -39,6 +39,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 ### SQL 规范闭环
 
 - SQL 粘贴校验，返回 error/warning/suggestion、结构化修复建议、请求级 fixedSql 策略和 dry-run 修复计划。
+- SQL lint 在保留 `issues[]` 的同时返回共享 `findings[]` 和可选 `sqlCheckRecordId`；记录保存成功后，finding 使用 `dataspec://evidence/sql-check/<id>` 关联可复验的检查证据，保存失败时不会伪造 evidence ref。
 - 支持 PostgreSQL `COMMENT ON TABLE/COLUMN`，以及常见 MySQL `CREATE TABLE`、列内注释、表选项、索引定义、`UNSIGNED` 数值类型和 `tinyint(1)` 布尔习惯解析。
 - SQL lint、fixedSql、DDL 生成和反向导入会返回 `dialectDiagnostics`，标明当前方言、能力维度、支持级别、稳定 code、说明和下一步建议。
 - 表名/字段名 snake_case、禁用字段名、推荐字段名、必备列、金额类型、字段后缀/前缀类型和注释缺失等规则。
@@ -75,6 +76,7 @@ DataSpec 用于统一数据库字段命名、数据类型、注释、枚举、�
 - AI 批量任务，支持后端保存 SQL lint batch run、前端查看最近任务/分项结果/下一步动作、绑定 AI task run 并下载 JSON 交付包。
 - AI 任务失败恢复，记录 task run 状态、失败步骤、partial artifacts、retryable、idempotencyKey 和 resumeCommand；API/CLI/MCP/前端可查询最近失败任务并复制恢复命令。
 - AI 执行证据包，支持从 SQL 检查记录、AI job、AI 批量任务、AI task run 和当前覆盖率报告生成 JSON 或 zip，前端可复制/下载，CLI/MCP 可机器读取。
+- AI 输出后置校验支持 `POST /api/ai-output/check`、CLI `ai-output check --findings <json>` 和 MCP `check_ai_output` 提交结构化 findings；`ERROR`、`confidence>=80` 或调用方自报 `autoFixSafe=true` 的外部 finding 必须携带当前项目可验证 evidence，外部 finding 规范化后始终为 `autoFixSafe=false`，空 findings 是合法结果。PASS 会返回绑定项目和完整规范化 findings 摘要的进程内 `verificationReceipt`；Evidence Package 携带外部 findings 时必须把它作为 `postCheckReceipt` 带回。receipt 不绑定 package 来源且同一进程内可为同项目、同 findings 重复使用，服务重启后需要重新 post-check。
 - 跨来源标准证据视图，提供只读 `GET /api/standard-evidence?projectId=1&subjectType=FIELD&subjectId=10`，按单字段聚合字段来源、可信度、使用热区、候选决策、变更日志、SQL 检查命中和 AI 作业使用摘要；响应不会返回 raw SQL、AI payload、候选 raw evidence、raw source metadata、token、password、Authorization、JDBC URL、DSN 或业务数据行。
 - AI 交接证据看板，按项目聚合 AI task run、AI job、SQL 检查和 AI 批量任务，标红失败或未验证项，并可直接生成、复制或下载脱敏 evidence package。
 - AI/CLI 写入保护，标准快照、反向导入确认、AI 批量 SQL lint、项目恢复 apply 和 AI job 回放记录已接入单机轻量 idempotency key、项目级 operation lock 和可重试冲突诊断。
@@ -913,11 +915,20 @@ node tools/dataspec-cli-mcp-contract-check.mjs
 node tools/dataspec-cli-mcp-contract-check.mjs --format json
 ```
 
-该检查会读取 fixture 并对齐本地 MCP `tools/list`、`resources/list`、`resources/templates/list`、`prompts/list` 描述；删除/重命名稳定入口、输入字段、输出 shape、resource template 或安全 metadata 时应同步 fixture、OpenSpec 和测试。
+该检查会读取 fixture 并对齐本地 MCP `tools/list`、`resources/list`、`resources/templates/list`、`prompts/list` 描述；共享 Finding 还会递归比对 live MCP schema 的字段、required、`additionalProperties`、版本下限、数组和文本上限。删除/重命名稳定入口、输入字段、输出 shape、resource template 或安全 metadata 时应同步 fixture、OpenSpec 和测试。
 
 ## AI 输出契约
 
 [docs/ai-contracts.md](docs/ai-contracts.md) 记录第一版 AI 可依赖的稳定字段，覆盖 Schema Registry、AI Context、SQL lint/fixedSql、字段推荐、字段检索、DDL 预览、AI 写入 safety metadata、CLI JSON 和 MCP resources/tools。兼容策略是：新增可选字段默认兼容；删除、改名、类型变化或语义变化需要同步更新契约测试和文档。
+
+共享 `ReviewFinding` additive 读模型统一 `source/findingKey/code/severity/subject/location/trigger/expected/observed/evidenceRefs/confidence/suggestedFix/autoFixSafe/waiver`。SQL lint、AI output post-check、Evidence Package 和 `review-pr --format json` 均可返回 `findings[]`，原有 `issues[]`、统计字段、退出码和评论 marker 保持兼容。稳定键使用固定字段顺序、显式 null、UTF-8 byte length 前缀和 SHA-256；CLI/MCP 会拒绝未知 Finding 字段。Java、CLI、MCP 和 sanitizer 的字符串边界统一按 Unicode code point 计算，所有外部文本都会在声明上限内限长和脱敏；GitHub commit SHA 与评论 URL 只表示交付位置，不进入 `finding.evidenceRefs`。
+
+```bash
+node tools/dataspec-cli.mjs ai-output check --project 1 --type SQL --file ai.sql --findings findings.json --format json
+node tools/dataspec-cli.mjs review-pr db/migrations --project 1 --repo acme/app --pr 42 --format json
+```
+
+`review-pr` 会先固定 PR head，分页读取 GitHub API 可提供的 PR files（最多 3,000 个），要求每个本地 SQL 唯一映射到 PR file 且 Git blob SHA 与 GitHub file `sha` 一致，并在加载 files 后、发布阶段前以及每次 inline/汇总评论写入前复查 head；检测到内容或 head 漂移后不会开始新的评论写入，漂移前已成功发布的 inline 评论可能保留。JSON envelope 返回 `commitSha/reviewCommentUrl/inlineCommentUrls/findings/sqlCheckRecordIds/postCheck/evidencePackages`，并保留 `reviewCommentAction/summary/inline/files`。评论 API 未返回 URL 时对应值为 `null`；外部 finding 的 post-check `PASS` 只说明结构与证据门禁通过，不表示被评审代码没有问题，也不授权自动应用修复，规范化外部 finding 固定返回 `autoFixSafe=false`。
 
 Schema Registry 是只读输出结构契约，不是鉴权、审批、发布流程或写入安全策略。服务端提供 `GET /api/contracts` 和 `GET /api/contracts/{contractId}`，返回 `kind/schemaVersion/registryVersion/compatibilityPolicy/contracts[]`、稳定字段、废弃字段、JSON Schema 和兼容窗口。AI Context zip 会额外包含 `.dataspec/schema-registry.json`，manifest 的 `contracts` 摘要会记录 registry schemaVersion、registryVersion、文件路径和 contractIds，离线 agent 可先读取它再消费字段目录、规则和 lint 结果。
 

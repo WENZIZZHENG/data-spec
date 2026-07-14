@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from 'node:child_process'
+import { Buffer } from 'node:buffer'
 import { chmod, lstat, mkdir, open, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
@@ -35,6 +36,8 @@ import {
 const DEFAULT_SERVER = 'http://localhost:8090'
 const CLI_VERSION = '0.1.0'
 const DEFAULT_GITHUB_API = 'https://api.github.com'
+const GITHUB_PR_FILES_PAGE_SIZE = 100
+const GITHUB_PR_FILES_MAX_PAGES = 30
 const DATASPEC_REVIEW_MARKER = '<!-- dataspec-sql-review -->'
 const DATASPEC_INLINE_REVIEW_PREFIX = 'dataspec-inline-review'
 const TOOLS_DIR = path.dirname(fileURLToPath(import.meta.url))
@@ -54,6 +57,18 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 const TEST_DATA_MAX_FIELDS = 100
 const TEST_DATA_MAX_CASES_PER_FIELD = 3
 const TEST_DATA_MAX_SEED_ROWS = 50
+const REVIEW_FINDINGS_MAX_FILE_BYTES = 1024 * 1024
+const REVIEW_FINDINGS_MAX_ITEMS = 100
+const REVIEW_FINDING_MAX_EVIDENCE_REFS = 20
+const REVIEW_FINDING_FIELDS = new Set([
+  'schemaVersion', 'source', 'findingKey', 'code', 'severity', 'subject', 'location', 'trigger',
+  'expected', 'observed', 'evidenceRefs', 'confidence', 'suggestedFix', 'autoFixSafe', 'waiver'
+])
+const REVIEW_FINDING_SUBJECT_FIELDS = new Set(['projectId', 'kind', 'name', 'tableName', 'columnName', 'stableRef'])
+const REVIEW_FINDING_LOCATION_FIELDS = new Set([
+  'path', 'line', 'column', 'lineEnd', 'columnEnd', 'sourceStart', 'sourceEnd', 'locationKind'
+])
+const REVIEW_FINDING_WAIVER_FIELDS = new Set(['waived', 'waiverId', 'reason'])
 const ZIP_LOCAL_FILE_HEADER = 0x04034b50
 const ZIP_CENTRAL_DIRECTORY_HEADER = 0x02014b50
 const ZIP_END_OF_CENTRAL_DIRECTORY = 0x06054b50
@@ -1260,32 +1275,225 @@ async function runReviewPr(args, io, fetchFn) {
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
   const githubApi = normalizeServer(options['github-api'] ?? DEFAULT_GITHUB_API)
-  const lintOutput = await lintSqlFiles(positional, projectId, server, fetchFn, apiToken, {}, resolveIdempotencyKey(options))
+  const commitSha = await fetchPullRequestCommitSha({ repo, prNumber, token, githubApi, fetchFn })
+  const prFiles = await fetchPullRequestFiles({ repo, prNumber, token, githubApi, fetchFn })
+  const sqlFiles = bindReviewSqlFiles(await readSqlFileEntries(positional), prFiles)
+  await assertPullRequestHeadUnchanged({ repo, prNumber, token, githubApi, fetchFn, expectedSha: commitSha })
+  const lintOutput = await lintSqlFileEntries(
+    sqlFiles,
+    projectId,
+    server,
+    fetchFn,
+    apiToken,
+    {},
+    resolveIdempotencyKey(options)
+  )
+  await assertPullRequestHeadUnchanged({ repo, prNumber, token, githubApi, fetchFn, expectedSha: commitSha })
   const inlineResult = hasReviewIssues(lintOutput)
-    ? await publishInlineReviewComments({ repo, prNumber, token, githubApi, lintOutput, fetchFn })
+    ? await publishInlineReviewComments({ repo, prNumber, token, githubApi, commitSha, prFiles, lintOutput, fetchFn })
     : emptyInlineResult()
   const body = buildReviewMarkdown(lintOutput, inlineResult.summary)
-  const action = await upsertPullRequestComment({
+  const reviewComment = await upsertPullRequestComment({
     repo,
     prNumber,
     token,
     githubApi,
     body,
-    fetchFn
+    fetchFn,
+    expectedSha: commitSha
   })
+  const action = reviewComment.action
   if (format === 'json') {
-    io.writeOut(`${JSON.stringify({
-      reviewCommentAction: action,
-      summary: lintOutput.summary,
-      inline: inlineResult.summary,
-      files: lintOutput.files
-    }, null, 2)}\n`)
+    io.writeOut(`${JSON.stringify(buildReviewDeliveryEnvelope({
+      projectId,
+      commitSha,
+      reviewComment,
+      inlineResult,
+      lintOutput
+    }), null, 2)}\n`)
   } else {
     io.writeOut(
       `已${action === 'updated' ? '更新' : '创建'} DataSpec Review 评论；inline 创建 ${inlineResult.summary.inlineCommentsCreated}，跳过 ${inlineResult.summary.inlineCommentsSkipped}，fallback ${inlineResult.summary.fallbackIssues}\n`
     )
   }
   return lintOutput.summary.failedFiles > 0 ? 1 : 0
+}
+
+/**
+ * 构建 review-pr 稳定交付 envelope；GitHub 元数据与 DataSpec finding evidence 明确分离。
+ */
+function buildReviewDeliveryEnvelope({ projectId, commitSha, reviewComment, inlineResult, lintOutput }) {
+  const findings = buildReviewFindings(lintOutput, projectId)
+  const sqlCheckRecordIds = [...new Set((lintOutput.files ?? [])
+    .map((file) => Number(file.result?.sqlCheckRecordId))
+    .filter((id) => Number.isSafeInteger(id) && id > 0))]
+  return sanitizeSecretValue({
+    kind: 'dataspec.review-pr-delivery',
+    schemaVersion: 1,
+    commitSha,
+    reviewCommentUrl: reviewComment.url,
+    inlineCommentUrls: (inlineResult.created ?? []).map((comment) => comment.url ?? null),
+    findings,
+    sqlCheckRecordIds,
+    postCheck: {
+      status: 'NOT_REQUIRED',
+      safeToUse: true,
+      reason: 'review-pr findings 来自 DataSpec 确定性 SQL lint，不属于外部 AI finding。'
+    },
+    evidencePackages: sqlCheckRecordIds.map((sourceId) => ({
+      sourceType: 'SQL_CHECK',
+      sourceId,
+      evidenceRef: `dataspec://evidence/sql-check/${sourceId}`,
+      exportCommand: `node tools/dataspec-cli.mjs evidence export --source-type SQL_CHECK --source-id ${sourceId} --format json`
+    })),
+    reviewCommentAction: reviewComment.action,
+    summary: lintOutput.summary,
+    inline: inlineResult.summary,
+    files: lintOutput.files
+  })
+}
+
+function buildReviewFindings(lintOutput, projectId) {
+  const findings = new Map()
+  for (const file of lintOutput.files ?? []) {
+    const result = file.result ?? {}
+    const backendFindings = Array.isArray(result.findings) ? result.findings : []
+    const sourceFindings = backendFindings.length > 0
+      ? backendFindings.map((finding) => normalizeReviewFinding(finding, file.path, projectId, result.sqlCheckRecordId))
+      : (result.issues ?? []).map((issue) => reviewFindingFromIssue(issue, file.path, projectId, result.sqlCheckRecordId))
+    for (const finding of sourceFindings) {
+      findings.set(finding.findingKey, finding)
+    }
+  }
+  return [...findings.values()]
+}
+
+function normalizeReviewFinding(finding, filePath, projectId, sqlCheckRecordId) {
+  const source = finding?.source ?? 'SQL_LINT'
+  const subject = {
+    ...(finding?.subject ?? {}),
+    projectId: finding?.subject?.projectId ?? projectId
+  }
+  const location = {
+    ...(finding?.location ?? {}),
+    path: normalizeReviewPath(finding?.location?.path ?? filePath)
+  }
+  const evidenceRefs = Array.isArray(finding?.evidenceRefs) && finding.evidenceRefs.length > 0
+    ? finding.evidenceRefs
+    : canonicalSqlCheckRefs(sqlCheckRecordId)
+  const normalized = sanitizeSecretValue({
+    schemaVersion: Number(finding?.schemaVersion ?? 1),
+    source,
+    code: finding?.code ?? 'unknown_rule',
+    severity: finding?.severity ?? 'WARNING',
+    subject,
+    location,
+    trigger: finding?.trigger ?? null,
+    expected: finding?.expected ?? null,
+    observed: finding?.observed ?? null,
+    evidenceRefs,
+    confidence: finding?.confidence ?? null,
+    suggestedFix: finding?.suggestedFix ?? null,
+    autoFixSafe: Boolean(finding?.autoFixSafe),
+    waiver: finding?.waiver ?? { waived: false, waiverId: null, reason: null }
+  })
+  return { ...normalized, findingKey: reviewFindingKey(normalized) }
+}
+
+function reviewFindingFromIssue(issue, filePath, projectId, sqlCheckRecordId) {
+  const waived = Boolean(issue?.suppressed)
+  const subjectKind = issue?.columnName ? 'SQL_COLUMN' : issue?.tableName ? 'SQL_TABLE' : 'SQL'
+  const normalized = sanitizeSecretValue({
+    schemaVersion: 1,
+    source: 'SQL_LINT',
+    code: issue?.ruleCode ?? 'unknown_rule',
+    severity: normalizeReviewSeverity(issue?.severity),
+    subject: {
+      projectId,
+      kind: subjectKind,
+      name: issue?.columnName ?? issue?.tableName ?? issue?.ruleName ?? issue?.ruleCode ?? 'SQL',
+      tableName: issue?.tableName ?? null,
+      columnName: issue?.columnName ?? null,
+      stableRef: null
+    },
+    location: {
+      path: normalizeReviewPath(filePath),
+      line: issue?.line ?? null,
+      column: issue?.column ?? null,
+      lineEnd: issue?.lineEnd ?? null,
+      columnEnd: issue?.columnEnd ?? null,
+      sourceStart: issue?.sourceStart ?? null,
+      sourceEnd: issue?.sourceEnd ?? null,
+      locationKind: issue?.locationKind ?? null
+    },
+    trigger: issue?.ruleName ?? null,
+    expected: issue?.suggestion ?? issue?.after ?? issue?.replacement ?? null,
+    observed: issue?.message ?? issue?.before ?? null,
+    evidenceRefs: canonicalSqlCheckRefs(sqlCheckRecordId),
+    confidence: issue?.confidence ?? null,
+    suggestedFix: issue?.suggestion ?? null,
+    autoFixSafe: !waived && issue?.fixRiskLevel === 'LOW' && issue?.fixStatus === 'APPLIED',
+    waiver: {
+      waived,
+      waiverId: waived ? issue?.suppressionId ?? null : null,
+      reason: waived ? issue?.suppressionReason ?? null : null
+    }
+  })
+  return { ...normalized, findingKey: reviewFindingKey(normalized) }
+}
+
+/**
+ * 为规范化 Finding 生成跨 Java/CLI 一致的稳定键。
+ *
+ * 固定字段顺序、显式 null 和 UTF-8 byte length 前缀共同避免可控文本跨字段拼接碰撞。
+ * @param {Record<string, any>} finding 已完成脱敏和默认值归一化的 Finding
+ * @returns {string} 带来源前缀的 24 位 SHA-256 摘要键
+ */
+export function reviewFindingKey(finding) {
+  const subject = finding?.subject
+  const location = finding?.location
+  const canonical = [
+    'review-finding-key-v1',
+    finding?.source,
+    finding?.code,
+    subject?.projectId,
+    subject?.kind,
+    subject?.name,
+    subject?.tableName,
+    subject?.columnName,
+    subject?.stableRef,
+    location?.path,
+    location?.line,
+    location?.column,
+    location?.lineEnd,
+    location?.columnEnd,
+    location?.sourceStart,
+    location?.sourceEnd,
+    location?.locationKind
+  ].map(canonicalReviewFindingValue).join('')
+  const hash = createHash('sha256')
+    .update(canonical)
+    .digest('hex')
+    .slice(0, 24)
+  return `${String(finding.source ?? 'finding').toLowerCase()}:${hash}`
+}
+
+function canonicalReviewFindingValue(value) {
+  if (value === undefined || value === null) return '-1:'
+  const text = String(value)
+  return `${Buffer.byteLength(text, 'utf8')}:${text}`
+}
+
+function canonicalSqlCheckRefs(sqlCheckRecordId) {
+  const id = Number(sqlCheckRecordId)
+  return Number.isSafeInteger(id) && id > 0
+    ? [`dataspec://evidence/sql-check/${id}`]
+    : []
+}
+
+function normalizeReviewSeverity(severity) {
+  const normalized = String(severity ?? '').toUpperCase()
+  return ['ERROR', 'WARNING', 'SUGGESTION', 'INFO'].includes(normalized) ? normalized : 'WARNING'
 }
 
 async function runExportContext(args, io, fetchFn) {
@@ -2040,7 +2248,7 @@ async function runAiOutput(args, io, fetchFn) {
   }
   const { positional, options } = parseArgs(
     rest,
-    ['project', 'type', 'file', 'snapshot-ref', 'snapshotRef', 'format', 'server', 'dataspec-token'],
+    ['project', 'type', 'file', 'findings', 'snapshot-ref', 'snapshotRef', 'format', 'server', 'dataspec-token'],
     ['stdin']
   )
   if (positional.length > 0) {
@@ -2062,6 +2270,9 @@ async function runAiOutput(args, io, fetchFn) {
   const content = options.stdin
     ? await io.readStdin()
     : await readFile(path.resolve(cliCwd(io), options.file), 'utf8')
+  const findings = options.findings
+    ? await readReviewFindingsFile(options.findings, cliCwd(io))
+    : undefined
   const server = normalizeServer(options.server ?? config.server)
   const apiToken = resolveDataSpecToken(options, config)
   const response = await fetchFn(`${server}/api/ai-output/check`, {
@@ -2071,13 +2282,159 @@ async function runAiOutput(args, io, fetchFn) {
       projectId,
       contentType,
       content,
-      snapshotRef: options.snapshotRef ?? options['snapshot-ref']
+      snapshotRef: options.snapshotRef ?? options['snapshot-ref'],
+      findings
     }))
   })
   const payload = await readJsonResponse(response)
   const result = unwrapResponse(payload)
   io.writeOut(`${JSON.stringify(sanitizeSecretValue(result), null, 2)}\n`)
   return result?.status === 'PASS' ? 0 : 1
+}
+
+/**
+ * 读取并验证外部 AI finding 文件；失败时不返回部分结果，调用方不得发起 post-check 请求。
+ */
+async function readReviewFindingsFile(file, cwd) {
+  const filePath = path.resolve(cwd, file)
+  const fileStat = await stat(filePath)
+  if (!fileStat.isFile()) {
+    throw new Error('ai-output check 的 --findings 必须指向 JSON 文件')
+  }
+  if (fileStat.size > REVIEW_FINDINGS_MAX_FILE_BYTES) {
+    throw new Error(`ai-output check 的 findings 文件不能超过 ${REVIEW_FINDINGS_MAX_FILE_BYTES} bytes`)
+  }
+  let findings
+  try {
+    findings = JSON.parse(await readFile(filePath, 'utf8'))
+  } catch {
+    throw new Error('ai-output check 的 findings 文件不是有效 JSON')
+  }
+  if (!Array.isArray(findings)) {
+    throw new Error('ai-output check 的 findings JSON 顶层必须是数组')
+  }
+  if (findings.length > REVIEW_FINDINGS_MAX_ITEMS) {
+    throw new Error(`ai-output check 的 findings 不能超过 ${REVIEW_FINDINGS_MAX_ITEMS} 条`)
+  }
+  findings.forEach((finding, index) => validateReviewFinding(finding, index))
+  return findings
+}
+
+function validateReviewFinding(finding, index) {
+  const prefix = `findings[${index}]`
+  if (!isPlainObject(finding)) {
+    throw new Error(`${prefix} 必须是 JSON object`)
+  }
+  rejectUnknownReviewFindingFields(finding, prefix, REVIEW_FINDING_FIELDS)
+  optionalInteger(finding.schemaVersion, `${prefix}.schemaVersion`, 1)
+  requireBoundedString(finding.code, `${prefix}.code`, 128)
+  optionalEnum(finding.source, `${prefix}.source`, ['SQL_LINT', 'AI_OUTPUT_POSTCHECK', 'EXTERNAL_AI'])
+  optionalBoundedString(finding.findingKey, `${prefix}.findingKey`, 128)
+  optionalEnum(finding.severity, `${prefix}.severity`, ['ERROR', 'WARNING', 'SUGGESTION', 'INFO'])
+  optionalBoundedString(finding.trigger, `${prefix}.trigger`, 1000)
+  optionalBoundedString(finding.expected, `${prefix}.expected`, 1000)
+  optionalBoundedString(finding.observed, `${prefix}.observed`, 1000)
+  optionalBoundedString(finding.suggestedFix, `${prefix}.suggestedFix`, 1000)
+  if (finding.confidence !== undefined && finding.confidence !== null
+      && (!Number.isInteger(finding.confidence) || finding.confidence < 0 || finding.confidence > 100)) {
+    throw new Error(`${prefix}.confidence 必须是 0-100 的整数`)
+  }
+  if (finding.autoFixSafe !== undefined && typeof finding.autoFixSafe !== 'boolean') {
+    throw new Error(`${prefix}.autoFixSafe 必须是 boolean`)
+  }
+  validateReviewFindingSubject(finding.subject, `${prefix}.subject`)
+  validateReviewFindingLocation(finding.location, `${prefix}.location`)
+  validateReviewFindingWaiver(finding.waiver, `${prefix}.waiver`)
+  if (finding.evidenceRefs !== undefined && finding.evidenceRefs !== null) {
+    if (!Array.isArray(finding.evidenceRefs)) {
+      throw new Error(`${prefix}.evidenceRefs 必须是数组`)
+    }
+    if (finding.evidenceRefs.length > REVIEW_FINDING_MAX_EVIDENCE_REFS) {
+      throw new Error(`${prefix}.evidenceRefs 不能超过 ${REVIEW_FINDING_MAX_EVIDENCE_REFS} 条`)
+    }
+    finding.evidenceRefs.forEach((value, refIndex) =>
+      requireBoundedString(value, `${prefix}.evidenceRefs[${refIndex}]`, 500))
+  }
+}
+
+function validateReviewFindingSubject(subject, field) {
+  if (subject === undefined || subject === null) return
+  if (!isPlainObject(subject)) throw new Error(`${field} 必须是 JSON object`)
+  rejectUnknownReviewFindingFields(subject, field, REVIEW_FINDING_SUBJECT_FIELDS)
+  if (subject.projectId !== undefined && subject.projectId !== null
+      && (!Number.isSafeInteger(subject.projectId) || subject.projectId <= 0)) {
+    throw new Error(`${field}.projectId 必须是正整数`)
+  }
+  optionalBoundedString(subject.kind, `${field}.kind`, 64)
+  for (const name of ['name', 'tableName', 'columnName', 'stableRef']) {
+    optionalBoundedString(subject[name], `${field}.${name}`, 256)
+  }
+}
+
+function validateReviewFindingLocation(location, field) {
+  if (location === undefined || location === null) return
+  if (!isPlainObject(location)) throw new Error(`${field} 必须是 JSON object`)
+  rejectUnknownReviewFindingFields(location, field, REVIEW_FINDING_LOCATION_FIELDS)
+  optionalBoundedString(location.path, `${field}.path`, 512)
+  optionalBoundedString(location.locationKind, `${field}.locationKind`, 64)
+  for (const name of ['line', 'column', 'lineEnd', 'columnEnd']) {
+    optionalInteger(location[name], `${field}.${name}`, 1)
+  }
+  for (const name of ['sourceStart', 'sourceEnd']) {
+    optionalInteger(location[name], `${field}.${name}`, 0)
+  }
+}
+
+function validateReviewFindingWaiver(waiver, field) {
+  if (waiver === undefined || waiver === null) return
+  if (!isPlainObject(waiver)) throw new Error(`${field} 必须是 JSON object`)
+  rejectUnknownReviewFindingFields(waiver, field, REVIEW_FINDING_WAIVER_FIELDS)
+  if (waiver.waived !== undefined && typeof waiver.waived !== 'boolean') {
+    throw new Error(`${field}.waived 必须是 boolean`)
+  }
+  if (waiver.waiverId !== undefined && waiver.waiverId !== null) {
+    optionalInteger(waiver.waiverId, `${field}.waiverId`, 1)
+  }
+  optionalBoundedString(waiver.reason, `${field}.reason`, 500)
+}
+
+function rejectUnknownReviewFindingFields(value, field, allowedFields) {
+  const unknown = Object.keys(value).filter((name) => !allowedFields.has(name))
+  if (unknown.length > 0) {
+    throw new Error(`${field} 包含不支持字段: ${unknown.join(', ')}`)
+  }
+}
+
+function optionalInteger(value, field, minimum) {
+  if (value === undefined || value === null) return
+  if (!Number.isSafeInteger(value) || value < minimum) {
+    throw new Error(`${field} 必须是大于等于 ${minimum} 的整数`)
+  }
+}
+
+function optionalEnum(value, field, allowed) {
+  if (value === undefined || value === null) return
+  if (typeof value !== 'string' || !allowed.includes(value)) {
+    throw new Error(`${field} 必须是 ${allowed.join('|')}`)
+  }
+}
+
+function requireBoundedString(value, field, maxCodePoints) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`${field} 必须是非空字符串`)
+  }
+  if ([...value].length > maxCodePoints) {
+    throw new Error(`${field} 不能超过 ${maxCodePoints} 个 Unicode code point`)
+  }
+}
+
+function optionalBoundedString(value, field, maxCodePoints) {
+  if (value === undefined || value === null) return
+  requireBoundedString(value, field, maxCodePoints)
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 async function runGenerateDdl(args, io, fetchFn) {
@@ -5460,19 +5817,36 @@ function parseOptionalBoolean(value, label) {
 
 async function lintSqlFiles(paths, projectId, server, fetchFn, apiToken, profileSelection = {}, idempotencyKey = null) {
   const files = await collectSqlFiles(paths)
+  const entries = await readSqlFileEntries(files, { collected: true })
+  return await lintSqlFileEntries(entries, projectId, server, fetchFn, apiToken, profileSelection, idempotencyKey)
+}
+
+async function readSqlFileEntries(paths, options = {}) {
+  const files = options.collected ? paths : await collectSqlFiles(paths)
+  return await Promise.all(files.map(async (filePath) => {
+    const bytes = await readFile(filePath)
+    return {
+      filePath,
+      sql: bytes.toString('utf8'),
+      gitBlobSha: gitBlobSha(bytes),
+      outputPath: formatOutputPath(filePath)
+    }
+  }))
+}
+
+async function lintSqlFileEntries(entries, projectId, server, fetchFn, apiToken, profileSelection = {}, idempotencyKey = null) {
   const results = []
 
-  for (const filePath of files) {
-    const sql = await readFile(filePath, 'utf8')
-    const fileIdempotencyKey = scopedIdempotencyKey(idempotencyKey, filePath)
+  for (const entry of entries) {
+    const fileIdempotencyKey = scopedIdempotencyKey(idempotencyKey, entry.filePath)
     const response = await fetchFn(`${server}/api/lint`, {
       method: 'POST',
       headers: dataSpecHeaders(apiToken, { 'Content-Type': 'application/json' }, fileIdempotencyKey),
-      body: JSON.stringify({ sql, projectId, ...profileSelection })
+      body: JSON.stringify({ sql: entry.sql, projectId, ...profileSelection })
     })
     const payload = await readJsonResponse(response)
     results.push({
-      path: formatOutputPath(filePath),
+      path: entry.outputPath,
       result: unwrapResponse(payload)
     })
   }
@@ -5481,6 +5855,45 @@ async function lintSqlFiles(paths, projectId, server, fetchFn, apiToken, profile
     summary: summarizeLintResults(results),
     files: results
   }
+}
+
+function gitBlobSha(bytes) {
+  const content = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes)
+  return createHash('sha1')
+    .update(Buffer.from(`blob ${content.length}\0`, 'utf8'))
+    .update(content)
+    .digest('hex')
+}
+
+function bindReviewSqlFiles(entries, prFiles) {
+  if (!Array.isArray(prFiles)) {
+    throw new Error('GitHub PR files 响应不是数组，无法绑定待评审 SQL')
+  }
+  const usedPaths = new Set()
+  return entries.map((entry) => {
+    const localPath = normalizeReviewPath(entry.outputPath)
+    const matches = prFiles.filter((file) => pathsMatch(localPath, normalizeReviewPath(file?.filename)))
+    if (matches.length === 0) {
+      throw new Error(`review-pr 拒绝 lint 非 PR 文件: ${localPath}`)
+    }
+    if (matches.length !== 1) {
+      throw new Error(`review-pr 无法唯一映射本地 SQL 到 PR 文件: ${localPath}`)
+    }
+    const matched = matches[0]
+    const reviewPath = normalizeReviewPath(matched.filename)
+    if (usedPaths.has(reviewPath)) {
+      throw new Error(`review-pr 多个本地文件映射到同一 PR 文件: ${reviewPath}`)
+    }
+    const expectedSha = typeof matched.sha === 'string' ? matched.sha.trim().toLowerCase() : ''
+    if (!/^[a-f0-9]{40}$/.test(expectedSha)) {
+      throw new Error(`GitHub PR 文件缺少有效 blob sha: ${reviewPath}`)
+    }
+    if (entry.gitBlobSha !== expectedSha) {
+      throw new Error(`本地 SQL 内容与 PR head 不一致: ${reviewPath}`)
+    }
+    usedPaths.add(reviewPath)
+    return { ...entry, outputPath: reviewPath }
+  })
 }
 
 async function collectSqlFiles(paths) {
@@ -6619,7 +7032,7 @@ function formatInputSourcePath(filePath, cwd) {
   return sourcePath.replaceAll(path.sep, '/')
 }
 
-async function upsertPullRequestComment({ repo, prNumber, token, githubApi, body, fetchFn }) {
+async function upsertPullRequestComment({ repo, prNumber, token, githubApi, body, fetchFn, expectedSha }) {
   const repoPath = repo.split('/').map(encodeURIComponent).join('/')
   const listUrl = `${githubApi}/repos/${repoPath}/issues/${encodeURIComponent(prNumber)}/comments?per_page=100`
   const commentsResponse = await fetchFn(listUrl, {
@@ -6631,25 +7044,27 @@ async function upsertPullRequestComment({ repo, prNumber, token, githubApi, body
     ? comments.find((comment) => comment.body?.includes(DATASPEC_REVIEW_MARKER))
     : null
   if (existing?.id) {
+    await assertPullRequestHeadUnchanged({ repo, prNumber, token, githubApi, fetchFn, expectedSha })
     const response = await fetchFn(`${githubApi}/repos/${repoPath}/issues/comments/${encodeURIComponent(existing.id)}`, {
       method: 'PATCH',
       headers: githubHeaders(token),
       body: JSON.stringify({ body })
     })
-    await readGithubJsonResponse(response)
-    return 'updated'
+    const payload = await readGithubJsonResponse(response)
+    return { action: 'updated', url: deliveryUrl(payload?.html_url) }
   }
 
+  await assertPullRequestHeadUnchanged({ repo, prNumber, token, githubApi, fetchFn, expectedSha })
   const response = await fetchFn(`${githubApi}/repos/${repoPath}/issues/${encodeURIComponent(prNumber)}/comments`, {
     method: 'POST',
     headers: githubHeaders(token),
     body: JSON.stringify({ body })
   })
-  await readGithubJsonResponse(response)
-  return 'created'
+  const payload = await readGithubJsonResponse(response)
+  return { action: 'created', url: deliveryUrl(payload?.html_url) }
 }
 
-async function publishInlineReviewComments({ repo, prNumber, token, githubApi, lintOutput, fetchFn }) {
+async function fetchPullRequestCommitSha({ repo, prNumber, token, githubApi, fetchFn }) {
   const repoPath = repo.split('/').map(encodeURIComponent).join('/')
   const pull = await fetchGithubJson(
     `${githubApi}/repos/${repoPath}/pulls/${encodeURIComponent(prNumber)}`,
@@ -6660,32 +7075,68 @@ async function publishInlineReviewComments({ repo, prNumber, token, githubApi, l
   if (!commitId) {
     throw new Error('GitHub PR 响应缺少 head.sha；请检查 repo/pr 是否有效')
   }
-  const prFiles = await fetchGithubJson(
-    `${githubApi}/repos/${repoPath}/pulls/${encodeURIComponent(prNumber)}/files?per_page=100`,
-    token,
-    fetchFn
-  )
+  return sanitizeSecretText(commitId)
+}
+
+async function fetchPullRequestFiles({ repo, prNumber, token, githubApi, fetchFn }) {
+  const repoPath = repo.split('/').map(encodeURIComponent).join('/')
+  const prFiles = []
+  for (let page = 1; page <= GITHUB_PR_FILES_MAX_PAGES; page += 1) {
+    const pageSuffix = page === 1 ? '' : `&page=${page}`
+    const pageFiles = await fetchGithubJson(
+      `${githubApi}/repos/${repoPath}/pulls/${encodeURIComponent(prNumber)}/files?per_page=${GITHUB_PR_FILES_PAGE_SIZE}${pageSuffix}`,
+      token,
+      fetchFn
+    )
+    if (!Array.isArray(pageFiles)) {
+      throw new Error('GitHub PR files 响应不是数组，无法绑定待评审 SQL')
+    }
+    prFiles.push(...pageFiles)
+    if (pageFiles.length < GITHUB_PR_FILES_PAGE_SIZE) {
+      break
+    }
+  }
+  return prFiles
+}
+
+async function assertPullRequestHeadUnchanged({ repo, prNumber, token, githubApi, fetchFn, expectedSha }) {
+  const currentSha = await fetchPullRequestCommitSha({ repo, prNumber, token, githubApi, fetchFn })
+  if (currentSha !== expectedSha) {
+    throw new Error(`GitHub PR head 已从 ${expectedSha} 变化为 ${currentSha}；已停止发布，请重新运行 review-pr`)
+  }
+}
+
+async function publishInlineReviewComments({ repo, prNumber, token, githubApi, commitSha, prFiles, lintOutput, fetchFn }) {
+  const repoPath = repo.split('/').map(encodeURIComponent).join('/')
   const existingComments = await fetchGithubJson(
     `${githubApi}/repos/${repoPath}/pulls/${encodeURIComponent(prNumber)}/comments?per_page=100`,
     token,
     fetchFn
   )
-  const plan = buildInlineReviewPlan(lintOutput, Array.isArray(prFiles) ? prFiles : [], Array.isArray(existingComments) ? existingComments : [])
+  const plan = buildInlineReviewPlan(lintOutput, prFiles, Array.isArray(existingComments) ? existingComments : [])
   const created = []
   for (const comment of plan.comments) {
+    await assertPullRequestHeadUnchanged({
+      repo,
+      prNumber,
+      token,
+      githubApi,
+      fetchFn,
+      expectedSha: commitSha
+    })
     const response = await fetchFn(`${githubApi}/repos/${repoPath}/pulls/${encodeURIComponent(prNumber)}/comments`, {
       method: 'POST',
       headers: githubHeaders(token),
       body: JSON.stringify({
         body: comment.body,
-        commit_id: commitId,
+        commit_id: commitSha,
         path: comment.path,
         line: comment.line,
         side: 'RIGHT'
       })
     })
-    await readGithubJsonResponse(response)
-    created.push(comment)
+    const payload = await readGithubJsonResponse(response)
+    created.push({ ...comment, url: deliveryUrl(payload?.html_url) })
   }
   return {
     ...plan,
@@ -6697,6 +7148,10 @@ async function publishInlineReviewComments({ repo, prNumber, token, githubApi, l
       fallbackReasons: summarizeFallbackReasons(plan.fallbackIssues)
     }
   }
+}
+
+function deliveryUrl(value) {
+  return typeof value === 'string' && value.trim() !== '' ? sanitizeSecretText(value.trim()) : null
 }
 
 async function fetchGithubJson(url, token, fetchFn) {
@@ -7178,7 +7633,7 @@ Usage:
   node tools/dataspec-cli.mjs search-fields [query] [--project <id>] --format json [--category <name>] [--tag <tag>] [--status <status>] [--sensitive true|false] [--source-batch <id>] [--limit <n>] [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs search-fields [--project <id>] --format json (--dsl <json>|--dsl-file <path>|--stdin) [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs ref resolve --project <id> --type <FIELD|ENUM|RULE|SNAPSHOT> --ref <value> [--ref <value> ...] --format json [--server <url>] [--dataspec-token <token>]
-  node tools/dataspec-cli.mjs ai-output check --project <id> --type <SQL|DDL|MARKDOWN|JSON|TEXT> (--file <path>|--stdin) [--snapshot-ref <ref>] --format json [--server <url>] [--dataspec-token <token>]
+  node tools/dataspec-cli.mjs ai-output check --project <id> --type <SQL|DDL|MARKDOWN|JSON|TEXT> (--file <path>|--stdin) [--findings <json>] [--snapshot-ref <ref>] --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs generate-ddl [--project <id>] --template <id> --table <name> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs table-standards list --project <id> --format json [--server <url>] [--dataspec-token <token>]
   node tools/dataspec-cli.mjs table-standards show --project <id> (--template <id>|--business-object <key>) --format json [--server <url>] [--dataspec-token <token>]
@@ -7237,7 +7692,7 @@ Options:
   context-quality check 是本地只读质量检查；读取已导出的目录、zip 或预算 plan JSON，不调用后端、不写缓存、不修改项目状态
   search-fields 返回字段标准检索 JSON，适合 AI 在建表或修 SQL 前选择相关标准字段；传 --dsl/--dsl-file/--stdin 时使用只读 Standard Query DSL 且不与 legacy 筛选参数混用
   ref resolve 只读解析字段、枚举、规则或快照引用，返回 stableRef/canonicalRef、生命周期状态和替代引用建议
-  ai-output check 只读校验 AI 产物中的标准引用；PASS 返回 0，WARN/FAIL 返回 1，参数、配置或 API 错误返回 2
+  ai-output check 只读校验 AI 产物中的标准引用和可选结构化 findings；--findings 在请求前校验 JSON 数组与安全边界；PASS 返回 0，WARN/FAIL 返回 1，参数、配置或 API 错误返回 2
   table-standards 只读读取业务对象、模板结构标准、关系摘要、安全 metadata 和 nextActions；show 需在 --template 与 --business-object 间二选一
   field-knowledge、field-semantics 和 metric-definitions 只读读取字段知识卡、字段语义规则和指标口径；输出会再次脱敏，不执行计算、不写项目状态
   synthetic-examples generate 只读生成合成标准样例包，可作为 fixture、Prompt 评测或人工审核草案；不会写入项目标准或调用外部 LLM

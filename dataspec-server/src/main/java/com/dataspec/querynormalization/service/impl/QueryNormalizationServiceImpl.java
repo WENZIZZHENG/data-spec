@@ -418,11 +418,11 @@ public class QueryNormalizationServiceImpl implements QueryNormalizationService 
     }
 
     private String safeReason(String reason) {
-        return SensitiveDataSanitizer.redactText(reason, MAX_REASON_LENGTH - 3);
+        return SensitiveDataSanitizer.redactText(reason, MAX_REASON_LENGTH);
     }
 
     private String safeText(String value) {
-        return SensitiveDataSanitizer.redactText(value, NameLexicalTokenizer.MAX_EVIDENCE_TOKEN_LENGTH - 3);
+        return SensitiveDataSanitizer.redactText(value, NameLexicalTokenizer.MAX_EVIDENCE_TOKEN_LENGTH);
     }
 
     private boolean containsHan(String value) {

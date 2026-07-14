@@ -5,17 +5,20 @@ import com.dataspec.aireplay.service.AiJobRecordService;
 import com.dataspec.aiprofile.service.AiTaskProfileService;
 import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.dialect.service.SqlDialectCompatibilityService;
+import com.dataspec.evidence.model.EvidenceSourceType;
+import com.dataspec.evidenceclaim.service.EvidenceClaimResolver;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.*;
 import com.dataspec.prompt.service.PromptTemplateRegistry;
+import com.dataspec.reviewfinding.service.ReviewFindingAdapter;
 import com.dataspec.lint.service.SqlCheckRecordService;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.service.RuleConfigService;
 import com.dataspec.ruleexemption.service.RuleExemptionService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -25,7 +28,6 @@ import java.util.*;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class SqlLintService {
 
     private static final String DEBUG_VERSION = "sql-rule-debug@1";
@@ -40,9 +42,60 @@ public class SqlLintService {
     private final RuleExemptionService ruleExemptionService;
     private final PromptTemplateRegistry promptTemplateRegistry;
     private final AiTaskProfileService aiTaskProfileService;
+    private final EvidenceClaimResolver evidenceClaimResolver;
     private final SqlIssueSourceSpanResolver sourceSpanResolver = new SqlIssueSourceSpanResolver();
     private final SqlDiffGenerator sqlDiffGenerator = new SqlDiffGenerator();
     private final SqlDialectCompatibilityService dialectCompatibilityService = new SqlDialectCompatibilityService();
+
+    /**
+     * 生产构造器；EvidenceClaimResolver 负责生成与验证规则一致的 canonical evidence ref。
+     */
+    @Autowired
+    public SqlLintService(
+            SqlParserService sqlParserService,
+            RuleConfigService ruleConfigService,
+            List<LintRule> allRules,
+            ObjectMapper objectMapper,
+            FixedSqlGenerator fixedSqlGenerator,
+            SqlCheckRecordService sqlCheckRecordService,
+            AiJobRecordService aiJobRecordService,
+            RuleExemptionService ruleExemptionService,
+            PromptTemplateRegistry promptTemplateRegistry,
+            AiTaskProfileService aiTaskProfileService,
+            EvidenceClaimResolver evidenceClaimResolver
+    ) {
+        this.sqlParserService = sqlParserService;
+        this.ruleConfigService = ruleConfigService;
+        this.allRules = allRules;
+        this.objectMapper = objectMapper;
+        this.fixedSqlGenerator = fixedSqlGenerator;
+        this.sqlCheckRecordService = sqlCheckRecordService;
+        this.aiJobRecordService = aiJobRecordService;
+        this.ruleExemptionService = ruleExemptionService;
+        this.promptTemplateRegistry = promptTemplateRegistry;
+        this.aiTaskProfileService = aiTaskProfileService;
+        this.evidenceClaimResolver = evidenceClaimResolver;
+    }
+
+    /**
+     * 兼容不需要 evidence 持久化验证的既有单元测试和离线构造。
+     */
+    public SqlLintService(
+            SqlParserService sqlParserService,
+            RuleConfigService ruleConfigService,
+            List<LintRule> allRules,
+            ObjectMapper objectMapper,
+            FixedSqlGenerator fixedSqlGenerator,
+            SqlCheckRecordService sqlCheckRecordService,
+            AiJobRecordService aiJobRecordService,
+            RuleExemptionService ruleExemptionService,
+            PromptTemplateRegistry promptTemplateRegistry,
+            AiTaskProfileService aiTaskProfileService
+    ) {
+        this(sqlParserService, ruleConfigService, allRules, objectMapper, fixedSqlGenerator,
+                sqlCheckRecordService, aiJobRecordService, ruleExemptionService,
+                promptTemplateRegistry, aiTaskProfileService, null);
+    }
 
     /**
      * 校验 SQL（不指定项目，使用所有内置规则）
@@ -77,6 +130,10 @@ public class SqlLintService {
         SqlCheckRecord record = null;
         try {
             record = sqlCheckRecordService.save(projectId, sql, result);
+            if (record != null && record.getId() != null) {
+                result.setSqlCheckRecordId(record.getId());
+                refreshFindings(result, projectId, canonicalSqlCheckEvidenceRefs(record.getId()));
+            }
         } catch (Exception e) {
             log.warn("保存 SQL 检查记录失败: {}", e.getMessage());
         }
@@ -171,6 +228,7 @@ public class SqlLintService {
 
         LintResult result = LintResult.of(tables, issues);
         applyFixedSqlPlan(result, fixedSqlGenerator.generatePlan(result, effectiveFixPolicy), sql);
+        refreshFindings(result, projectId, List.of());
         result.setDialectDiagnostics(dialectCompatibilityService.diagnoseSql(sql, result.getFixedSql() != null));
 
         List<SqlRuleDebugTrace> debugRules = collectDebug ? buildDebugRules(snapshots, result) : List.of();
@@ -186,6 +244,17 @@ public class SqlLintService {
         result.setFixNextActions(plan.getFixNextActions());
         result.setFixedSql(plan.getFixedSql());
         result.setFixedSqlDiff(sqlDiffGenerator.generate(sql, plan.getFixedSql()));
+    }
+
+    private void refreshFindings(LintResult result, Long projectId, List<String> evidenceRefs) {
+        result.setFindings(ReviewFindingAdapter.fromLintIssues(result.getIssues(), projectId, null, evidenceRefs));
+    }
+
+    private List<String> canonicalSqlCheckEvidenceRefs(Long recordId) {
+        String evidenceRef = evidenceClaimResolver == null
+                ? "dataspec://evidence/sql-check/" + recordId
+                : evidenceClaimResolver.canonicalRef(EvidenceSourceType.SQL_CHECK, recordId);
+        return evidenceRef == null ? List.of() : List.of(evidenceRef);
     }
 
     private RuleSettings loadRuleSettings(Long projectId) {

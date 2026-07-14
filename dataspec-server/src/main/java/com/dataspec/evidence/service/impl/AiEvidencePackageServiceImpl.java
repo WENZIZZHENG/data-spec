@@ -5,6 +5,7 @@ import com.dataspec.aibatch.model.AiBatchRunDetail;
 import com.dataspec.aibatch.service.AiBatchService;
 import com.dataspec.aitaskrun.model.AiTaskRunDetail;
 import com.dataspec.aitaskrun.service.AiTaskRunService;
+import com.dataspec.aioutputcheck.service.AiOutputPostCheckReceipt;
 import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.aireplay.entity.AiJobRecord;
 import com.dataspec.aireplay.model.AiJobRecordDetail;
@@ -21,11 +22,20 @@ import com.dataspec.evidence.model.AiEvidenceSource;
 import com.dataspec.evidence.model.AiEvidenceStandardSnapshot;
 import com.dataspec.evidence.model.EvidenceSourceType;
 import com.dataspec.evidence.service.AiEvidencePackageService;
+import com.dataspec.evidenceclaim.model.EvidenceClaimResolution;
+import com.dataspec.evidenceclaim.model.EvidenceClaimResolutionStatus;
 import com.dataspec.evidenceclaim.service.EvidenceClaimResolver;
 import com.dataspec.lint.entity.SqlCheckRecord;
 import com.dataspec.lint.model.LintIssue;
 import com.dataspec.lint.model.SqlCheckReplay;
 import com.dataspec.lint.service.SqlCheckRecordService;
+import com.dataspec.reviewfinding.model.ReviewFinding;
+import com.dataspec.reviewfinding.model.ReviewFindingSeverity;
+import com.dataspec.reviewfinding.model.ReviewFindingSource;
+import com.dataspec.reviewfinding.model.ReviewFindingSubject;
+import com.dataspec.reviewfinding.model.ReviewFindingWaiver;
+import com.dataspec.reviewfinding.service.ReviewFindingAdapter;
+import com.dataspec.security.context.ProjectAccessGuard;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -91,9 +101,22 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
     private AiEvidencePackage fromSqlCheck(AiEvidencePackageReq req) {
         Long sourceId = requireSourceId(req);
         SqlCheckRecord record = sqlCheckRecordService.getById(sourceId);
+        if (record.getProjectId() == null) {
+            throw new BizException(403, "SQL 检查记录缺少项目归属，无法安全导出 Evidence Package");
+        }
+        ProjectAccessGuard.requireProjectAccess(record.getProjectId());
         List<LintIssue> issues = sqlCheckRecordService.parseIssues(record);
         SqlCheckReplay replay = sqlCheckRecordService.buildReplay(record);
-        Long projectId = firstNonNull(req.projectId(), record.getProjectId());
+        Long projectId = record.getProjectId();
+        String evidenceRef = evidenceClaimResolver.canonicalRef(EvidenceSourceType.SQL_CHECK, sourceId);
+        List<ReviewFinding> findings = packageFindings(
+                req,
+                projectId,
+                ReviewFindingAdapter.fromLintIssues(
+                        issues,
+                        projectId,
+                        null,
+                        evidenceRef == null ? List.of() : List.of(evidenceRef)));
 
         Map<String, Object> inputs = orderedMap(
                 "sqlPreview", preview(record.getOriginalSql()),
@@ -119,9 +142,10 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 snapshot(record.getStandardSnapshotId(), record.getStandardSnapshotVersion(), record.getStandardSnapshotHash()),
                 inputs,
                 outputs,
-                validation,
-                req.postCheckSummary(),
-                artifacts,
+                 validation,
+                 req.postCheckSummary(),
+                 findings,
+                 artifacts,
                 List.of("查看 fixedSqlDiff 和 issueSamples 后再决定是否应用修复。", "如标准已变化，先重新运行 lint 或导出最新 AI Context。"),
                 List.of("dataspec lint <path|-> --project " + projectId + " --format json"),
                 List.of()
@@ -132,7 +156,7 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
         Long sourceId = requireSourceId(req);
         AiJobRecordDetail detail = aiJobRecordService.getDetail(sourceId);
         AiJobRecord record = detail.record();
-        Long projectId = firstNonNull(req.projectId(), record.getProjectId());
+        Long projectId = firstNonNull(record.getProjectId(), req.projectId());
         Map<String, Object> inputs = orderedMap(
                 "inputSummary", preview(record.getInputSummary()),
                 "promptVersion", record.getPromptVersion(),
@@ -155,9 +179,10 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 snapshot(record.getStandardSnapshotId(), record.getStandardSnapshotVersion(), record.getStandardSnapshotHash()),
                 inputs,
                 outputs,
-                validation,
-                req.postCheckSummary(),
-                artifacts,
+                 validation,
+                 req.postCheckSummary(),
+                 packageFindings(req, projectId, List.of()),
+                 artifacts,
                 List.of("需要复现时使用 replayCommand，并确认当前标准快照是否一致。"),
                 List.of(firstText(detail.replayCommand(), "dataspec replay ai-job --id " + sourceId)),
                 List.of()
@@ -168,7 +193,8 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
         Long sourceId = requireSourceId(req);
         AiBatchRunDetail detail = aiBatchService.getDetail(sourceId);
         AiBatchDeliveryPackage deliveryPackage = detail.deliveryPackage();
-        Long projectId = firstNonNull(req.projectId(), detail.run().getProjectId(), deliveryPackage != null ? deliveryPackage.projectId() : null);
+        Long projectId = firstNonNull(detail.run().getProjectId(),
+                deliveryPackage != null ? deliveryPackage.projectId() : null, req.projectId());
         Map<String, Object> inputs = orderedMap(
                 "batchType", detail.run().getBatchType(),
                 "source", preview(detail.run().getSource())
@@ -191,9 +217,10 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 AiEvidenceStandardSnapshot.unversioned(),
                 inputs,
                 outputs,
-                validation,
-                req.postCheckSummary(),
-                artifacts,
+                 validation,
+                 req.postCheckSummary(),
+                 packageFindings(req, projectId, List.of()),
+                 artifacts,
                 deliveryPackage != null && deliveryPackage.nextActions() != null ? sanitizeStringList(deliveryPackage.nextActions()) : List.of("查看失败项并按需重试。"),
                 List.of("dataspec evidence export --source-type AI_BATCH_RUN --source-id " + sourceId + " --format json"),
                 List.of()
@@ -236,9 +263,10 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 AiEvidenceStandardSnapshot.unversioned(),
                 inputs,
                 outputs,
-                validation,
-                req.postCheckSummary(),
-                artifacts,
+                 validation,
+                 req.postCheckSummary(),
+                 packageFindings(req, req.projectId(), List.of()),
+                 artifacts,
                 List.of(firstText(detail.nextAction(), "查看任务状态后决定是否重试。")),
                 suggestedCommands,
                 List.of()
@@ -246,13 +274,14 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
     }
 
     private AiEvidencePackage fromCoverage(AiEvidencePackageReq req) {
-        FieldCoverageReport report = req.coverageReport();
-        if (report == null) {
-            throw new BizException("coverageReport 不能为空，COVERAGE_REPORT 需要传入当前覆盖率报告摘要");
-        }
         Long projectId = req.projectId();
         if (projectId == null) {
             throw new BizException("projectId 不能为空，COVERAGE_REPORT 需要项目 ID");
+        }
+        ProjectAccessGuard.requireProjectAccess(projectId);
+        FieldCoverageReport report = req.coverageReport();
+        if (report == null) {
+            throw new BizException("coverageReport 不能为空，COVERAGE_REPORT 需要传入当前覆盖率报告摘要");
         }
         Map<String, Object> inputs = orderedMap(
                 "sourceTitle", firstText(req.sourceTitle(), "字段覆盖率报告"),
@@ -273,9 +302,10 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 req.standardSnapshot() != null ? req.standardSnapshot() : AiEvidenceStandardSnapshot.unversioned(),
                 inputs,
                 outputs,
-                validation,
-                req.postCheckSummary(),
-                List.of(new AiEvidenceArtifact("coverage-report", "字段覆盖率报告摘要", "json", outputs)),
+                 validation,
+                 req.postCheckSummary(),
+                 packageFindings(req, projectId, List.of()),
+                 List.of(new AiEvidenceArtifact("coverage-report", "字段覆盖率报告摘要", "json", outputs)),
                 List.of("优先处理 unmanagedRankingSamples 中出现频次最高的字段。", "需要写入标准字段前先进入候选或反向导入确认流程。"),
                 List.of("dataspec coverage report --project " + projectId + " --format json"),
                 List.of(new AiEvidenceDiagnostic("INFO", "PAYLOAD_SOURCE", "覆盖率报告为即时 payload source，未持久化到 DataSpec。"))
@@ -286,10 +316,11 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                                     AiEvidenceSource source,
                                     AiEvidenceStandardSnapshot snapshot,
                                     Map<String, Object> inputs,
-                                    Map<String, Object> outputs,
-                                    Map<String, Object> validation,
-                                    Map<String, Object> postCheckSummary,
-                                    List<AiEvidenceArtifact> artifacts,
+                                     Map<String, Object> outputs,
+                                     Map<String, Object> validation,
+                                     Map<String, Object> postCheckSummary,
+                                     List<ReviewFinding> findings,
+                                     List<AiEvidenceArtifact> artifacts,
                                     List<String> nextActions,
                                     List<String> suggestedCommands,
                                     List<AiEvidenceDiagnostic> diagnostics) {
@@ -304,9 +335,10 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 snapshot != null ? snapshot : AiEvidenceStandardSnapshot.unversioned(),
                 sanitizeToMap(inputs),
                 sanitizeToMap(outputs),
-                sanitizeToMap(validation),
-                sanitizePostCheckSummary(postCheckSummary, projectId),
-                artifacts == null ? List.of() : artifacts.stream()
+                 sanitizeToMap(validation),
+                 sanitizePostCheckSummary(postCheckSummary, projectId),
+                 findings == null ? List.of() : List.copyOf(findings),
+                 artifacts == null ? List.of() : artifacts.stream()
                         .map(item -> new AiEvidenceArtifact(item.artifactType(), sanitizeText(item.title()), item.format(), sanitizeToMap(item.summary())))
                         .toList(),
                 sanitizeStringList(nextActions),
@@ -314,7 +346,87 @@ public class AiEvidencePackageServiceImpl implements AiEvidencePackageService {
                 diagnostics == null ? List.of() : diagnostics.stream()
                         .map(item -> new AiEvidenceDiagnostic(item.level(), item.code(), sanitizeText(item.message())))
                         .toList()
-        );
+         );
+     }
+
+    private List<ReviewFinding> packageFindings(
+            AiEvidencePackageReq req,
+            Long projectId,
+            List<ReviewFinding> derivedFindings
+    ) {
+        List<ReviewFinding> result = new ArrayList<>(
+                derivedFindings == null ? List.of() : derivedFindings);
+        if (req.findings().isEmpty()) {
+            return ReviewFindingAdapter.deduplicate(result);
+        }
+        requireSuccessfulPostCheck(req.postCheckSummary());
+        List<ReviewFinding> normalizedExternalFindings = new ArrayList<>();
+        for (ReviewFinding submitted : req.findings()) {
+            if (submitted == null || submitted.code() == null || submitted.code().isBlank()) {
+                throw new BizException("Evidence Package finding.code 不能为空");
+            }
+            List<String> verifiedRefs = verifyPackageEvidenceRefs(projectId, submitted);
+            ReviewFindingSubject subject = submitted.subject() == null
+                    ? new ReviewFindingSubject(projectId, "AI_OUTPUT", null, null, null, null)
+                    : new ReviewFindingSubject(projectId, submitted.subject().kind(), submitted.subject().name(),
+                            submitted.subject().tableName(), submitted.subject().columnName(), submitted.subject().stableRef());
+            normalizedExternalFindings.add(new ReviewFinding(
+                    ReviewFindingSource.EXTERNAL_AI,
+                    null,
+                    submitted.code(),
+                    submitted.severity(),
+                    subject,
+                    submitted.location(),
+                    submitted.trigger(),
+                    submitted.expected(),
+                    submitted.observed(),
+                    verifiedRefs,
+                    submitted.confidence(),
+                    submitted.suggestedFix(),
+                    false,
+                    ReviewFindingWaiver.NONE));
+        }
+        normalizedExternalFindings = ReviewFindingAdapter.deduplicate(normalizedExternalFindings);
+        if (!AiOutputPostCheckReceipt.verify(
+                req.postCheckReceipt(),
+                projectId,
+                normalizedExternalFindings,
+                objectMapper)) {
+            throw new BizException("外部 findings 的 postCheckReceipt 缺失、已失效或与当前项目及 finding 内容不匹配");
+        }
+        result.addAll(normalizedExternalFindings);
+        return ReviewFindingAdapter.deduplicate(result);
+    }
+
+    private void requireSuccessfulPostCheck(Map<String, Object> postCheckSummary) {
+        if (postCheckSummary == null
+                || !"PASS".equalsIgnoreCase(String.valueOf(postCheckSummary.get("status")))
+                || !Boolean.TRUE.equals(postCheckSummary.get("safeToUse"))) {
+            throw new BizException("外部 findings 需要 status=PASS 且 safeToUse=true 的 postCheckSummary");
+        }
+    }
+
+    private List<String> verifyPackageEvidenceRefs(Long projectId, ReviewFinding finding) {
+        boolean highImpact = finding.severity() == ReviewFindingSeverity.ERROR
+                || (finding.confidence() != null && finding.confidence() >= 80)
+                || finding.autoFixSafe();
+        if (finding.evidenceRefs().isEmpty()) {
+            throw new BizException(highImpact
+                    ? "高影响 finding 缺少可验证 evidence ref"
+                    : "外部 finding 缺少 post-check 已验证的 evidence ref");
+        }
+        List<String> verifiedRefs = new ArrayList<>();
+        for (String evidenceRef : finding.evidenceRefs()) {
+            EvidenceClaimResolution resolution = evidenceClaimResolver.resolve(projectId, evidenceRef);
+            if (resolution == null
+                    || resolution.status() != EvidenceClaimResolutionStatus.VERIFIED
+                    || resolution.canonicalRef() == null) {
+                throw new BizException("外部 finding evidence ref 在当前项目无法验证: "
+                        + SensitiveDataSanitizer.redactText(evidenceRef, 300));
+            }
+            verifiedRefs.add(resolution.canonicalRef());
+        }
+        return List.copyOf(verifiedRefs);
     }
 
     private AiEvidenceSource source(

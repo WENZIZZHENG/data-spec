@@ -15,6 +15,11 @@ import com.dataspec.evidenceclaim.service.EvidenceClaimResolver;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.rule.entity.RuleConfig;
 import com.dataspec.rule.repository.RuleConfigRepository;
+import com.dataspec.reviewfinding.model.ReviewFinding;
+import com.dataspec.reviewfinding.model.ReviewFindingSeverity;
+import com.dataspec.reviewfinding.model.ReviewFindingSource;
+import com.dataspec.reviewfinding.model.ReviewFindingSubject;
+import com.dataspec.reviewfinding.model.ReviewFindingWaiver;
 import com.dataspec.standard.entity.StandardSnapshot;
 import com.dataspec.standard.repository.StandardSnapshotRepository;
 import com.dataspec.standardref.model.StandardReferenceConfidence;
@@ -33,6 +38,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -312,6 +319,148 @@ class AiOutputPostCheckServiceImplTest {
 
         assertEquals(AiOutputPostCheckStatus.PASS, result.status());
         assertTrue(result.safeToUse());
+    }
+
+    @Test
+    void verifiedHighImpactExternalFindingCanPassButCannotRemainAutoFixSafe() {
+        String evidenceRef = "dataspec://evidence/sql-check/10";
+        EvidenceClaimResolver evidenceResolver = mock(EvidenceClaimResolver.class);
+        when(evidenceResolver.resolve(1L, evidenceRef)).thenReturn(
+                evidenceResolution(evidenceRef, EvidenceClaimResolutionStatus.VERIFIED, evidenceRef));
+        AiOutputPostCheckServiceImpl service = service(mockResolver(), evidenceResolver);
+        ReviewFinding submitted = externalFinding(
+                ReviewFindingSeverity.ERROR,
+                95,
+                true,
+                List.of(evidenceRef));
+
+        AiOutputPostCheckResult result = service.check(new AiOutputPostCheckRequest(
+                1L,
+                AiOutputContentType.TEXT,
+                "评审已完成。",
+                null,
+                List.of(submitted)));
+
+        assertEquals(AiOutputPostCheckStatus.PASS, result.status());
+        assertEquals(1, result.findings().size());
+        ReviewFinding normalized = result.findings().getFirst();
+        assertEquals(ReviewFindingSource.EXTERNAL_AI, normalized.source());
+        assertEquals(1L, normalized.subject().projectId());
+        assertFalse("caller-controlled-key".equals(normalized.findingKey()));
+        assertEquals(List.of(evidenceRef), normalized.evidenceRefs());
+        assertFalse(normalized.autoFixSafe());
+        assertNotNull(result.verificationReceipt());
+    }
+
+    @Test
+    void invalidHighImpactExternalEvidenceBlocksAndCannotRemainAutoFixSafe() {
+        String evidenceRef = "dataspec://evidence/sql-check/30";
+        EvidenceClaimResolver evidenceResolver = mock(EvidenceClaimResolver.class);
+        when(evidenceResolver.resolve(1L, evidenceRef)).thenReturn(
+                evidenceResolution(evidenceRef, EvidenceClaimResolutionStatus.CROSS_PROJECT, null));
+        AiOutputPostCheckServiceImpl service = service(mockResolver(), evidenceResolver);
+
+        AiOutputPostCheckResult result = service.check(new AiOutputPostCheckRequest(
+                1L,
+                AiOutputContentType.TEXT,
+                "评审已完成。",
+                null,
+                List.of(externalFinding(ReviewFindingSeverity.WARNING, 90, true, List.of(evidenceRef)))));
+
+        assertEquals(AiOutputPostCheckStatus.FAIL, result.status());
+        assertNull(result.verificationReceipt());
+        assertTrue(result.issues().stream().anyMatch(issue ->
+                "CROSS_PROJECT_FINDING_EVIDENCE_REFERENCE".equals(issue.code())
+                        && issue.severity().name().equals("FAIL")));
+        ReviewFinding normalized = result.findings().stream()
+                .filter(finding -> "AI_REVIEW_RULE".equals(finding.code()))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(normalized.evidenceRefs().isEmpty());
+        assertFalse(normalized.autoFixSafe());
+        assertFalse(result.toString().contains("raw-secret-123"));
+    }
+
+    @Test
+    void lowImpactFindingWithoutEvidenceWarnsAndEmptyFindingsRemainValid() {
+        AiOutputPostCheckServiceImpl service = service(mockResolver());
+
+        AiOutputPostCheckResult warned = service.check(new AiOutputPostCheckRequest(
+                1L,
+                AiOutputContentType.TEXT,
+                "普通评审摘要。",
+                null,
+                List.of(externalFinding(ReviewFindingSeverity.INFO, 30, false, List.of()))));
+        AiOutputPostCheckResult empty = service.check(new AiOutputPostCheckRequest(
+                1L,
+                AiOutputContentType.TEXT,
+                "普通评审摘要。",
+                null,
+                List.of()));
+
+        assertEquals(AiOutputPostCheckStatus.WARN, warned.status());
+        assertTrue(warned.issues().stream().anyMatch(issue ->
+                "MISSING_FINDING_EVIDENCE_REFERENCE".equals(issue.code())
+                        && issue.severity().name().equals("WARN")));
+        assertEquals(AiOutputPostCheckStatus.PASS, empty.status());
+        assertTrue(empty.findings().isEmpty());
+        assertNotNull(empty.verificationReceipt());
+    }
+
+    @Test
+    void waivedCallerAutoFixClaimStillTriggersHighImpactEvidenceGate() {
+        ReviewFinding submitted = new ReviewFinding(
+                ReviewFindingSource.EXTERNAL_AI,
+                null,
+                "AI_REVIEW_RULE",
+                ReviewFindingSeverity.INFO,
+                new ReviewFindingSubject(1L, "AI_OUTPUT", "review", null, null, null),
+                null,
+                null,
+                null,
+                "缺少确定性 evidence",
+                List.of(),
+                20,
+                null,
+                true,
+                new ReviewFindingWaiver(true, 9L, "调用方自报豁免"));
+        assertTrue(submitted.autoFixSafe(), "通用模型不能在 evidence gate 前消除调用方声明");
+
+        AiOutputPostCheckResult result = service(mockResolver()).check(new AiOutputPostCheckRequest(
+                1L,
+                AiOutputContentType.TEXT,
+                "评审完成。",
+                null,
+                List.of(submitted)));
+
+        assertEquals(AiOutputPostCheckStatus.FAIL, result.status());
+        assertTrue(result.issues().stream().anyMatch(issue ->
+                "MISSING_FINDING_EVIDENCE_REFERENCE".equals(issue.code())
+                        && issue.severity().name().equals("FAIL")));
+        assertNull(result.verificationReceipt());
+    }
+
+    private ReviewFinding externalFinding(
+            ReviewFindingSeverity severity,
+            Integer confidence,
+            boolean autoFixSafe,
+            List<String> evidenceRefs
+    ) {
+        return new ReviewFinding(
+                ReviewFindingSource.SQL_LINT,
+                "caller-controlled-key",
+                "AI_REVIEW_RULE",
+                severity,
+                new ReviewFindingSubject(999L, "AI_OUTPUT", "order review", null, null, null),
+                null,
+                "authorization=Bearer raw-secret-123",
+                "符合字段标准",
+                "password=raw-secret-123",
+                evidenceRefs,
+                confidence,
+                "人工修复",
+                autoFixSafe,
+                ReviewFindingWaiver.NONE);
     }
 
     private AiOutputPostCheckServiceImpl service(StandardReferenceResolutionService resolver) {

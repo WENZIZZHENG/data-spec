@@ -795,6 +795,7 @@ test('standard reference and ai output check tools are listed as readonly', asyn
   const response = await handler({ jsonrpc: '2.0', id: 62, method: 'tools/list' })
   const resolveTool = response.result.tools.find((tool) => tool.name === 'resolve_standard_refs')
   const checkTool = response.result.tools.find((tool) => tool.name === 'check_ai_output')
+  const evidenceTool = response.result.tools.find((tool) => tool.name === 'export_evidence_package')
 
   assert.ok(resolveTool)
   assert.ok(resolveTool.inputSchema.properties.refs.description)
@@ -803,8 +804,25 @@ test('standard reference and ai output check tools are listed as readonly', asyn
   assert.ok(checkTool)
   assert.ok(checkTool.description.includes('does not write') || checkTool.description.includes('不写入'))
   assert.ok(checkTool.inputSchema.properties.content.description)
+  assert.equal(checkTool.inputSchema.properties.findings.maxItems, 100)
+  assert.ok(checkTool.inputSchema.properties.findings.description)
+  assert.deepEqual(
+    Object.keys(checkTool.inputSchema.properties.findings.items.properties),
+    ['schemaVersion', 'source', 'findingKey', 'code', 'severity', 'subject', 'location', 'trigger', 'expected', 'observed', 'evidenceRefs', 'confidence', 'suggestedFix', 'autoFixSafe', 'waiver']
+  )
+  assert.equal(checkTool.inputSchema.properties.findings.items.additionalProperties, false)
+  assert.equal(checkTool.inputSchema.properties.findings.items.properties.subject.additionalProperties, false)
+  assert.equal(checkTool.inputSchema.properties.findings.items.properties.location.additionalProperties, false)
+  assert.equal(checkTool.inputSchema.properties.findings.items.properties.waiver.additionalProperties, false)
   assert.equal(checkTool.safety.readOnly, true)
   assert.equal(checkTool.safety.writesProject, false)
+  assert.ok(checkTool.safety.sensitiveInputs.includes('findings'))
+  assert.ok(evidenceTool)
+  assert.equal(evidenceTool.inputSchema.properties.findings.maxItems, 100)
+  assert.ok(evidenceTool.inputSchema.properties.postCheckSummary.description)
+  assert.equal(evidenceTool.inputSchema.properties.postCheckReceipt.maxLength, 4096)
+  assert.ok(evidenceTool.safety.sensitiveInputs.includes('findings'))
+  assert.ok(evidenceTool.safety.sensitiveInputs.includes('postCheckReceipt'))
 })
 
 test('resolve_standard_refs tool returns structured resolution json', async () => {
@@ -926,6 +944,88 @@ test('check_ai_output tool keeps stable TEXT body and accepts legacy PLAIN_TEXT 
   assert.equal(legacyResponse.result.structuredContent.status, 'PASS')
   assert.equal(JSON.parse(calls[0].options.body).contentType, 'TEXT')
   assert.equal(JSON.parse(calls[1].options.body).contentType, 'TEXT')
+})
+
+test('check_ai_output validates and forwards optional structured findings', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url, options) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: {
+        kind: 'dataspec-ai-output-postcheck',
+        status: 'PASS',
+        safeToUse: true,
+        issues: [],
+        findings: [{ code: 'AI_REVIEW_RULE', findingKey: 'external_ai:server-key' }]
+      }
+    })
+  })
+  const findings = [{
+    source: 'EXTERNAL_AI',
+    code: 'AI_REVIEW_RULE',
+    severity: 'WARNING',
+    subject: { projectId: 7, kind: 'AI_OUTPUT', name: 'review' },
+    location: { path: 'db/schema.sql', line: 2, column: 3 },
+    trigger: '字段不一致',
+    expected: '使用 snake_case',
+    observed: 'BadName',
+    evidenceRefs: ['dataspec://evidence/sql-check/11'],
+    confidence: 85,
+    suggestedFix: '改为 bad_name',
+    autoFixSafe: false,
+    waiver: { waived: false }
+  }]
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 643,
+    method: 'tools/call',
+    params: {
+      name: 'check_ai_output',
+      arguments: { projectId: 7, contentType: 'TEXT', content: 'review result', findings }
+    }
+  })
+
+  assert.equal(calls.length, 1)
+  assert.deepEqual(JSON.parse(calls[0].options.body).findings, findings)
+  assert.equal(response.result.structuredContent.findings[0].findingKey, 'external_ai:server-key')
+})
+
+test('check_ai_output rejects unsafe, version-invalid, and unknown finding fields before backend call', async () => {
+  let fetchCalls = 0
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async () => {
+    fetchCalls += 1
+    return jsonResponse({ code: 200, data: {} })
+  })
+
+  const invalidFindings = [
+    [{ code: 'AI_REVIEW_RULE', observed: 'x'.repeat(1001) }],
+    [{ schemaVersion: 0, code: 'AI_REVIEW_RULE' }],
+    [{ code: 'AI_REVIEW_RULE', rawPayload: 'x'.repeat(100000) }],
+    [{ code: 'AI_REVIEW_RULE', subject: { kind: 'AI_OUTPUT', rawPayload: 'x' } }]
+  ]
+
+  for (const [index, findings] of invalidFindings.entries()) {
+    const response = await handler({
+      jsonrpc: '2.0',
+      id: 644 + index,
+      method: 'tools/call',
+      params: {
+        name: 'check_ai_output',
+        arguments: {
+          projectId: 7,
+          contentType: 'TEXT',
+          content: 'review result',
+          findings
+        }
+      }
+    })
+
+    assert.equal(response.error.code, -32602)
+    assert.match(response.error.message, /findings\[0\]|安全上限/)
+  }
+  assert.equal(fetchCalls, 0)
 })
 
 test('get_session_bootstrap tool returns structured bootstrap package', async () => {
@@ -1797,6 +1897,50 @@ test('export_evidence_package tool returns structured package without adding sec
   assert.doesNotMatch(response.result.content[0].text, /ds_mcp_secret_token|Authorization|password=secret|jdbc:postgresql/)
 })
 
+test('export_evidence_package validates and forwards post-checked findings', async () => {
+  const calls = []
+  const handler = createMcpHandler({ projectId: 7, server: 'http://dataspec.local' }, async (url, options) => {
+    calls.push({ url, options })
+    return jsonResponse({
+      code: 200,
+      data: evidencePackageFixture({
+        sourceType: 'AI_JOB',
+        findings: [{ code: 'AI_REVIEW_RULE', evidenceRefs: ['dataspec://evidence/sql-check/42'] }]
+      })
+    })
+  })
+  const findings = [{
+    code: 'AI_REVIEW_RULE',
+    severity: 'WARNING',
+    evidenceRefs: ['dataspec://evidence/sql-check/42'],
+    confidence: 85
+  }]
+  const postCheckSummary = { status: 'PASS', safeToUse: true, issueCount: 0 }
+  const postCheckReceipt = 'aopcr1.payload.signature'
+
+  const response = await handler({
+    jsonrpc: '2.0',
+    id: 161,
+    method: 'tools/call',
+    params: {
+      name: 'export_evidence_package',
+      arguments: {
+        sourceType: 'AI_JOB',
+        sourceId: 42,
+        postCheckSummary,
+        postCheckReceipt,
+        findings
+      }
+    }
+  })
+
+  const body = JSON.parse(calls[0].options.body)
+  assert.deepEqual(body.postCheckSummary, postCheckSummary)
+  assert.equal(body.postCheckReceipt, postCheckReceipt)
+  assert.deepEqual(body.findings, findings)
+  assert.equal(response.result.structuredContent.findings[0].code, 'AI_REVIEW_RULE')
+})
+
 test('get_ai_task_run tool returns task run detail as structured content', async () => {
   const calls = []
   const handler = createMcpHandler({
@@ -2229,6 +2373,8 @@ function evidencePackageFixture(overrides = {}) {
       status: 'PASSED',
       diagnostics: [{ level: 'INFO', code: 'READY', message: '可交付' }]
     },
+    postCheckSummary: overrides.postCheckSummary ?? null,
+    findings: overrides.findings ?? [],
     artifacts: [{ name: 'fixedSql', mediaType: 'text/sql', summary: { available: true } }],
     nextActions: ['复核 fixedSql 后再应用补丁。'],
     suggestedCommands: ['dataspec evidence export --source-type SQL_CHECK --source-id 42 --format zip --output evidence.zip']

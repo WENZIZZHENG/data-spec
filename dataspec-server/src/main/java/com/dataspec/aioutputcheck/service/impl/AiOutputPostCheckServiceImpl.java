@@ -8,6 +8,7 @@ import com.dataspec.aioutputcheck.model.AiOutputPostCheckResult;
 import com.dataspec.aioutputcheck.model.AiOutputPostCheckStatus;
 import com.dataspec.aioutputcheck.model.AiOutputPostCheckSummary;
 import com.dataspec.aioutputcheck.service.AiOutputPostCheckService;
+import com.dataspec.aioutputcheck.service.AiOutputPostCheckReceipt;
 import com.dataspec.common.exception.BizException;
 import com.dataspec.common.sanitize.SensitiveDataSanitizer;
 import com.dataspec.enumdict.entity.EnumDict;
@@ -18,6 +19,12 @@ import com.dataspec.evidenceclaim.service.EvidenceClaimResolver;
 import com.dataspec.lint.engine.SqlParserService;
 import com.dataspec.lint.model.TableDef;
 import com.dataspec.rule.repository.RuleConfigRepository;
+import com.dataspec.reviewfinding.model.ReviewFinding;
+import com.dataspec.reviewfinding.model.ReviewFindingSeverity;
+import com.dataspec.reviewfinding.model.ReviewFindingSource;
+import com.dataspec.reviewfinding.model.ReviewFindingSubject;
+import com.dataspec.reviewfinding.model.ReviewFindingWaiver;
+import com.dataspec.reviewfinding.service.ReviewFindingAdapter;
 import com.dataspec.security.context.ProjectAccessGuard;
 import com.dataspec.standard.entity.StandardSnapshot;
 import com.dataspec.standard.repository.StandardSnapshotRepository;
@@ -58,6 +65,7 @@ import java.util.regex.Pattern;
 public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
 
     private static final int MAX_CONTENT_LENGTH = 20_000;
+    private static final int MAX_FINDINGS = 100;
     private static final int EXCERPT_RADIUS = 60;
     private static final Pattern STABLE_REF_PATTERN = Pattern.compile(
             "(?i)\\b(field|enum|rule|snapshot):\\d+:[A-Za-z0-9_.-]+");
@@ -104,24 +112,39 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
         List<EvidenceClaimCheck> evidenceChecks = resolveEvidenceClaims(request.projectId(), request.content());
         List<AiOutputPostCheckIssue> evidenceIssues = evidenceClaimIssues(request.content(), evidenceChecks);
         List<StandardReferenceResolutionResult> resolvedRefs = resolveOccurrences(request.projectId(), occurrences);
+        ExternalFindingCheck externalFindingCheck = checkExternalFindings(request.projectId(), request.findings());
         List<AiOutputPostCheckIssue> issues = new ArrayList<>(evidenceIssues);
         issues.addAll(explicitClaimIssues(request));
         issues.addAll(referenceIssues(resolvedRefs, occurrences));
+        issues.addAll(externalFindingCheck.issues());
+
+        List<ReviewFinding> findings = new ArrayList<>(externalFindingCheck.findings());
+        findings.addAll(ReviewFindingAdapter.fromPostCheckIssues(issues, request.projectId()));
+        findings = ReviewFindingAdapter.deduplicate(findings);
 
         AiOutputPostCheckSummary summary = summary(resolvedRefs, issues);
         AiOutputPostCheckStatus status = status(issues);
+        boolean safeToUse = status == AiOutputPostCheckStatus.PASS;
+        String verificationReceipt = AiOutputPostCheckReceipt.issue(
+                request.projectId(),
+                status,
+                safeToUse,
+                externalFindingCheck.findings(),
+                JSON_MAPPER);
         return new AiOutputPostCheckResult(
                 AiOutputPostCheckResult.KIND,
                 AiOutputPostCheckResult.SCHEMA_VERSION,
                 request.projectId(),
                 status,
-                status == AiOutputPostCheckStatus.PASS,
+                safeToUse,
                 summary,
                 issues,
+                findings,
                 resolvedRefs,
                 suggestedFixes(issues),
-                evidenceLinks(resolvedRefs, evidenceChecks),
-                nextActions(status));
+                evidenceLinks(resolvedRefs, evidenceChecks, externalFindingCheck.findings()),
+                nextActions(status),
+                verificationReceipt);
     }
 
     private void validate(AiOutputPostCheckRequest request) {
@@ -134,12 +157,113 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
         if (request.content() == null || request.content().isBlank()) {
             throw new BizException("content 不能为空");
         }
-        if (request.content().length() > MAX_CONTENT_LENGTH) {
+        if (request.content().codePointCount(0, request.content().length()) > MAX_CONTENT_LENGTH) {
             throw new BizException("content 不能超过 " + MAX_CONTENT_LENGTH + " 字符");
         }
         if (request.content().indexOf('\0') >= 0) {
             throw new BizException("content 包含不支持的二进制字符");
         }
+        if (request.findings().size() > MAX_FINDINGS) {
+            throw new BizException("findings 不能超过 " + MAX_FINDINGS + " 条");
+        }
+        for (int index = 0; index < request.findings().size(); index++) {
+            ReviewFinding finding = request.findings().get(index);
+            if (finding == null) {
+                throw new BizException("findings[" + index + "] 不能为空");
+            }
+            if (finding.code() == null || finding.code().isBlank()) {
+                throw new BizException("findings[" + index + "].code 不能为空");
+            }
+        }
+    }
+
+    private ExternalFindingCheck checkExternalFindings(Long projectId, List<ReviewFinding> submittedFindings) {
+        if (submittedFindings == null || submittedFindings.isEmpty()) {
+            return new ExternalFindingCheck(List.of(), List.of());
+        }
+        List<ReviewFinding> findings = new ArrayList<>();
+        List<AiOutputPostCheckIssue> issues = new ArrayList<>();
+        for (ReviewFinding submitted : submittedFindings) {
+            boolean highImpact = submitted.severity() == ReviewFindingSeverity.ERROR
+                    || (submitted.confidence() != null && submitted.confidence() >= 80)
+                    || submitted.autoFixSafe();
+            LinkedHashSet<String> verifiedRefs = new LinkedHashSet<>();
+            if (submitted.evidenceRefs().isEmpty()) {
+                issues.add(findingEvidenceIssue(
+                        "MISSING_FINDING_EVIDENCE_REFERENCE",
+                        highImpact,
+                        submitted,
+                        null,
+                        "结构化 finding 未提供可验证 evidence ref。"));
+            } else {
+                for (String evidenceRef : submitted.evidenceRefs()) {
+                    EvidenceClaimResolution resolution = evidenceClaimResolver.resolve(projectId, evidenceRef);
+                    if (resolution != null && resolution.status() == EvidenceClaimResolutionStatus.VERIFIED
+                            && resolution.canonicalRef() != null) {
+                        verifiedRefs.add(resolution.canonicalRef());
+                        continue;
+                    }
+                    EvidenceClaimResolutionStatus resolutionStatus = resolution == null
+                            ? EvidenceClaimResolutionStatus.UNVERIFIABLE : resolution.status();
+                    String code = switch (resolutionStatus) {
+                        case MISSING -> "MISSING_FINDING_EVIDENCE_REFERENCE";
+                        case CROSS_PROJECT -> "CROSS_PROJECT_FINDING_EVIDENCE_REFERENCE";
+                        case UNVERIFIABLE, VERIFIED -> "UNVERIFIABLE_FINDING_EVIDENCE_REFERENCE";
+                    };
+                    String message = switch (resolutionStatus) {
+                        case MISSING -> "结构化 finding 引用的 Evidence 来源不存在。";
+                        case CROSS_PROJECT -> "结构化 finding 引用了其他项目的 Evidence 来源。";
+                        case UNVERIFIABLE, VERIFIED -> "结构化 finding 的 Evidence ref 无法确定性验证。";
+                    };
+                    issues.add(findingEvidenceIssue(code, highImpact, submitted,
+                            resolution == null ? evidenceRef : resolution.inputRef(), message));
+                }
+            }
+
+            ReviewFindingSubject subject = submitted.subject() == null
+                    ? new ReviewFindingSubject(projectId, "AI_OUTPUT", null, null, null, null)
+                    : new ReviewFindingSubject(projectId, submitted.subject().kind(), submitted.subject().name(),
+                            submitted.subject().tableName(), submitted.subject().columnName(), submitted.subject().stableRef());
+            findings.add(new ReviewFinding(
+                    ReviewFindingSource.EXTERNAL_AI,
+                    null,
+                    submitted.code(),
+                    submitted.severity(),
+                    subject,
+                    submitted.location(),
+                    submitted.trigger(),
+                    submitted.expected(),
+                    submitted.observed(),
+                    List.copyOf(verifiedRefs),
+                    submitted.confidence(),
+                    submitted.suggestedFix(),
+                    false,
+                    ReviewFindingWaiver.NONE));
+        }
+        return new ExternalFindingCheck(
+                ReviewFindingAdapter.deduplicate(findings),
+                List.copyOf(issues));
+    }
+
+    private AiOutputPostCheckIssue findingEvidenceIssue(
+            String code,
+            boolean highImpact,
+            ReviewFinding finding,
+            String evidenceRef,
+            String message
+    ) {
+        return new AiOutputPostCheckIssue(
+                code,
+                highImpact ? AiOutputPostCheckIssueSeverity.FAIL : AiOutputPostCheckIssueSeverity.WARN,
+                null,
+                sanitize(evidenceRef),
+                sanitize(message),
+                sanitize(finding.observed()),
+                null,
+                List.of(),
+                highImpact
+                        ? List.of("补充当前项目可解析的 canonical evidence ref 后重新执行 post-check。")
+                        : List.of("补充 evidence ref，或人工确认该低影响 finding。"));
     }
 
     private List<Occurrence> extractOccurrences(AiOutputPostCheckRequest request) {
@@ -713,7 +837,8 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
 
     private List<String> evidenceLinks(
             List<StandardReferenceResolutionResult> resolvedRefs,
-            List<EvidenceClaimCheck> evidenceChecks
+            List<EvidenceClaimCheck> evidenceChecks,
+            List<ReviewFinding> findings
     ) {
         Set<String> links = new LinkedHashSet<>();
         for (StandardReferenceResolutionResult result : resolvedRefs) {
@@ -725,6 +850,9 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
                     && resolution.canonicalRef() != null) {
                 links.add(resolution.canonicalRef());
             }
+        }
+        for (ReviewFinding finding : findings) {
+            links.addAll(finding.evidenceRefs());
         }
         return sanitizeList(new ArrayList<>(links));
     }
@@ -824,6 +952,12 @@ public class AiOutputPostCheckServiceImpl implements AiOutputPostCheckService {
     }
 
     private record EvidenceClaimCheck(int start, int end, EvidenceClaimResolution resolution) {
+    }
+
+    private record ExternalFindingCheck(
+            List<ReviewFinding> findings,
+            List<AiOutputPostCheckIssue> issues
+    ) {
     }
 
     private record SnapshotIdentity(Long id, String version) {
