@@ -1191,3 +1191,13 @@
 - 评审证据：首轮 agent `019f5ddf-801b-73a1-97c2-dd8e36573796` 已完成并关闭，7 项 finding 均已整改；第二轮 agent `019f5e13-ce91-7312-a80a-4c0ccf09687c` 已完成并关闭，2 项 Important 已修复并补回归，1 项 Minor 已通过公共契约说明收口。
 - 产物：`review-finding-contract` 主规格、后端 Review Finding 模型与适配器、post-check receipt、Evidence Package findings、OpenAPI 生成类型、CLI/MCP contract fixture、GitHub review delivery envelope、README 和 AI 契约文档。
 - 后续遗留：不由 DataSpec 调用外部 LLM，不自动应用修复或创建远程 PR；真实 GitHub 并发写入、多副本 receipt 共享和跨进程有效期只有出现明确部署需求时再单独评估。
+
+## P6-137 / P6-101 / P6-103 / P6-118 / P6-119 / P6-173：配置 Schema 与运行摘要
+
+- 状态：第一版已于 2026-07-14 完成实现、验证和独立评审；OpenSpec change `add-dataspec-config-schema` 已同步 `dataspec-local-config`、`dataspec-init`、`dataspec-doctor` 主规格并归档。
+- 已完成能力：新增 Draft 2020-12 `.dataspec/config.json` JSON Schema；`dataspec init` 生成本地 schema、带 `$schema/configVersion` 的 config 和 README，通用编辑器及 AI 可离线读取字段说明。
+- 兼容与诊断：运行时 loader 继续忽略未知扩展字段并兼容纯数字字符串 projectId；doctor 输出 secret-safe configSchema 摘要，区分 supported、legacy、missing、wrong association 和 future version，不新增 fingerprint 或网络依赖。
+- 安全边界：init 不写 `apiToken`，CLI 与 loader 在请求或写文件前拒绝含 username/password 的 server URL；非 canonical schemaRef 只显示固定占位符，future config 不会被 `--force` 降级或部分覆盖。
+- 验证证据：config 测试 `11/11`；tools 全量 `468 total / 466 pass / 2 platform skips`；Python `jsonschema` Draft 2020-12 实际校验通过；归档前 OpenSpec strict valid、all `138/138`，归档后主规格 `137/137`；最终状态检查零 issues，backlog validator 和 `git diff --check` 通过。详细命令见归档 change 的 `tasks.md`。
+- 评审证据：只读 agent `019f5e4d-5640-7a23-9b90-7d663f989d77`、最终评审 agent `019f5e5d-91f8-73d3-b901-2c90ef48423a` 和复评 agent `019f5e67-7b47-7900-9afb-4cadde770112` 均已完成并关闭；全部 findings 已修复并补定向与全量回归，最终复评为“无 findings”。
+- 后续遗留：不建设 VS Code 插件、远程 schema registry、schema hash 或第二套运行指纹；只有真实分发或本地篡改诊断需求出现时再评估。

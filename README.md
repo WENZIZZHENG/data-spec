@@ -717,7 +717,7 @@ VALUES ('default-cli', '<hash>', 'alice', '1,2');
 
 ## CLI
 
-第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`。在业务仓库中可运行 `init` 生成 `.dataspec/config.json`、`.dataspec/README.md`，并可选写入带 marker 的 `AGENTS.md` 片段：
+第一版 CLI 是 HTTP-backed wrapper，需要先启动 DataSpec 后端，默认连接 `http://localhost:8090`。在业务仓库中可运行 `init` 生成 `.dataspec/config.schema.json`、`.dataspec/config.json`、`.dataspec/README.md`，并可选写入带 marker 的 `AGENTS.md` 片段：
 
 ```bash
 # 初始化业务仓库接入配置，完成后会自动运行一次轻量 doctor
@@ -730,20 +730,23 @@ node tools/dataspec-cli.mjs init --project 1 --format json
 node tools/dataspec-cli.mjs init --project 1 --force --with-agents
 ```
 
-`init` 默认不覆盖已有 `.dataspec/config.json`、`.dataspec/README.md` 或 `AGENTS.md` 中的 DataSpec marker 片段，传 `--force` 才会覆盖 DataSpec 管理内容。初始化不会把明文 API token 写入可提交文件；安全模式下继续使用 `DATASPEC_TOKEN`、`--dataspec-token` 或本地忽略配置传递 token。
+`init` 默认逐文件保护已有 `.dataspec/config.schema.json`、`.dataspec/config.json`、`.dataspec/README.md` 和 `AGENTS.md` 中的 DataSpec marker 片段，传 `--force` 才会覆盖 DataSpec 管理内容。初始化不会把明文 API token 写入可提交文件；安全模式下继续使用 `DATASPEC_TOKEN` 或 `--dataspec-token` 传递 token。
 
-也可以手写 `.dataspec/config.json`，CLI 会从当前目录向上查找该文件；显式命令行参数优先于配置文件：
+生成的 `config.json` 通过相对 `$schema` 关联本地 Draft 2020-12 schema，通用 JSON 编辑器无需插件或网络即可读取字段 description、类型和安全边界。schema 对官方字段严格并允许 `x-` 私有扩展；CLI/MCP loader 继续忽略未知字段以兼容历史配置。也可以手写 `.dataspec/config.json`，CLI 会从当前目录向上查找该文件；显式命令行参数优先于配置文件：
 
 ```json
 {
+  "$schema": "./config.schema.json",
+  "configVersion": 1,
   "projectId": 1,
   "server": "http://localhost:8090",
-  "apiToken": "ds_optional_local_token",
   "defaultPaths": ["db/migrations", "sql"],
   "aiProfile": "sql-fix",
   "taskType": "SQL_FIX"
 }
 ```
+
+旧配置缺少 `$schema` 或 `configVersion` 时仍按 v1 字段兼容读取，`doctor` 会返回 `LEGACY` warning 和本地 schema 迁移提示；声明高于当前支持版本时 config check 为 fail，`init` 即使带 `--force` 也不会自动降级或写入部分 v1 文件。`doctor --format json` 的 `configSchema` 与 config check details 会输出 `supportedVersion/declaredVersion/effectiveVersion/schemaRef/schemaPath/schemaFilePresent/associationStatus`；非 canonical schemaRef 固定显示 `<unexpected>`，不会输出 `apiToken`、安全模式原文或 local-only path 列表。server URL 不允许携带 username/password。现有仓库可手工复制 schema 并添加两个关联字段；只有确认可以覆盖同版本管理文件时才运行 `init --force`。
 
 ```bash
 # AI 新会话第一跳；READY 退出码 0，DEGRADED/BLOCKED 退出码 1
@@ -1166,7 +1169,7 @@ data-spec/
 - [x] AI task profiles，支持 `create-table`、`sql-fix`、`reverse-import`、`pr-review`、`minimal-context` 默认建议，前端可查看切换，CLI/MCP/doctor 可读取诊断
 - [x] AI 输出契约文档与 contract fixtures，覆盖 AI Context、lint/fixedSql、字段推荐、字段检索、DDL 预览、合成标准样例、契约候选导入预览、CLI/MCP JSON 稳定字段
 - [x] AI 可读错误诊断，API 失败响应、CLI stderr 和 MCP JSON-RPC error 可输出 code/category/retryable/suggestedAction/docsRef
-- [x] `dataspec init` 业务仓库初始化向导，生成 `.dataspec` 配置、README、可选 AGENTS 片段并运行 doctor
+- [x] `dataspec init` 业务仓库初始化向导，生成 versioned `.dataspec/config.schema.json`、关联配置、README、可选 AGENTS 片段并运行 doctor
 - [x] AI 建表 Prompt、SQL 修正 Prompt、Prompt template registry 和本地评测
 - [x] AI 回放记录，支持查看 Prompt、lint/fixedSql、DDL 预览的输入输出和标准快照
 - [x] AI 反馈报告，按项目聚合字段、规则、fixedSql、未纳管信号和下一步维护动作

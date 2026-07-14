@@ -4,6 +4,18 @@ import path from 'node:path'
 const CONFIG_DIR = '.dataspec'
 const CONFIG_FILE = 'config.json'
 
+/** 当前 CLI 可理解的 `.dataspec/config.json` 契约版本。 */
+export const DATASPEC_CONFIG_SCHEMA_VERSION = 1
+
+/** `dataspec init` 写入业务仓库的本地 schema 文件名。 */
+export const DATASPEC_CONFIG_SCHEMA_FILE = 'config.schema.json'
+
+/** DataSpec tools 目录内随 CLI 分发的 canonical schema 文件名。 */
+export const DATASPEC_CONFIG_SCHEMA_SOURCE_FILE = 'dataspec-config.schema.json'
+
+/** config 中用于离线编辑器提示的稳定相对引用。 */
+export const DATASPEC_CONFIG_SCHEMA_REF = `./${DATASPEC_CONFIG_SCHEMA_FILE}`
+
 export function findDataSpecConfig(startDir = process.cwd()) {
   let currentDir = path.resolve(startDir)
   while (true) {
@@ -56,6 +68,8 @@ function emptyConfig(startDir) {
     aiProfile: undefined,
     taskType: undefined,
     securityProfile: undefined,
+    schemaRef: undefined,
+    configVersion: undefined,
     defaultPaths: []
   }
 }
@@ -74,15 +88,43 @@ function normalizeDataSpecConfig(rawConfig, configPath) {
     aiProfile: normalizeOptionalString(rawConfig.aiProfile, 'aiProfile', configPath),
     taskType: normalizeOptionalString(rawConfig.taskType, 'taskType', configPath),
     securityProfile: normalizeSecurityProfile(rawConfig.securityProfile, configPath),
+    schemaRef: normalizeSchemaRef(rawConfig, configPath),
+    configVersion: normalizeConfigVersion(rawConfig.configVersion, configPath),
     defaultPaths: normalizeDefaultPaths(rawConfig.defaultPaths, configPath)
   }
+}
+
+function normalizeConfigVersion(value, configPath) {
+  if (value === undefined) {
+    return undefined
+  }
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`DataSpec 配置 configVersion 必须是正整数: ${configPath}`)
+  }
+  return value
+}
+
+function normalizeSchemaRef(rawConfig, configPath) {
+  if (!Object.hasOwn(rawConfig, '$schema')) {
+    return undefined
+  }
+  const value = rawConfig.$schema
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`DataSpec 配置 $schema 必须是非空字符串: ${configPath}`)
+  }
+  // 保留用户声明原文，使 doctor 能将带空格等非 canonical 关联识别为异常。
+  return value
 }
 
 function normalizeProjectId(value) {
   if (value === undefined || value === null || value === '') {
     return undefined
   }
-  const projectId = Number(value)
+  const normalized = typeof value === 'string' ? value.trim() : value
+  if (typeof normalized !== 'number' && (typeof normalized !== 'string' || !/^[1-9]\d*$/.test(normalized))) {
+    throw new Error(`无效 DataSpec projectId: ${String(value)}`)
+  }
+  const projectId = Number(normalized)
   if (!Number.isInteger(projectId) || projectId <= 0) {
     throw new Error(`无效 DataSpec projectId: ${value}`)
   }
@@ -97,7 +139,22 @@ function normalizeServer(value) {
     throw new Error(`无效 DataSpec server: ${value}`)
   }
   const server = value.replace(/\/+$/, '')
+  rejectServerUserinfo(server)
   return server || undefined
+}
+
+function rejectServerUserinfo(server) {
+  try {
+    const parsed = new URL(server)
+    if (parsed.username || parsed.password) {
+      throw new Error('DataSpec server URL 不能包含用户名或密码')
+    }
+  } catch (error) {
+    if (error.message === 'DataSpec server URL 不能包含用户名或密码') {
+      throw error
+    }
+    // 既有 loader 允许非 URL server 字符串；本变更只收紧可解析 URL 的 userinfo。
+  }
 }
 
 function normalizeApiToken(value) {

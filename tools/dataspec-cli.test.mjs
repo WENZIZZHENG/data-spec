@@ -3570,7 +3570,7 @@ test('export-context cache writes AI context files and redacted metadata', async
       '--project',
       '9',
       '--server',
-      'http://token:secret@dataspec.local',
+      'http://dataspec.local',
       '--scope',
       'field',
       '--query',
@@ -3594,8 +3594,41 @@ test('export-context cache writes AI context files and redacted metadata', async
     assert.equal(metadata.ttlDays, 3)
     assert.equal(metadata.server, 'http://dataspec.local')
     assert.match(metadataText, /token=\*\*\*/)
-    assert.doesNotMatch(metadataText, /token=abc|Bearer abc|jdbc:postgresql|token:secret/)
+    assert.doesNotMatch(metadataText, /token=abc|Bearer abc|jdbc:postgresql/)
     assert.match(io.stdout, /已缓存 AI Context/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('export-context rejects server userinfo before request or cache writes', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-cache-userinfo-'))
+  try {
+    let called = false
+    const fetchFn = async () => {
+      called = true
+      throw new Error('fetch should not be called')
+    }
+    const io = createIo('', dir)
+
+    const code = await runCli([
+      'export-context',
+      '--project',
+      '9',
+      '--server',
+      'https://local-user:raw-server-secret@example.com',
+      '--cache'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.equal(called, false)
+    assert.equal(io.stdout, '')
+    assert.match(io.stderr, /server URL 不能包含用户名或密码/)
+    assert.doesNotMatch(io.stderr, /local-user|raw-server-secret/)
+    await assert.rejects(
+      readFile(path.join(dir, '.dataspec', 'context', 'cache-metadata.json')),
+      /ENOENT/
+    )
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -4750,8 +4783,10 @@ test('bootstrap returns auth next action when server rejects token', async () =>
   assert.equal(io.stderr, '')
 })
 
-test('bootstrap fallback redacts server userinfo in commands', async () => {
+test('bootstrap rejects server userinfo before request without echoing credentials', async () => {
+  let called = false
   const fetchFn = async () => {
+    called = true
     throw new Error('ECONNREFUSED')
   }
   const io = createIo()
@@ -4766,12 +4801,11 @@ test('bootstrap fallback redacts server userinfo in commands', async () => {
     'json'
   ], io, fetchFn)
 
-  const output = JSON.parse(io.stdout)
-  assert.equal(code, 1)
-  assert.equal(output.server, 'http://dataspec.local')
-  assert.match(output.recommendedCommands.join('\n'), /--server http:\/\/dataspec\.local/)
-  assert.doesNotMatch(io.stdout, /user:p|p@ss|user%3A|p%40ss|http:\/\/user/)
-  assert.equal(io.stderr, '')
+  assert.equal(code, 2)
+  assert.equal(called, false)
+  assert.equal(io.stdout, '')
+  assert.match(io.stderr, /server URL 不能包含用户名或密码/)
+  assert.doesNotMatch(io.stderr, /user:p|p@ss|user%3A|p%40ss|http:\/\/user/)
 })
 
 test('bootstrap text output summarizes status and next commands', async () => {
@@ -6612,6 +6646,8 @@ test('doctor prints json checks from local config and returns 0 when ready', asy
     await writeFile(
       path.join(dir, '.dataspec', 'config.json'),
       JSON.stringify({
+        $schema: './config.schema.json',
+        configVersion: 1,
         projectId: 7,
         server: 'http://dataspec.local/',
         apiToken: 'ds_config_token',
@@ -6619,6 +6655,7 @@ test('doctor prints json checks from local config and returns 0 when ready', asy
       }),
       'utf8'
     )
+    await writeFile(path.join(dir, '.dataspec', 'config.schema.json'), '{}', 'utf8')
     const calls = []
     const fetchFn = async (url, options = {}) => {
       calls.push({ url, options })
@@ -6678,6 +6715,16 @@ test('doctor prints json checks from local config and returns 0 when ready', asy
     assert.equal(output.ok, true)
     assert.equal(output.server, 'http://dataspec.local')
     assert.equal(output.projectId, 7)
+    assert.deepEqual(output.configSchema, {
+      supportedVersion: 1,
+      declaredVersion: 1,
+      effectiveVersion: 1,
+      schemaRef: './config.schema.json',
+      expectedSchemaRef: './config.schema.json',
+      schemaPath: path.join(dir, '.dataspec', 'config.schema.json'),
+      schemaFilePresent: true,
+      associationStatus: 'SUPPORTED'
+    })
     assert.deepEqual(output.checks.map((check) => check.name), [
       'config',
       'server',
@@ -6694,6 +6741,151 @@ test('doctor prints json checks from local config and returns 0 when ready', asy
     assert.equal(calls[0].url, 'http://dataspec.local/api-docs')
     assert.equal(calls[1].options.headers.Authorization, 'Bearer ds_config_token')
     assert.equal(io.stderr, '')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('doctor keeps legacy config usable and reports schema migration state', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-doctor-config-schema-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({ projectId: 7, server: 'http://dataspec.local' }),
+      'utf8'
+    )
+    const io = createIo('', dir)
+
+    const code = await runCli(['doctor', '--format', 'json'], io, createReadyDoctorFetch('http://dataspec.local', 7))
+
+    const output = JSON.parse(io.stdout)
+    const configCheck = output.checks.find((check) => check.name === 'config')
+    assert.equal(code, 0)
+    assert.equal(configCheck.status, 'warn')
+    assert.equal(output.configSchema.associationStatus, 'LEGACY')
+    assert.equal(output.configSchema.declaredVersion, null)
+    assert.equal(output.configSchema.effectiveVersion, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('doctor reports missing and wrong local schema associations', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-doctor-config-schema-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    const configPath = path.join(dir, '.dataspec', 'config.json')
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        $schema: './config.schema.json',
+        configVersion: 1,
+        projectId: 7,
+        server: 'http://dataspec.local'
+      }),
+      'utf8'
+    )
+    const missingIo = createIo('', dir)
+
+    const missingCode = await runCli(
+      ['doctor', '--format', 'json'],
+      missingIo,
+      createReadyDoctorFetch('http://dataspec.local', 7)
+    )
+
+    assert.equal(missingCode, 0)
+    assert.equal(JSON.parse(missingIo.stdout).configSchema.associationStatus, 'SCHEMA_FILE_MISSING')
+
+    const schemaPath = path.join(dir, '.dataspec', 'config.schema.json')
+    await mkdir(schemaPath)
+    const directoryIo = createIo('', dir)
+    const directoryCode = await runCli(
+      ['doctor', '--format', 'json'],
+      directoryIo,
+      createReadyDoctorFetch('http://dataspec.local', 7)
+    )
+
+    assert.equal(directoryCode, 0)
+    assert.equal(JSON.parse(directoryIo.stdout).configSchema.associationStatus, 'SCHEMA_FILE_MISSING')
+    assert.equal(JSON.parse(directoryIo.stdout).configSchema.schemaFilePresent, false)
+
+    await rm(schemaPath, { recursive: true })
+    await writeFile(schemaPath, '{}', 'utf8')
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        $schema: './config.schema.json',
+        projectId: 7,
+        server: 'http://dataspec.local'
+      }),
+      'utf8'
+    )
+    const missingVersionIo = createIo('', dir)
+    const missingVersionCode = await runCli(
+      ['doctor', '--format', 'json'],
+      missingVersionIo,
+      createReadyDoctorFetch('http://dataspec.local', 7)
+    )
+
+    assert.equal(missingVersionCode, 0)
+    assert.equal(JSON.parse(missingVersionIo.stdout).configSchema.associationStatus, 'LEGACY')
+
+    const privateSchemaPath = 'C:\\Users\\Admin\\.ssh\\id_rsa'
+    const localOnlyPath = 'C:\\Users\\Admin\\token-cache'
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        $schema: privateSchemaPath,
+        configVersion: 1,
+        projectId: 7,
+        server: 'http://dataspec.local',
+        securityProfile: { localOnlyPaths: [localOnlyPath] }
+      }),
+      'utf8'
+    )
+    const wrongIo = createIo('', dir)
+    const wrongCode = await runCli(
+      ['doctor', '--format', 'json'],
+      wrongIo,
+      createReadyDoctorFetch('http://dataspec.local', 7)
+    )
+
+    assert.equal(wrongCode, 0)
+    const wrongOutput = JSON.parse(wrongIo.stdout)
+    assert.equal(wrongOutput.configSchema.associationStatus, 'WRONG_SCHEMA_REF')
+    assert.equal(wrongOutput.configSchema.schemaRef, '<unexpected>')
+    assert.doesNotMatch(wrongIo.stdout, /id_rsa|token-cache|Users\\Admin/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('doctor fails when config declares an unsupported future version', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-doctor-config-schema-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    await writeFile(path.join(dir, '.dataspec', 'config.schema.json'), '{}', 'utf8')
+    await writeFile(
+      path.join(dir, '.dataspec', 'config.json'),
+      JSON.stringify({
+        $schema: './config.schema.json',
+        configVersion: 2,
+        projectId: 7,
+        server: 'http://dataspec.local'
+      }),
+      'utf8'
+    )
+    const io = createIo('', dir)
+
+    const code = await runCli(['doctor', '--format', 'json'], io, createReadyDoctorFetch('http://dataspec.local', 7))
+
+    const output = JSON.parse(io.stdout)
+    const configCheck = output.checks.find((check) => check.name === 'config')
+    assert.equal(code, 1)
+    assert.equal(configCheck.status, 'fail')
+    assert.equal(output.configSchema.associationStatus, 'UNSUPPORTED_VERSION')
+    assert.match(configCheck.message, /仅支持版本 1/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -6823,6 +7015,8 @@ test('doctor returns 1 and reports failed checks when server is unreachable', as
   const output = JSON.parse(io.stdout)
   assert.equal(code, 1)
   assert.equal(output.ok, false)
+  assert.equal(output.configSchema.associationStatus, 'CONFIG_MISSING')
+  assert.equal(output.configSchema.supportedVersion, 1)
   assert.equal(output.checks.some((check) => check.name === 'server' && check.status === 'fail'), true)
   assert.match(output.checks.find((check) => check.name === 'server').message, /connect ECONNREFUSED/)
   assert.equal(io.stderr, '')
@@ -7030,21 +7224,27 @@ test('init creates dataspec files and prints json doctor result', async () => {
     ], io, fetchFn)
 
     const config = JSON.parse(await readFile(path.join(dir, '.dataspec', 'config.json'), 'utf8'))
+    const configSchema = JSON.parse(await readFile(path.join(dir, '.dataspec', 'config.schema.json'), 'utf8'))
     const readme = await readFile(path.join(dir, '.dataspec', 'README.md'), 'utf8')
     const output = JSON.parse(io.stdout)
     assert.equal(code, 0)
     assert.deepEqual(config, {
+      $schema: './config.schema.json',
+      configVersion: 1,
       projectId: 7,
       server: 'http://dataspec.local',
       defaultPaths: ['sql', 'db/migrations']
     })
     assert.equal('apiToken' in config, false)
+    assert.equal(configSchema.properties.configVersion.const, 1)
     assert.match(readme, /DATASPEC_TOKEN/)
     assert.equal(output.ok, true)
     assert.equal(output.configPath, path.join(dir, '.dataspec', 'config.json'))
+    assert.equal(output.configSchemaPath, path.join(dir, '.dataspec', 'config.schema.json'))
     assert.deepEqual(output.writtenFiles.sort(), [
       path.join(dir, '.dataspec', 'README.md'),
-      path.join(dir, '.dataspec', 'config.json')
+      path.join(dir, '.dataspec', 'config.json'),
+      path.join(dir, '.dataspec', 'config.schema.json')
     ].sort())
     assert.deepEqual(output.skippedFiles, [])
     assert.equal(output.doctor.projectId, 7)
@@ -7060,6 +7260,7 @@ test('init skips existing files by default and force overwrites managed files', 
     await mkdir(path.join(dir, '.dataspec'), { recursive: true })
     await mkdir(path.join(dir, 'sql'), { recursive: true })
     const configPath = path.join(dir, '.dataspec', 'config.json')
+    const configSchemaPath = path.join(dir, '.dataspec', 'config.schema.json')
     const readmePath = path.join(dir, '.dataspec', 'README.md')
     await writeFile(configPath, JSON.stringify({ projectId: 7, server: 'http://old.local', defaultPaths: ['sql'] }), 'utf8')
     await writeFile(readmePath, 'custom readme', 'utf8')
@@ -7083,7 +7284,7 @@ test('init skips existing files by default and force overwrites managed files', 
       defaultPaths: ['sql']
     })
     assert.equal(await readFile(readmePath, 'utf8'), 'custom readme')
-    assert.deepEqual(output.writtenFiles, [])
+    assert.deepEqual(output.writtenFiles, [configSchemaPath])
     assert.deepEqual(output.skippedFiles.sort(), [configPath, readmePath].sort())
 
     const forceIo = createIo('', dir)
@@ -7102,11 +7303,46 @@ test('init skips existing files by default and force overwrites managed files', 
 
     assert.equal(forceCode, 0)
     assert.deepEqual(JSON.parse(await readFile(configPath, 'utf8')), {
+      $schema: './config.schema.json',
+      configVersion: 1,
       projectId: 8,
       server: 'http://new.local',
       defaultPaths: ['sql']
     })
+    assert.equal(JSON.parse(await readFile(configSchemaPath, 'utf8')).properties.configVersion.const, 1)
     assert.match(await readFile(readmePath, 'utf8'), /DataSpec 初始化/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('init refuses to rewrite or downgrade a future config version', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-init-future-config-'))
+  try {
+    await mkdir(path.join(dir, '.dataspec'), { recursive: true })
+    const configPath = path.join(dir, '.dataspec', 'config.json')
+    const futureConfig = {
+      $schema: './future.schema.json',
+      configVersion: 2,
+      projectId: 7,
+      server: 'http://future.local',
+      futureField: { keep: true }
+    }
+    await writeFile(configPath, JSON.stringify(futureConfig), 'utf8')
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'init', '--project', '8', '--server', 'http://new.local', '--force', '--format', 'json'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /配置版本 2 高于当前支持版本 1/)
+    assert.deepEqual(JSON.parse(await readFile(configPath, 'utf8')), futureConfig)
+    await assert.rejects(readFile(path.join(dir, '.dataspec', 'config.schema.json')), /ENOENT/)
+    await assert.rejects(readFile(path.join(dir, '.dataspec', 'README.md')), /ENOENT/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -7207,6 +7443,35 @@ test('init never writes dataspec token to generated files or output', async () =
     ].join('\n')
     assert.equal(code, 0)
     assert.doesNotMatch(generatedText, new RegExp(secretToken))
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('init rejects server URL userinfo before writing managed files', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'dataspec-cli-init-userinfo-'))
+  try {
+    const io = createIo('', dir)
+    const fetchFn = async () => {
+      throw new Error('fetch should not be called')
+    }
+
+    const code = await runCli([
+      'init',
+      '--project',
+      '7',
+      '--server',
+      'https://local-user:raw-server-secret@example.com',
+      '--format',
+      'json'
+    ], io, fetchFn)
+
+    assert.equal(code, 2)
+    assert.match(io.stderr, /server URL 不能包含用户名或密码/)
+    assert.doesNotMatch(`${io.stdout}\n${io.stderr}`, /local-user|raw-server-secret/)
+    await assert.rejects(readFile(path.join(dir, '.dataspec', 'config.json')), /ENOENT/)
+    await assert.rejects(readFile(path.join(dir, '.dataspec', 'config.schema.json')), /ENOENT/)
+    await assert.rejects(readFile(path.join(dir, '.dataspec', 'README.md')), /ENOENT/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

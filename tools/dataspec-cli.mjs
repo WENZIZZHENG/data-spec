@@ -8,7 +8,14 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { inflateRawSync } from 'node:zlib'
 import { promisify } from 'node:util'
-import { loadDataSpecConfig, resolveDefaultPaths } from './dataspec-config.mjs'
+import {
+  DATASPEC_CONFIG_SCHEMA_FILE,
+  DATASPEC_CONFIG_SCHEMA_REF,
+  DATASPEC_CONFIG_SCHEMA_SOURCE_FILE,
+  DATASPEC_CONFIG_SCHEMA_VERSION,
+  loadDataSpecConfig,
+  resolveDefaultPaths
+} from './dataspec-config.mjs'
 import {
   formatWorkflowListText,
   formatWorkflowRecipeText,
@@ -41,6 +48,7 @@ const GITHUB_PR_FILES_MAX_PAGES = 30
 const DATASPEC_REVIEW_MARKER = '<!-- dataspec-sql-review -->'
 const DATASPEC_INLINE_REVIEW_PREFIX = 'dataspec-inline-review'
 const TOOLS_DIR = path.dirname(fileURLToPath(import.meta.url))
+const DATASPEC_CONFIG_SCHEMA_SOURCE_PATH = path.join(TOOLS_DIR, 'schemas', DATASPEC_CONFIG_SCHEMA_SOURCE_FILE)
 const REPO_ROOT = path.dirname(TOOLS_DIR)
 const DATASPEC_WEB_DIR = path.join(REPO_ROOT, 'dataspec-web')
 const OPENAPI_SCHEMA_PATH = path.join(DATASPEC_WEB_DIR, 'src', 'api', 'schema.ts')
@@ -3657,15 +3665,22 @@ async function runInit(args, io, fetchFn) {
   }
 
   const existingConfig = loadDataSpecConfig(cliCwd(io))
+  if (existingConfig.configVersion > DATASPEC_CONFIG_SCHEMA_VERSION) {
+    throw new Error(
+      `现有 DataSpec 配置版本 ${existingConfig.configVersion} 高于当前支持版本 ${DATASPEC_CONFIG_SCHEMA_VERSION}；init 不会自动降级，请升级 CLI`
+    )
+  }
   const rootDir = existingConfig.rootDir
   const projectId = parseProjectId(options.project ?? existingConfig.projectId)
   const server = normalizeServer(options.server ?? existingConfig.server ?? DEFAULT_SERVER)
   const defaultPaths = resolveInitDefaultPaths(options['default-path'], existingConfig.defaultPaths)
   const force = Boolean(options.force)
   const configPath = path.join(rootDir, '.dataspec', 'config.json')
+  const configSchemaPath = path.join(rootDir, '.dataspec', DATASPEC_CONFIG_SCHEMA_FILE)
   const readmePath = path.join(rootDir, '.dataspec', 'README.md')
 
   const fileResults = []
+  fileResults.push(await writeInitFile(configSchemaPath, await readFile(DATASPEC_CONFIG_SCHEMA_SOURCE_PATH, 'utf8'), force))
   fileResults.push(await writeInitFile(configPath, renderInitConfig(projectId, server, defaultPaths), force))
   fileResults.push(await writeInitFile(readmePath, renderInitReadme({ projectId, server, defaultPaths }), force))
   if (options['with-agents']) {
@@ -3687,6 +3702,7 @@ async function runInit(args, io, fetchFn) {
     ok: doctor.ok,
     rootDir,
     configPath,
+    configSchemaPath,
     writtenFiles: fileResults.filter((item) => item.action === 'written').map((item) => item.path),
     skippedFiles: fileResults.filter((item) => item.action === 'skipped').map((item) => item.path),
     defaultPaths,
@@ -4046,8 +4062,9 @@ async function buildDoctorResult({ config, options, io, fetchFn }) {
   const projectId = options.project || config.projectId ? parseProjectId(options.project ?? config.projectId) : undefined
   const apiToken = resolveDataSpecToken(options, config)
   const checks = []
+  const configSchema = await buildConfigSchemaSummary(config)
 
-  checks.push(buildConfigCheck(config))
+  checks.push(buildConfigCheck(config, configSchema))
   const apiDocsResult = await checkApiDocs(server, fetchFn, apiToken)
   checks.push(apiDocsResult.check)
   checks.push(await checkAuth(server, fetchFn, apiToken))
@@ -4088,20 +4105,75 @@ async function buildDoctorResult({ config, options, io, fetchFn }) {
     server,
     projectId: projectId ?? null,
     configPath: config.configPath,
+    configSchema,
     checks
   }
 }
 
-function buildConfigCheck(config) {
-  if (config.configPath) {
-    return passCheck('config', `已读取配置: ${config.configPath}`, {
-      configPath: config.configPath,
-      rootDir: config.rootDir
-    })
+async function buildConfigSchemaSummary(config) {
+  const schemaPath = config.configPath
+    ? path.join(path.dirname(config.configPath), DATASPEC_CONFIG_SCHEMA_FILE)
+    : path.join(config.rootDir, '.dataspec', DATASPEC_CONFIG_SCHEMA_FILE)
+  const declaredVersion = config.configVersion ?? null
+  const rawSchemaRef = config.schemaRef ?? null
+  const schemaRef = rawSchemaRef === null
+    ? null
+    : rawSchemaRef === DATASPEC_CONFIG_SCHEMA_REF
+      ? DATASPEC_CONFIG_SCHEMA_REF
+      : '<unexpected>'
+  const schemaFilePresent = await regularFileExists(schemaPath)
+  let associationStatus
+  if (!config.configPath) {
+    associationStatus = 'CONFIG_MISSING'
+  } else if (declaredVersion !== null && declaredVersion !== DATASPEC_CONFIG_SCHEMA_VERSION) {
+    associationStatus = 'UNSUPPORTED_VERSION'
+  } else if (declaredVersion === null) {
+    associationStatus = 'LEGACY'
+  } else if (rawSchemaRef === null) {
+    associationStatus = 'SCHEMA_REF_MISSING'
+  } else if (rawSchemaRef !== DATASPEC_CONFIG_SCHEMA_REF) {
+    associationStatus = 'WRONG_SCHEMA_REF'
+  } else if (!schemaFilePresent) {
+    associationStatus = 'SCHEMA_FILE_MISSING'
+  } else {
+    associationStatus = 'SUPPORTED'
   }
-  return warnCheck('config', '未找到 .dataspec/config.json，将使用命令行参数和默认服务地址', {
-    rootDir: config.rootDir
-  })
+  return {
+    supportedVersion: DATASPEC_CONFIG_SCHEMA_VERSION,
+    declaredVersion,
+    effectiveVersion: declaredVersion ?? DATASPEC_CONFIG_SCHEMA_VERSION,
+    schemaRef,
+    expectedSchemaRef: DATASPEC_CONFIG_SCHEMA_REF,
+    schemaPath,
+    schemaFilePresent,
+    associationStatus
+  }
+}
+
+function buildConfigCheck(config, configSchema) {
+  const details = {
+    configPath: config.configPath,
+    rootDir: config.rootDir,
+    ...configSchema
+  }
+  if (!config.configPath) {
+    return warnCheck('config', '未找到 .dataspec/config.json，将使用命令行参数和默认服务地址', details)
+  }
+  if (configSchema.associationStatus === 'UNSUPPORTED_VERSION') {
+    return failCheck(
+      'config',
+      `配置声明版本 ${configSchema.declaredVersion}，当前 CLI 仅支持版本 ${configSchema.supportedVersion}；请升级 CLI 或使用兼容配置`,
+      details
+    )
+  }
+  if (configSchema.associationStatus !== 'SUPPORTED') {
+    return warnCheck(
+      'config',
+      `已读取配置，但 schema 关联状态为 ${configSchema.associationStatus}；可添加 ${DATASPEC_CONFIG_SCHEMA_REF} 和 configVersion ${DATASPEC_CONFIG_SCHEMA_VERSION}`,
+      details
+    )
+  }
+  return passCheck('config', `已读取配置并匹配 config schema v${DATASPEC_CONFIG_SCHEMA_VERSION}: ${config.configPath}`, details)
 }
 
 async function checkApiDocs(server, fetchFn, apiToken) {
@@ -5062,6 +5134,8 @@ function formatDoctorText(result) {
     'DataSpec Doctor',
     `server: ${result.server}`,
     `projectId: ${result.projectId ?? '未配置'}`,
+    `configSchema: v${result.configSchema.supportedVersion} (${result.configSchema.associationStatus})`,
+    `configSchemaPath: ${result.configSchema.schemaPath}`,
     ''
   ]
   for (const check of result.checks) {
@@ -5631,8 +5705,25 @@ async function pathExists(filePath) {
   }
 }
 
+async function regularFileExists(filePath) {
+  try {
+    return (await stat(filePath)).isFile()
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return false
+    }
+    throw error
+  }
+}
+
 function renderInitConfig(projectId, server, defaultPaths) {
-  return `${JSON.stringify({ projectId, server, defaultPaths }, null, 2)}\n`
+  return `${JSON.stringify({
+    $schema: DATASPEC_CONFIG_SCHEMA_REF,
+    configVersion: DATASPEC_CONFIG_SCHEMA_VERSION,
+    projectId,
+    server,
+    defaultPaths
+  }, null, 2)}\n`
 }
 
 function renderInitReadme({ projectId, server, defaultPaths }) {
@@ -5645,6 +5736,10 @@ function renderInitReadme({ projectId, server, defaultPaths }) {
 - projectId: ${projectId}
 - server: ${server}
 - defaultPaths: ${defaultPaths.map((item) => `\`${item}\``).join(', ')}
+- configVersion: ${DATASPEC_CONFIG_SCHEMA_VERSION}
+- JSON Schema: \`${DATASPEC_CONFIG_SCHEMA_REF}\`
+
+\`config.json\` 通过本地 \`config.schema.json\` 为通用 JSON 编辑器提供字段提示和类型校验，不需要 DataSpec 专用插件或网络访问。旧配置缺少 \`$schema/configVersion\` 时仍可运行，\`doctor\` 会提示迁移状态。
 
 ## 常用命令
 
@@ -5708,6 +5803,7 @@ function formatInitText(result) {
     'DataSpec Init',
     `root: ${result.rootDir}`,
     `config: ${result.configPath}`,
+    `configSchema: ${result.configSchemaPath}`,
     ''
   ]
   if (result.writtenFiles.length > 0) {
@@ -7463,7 +7559,19 @@ function escapeTableCell(value) {
 }
 
 function normalizeServer(server = DEFAULT_SERVER) {
-  return server.replace(/\/+$/, '')
+  const normalized = server.replace(/\/+$/, '')
+  try {
+    const parsed = new URL(normalized)
+    if (parsed.username || parsed.password) {
+      throw new Error('DataSpec server URL 不能包含用户名或密码')
+    }
+  } catch (error) {
+    if (error.message === 'DataSpec server URL 不能包含用户名或密码') {
+      throw error
+    }
+    // 保留既有自定义 server 字符串兼容；只拒绝可解析 URL 中的 userinfo。
+  }
+  return normalized
 }
 
 function normalizeAiOutputPostCheckContentType(value) {

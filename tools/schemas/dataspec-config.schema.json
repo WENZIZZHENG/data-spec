@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dataspec.local/schemas/config/v1",
+  "title": "DataSpec Local Config",
+  "description": "DataSpec CLI 与 MCP 在业务仓库中读取的本地配置。配置文件不得提交真实 token、密码或连接凭据。",
+  "type": "object",
+  "additionalProperties": false,
+  "patternProperties": {
+    "^x-": {
+      "description": "调用方私有扩展字段；当前 DataSpec loader 会忽略该字段。"
+    }
+  },
+  "required": [
+    "configVersion"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "./config.schema.json",
+      "description": "当前配置使用的本地 JSON Schema 相对路径；dataspec init 固定生成 ./config.schema.json。"
+    },
+    "configVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "DataSpec 本地配置契约版本；当前支持版本为 1。"
+    },
+    "projectId": {
+      "description": "默认 DataSpec 项目 ID；新配置使用正整数，历史纯数字字符串继续兼容；命令行 --project 会覆盖该值。",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        }
+      ]
+    },
+    "server": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^https?://(?![^/?#]*@)[^\\s]+$",
+      "description": "DataSpec 服务根地址，不包含 username/password 或 API path；命令行 --server 会覆盖该值。",
+      "examples": [
+        "http://localhost:8090"
+      ]
+    },
+    "apiToken": {
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true,
+      "description": "可选 API token。不得提交真实值；优先使用 DATASPEC_TOKEN 或 --dataspec-token。"
+    },
+    "aiProfile": {
+      "type": "string",
+      "minLength": 1,
+      "description": "默认 AI profile ID；显式 --profile 或 --task-type 优先。"
+    },
+    "taskType": {
+      "type": "string",
+      "minLength": 1,
+      "description": "默认 AI task type；显式 --profile 或 --task-type 优先。"
+    },
+    "defaultPaths": {
+      "type": "array",
+      "description": "相对业务仓库根目录的默认扫描路径；未配置时不会自动扩大为全仓扫描。",
+      "uniqueItems": true,
+      "default": [],
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "description": "SQL、migration 或其他允许 DataSpec 扫描的相对路径。"
+      }
+    },
+    "securityProfile": {
+      "type": "object",
+      "description": "本地 AI 使用安全策略摘要；不得在数组中写入真实 secret、Authorization header 或完整连接串。",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "securityProfile 私有扩展字段；当前 DataSpec loader 会忽略该字段。"
+        }
+      },
+      "properties": {
+        "redactionStrictness": {
+          "type": "string",
+          "minLength": 1,
+          "description": "输出脱敏严格度策略名，例如 strict。"
+        },
+        "sensitiveFieldPolicy": {
+          "type": "string",
+          "minLength": 1,
+          "description": "敏感字段处理策略名，例如 metadata-only。"
+        },
+        "allowedAiTools": {
+          "type": "array",
+          "description": "允许使用的本地 AI 工具标识；仅记录名称，不记录 token 或命令凭据。",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "允许的 AI 工具标识。"
+          }
+        },
+        "neverExportPatterns": {
+          "type": "array",
+          "description": "禁止导出的模式名称或脱敏规则；不得填写真实 secret 值。",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "禁止导出的模式或规则名称。"
+          }
+        },
+        "localOnlyPaths": {
+          "type": "array",
+          "description": "只允许本地使用、不得进入 AI Context 或交付包的路径。",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "相对业务仓库根目录的本地专用路径。"
+          }
+        },
+        "samplePolicy": {
+          "type": "string",
+          "minLength": 1,
+          "description": "样例数据策略名，例如 synthetic-only。"
+        },
+        "credentialPolicy": {
+          "type": "string",
+          "minLength": 1,
+          "description": "凭据使用策略名，例如 env-only 或 never-export。"
+        }
+      }
+    }
+  }
+}
